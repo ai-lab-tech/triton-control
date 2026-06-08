@@ -1,0 +1,10 @@
+/*
+ * Keep the documentation drawer on Home focused on site navigation. Material
+ * also injects the active page TOC into the primary nav; on Home that makes the
+ * main docs nav appear to disappear after selecting Home.
+ */
+.md-nav__item--active:has(> a[href="."]) > .md-nav__toggle,
+.md-nav__item--active:has(> a[href="."]) > label.md-nav__link,
+.md-nav__item--active:has(> a[href="."]) > .md-nav--secondary {
+  display: none;
+}
