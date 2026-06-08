@@ -11,21 +11,25 @@ theme:
     - content.code.copy
 
 nav:
-  - Home: index.md
-  - Getting Started: getting-started.md
+  - Triton Control:
+    - Home: index.md
+    - Getting Started: getting-started.md
+    - User Guide: user-guide.md
+    - User Management: user-management.md
   - Architecture:
     - Overview: architecture-overview.md
     - Backend Components: architecture-backend-components.md
     - Model Config Validation: model-config-validation.md
-  - User Guide: user-guide.md
-  - User Management: user-management.md
-  - API: api.md
-  - Configuration: configuration.md
-  - Deployment: deployment.md
-  - Roadmap: roadmap.md
-  - Development: development.md
-  - Security: security.md
-  - Troubleshooting: troubleshooting.md
+  - Operations:
+    - Configuration: configuration.md
+    - Deployment: deployment.md
+    - Security: security.md
+    - Troubleshooting: troubleshooting.md
+  - Reference:
+    - API: api.md
+  - Project:
+    - Roadmap: roadmap.md
+    - Development: development.md
 
 markdown_extensions:
   - admonition
