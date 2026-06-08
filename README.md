@@ -7,6 +7,8 @@ local evaluation (with reduced Kubernetes-specific functionality, for example
 no self-deployed Triton deployment workflows), and with separate Python/npm
 processes for development.
 
+Documentation: https://ai-lab-tech.github.io/triton-control/
+
 Core capabilities include:
 
 - existing Triton instance registration and management
