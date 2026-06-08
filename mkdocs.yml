@@ -30,6 +30,16 @@ nav:
   - Project:
     - Roadmap: roadmap.md
     - Development: development.md
+  - Operations:
+    - Configuration: configuration.md
+    - Deployment: deployment.md
+    - Security: security.md
+    - Troubleshooting: troubleshooting.md
+  - Reference:
+    - API: api.md
+  - Project:
+    - Roadmap: roadmap.md
+    - Development: development.md
 
 markdown_extensions:
   - admonition
