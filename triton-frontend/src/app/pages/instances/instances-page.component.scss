@@ -1,0 +1,247 @@
+.instances {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+}
+
+.deployment-progress-panel {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border-radius: 14px;
+  border: 1px solid rgba(20, 184, 166, 0.25);
+  background: rgba(240, 253, 250, 0.9);
+  padding: 0.85rem 1rem;
+}
+
+.deployment-progress-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.deployment-progress-title {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.deployment-progress-text {
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.deployment-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  border: 2px solid rgba(20, 184, 166, 0.2);
+  border-top-color: #14b8a6;
+  animation: deployment-progress-spin 0.9s linear infinite;
+}
+
+@keyframes deployment-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1.4fr 0.6fr auto;
+  gap: 1rem;
+  padding: 1.2rem;
+  align-items: start;
+}
+
+.filter-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.filters .mat-mdc-form-field {
+  width: 100%;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.instance-card {
+  padding: 1.2rem;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  transition:
+    border 0.2s ease,
+    transform 0.2s ease;
+}
+
+.instance-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(20, 184, 166, 0.25);
+}
+
+.instance-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.instance-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.instance-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+}
+
+.instance-url-label,
+.instance-region-label {
+  font-weight: 600;
+}
+
+.instance-meta-separator {
+  color: #94a3b8;
+}
+
+.instance-starting-message {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  padding: 0.62rem 0.72rem;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.35;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.16);
+}
+
+.instance-starting-message .deployment-spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+}
+
+.instance-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.metric-value {
+  font-weight: 700;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.details-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--sky-500);
+}
+
+.details-link .material-icons {
+  font-size: 1rem;
+}
+
+.s3-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--aqua-600);
+}
+
+.s3-link .material-icons {
+  font-size: 1rem;
+}
+
+.s3-disabled {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.delete-instance-btn {
+  color: #b91c1c !important;
+  border-color: rgba(185, 28, 28, 0.35) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.delete-instance-btn .material-icons {
+  color: #b91c1c !important;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.self-deployed-inline {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.72rem;
+  border-radius: 999px;
+  background: #bfe8e6;
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 800px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}

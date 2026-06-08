@@ -1,0 +1,141 @@
+<div class="users">
+  <div class="header-row">
+    <div>
+      <div class="page-title">User Management</div>
+      <p class="page-subtitle">
+        Provision access to Triton instances with local credentials or OIDC identities.
+      </p>
+    </div>
+    <div class="header-actions">
+      <button mat-flat-button color="primary" (click)="openNewUserDialog()">
+        <span class="material-icons">person_add</span>
+        Add user
+      </button>
+    </div>
+  </div>
+
+  <mat-card class="card table-card">
+    <div class="card-title">Active users</div>
+    @if (loading()) {
+      <p>Loading users...</p>
+    }
+    @if (error()) {
+      <p>{{ error() }}</p>
+    }
+    <table mat-table [dataSource]="users()">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Name</th>
+        <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="email">
+        <th mat-header-cell *matHeaderCellDef>Email</th>
+        <td mat-cell *matCellDef="let row">{{ row.email }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="role">
+        <th mat-header-cell *matHeaderCellDef>Role</th>
+        <td mat-cell *matCellDef="let row" class="role-cell">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-select
+              [(ngModel)]="pendingRoleByUserId[row.id]"
+              (ngModelChange)="updateRole(row, $event)"
+            >
+              @for (role of roles; track role) {
+                <mat-option [value]="role">{{ role }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="auth">
+        <th mat-header-cell *matHeaderCellDef>Auth</th>
+        <td mat-cell *matCellDef="let row">
+          <span class="chip" [attr.data-tone]="row.auth === 'oidc' ? 'ok' : 'warn'">
+            {{ row.auth }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let row">
+          <span class="chip" [attr.data-tone]="row.isActive ? 'ok' : 'warn'">
+            {{ row.isActive ? "active" : "pending" }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="instances">
+        <th mat-header-cell *matHeaderCellDef>Instances</th>
+        <td mat-cell *matCellDef="let row">
+          <div class="instance-chips">
+            @for (instance of row.instances; track instance) {
+              <span class="instance-chip">
+                <span class="instance-chip-name">{{ instance }}</span>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="chip-action"
+                  aria-label="Unassign {{ instance }}"
+                  (click)="removeInstanceFromUser(row, instance)"
+                >
+                  <span class="material-icons">close</span>
+                </button>
+              </span>
+            }
+            @if (!row.instances.length) {
+              <span class="empty-chip">No instances assigned</span>
+            }
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="addInstance">
+        <th mat-header-cell *matHeaderCellDef>Add instance</th>
+        <td mat-cell *matCellDef="let row" class="add-instance-cell">
+          <div class="instance-add">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-select
+                [(ngModel)]="pendingInstanceByEmail[row.email]"
+                placeholder="Add instance"
+              >
+                @for (instance of availableInstances(row); track instance) {
+                  <mat-option [value]="instance">{{ instance }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="addInstanceToUser(row)"
+              [disabled]="!pendingInstanceByEmail[row.email] || !availableInstances(row).length"
+            >
+              Add
+            </button>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Actions</th>
+        <td mat-cell *matCellDef="let row" class="actions-cell">
+          @if (!row.isActive) {
+            <button mat-flat-button color="primary" type="button" (click)="approveUser(row)">
+              <span class="material-icons">verified_user</span>
+              Approve
+            </button>
+          }
+          <button mat-stroked-button color="warn" type="button" (click)="deleteUser(row)">
+            <span class="material-icons">delete</span>
+            Delete
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+  </mat-card>
+</div>

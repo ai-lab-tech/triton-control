@@ -1,0 +1,140 @@
+﻿<div class="instances">
+  <div class="header-row">
+    <div>
+      <div class="page-title">Triton Instances</div>
+      <p class="page-subtitle">
+        Manage runtime health, model catalogs, and S3 connectivity per instance.
+      </p>
+      @if (perfProfileRunning()) {
+        <div class="deployment-progress-panel" role="status" aria-live="polite">
+          <span class="deployment-spinner" aria-hidden="true"></span>
+          <div class="deployment-progress-copy">
+            <div class="deployment-progress-title">Perf Analyzer</div>
+            <div class="deployment-progress-text">{{ activeProfileRunLabel() }}</div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="filters card">
+    <div class="filter-row">
+      <label class="field-label" for="instance-search">Search instances</label>
+      <mat-form-field appearance="outline">
+        <input id="instance-search" matInput [(ngModel)]="query" placeholder="Name" />
+      </mat-form-field>
+    </div>
+    <div class="filter-row">
+      <label class="field-label" for="instance-status">Status</label>
+      <mat-form-field appearance="outline">
+        <mat-select id="instance-status" [(ngModel)]="status">
+          <mat-option value="all">All</mat-option>
+          <mat-option value="healthy">Healthy</mat-option>
+          <mat-option value="down">Down</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <div class="filter-actions">
+      <button mat-flat-button color="primary" type="button" (click)="refresh()">
+        <span class="material-icons">sync</span>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="list">
+    @for (instance of filteredInstances(); track instance.id) {
+      <mat-card class="instance-card">
+        <div class="instance-head">
+          <div>
+            <div class="instance-name">
+              <span>{{ instance.name }}</span>
+              @if (instance.isSelfDeployed) {
+                <span class="self-deployed-inline">Self deployed</span>
+              }
+            </div>
+            <div class="instance-meta">
+              <span class="instance-url-label">URL:</span>
+              <span>{{ instance.url }}</span>
+              @if (instance.region && instance.region !== "Unknown") {
+                <span class="instance-meta-separator">·</span>
+                <span class="instance-region-label">Region:</span>
+                <span>{{ instance.region }}</span>
+              }
+            </div>
+          </div>
+          <span
+            class="chip"
+            [attr.data-tone]="
+              deploymentStarting(instance)
+                ? 'warn'
+                : instance.status === 'healthy'
+                  ? 'ok'
+                  : instance.status === 'warning'
+                    ? 'warn'
+                    : 'down'
+            "
+          >
+            {{ deploymentStarting(instance) ? "starting" : instance.status }}
+          </span>
+        </div>
+        @if (deploymentStarting(instance)) {
+          <div class="instance-starting-message" role="status" aria-live="polite">
+            <span class="deployment-spinner" aria-hidden="true"></span>
+            Triton is starting. Health, models, and metrics can take a few minutes to appear.
+          </div>
+        }
+        <div class="instance-metrics">
+          <div>
+            <div class="metric-value">{{ instance.models }}</div>
+            <div class="metric-label">Models</div>
+          </div>
+          <div>
+            <div class="metric-value">
+              {{ instance.metricsUrl && !instance.metricsError ? instance.cpu + "%" : "N/A" }}
+            </div>
+            <div class="metric-label">CPU</div>
+          </div>
+          <div>
+            <div class="metric-value">
+              {{ instance.metricsUrl && !instance.metricsError ? instance.ram + "%" : "N/A" }}
+            </div>
+            <div class="metric-label">RAM</div>
+          </div>
+          <div>
+            <div class="metric-value">
+              {{ instance.metricsUrl && !instance.metricsError ? instance.gpu + "%" : "N/A" }}
+            </div>
+            <div class="metric-label">GPU</div>
+          </div>
+        </div>
+        <div class="card-actions">
+          <a class="details-link" [routerLink]="['/instances', instance.id]">
+            <span class="material-icons">visibility</span>
+            Details
+          </a>
+          @if (instance.s3.enabled) {
+            <a class="s3-link" [routerLink]="['/instances', instance.id, 's3']">
+              S3 Browser
+              <span class="material-icons">folder</span>
+            </a>
+          }
+          @if (!instance.s3.enabled) {
+            <span class="s3-disabled">S3 not connected</span>
+          }
+          @if (canDeleteInstances()) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="delete-instance-btn"
+              (click)="deleteInstance(instance.id, instance.name, instance.isSelfDeployed)"
+            >
+              Delete
+              <span class="material-icons">delete</span>
+            </button>
+          }
+        </div>
+      </mat-card>
+    }
+  </div>
+</div>

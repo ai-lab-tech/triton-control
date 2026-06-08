@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "triton-control.fullname" . }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "triton-control.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+  ports:
+    - name: http
+      port: {{ .Values.service.frontendPort }}
+      targetPort: http
+      protocol: TCP
+    - name: api
+      port: {{ .Values.service.backendPort }}
+      targetPort: api
+      protocol: TCP

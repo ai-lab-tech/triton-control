@@ -1,0 +1,162 @@
+.users {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.card {
+  padding: 1.5rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.span-two {
+  grid-column: span 2;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.form-grid .mat-mdc-form-field {
+  width: 100%;
+}
+
+table {
+  width: 100%;
+}
+
+.mat-mdc-row,
+.mat-mdc-header-row {
+  align-items: center;
+}
+
+.mat-mdc-cell,
+.mat-mdc-header-cell {
+  vertical-align: middle;
+}
+
+.mat-mdc-cell {
+  align-items: center;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.role-cell,
+.add-instance-cell {
+  vertical-align: middle !important;
+}
+
+.mat-mdc-chip-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.instance-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.instance-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 1.4rem 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.chip-action {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(40%, -65%);
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  line-height: 1;
+}
+
+.chip-action .material-icons {
+  font-size: 0.95rem;
+}
+
+.empty-chip {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.instance-add {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.instance-add .mat-mdc-form-field {
+  min-width: 200px;
+  margin: 0;
+}
+
+.instance-add button {
+  height: 56px;
+  padding: 0 1.4rem;
+  border-radius: 999px;
+}
+
+.role-cell .mat-mdc-form-field {
+  margin: 0;
+}
+
+.actions-cell {
+  white-space: nowrap;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .span-two {
+    grid-column: auto;
+  }
+}

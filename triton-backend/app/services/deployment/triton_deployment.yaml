@@ -1,0 +1,145 @@
+{image_pull_secret_manifest}apiVersion: v1
+kind: Secret
+metadata:
+  name: {secret_name}
+  namespace: {namespace}
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: {s3_access_key}
+  AWS_SECRET_ACCESS_KEY: {s3_secret_key}
+  S3_CA_CERTIFICATE: {s3_ca_certificate}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {deployment_name}
+  namespace: {namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton
+      deployment: {deployment_name}
+  template:
+    metadata:
+      labels:
+        app: triton
+        deployment: {deployment_name}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+{image_pull_secret_reference}{s3_ca_init_container_block}      containers:
+        - name: triton
+          image: {image}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {secret_name}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {secret_name}
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_DEFAULT_REGION
+              value: {s3_region}
+            # Current Triton versions read the standard CA bundle path directly.
+            # Keep AWS_CA_BUNDLE for compatibility with future S3 client behavior.
+            - name: AWS_CA_BUNDLE
+              value: {aws_ca_bundle}
+          volumeMounts:
+{s3_ca_volume_mount_block}            - name: dshm
+              mountPath: /dev/shm
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              {requirements_install_command}exec tritonserver {triton_server_args}
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 8001
+              name: grpc
+            - containerPort: 8002
+              name: metrics
+{resources}
+          livenessProbe:
+            httpGet:
+              path: /v2/health/live
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /v2/health/ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 12
+      volumes:
+{s3_ca_volume_item_block}        - name: dshm
+          emptyDir:
+            medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {service_name}
+  namespace: {namespace}
+spec:
+  selector:
+    app: triton
+    deployment: {deployment_name}
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 18000
+      targetPort: 8000
+    - name: grpc
+      port: 18001
+      targetPort: 8001
+    - name: metrics
+      port: 18002
+      targetPort: 8002
+      
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {ingress_name}
+  namespace: {namespace}
+spec:
+  ingressClassName: {ingress_class_name}
+  rules:
+    - {ingress_host_rule}http:
+        paths:
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {service_name}
+                port:
+                  name: metrics
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {service_name}
+                port:
+                  name: http

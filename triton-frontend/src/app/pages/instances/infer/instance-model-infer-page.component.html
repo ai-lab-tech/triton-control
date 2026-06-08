@@ -1,0 +1,180 @@
+@if (hasValidRoute()) {
+  <div class="infer-page">
+    <div class="infer-header">
+      <nav class="page-breadcrumbs" aria-label="Breadcrumb">
+        <a routerLink="/instances">Triton Instances</a>
+        <span class="breadcrumb-separator">/</span>
+        <a [routerLink]="['/instances', instanceId()]">{{
+          instanceName || "Instance #" + instanceId()
+        }}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span aria-current="page">Infer {{ modelName() }}</span>
+      </nav>
+      <div class="page-title">Model Inference</div>
+      <p class="page-subtitle">{{ modelName() }} - Version {{ version() }}</p>
+    </div>
+
+    <mat-card class="card infer-card">
+      <div class="endpoint-list">
+        <div class="endpoint-row">
+          <span class="endpoint-label">Instance</span>
+          <span class="endpoint-value">{{ instanceName || "Instance #" + instanceId() }}</span>
+        </div>
+        <div class="endpoint-row">
+          <span class="endpoint-label">Infer URL</span>
+          <div class="endpoint-copy-row">
+            <code class="endpoint-url">{{ requestUrl() || "Unavailable" }}</code>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="copyInferUrl()"
+              [disabled]="!requestUrl()"
+            >
+              {{ inferUrlCopied ? "Copied" : "Copy URL" }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="editor-section">
+        <div class="editor-pane">
+          <div class="editor-head">
+            <div class="section-title">JSON Body</div>
+          </div>
+          <app-instance-model-monaco-editor
+            [(value)]="editorContent"
+          ></app-instance-model-monaco-editor>
+        </div>
+        <aside class="api-config-pane">
+          <div class="editor-head">
+            <div class="section-title">API Config</div>
+            <button
+              mat-stroked-button
+              type="button"
+              class="api-config-btn"
+              (click)="toggleApiConfig()"
+              [disabled]="apiConfigLoading()"
+            >
+              <span class="material-icons">
+                {{ apiConfigOpen() ? "expand_less" : "data_object" }}
+              </span>
+              {{ apiConfigOpen() ? "Hide API Config" : "Show API Config" }}
+            </button>
+          </div>
+          @if (apiConfigOpen()) {
+            @if (apiConfigLoading()) {
+              <div class="panel-hint">Loading API config...</div>
+            } @else if (apiConfigError()) {
+              <div class="panel-hint error-text">{{ apiConfigError() }}</div>
+            } @else if (apiConfigJson()) {
+              <pre class="response-block">{{ apiConfigJson() }}</pre>
+            }
+          } @else {
+            <div class="panel-hint">Open the model API config beside the request body.</div>
+          }
+        </aside>
+      </div>
+
+      <div class="actions">
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="sendInference()"
+          [disabled]="submitting() || processingResponse()"
+        >
+          <span class="material-icons">rocket_launch</span>
+          {{ sendLabel() }}
+        </button>
+      </div>
+      @if (requestLatencyMs() !== null) {
+        <div class="panel-hint latency-hint">
+          Request latency: {{ requestLatencyMs()!.toFixed(1) }} ms
+        </div>
+      }
+      @if (inferenceMetrics(); as metrics) {
+        <div class="metrics-panel">
+          <div class="metrics-title-row">
+            <div class="section-title">Triton Inference Metrics</div>
+            @if (metrics.source) {
+              <span class="metrics-source">
+                Source: {{ metrics.source === "metrics" ? "/metrics" : "/v2/models/stats" }}
+              </span>
+            }
+          </div>
+          @if (metrics.available && inferenceMetricRows().length) {
+            <div class="metrics-table">
+              <div class="metrics-row metrics-head">
+                <span>Model</span>
+                <span>Total</span>
+                <span>Queue</span>
+                <span>No queue</span>
+                <span>Input</span>
+                <span>Infer</span>
+                <span>Output</span>
+              </div>
+              @for (row of inferenceMetricRows(); track row.model + "|" + row.version) {
+                <div class="metrics-row">
+                  <span class="metrics-model">
+                    {{ row.model || modelName() }}
+                    @if (row.version) {
+                      <span class="metrics-version">v{{ row.version }}</span>
+                    }
+                  </span>
+                  <span>{{ row.totalMs.toFixed(3) }} ms</span>
+                  <span>{{ row.queueMs.toFixed(3) }} ms</span>
+                  <span>{{ row.withoutQueueMs.toFixed(3) }} ms</span>
+                  <span>{{ row.computeInputMs.toFixed(3) }} ms</span>
+                  <span>{{ row.computeInferMs.toFixed(3) }} ms</span>
+                  <span>{{ row.computeOutputMs.toFixed(3) }} ms</span>
+                </div>
+              }
+            </div>
+            @if (inferenceMetricRows().length > 1) {
+              <div class="panel-hint">
+                Multiple rows indicate ensemble or downstream model steps that ran during this
+                request.
+              </div>
+            }
+          } @else {
+            <div class="panel-hint">{{ metrics.error || "Inference metrics unavailable." }}</div>
+          }
+        </div>
+      }
+      @if (processingResponse()) {
+        <div class="panel-hint">Rendering response...</div>
+      }
+
+      @if (resolvingInstance) {
+        <div class="panel-hint">Resolving instance metadata in background...</div>
+      }
+
+      @if (displayError()) {
+        <div class="response-panel error-panel">
+          <div class="section-title">Error</div>
+          <pre class="response-block">{{ displayError() }}</pre>
+        </div>
+      }
+
+      @if (responseJson()) {
+        <div class="response-panel">
+          <div class="editor-head">
+            <div class="section-title">Response</div>
+            <button mat-stroked-button type="button" (click)="copyResponse()">
+              {{ responseCopied ? "Copied" : "Copy Response" }}
+            </button>
+          </div>
+          <pre class="response-block">{{ responseJson() }}</pre>
+        </div>
+      }
+    </mat-card>
+  </div>
+}
+
+@if (!hasValidRoute()) {
+  <div class="empty">
+    <span class="material-icons">rocket_launch</span>
+    <div>Model inference target not found.</div>
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}

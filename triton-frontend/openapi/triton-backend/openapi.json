@@ -1,0 +1,3638 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Triton Backend",
+    "description": "Backend for Triton",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/login": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Login",
+        "operationId": "login_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Login Login Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/callback": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Auth Callback",
+        "operationId": "auth_callback_auth_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Auth Callback Auth Callback Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Logout",
+        "operationId": "logout_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Logout Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whoami": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Whoami",
+        "operationId": "whoami_api_whoami_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Whoami Api Whoami Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/options": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Auth Options Endpoint",
+        "operationId": "auth_options_endpoint_api_auth_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Auth Options Endpoint Api Auth Options Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/bootstrap-status": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Bootstrap Status Endpoint",
+        "operationId": "bootstrap_status_endpoint_api_auth_bootstrap_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/bootstrap/register": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Bootstrap Register Endpoint",
+        "operationId": "bootstrap_register_endpoint_api_auth_bootstrap_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/settings/preflight/callback": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Oidc Preflight Callback",
+        "operationId": "oidc_preflight_callback_api_auth_settings_preflight_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Oidc Preflight Callback Api Auth Settings Preflight Callback Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/self-register": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Self Register Endpoint",
+        "operationId": "self_register_endpoint_api_auth_self_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelfRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Login Endpoint",
+        "operationId": "login_endpoint_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/settings": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Get Oidc Settings Endpoint",
+        "operationId": "get_oidc_settings_endpoint_api_auth_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcSettingsDTO"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": ["users"],
+        "summary": "Put Oidc Settings Endpoint",
+        "operationId": "put_oidc_settings_endpoint_api_auth_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Put Oidc Settings Endpoint Api Auth Settings Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/settings/preflight/start": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Start Oidc Preflight Endpoint",
+        "operationId": "start_oidc_preflight_endpoint_api_auth_settings_preflight_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Start Oidc Preflight Endpoint Api Auth Settings Preflight Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["users"],
+        "summary": "Register User Endpoint",
+        "operationId": "register_user_endpoint_api_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "List Users",
+        "operationId": "list_users_api_auth_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List Users Api Auth Users Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/users/{user_id}": {
+      "delete": {
+        "tags": ["users"],
+        "summary": "Delete User",
+        "operationId": "delete_user_api_auth_users__user_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users/{user_id}/instances": {
+      "put": {
+        "tags": ["users"],
+        "summary": "Update User Instances",
+        "operationId": "update_user_instances_api_auth_users__user_id__instances_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInstancesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users/{user_id}/role": {
+      "put": {
+        "tags": ["users"],
+        "summary": "Update User Role",
+        "operationId": "update_user_role_api_auth_users__user_id__role_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/alerts": {
+      "get": {
+        "tags": ["dashboard"],
+        "summary": "List Dashboard Alerts",
+        "description": "Return persisted dashboard alerts visible to the current user.",
+        "operationId": "list_dashboard_alerts_api_dashboard_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DashboardAlertDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List Dashboard Alerts Api Dashboard Alerts Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/deployments": {
+      "post": {
+        "tags": ["deployments"],
+        "summary": "Create Deployment",
+        "description": "Deploy Triton on Kubernetes for the provided S3 model repository.",
+        "operationId": "create_deployment_api_deployments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeploymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/deployments/{instance_id}": {
+      "delete": {
+        "tags": ["deployments"],
+        "summary": "Delete Deployment",
+        "description": "Delete a self-deployed Triton instance and its Kubernetes namespace.",
+        "operationId": "delete_deployment_api_deployments__instance_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deployments/{instance_id}/logs": {
+      "get": {
+        "tags": ["deployments"],
+        "summary": "Get Deployment Logs",
+        "description": "Return deployment and Kubernetes pod logs for an instance.",
+        "operationId": "get_deployment_logs_api_deployments__instance_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceLogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/perf-analyzers": {
+      "get": {
+        "tags": ["perf-analyzers"],
+        "summary": "Get Perf Analyzer Status",
+        "description": "Return the singleton Perf Analyzer installation state.",
+        "operationId": "get_perf_analyzer_status_api_perf_analyzers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfAnalyzerStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": ["perf-analyzers"],
+        "summary": "Install Perf Analyzer",
+        "description": "Install a Perf Analyzer SDK container on Kubernetes.",
+        "operationId": "install_perf_analyzer_api_perf_analyzers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallPerfAnalyzerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfAnalyzerInstallResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["perf-analyzers"],
+        "summary": "Uninstall Perf Analyzer",
+        "description": "Uninstall the singleton Perf Analyzer Kubernetes workload.",
+        "operationId": "uninstall_perf_analyzer_api_perf_analyzers_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfAnalyzerDeleteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/perf-analyzers/runs": {
+      "post": {
+        "tags": ["perf-analyzers"],
+        "summary": "Run Perf Analyzer",
+        "description": "Execute Perf Analyzer for one Triton instance model.",
+        "operationId": "run_perf_analyzer_api_perf_analyzers_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunPerfAnalyzerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfAnalyzerRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/perf-analyzers/runs/latest": {
+      "get": {
+        "tags": ["perf-analyzers"],
+        "summary": "Get Latest Perf Analyzer Run",
+        "description": "Return the latest persisted Perf Analyzer result for one model target.",
+        "operationId": "get_latest_perf_analyzer_run_api_perf_analyzers_runs_latest_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Name"
+            }
+          },
+          {
+            "name": "model_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfAnalyzerLatestRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances": {
+      "post": {
+        "tags": ["instances"],
+        "summary": "Create Instance",
+        "description": "Create a Triton instance from UI input (url + optional name).\n\nThe backend connects to Triton, reads the currently available models,\nstores the instance in the DB, and returns the created DTO.",
+        "operationId": "create_instance_api_instances_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTritonInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TritonInstanceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["instances"],
+        "summary": "List Instances",
+        "description": "List all registered Triton instances.",
+        "operationId": "list_instances_api_instances_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TritonInstanceDTO"
+                  },
+                  "title": "Response List Instances Api Instances Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance",
+        "description": "Get a single Triton instance by ID.",
+        "operationId": "get_instance_api_instances__instance_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TritonInstanceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["instances"],
+        "summary": "Delete Instance",
+        "description": "Delete a registered Triton instance. Admin role required.",
+        "operationId": "delete_instance_api_instances__instance_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["instances"],
+        "summary": "Update Instance",
+        "description": "Update a Triton instance endpoint and SSL verification settings.",
+        "operationId": "update_instance_api_instances__instance_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTritonInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TritonInstanceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/by-name/{name}": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance By Name",
+        "description": "Get a single Triton instance by its unique name.",
+        "operationId": "get_instance_by_name_api_instances_by_name__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TritonInstanceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance Models",
+        "description": "Return the live Triton model repository index for an instance.",
+        "operationId": "get_instance_models_api_instances__instance_id__models_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TritonRepositoryModelDTO"
+                  },
+                  "title": "Response Get Instance Models Api Instances  Instance Id  Models Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/versions/{version}/config": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance Model Config",
+        "description": "Proxy the live Triton model config for a specific model version.",
+        "operationId": "get_instance_model_config_api_instances__instance_id__models__model_name__versions__version__config_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Model Name"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Instance Model Config Api Instances  Instance Id  Models  Model Name  Versions  Version  Config Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/load": {
+      "post": {
+        "tags": ["instances"],
+        "summary": "Load Instance Model",
+        "description": "Trigger explicit load for a model via Triton's repository API.",
+        "operationId": "load_instance_model_api_instances__instance_id__models__model_name__load_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Model Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRepositoryActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/unload": {
+      "post": {
+        "tags": ["instances"],
+        "summary": "Unload Instance Model",
+        "description": "Trigger explicit unload for a model via Triton's repository API.",
+        "operationId": "unload_instance_model_api_instances__instance_id__models__model_name__unload_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Model Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRepositoryActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/versions/{version}/infer": {
+      "post": {
+        "tags": ["instances"],
+        "summary": "Infer Instance Model",
+        "description": "Proxy a Triton inference request for a specific model version.",
+        "operationId": "infer_instance_model_api_instances__instance_id__models__model_name__versions__version__infer_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Model Name"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload",
+                "description": "Triton inference request body."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/s3": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance S3",
+        "operationId": "get_instance_s3_api_instances__instance_id__s3_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceS3ConfigDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["instances"],
+        "summary": "Update Instance S3",
+        "operationId": "update_instance_s3_api_instances__instance_id__s3_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstanceS3Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceS3ConfigDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/s3/list": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "List Instance S3",
+        "operationId": "list_instance_s3_api_instances__instance_id__s3_list_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Prefix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/s3/content": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance S3 Content",
+        "operationId": "get_instance_s3_content_api_instances__instance_id__s3_content_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "S3 object path",
+              "title": "Path"
+            },
+            "description": "S3 object path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3FileContentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["instances"],
+        "summary": "Put Instance S3 Content",
+        "operationId": "put_instance_s3_content_api_instances__instance_id__s3_content_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "S3 object path",
+              "title": "Path"
+            },
+            "description": "S3 object path"
+          },
+          {
+            "name": "content_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Type"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream",
+                "title": "Content"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3FileWriteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/s3/content/raw": {
+      "get": {
+        "tags": ["instances"],
+        "summary": "Get Instance S3 Content Raw",
+        "operationId": "get_instance_s3_content_raw_api_instances__instance_id__s3_content_raw_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "S3 object path",
+              "title": "Path"
+            },
+            "description": "S3 object path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Raw object bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Auth Me",
+        "operationId": "auth_me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Auth Me Api Auth Me Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BootstrapRegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["email", "password"],
+        "title": "BootstrapRegisterRequest"
+      },
+      "BootstrapStatusResponse": {
+        "properties": {
+          "oidc_enabled": {
+            "type": "boolean",
+            "title": "Oidc Enabled"
+          },
+          "needs_setup": {
+            "type": "boolean",
+            "title": "Needs Setup"
+          }
+        },
+        "type": "object",
+        "required": ["oidc_enabled", "needs_setup"],
+        "title": "BootstrapStatusResponse"
+      },
+      "CreateDeploymentRequest": {
+        "properties": {
+          "deployment_name": {
+            "type": "string",
+            "title": "Deployment Name"
+          },
+          "s3_url": {
+            "type": "string",
+            "title": "S3 Url"
+          },
+          "s3_access_key": {
+            "type": "string",
+            "title": "S3 Access Key"
+          },
+          "s3_secret_key": {
+            "type": "string",
+            "title": "S3 Secret Key"
+          },
+          "s3_region": {
+            "type": "string",
+            "title": "S3 Region",
+            "default": "us-east-1"
+          },
+          "s3_ca_certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Ca Certificate"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["http", "https"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "model_control_mode": {
+            "type": "string",
+            "enum": ["explicit", "poll"],
+            "title": "Model Control Mode",
+            "default": "explicit"
+          },
+          "repository_poll_secs": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Repository Poll Secs",
+            "default": 15
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "allow_metrics": {
+            "type": "boolean",
+            "title": "Allow Metrics",
+            "default": true
+          },
+          "requirements_txt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements Txt"
+          },
+          "gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Count"
+          },
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu"
+          },
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
+          "memory_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit"
+          }
+        },
+        "type": "object",
+        "required": ["deployment_name", "s3_url", "s3_access_key", "s3_secret_key", "image"],
+        "title": "CreateDeploymentRequest",
+        "description": "Request body for ``POST /api/deployments``."
+      },
+      "CreateTritonInstanceRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "verify_ssl": {
+            "type": "boolean",
+            "title": "Verify Ssl",
+            "default": false
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "metrics_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Url"
+          }
+        },
+        "type": "object",
+        "required": ["url"],
+        "title": "CreateTritonInstanceRequest",
+        "description": "Request to create a Triton instance."
+      },
+      "CreateUserRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "viewer"
+          },
+          "auth_provider": {
+            "type": "string",
+            "title": "Auth Provider",
+            "default": "local"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "oidc_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Subject"
+          },
+          "assigned_instances": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Instances"
+          }
+        },
+        "type": "object",
+        "required": ["email", "name"],
+        "title": "CreateUserRequest"
+      },
+      "DashboardAlertDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          },
+          "instance_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Name"
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": ["id", "icon", "label", "tone", "created_at"],
+        "title": "DashboardAlertDTO"
+      },
+      "DeploymentDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          }
+        },
+        "type": "object",
+        "required": ["status", "message", "namespace"],
+        "title": "DeploymentDeleteResponse",
+        "description": "Response after deleting a Kubernetes-managed Triton deployment."
+      },
+      "DeploymentResponse": {
+        "properties": {
+          "instance_id": {
+            "type": "integer",
+            "title": "Instance Id"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "deployment_name": {
+            "type": "string",
+            "title": "Deployment Name"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "secret_name": {
+            "type": "string",
+            "title": "Secret Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "s3_url": {
+            "type": "string",
+            "title": "S3 Url"
+          },
+          "applied_resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applied Resources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id",
+          "namespace",
+          "deployment_name",
+          "service_name",
+          "secret_name",
+          "image",
+          "s3_url",
+          "applied_resources"
+        ],
+        "title": "DeploymentResponse",
+        "description": "Response after Kubernetes resources are applied."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InstallPerfAnalyzerRequest": {
+        "properties": {
+          "installation_name": {
+            "type": "string",
+            "title": "Installation Name",
+            "default": "perf-analyzer"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          }
+        },
+        "type": "object",
+        "required": ["image"],
+        "title": "InstallPerfAnalyzerRequest",
+        "description": "Request body for ``POST /api/perf-analyzers``."
+      },
+      "InstanceLogsResponse": {
+        "properties": {
+          "logs": {
+            "type": "string",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": ["logs"],
+        "title": "InstanceLogsResponse"
+      },
+      "InstanceS3ConfigDTO": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "access_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Key"
+          },
+          "secret_configured": {
+            "type": "boolean",
+            "title": "Secret Configured",
+            "default": false
+          },
+          "use_https": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Https"
+          },
+          "verify_ssl": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Ssl"
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "address_style": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["path", "virtual"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Style"
+          }
+        },
+        "type": "object",
+        "title": "InstanceS3ConfigDTO"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": ["email", "password"],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDTO"
+          }
+        },
+        "type": "object",
+        "required": ["access_token", "user"],
+        "title": "LoginResponse"
+      },
+      "ModelRepositoryActionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "ModelRepositoryActionResponse"
+      },
+      "OidcSettingsDTO": {
+        "properties": {
+          "oidc_enabled": {
+            "type": "boolean",
+            "title": "Oidc Enabled"
+          },
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "type": "string",
+            "title": "Client Secret"
+          },
+          "client_secret_configured": {
+            "type": "boolean",
+            "title": "Client Secret Configured",
+            "default": false
+          },
+          "redirect_uri": {
+            "type": "string",
+            "title": "Redirect Uri"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes"
+          },
+          "strict_discovery_document_validation": {
+            "type": "boolean",
+            "title": "Strict Discovery Document Validation"
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "api_base_url": {
+            "type": "string",
+            "title": "Api Base Url"
+          },
+          "config_source": {
+            "type": "string",
+            "title": "Config Source",
+            "default": "db"
+          },
+          "kubernetes_enabled": {
+            "type": "boolean",
+            "title": "Kubernetes Enabled",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "oidc_enabled",
+          "issuer",
+          "client_id",
+          "client_secret",
+          "redirect_uri",
+          "scopes",
+          "strict_discovery_document_validation",
+          "api_base_url"
+        ],
+        "title": "OidcSettingsDTO"
+      },
+      "PerfAnalyzerDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          }
+        },
+        "type": "object",
+        "required": ["status", "message", "namespace"],
+        "title": "PerfAnalyzerDeleteResponse",
+        "description": "Response after uninstalling the singleton Perf Analyzer workload."
+      },
+      "PerfAnalyzerInstallResponse": {
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "deployment_name": {
+            "type": "string",
+            "title": "Deployment Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "applied_resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applied Resources"
+          }
+        },
+        "type": "object",
+        "required": ["namespace", "deployment_name", "image", "applied_resources"],
+        "title": "PerfAnalyzerInstallResponse",
+        "description": "Response after Perf Analyzer Kubernetes resources are applied."
+      },
+      "PerfAnalyzerLatestRunResponse": {
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "title": "Found"
+          },
+          "executed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executed At"
+          },
+          "batch_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size"
+          },
+          "concurrency_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrency Range"
+          },
+          "measurement_request_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurement Request Count"
+          },
+          "input_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Data"
+          },
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Command"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": ["found"],
+        "title": "PerfAnalyzerLatestRunResponse",
+        "description": "Persisted latest Perf Analyzer result for one instance model target."
+      },
+      "PerfAnalyzerRunResponse": {
+        "properties": {
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Command"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output"
+          }
+        },
+        "type": "object",
+        "required": ["command", "output"],
+        "title": "PerfAnalyzerRunResponse",
+        "description": "Output captured from a Perf Analyzer process executed in Kubernetes."
+      },
+      "PerfAnalyzerStatusResponse": {
+        "properties": {
+          "installed": {
+            "type": "boolean",
+            "title": "Installed"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "not_installed"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": false
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message",
+            "default": ""
+          },
+          "installation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PerfAnalyzerInstallResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["installed"],
+        "title": "PerfAnalyzerStatusResponse",
+        "description": "Response describing the singleton Perf Analyzer installation state."
+      },
+      "RunPerfAnalyzerRequest": {
+        "properties": {
+          "instance_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Instance Id"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "batch_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Batch Size",
+            "default": 1
+          },
+          "concurrency_range": {
+            "type": "string",
+            "title": "Concurrency Range",
+            "default": "1"
+          },
+          "measurement_request_count": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Measurement Request Count",
+            "default": 50
+          },
+          "input_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Data"
+          }
+        },
+        "type": "object",
+        "required": ["instance_id", "model_name", "model_version"],
+        "title": "RunPerfAnalyzerRequest",
+        "description": "Request body for a model-level Perf Analyzer run."
+      },
+      "S3EntryDTO": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["folder", "file"],
+            "title": "Type"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          }
+        },
+        "type": "object",
+        "required": ["name", "path", "type"],
+        "title": "S3EntryDTO"
+      },
+      "S3FileContentResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": ["path", "content"],
+        "title": "S3FileContentResponse"
+      },
+      "S3FileWriteResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": ["path", "size"],
+        "title": "S3FileWriteResponse"
+      },
+      "S3ListResponse": {
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/S3EntryDTO"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": ["prefix", "entries"],
+        "title": "S3ListResponse"
+      },
+      "SelfRegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": ["email", "password"],
+        "title": "SelfRegisterRequest"
+      },
+      "TritonInstanceDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "model_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Names"
+          },
+          "repository_models": {
+            "items": {
+              "$ref": "#/components/schemas/TritonRepositoryModelDTO"
+            },
+            "type": "array",
+            "title": "Repository Models"
+          },
+          "server_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Metadata"
+          },
+          "health_live": {
+            "type": "boolean",
+            "title": "Health Live",
+            "default": false
+          },
+          "health_ready": {
+            "type": "boolean",
+            "title": "Health Ready",
+            "default": false
+          },
+          "health_last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Last Checked At"
+          },
+          "health_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Error"
+          },
+          "triton_verify_ssl": {
+            "type": "boolean",
+            "title": "Triton Verify Ssl",
+            "default": false
+          },
+          "triton_ca_certificate": {
+            "type": "string",
+            "title": "Triton Ca Certificate",
+            "default": ""
+          },
+          "metrics_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Url"
+          },
+          "metrics_cpu": {
+            "type": "number",
+            "title": "Metrics Cpu",
+            "default": 0
+          },
+          "metrics_ram": {
+            "type": "number",
+            "title": "Metrics Ram",
+            "default": 0
+          },
+          "metrics_gpu": {
+            "type": "number",
+            "title": "Metrics Gpu",
+            "default": 0
+          },
+          "metrics_last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Last Checked At"
+          },
+          "metrics_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Error"
+          },
+          "deployment_runtime": {
+            "type": "string",
+            "title": "Deployment Runtime",
+            "default": "external"
+          },
+          "deployment_namespace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Namespace"
+          },
+          "deployment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Name"
+          },
+          "deployment_service_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Service Name"
+          },
+          "deployment_secret_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Secret Name"
+          },
+          "deployment_log": {
+            "type": "string",
+            "title": "Deployment Log",
+            "default": ""
+          },
+          "is_self_deployed": {
+            "type": "boolean",
+            "title": "Is Self Deployed",
+            "default": false
+          },
+          "pod_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pod Statuses"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "s3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstanceS3ConfigDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["id", "url", "name", "model_names", "created_at"],
+        "title": "TritonInstanceDTO",
+        "description": "DTO for outgoing Triton instance data (API responses)."
+      },
+      "TritonRepositoryModelDTO": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "TritonRepositoryModelDTO"
+      },
+      "UpdateInstanceS3Request": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "access_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Key"
+          },
+          "secret_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Key"
+          },
+          "use_https": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Https"
+          },
+          "verify_ssl": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify Ssl"
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "address_style": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["path", "virtual"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Style"
+          }
+        },
+        "type": "object",
+        "title": "UpdateInstanceS3Request"
+      },
+      "UpdateOidcSettingsRequest": {
+        "properties": {
+          "oidc_enabled": {
+            "type": "boolean",
+            "title": "Oidc Enabled"
+          },
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "type": "string",
+            "title": "Client Secret"
+          },
+          "redirect_uri": {
+            "type": "string",
+            "title": "Redirect Uri"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes"
+          },
+          "strict_discovery_document_validation": {
+            "type": "boolean",
+            "title": "Strict Discovery Document Validation"
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "api_base_url": {
+            "type": "string",
+            "title": "Api Base Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "oidc_enabled",
+          "issuer",
+          "client_id",
+          "client_secret",
+          "redirect_uri",
+          "scopes",
+          "strict_discovery_document_validation",
+          "api_base_url"
+        ],
+        "title": "UpdateOidcSettingsRequest"
+      },
+      "UpdateTritonInstanceRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "verify_ssl": {
+            "type": "boolean",
+            "title": "Verify Ssl",
+            "default": false
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "metrics_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Url"
+          }
+        },
+        "type": "object",
+        "required": ["url"],
+        "title": "UpdateTritonInstanceRequest",
+        "description": "Request to update an existing Triton instance connection."
+      },
+      "UpdateUserInstancesRequest": {
+        "properties": {
+          "assigned_instances": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Instances"
+          }
+        },
+        "type": "object",
+        "title": "UpdateUserInstancesRequest"
+      },
+      "UpdateUserRoleRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": ["role"],
+        "title": "UpdateUserRoleRequest"
+      },
+      "UserDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "auth_provider": {
+            "type": "string",
+            "title": "Auth Provider"
+          },
+          "oidc_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oidc Subject"
+          },
+          "assigned_instances": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Instances"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "auth_provider",
+          "assigned_instances",
+          "is_active",
+          "created_at"
+        ],
+        "title": "UserDTO"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

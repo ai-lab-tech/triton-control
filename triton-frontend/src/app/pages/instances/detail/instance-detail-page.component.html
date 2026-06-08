@@ -1,0 +1,824 @@
+@if (instance(); as instance) {
+  <div class="instance-detail">
+    <div class="detail-top">
+      <nav class="page-breadcrumbs" aria-label="Breadcrumb">
+        <a routerLink="/instances">Triton Instances</a>
+        <span class="breadcrumb-separator">/</span>
+        <span aria-current="page">{{ instance.name }}</span>
+      </nav>
+    </div>
+    <div class="detail-header">
+      <div class="detail-summary">
+        <div class="detail-summary-head">
+          <div class="page-title">{{ instance.name }}</div>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Instance name</span>
+          <span class="summary-value">{{ instance.name }}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Status</span>
+          <span
+            class="chip"
+            [attr.data-tone]="
+              instance.status === 'healthy' ? 'ok' : instance.status === 'warning' ? 'warn' : 'down'
+            "
+          >
+            {{ instance.status }}
+          </span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Version</span>
+          <span class="summary-value">{{ instance.version || "Unavailable" }}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Runtime</span>
+          <span class="summary-value runtime-value">
+            {{ runtimeEnvironmentLabel() }}
+            @if (instance.isSelfDeployed) {
+              <span class="chip self-deployed-chip" data-tone="ok">Self deployed</span>
+            }
+          </span>
+        </div>
+        @if (instance.isSelfDeployed) {
+          <div class="summary-row">
+            <span class="summary-label">Namespace</span>
+            <span class="summary-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
+          </div>
+          <div class="summary-row summary-row-state">
+            <span class="summary-label">Current state</span>
+            <span class="summary-value summary-value-state">
+              @if (instance.podStatuses.length) {
+                <span class="pod-state-list">
+                  @for (podStatus of instance.podStatuses; track podStatus) {
+                    <span
+                      class="pod-state-chip"
+                      [attr.data-ready]="
+                        podStatus.includes('Ready') && !podStatus.includes('Not Ready')
+                      "
+                    >
+                      <span class="material-icons">circle</span>
+                      {{ podStatus }}
+                    </span>
+                  }
+                </span>
+              } @else {
+                <span class="pod-state-empty">No pod status available yet.</span>
+              }
+            </span>
+          </div>
+        }
+        <p class="page-subtitle">{{ instance.version }} · {{ instance.region }}</p>
+      </div>
+    </div>
+    @if (deploymentDeleteError()) {
+      <div class="panel-hint health-error">{{ deploymentDeleteError() }}</div>
+    }
+    @if (deploymentInProgress()) {
+      <div class="deployment-progress-panel" role="status" aria-live="polite">
+        <span class="deployment-spinner" aria-hidden="true"></span>
+        <div class="deployment-progress-copy">
+          <div class="deployment-progress-title">Deploying</div>
+          <div class="deployment-progress-text">
+            Kubernetes resources were created. Health, models, and metrics can take a few minutes to
+            appear.
+          </div>
+        </div>
+      </div>
+    }
+    @if (perfProfileRunning()) {
+      <div class="deployment-progress-panel" role="status" aria-live="polite">
+        <span class="deployment-spinner" aria-hidden="true"></span>
+        <div class="deployment-progress-copy">
+          <div class="deployment-progress-title">Perf Analyzer</div>
+          <div class="deployment-progress-text">{{ activeProfileRunLabel() }}</div>
+        </div>
+      </div>
+    }
+    <div class="detail-stats">
+      <div class="stat-block">
+        <span class="label">CPU</span>
+        <span class="value">{{
+          instance.metricsUrl && !instance.metricsError ? instance.cpu + "%" : "N/A"
+        }}</span>
+      </div>
+      <div class="stat-block">
+        <span class="label">RAM</span>
+        <span class="value">{{
+          instance.metricsUrl && !instance.metricsError ? instance.ram + "%" : "N/A"
+        }}</span>
+      </div>
+      <div class="stat-block">
+        <span class="label">GPU</span>
+        <span class="value">{{
+          instance.metricsUrl && !instance.metricsError ? instance.gpu + "%" : "N/A"
+        }}</span>
+      </div>
+      <div class="stat-block">
+        <span class="label">Assigned users</span>
+        <span class="value">{{ instance.assignedUsers.length }}</span>
+      </div>
+    </div>
+    <mat-divider></mat-divider>
+    <mat-tab-group
+      class="detail-tabs"
+      [selectedIndex]="selectedDetailTabIndex()"
+      (selectedTabChange)="onDetailTabChanged($event)"
+    >
+      <mat-tab label="Overview">
+        <div class="tab-panel">
+          <div class="panel-card access-card">
+            <div class="panel-title">Access</div>
+            <div class="access-summary">
+              <span class="access-count">{{ instance.assignedUsers.length }}</span>
+              <span class="access-text">{{
+                instance.assignedUsers.length === 1 ? "person has access" : "people have access"
+              }}</span>
+            </div>
+            <div class="chip-row">
+              @for (user of instance.assignedUsers; track user) {
+                <span class="user-chip" data-tone="ok">
+                  <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
+                  <span class="user-name">{{ user.name }}</span>
+                  <span class="permission-chip">{{ user.role }}</span>
+                </span>
+              }
+              @if (!instance.assignedUsers.length) {
+                <span class="empty-chip">No access assigned</span>
+              }
+            </div>
+            <div class="panel-hint">
+              People shown here can access this instance with the listed permission.
+            </div>
+          </div>
+          <div class="panel-card networking-card">
+            <div class="networking-card-header">
+              <div class="panel-title">Networking</div>
+              @if (canWriteInstances()) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="network-copy-btn"
+                  (click)="openTritonDialog()"
+                >
+                  <span class="material-icons">tune</span>
+                  Edit
+                </button>
+              }
+            </div>
+            <div class="kv">
+              <span class="kv-label">Base URL</span>
+              <span class="kv-value network-url-row">
+                <code class="network-url">{{ instance.url }}</code>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="network-copy-btn"
+                  (click)="copyBaseUrl(instance.url)"
+                >
+                  <span class="material-icons">content_copy</span>
+                  Copy
+                </button>
+              </span>
+            </div>
+            <div class="kv">
+              <span class="kv-label">Metrics URL</span>
+              <span class="kv-value">
+                @if (instance.metricsUrl) {
+                  <code class="network-url">{{ instance.metricsUrl }}</code>
+                } @else {
+                  <span>Not configured</span>
+                }
+              </span>
+            </div>
+            <div class="kv">
+              <span class="kv-label">SSL</span>
+              <span class="kv-value">
+                {{
+                  instance.tritonVerifySsl
+                    ? "Certificate verification enabled"
+                    : "Certificate verification disabled"
+                }}
+              </span>
+            </div>
+            <div class="kv">
+              <span class="kv-label">Live</span>
+              <span class="kv-value">
+                <span
+                  class="chip network-status-chip"
+                  [attr.data-tone]="instance.healthLive ? 'ok' : 'down'"
+                >
+                  {{ instance.healthLive ? "200 OK" : "Unavailable" }}
+                </span>
+              </span>
+            </div>
+            <div class="kv">
+              <span class="kv-label">Ready</span>
+              <span class="kv-value">
+                <span
+                  class="chip network-status-chip"
+                  [attr.data-tone]="instance.healthReady ? 'ok' : 'warn'"
+                >
+                  {{ instance.healthReady ? "200 OK" : "Not Ready" }}
+                </span>
+              </span>
+            </div>
+            @if (instance.healthLastCheckedAt) {
+              <div class="kv">
+                <span class="kv-label">Last check</span>
+                <span class="kv-value">{{ instance.healthLastCheckedAt | date: "medium" }}</span>
+              </div>
+            }
+            @if (copyBaseUrlMessage) {
+              <div class="panel-hint">{{ copyBaseUrlMessage }}</div>
+            }
+            @if (instance.healthError) {
+              <div class="panel-hint health-error">{{ instance.healthError }}</div>
+            }
+            @if (instance.metricsError) {
+              <div class="panel-hint health-error">{{ instance.metricsError }}</div>
+            }
+          </div>
+          <div class="panel-card">
+            <div class="panel-title">Triton /v2 Metadata</div>
+            <div class="endpoint-row">
+              <span class="endpoint-method">GET</span>
+              <code>{{ instance.url }}/v2</code>
+              <button
+                mat-stroked-button
+                type="button"
+                class="metadata-toggle"
+                (click)="toggleMetadataView()"
+              >
+                <span class="material-icons">{{
+                  showRawMetadata() ? "notes" : "data_object"
+                }}</span>
+                {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
+              </button>
+            </div>
+            @if (!showRawMetadata()) {
+              <div class="metadata-summary">
+                <div class="metadata-item">
+                  <div class="metadata-label">Server name</div>
+                  <div class="metadata-value">{{ metadataSummary().serverName }}</div>
+                </div>
+                <div class="metadata-item">
+                  <div class="metadata-label">Version</div>
+                  <div class="metadata-value">{{ metadataSummary().version }}</div>
+                </div>
+                <div class="metadata-item metadata-item-wide">
+                  <div class="metadata-label">Extensions</div>
+                  @if (metadataSummary().extensions.length) {
+                    <div class="metadata-extension-list">
+                      @for (extension of metadataSummary().extensions; track extension) {
+                        <span class="metadata-extension-chip">{{ extension }}</span>
+                      }
+                    </div>
+                  } @else {
+                    <div class="metadata-value">Unavailable</div>
+                  }
+                </div>
+              </div>
+            } @else {
+              <pre class="json-block">{{ metadataJson() }}</pre>
+            }
+          </div>
+        </div>
+      </mat-tab>
+      <mat-tab [label]="'Models (' + instance.repositoryModels.length + ')'">
+        <div class="tab-panel">
+          <div class="panel-card">
+            <div class="panel-title">Deployed models</div>
+            <div class="models-list">
+              @if (instance.repositoryModels.length) {
+                @for (model of instance.repositoryModels; track model.name + "|" + model.version) {
+                  <div class="repository-model-card">
+                    <div class="repository-model-row">
+                      <div class="repository-model-main">
+                        <div class="repository-model-name">{{ model.name }}</div>
+                        <div class="repository-model-meta">
+                          <span>Version {{ model.version || "-" }}</span>
+                          @if (model.reason) {
+                            <span class="repository-model-reason">{{ model.reason }}</span>
+                          }
+                        </div>
+                        @if (getModelActionMessage(model.name, model.version)) {
+                          <div class="panel-hint model-row-message model-action-message">
+                            {{ getModelActionMessage(model.name, model.version) }}
+                          </div>
+                        }
+                        @if (getModelActionError(model.name, model.version)) {
+                          <div class="panel-hint model-row-message health-error">
+                            {{ getModelActionError(model.name, model.version) }}
+                          </div>
+                        }
+                      </div>
+                      <div class="repository-model-state">
+                        <span
+                          class="model-state-badge"
+                          [attr.data-tone]="modelStateTone(model.state)"
+                        >
+                          {{ modelStateLabel(model.state) }}
+                        </span>
+                      </div>
+                      <div class="repository-model-actions">
+                        @if (canWriteInstances()) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            class="model-action-btn"
+                            (click)="loadModel(model.name, model.version)"
+                            [disabled]="isModelActionLoading(model.name, model.version, 'load')"
+                          >
+                            <span class="material-icons">play_arrow</span>
+                            {{ loadModelLabel(model.name, model.version, model.state) }}
+                          </button>
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            class="model-action-btn"
+                            (click)="unloadModel(model.name, model.version)"
+                            [disabled]="
+                              isModelActionLoading(model.name, model.version, 'unload') ||
+                              !canUnloadModel(model.state)
+                            "
+                          >
+                            <span class="material-icons">stop</span>
+                            {{ unloadModelLabel(model.name, model.version) }}
+                          </button>
+                        }
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          class="model-action-btn"
+                          [routerLink]="[
+                            '/instances',
+                            instance.id,
+                            'models',
+                            model.name,
+                            'versions',
+                            model.version,
+                            'infer',
+                          ]"
+                          [state]="{ instanceName: instance.name, instanceUrl: instance.url }"
+                          [disabled]="!canInferModel(model.state, model.version)"
+                        >
+                          <span class="material-icons">rocket_launch</span>
+                          Infer
+                        </button>
+                        @if (canWriteInstances() && perfAnalyzerInstalled()) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            class="model-action-btn"
+                            [routerLink]="[
+                              '/instances',
+                              instance.id,
+                              'models',
+                              model.name,
+                              'versions',
+                              model.version,
+                              'profile',
+                            ]"
+                            [state]="{ instanceName: instance.name, instanceUrl: instance.url }"
+                            [disabled]="!canOpenProfile(model.name, model.state, model.version)"
+                          >
+                            <span class="material-icons">speed</span>
+                            Profile
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="panel-hint">No models returned from the Triton repository index.</div>
+              }
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+      <mat-tab label="S3 Connection">
+        <div class="tab-panel">
+          <div class="panel-card">
+            <div class="panel-title">S3 access</div>
+            @if (hasS3Connection(instance)) {
+              <div class="s3-summary">
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">Status</span>
+                  <span class="s3-summary-value">
+                    <span class="chip" [attr.data-tone]="instance.s3.enabled ? 'ok' : 'neutral'">
+                      {{ instance.s3.enabled ? "Enabled" : "Saved but disabled" }}
+                    </span>
+                  </span>
+                </div>
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">Endpoint</span>
+                  <span class="s3-summary-value">{{
+                    instance.s3.endpoint || "Not configured"
+                  }}</span>
+                </div>
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">Bucket</span>
+                  <span class="s3-summary-value">{{ instance.s3.bucket || "Not configured" }}</span>
+                </div>
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">Region</span>
+                  <span class="s3-summary-value">{{ instance.s3.region || "Not configured" }}</span>
+                </div>
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">Repository path</span>
+                  <span class="s3-summary-value">{{ instance.s3.prefix || "/" }}</span>
+                </div>
+                <div class="s3-summary-row">
+                  <span class="s3-summary-label">SSL</span>
+                  <span class="s3-summary-value">
+                    {{
+                      instance.s3.verifySsl
+                        ? "Certificate verification enabled"
+                        : "Certificate verification disabled"
+                    }}
+                  </span>
+                </div>
+              </div>
+              @if (canWriteInstances()) {
+                <div class="s3-actions">
+                  <button mat-stroked-button type="button" (click)="openS3Dialog()">
+                    <span class="material-icons">tune</span>
+                    Edit S3 connection
+                  </button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="s3-disable-btn"
+                    (click)="disableS3Config()"
+                    [disabled]="s3Saving()"
+                  >
+                    <span class="material-icons">link_off</span>
+                    Delete S3 Connection
+                  </button>
+                </div>
+              }
+            } @else {
+              <div class="s3-empty-state">
+                <div class="s3-empty-copy">
+                  <div class="s3-empty-title">No S3 connection configured</div>
+                  <div class="panel-hint">
+                    Add an S3 connection to manage model data for this instance.
+                  </div>
+                </div>
+                @if (canWriteInstances()) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="s3-add-btn"
+                    (click)="openS3Dialog()"
+                  >
+                    <span class="material-icons">add_link</span>
+                    Add S3 connection
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          <div class="panel-card">
+            <div class="panel-title">Model data in S3</div>
+            @if (hasS3Connection(instance) && instance.s3.enabled) {
+              <div class="s3-browser-action">
+                <a
+                  mat-stroked-button
+                  class="summary-action-btn"
+                  [routerLink]="['/instances', instance.id, 's3']"
+                >
+                  <span class="material-icons">folder</span>
+                  Open S3 Browser
+                </a>
+              </div>
+            }
+            @if (hasS3Connection(instance) && instance.s3.enabled) {
+              <div class="s3-tree">
+                @for (node of instance.modelFiles; track node) {
+                  <div class="tree-row">
+                    <span class="material-icons" [class.folder]="node.type === 'folder'">
+                      {{ node.type === "folder" ? "folder" : "insert_drive_file" }}
+                    </span>
+                    <span class="tree-name" [style.paddingLeft.px]="node.level * 14">{{
+                      node.name
+                    }}</span>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="panel-hint">
+                S3 model data becomes available here after an active S3 connection is configured.
+              </div>
+            }
+          </div>
+        </div>
+      </mat-tab>
+      @if (instance.isSelfDeployed) {
+        <mat-tab label="Logs">
+          <div class="tab-panel logs-panel">
+            <div class="panel-card logs-card">
+              <div class="logs-head">
+                <div>
+                  <div class="panel-title">Deployment logs</div>
+                  <div class="panel-hint">
+                    Kubernetes deployment events and recent Triton pod output.
+                  </div>
+                </div>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="summary-action-btn"
+                  (click)="loadDeploymentLogs()"
+                  [disabled]="deploymentLogsLoading()"
+                >
+                  <span class="material-icons">sync</span>
+                  {{ deploymentLogsLoading() ? "Loading..." : "Refresh" }}
+                </button>
+              </div>
+              @if (deploymentLogsError()) {
+                <div class="panel-hint health-error">{{ deploymentLogsError() }}</div>
+              }
+              <pre class="json-block deployment-log-block">{{
+                deploymentLogs() || instance.deploymentLog || "No deployment logs available."
+              }}</pre>
+            </div>
+          </div>
+        </mat-tab>
+      }
+    </mat-tab-group>
+  </div>
+
+  @if (showS3Dialog()) {
+    <div
+      class="s3-dialog-backdrop"
+      (pointerdown)="onDialogBackdropPointerDown($event)"
+      (click)="closeS3DialogFromBackdrop($event)"
+    >
+      <div class="s3-dialog" (click)="$event.stopPropagation()">
+        <div class="s3-dialog-head">
+          <div>
+            <div class="panel-title">
+              {{ hasS3Connection(instance) ? "Edit S3 connection" : "Add S3 connection" }}
+            </div>
+            <div class="panel-hint">
+              Configure the S3 endpoint and credentials for this Triton instance.
+            </div>
+          </div>
+          <button
+            mat-icon-button
+            type="button"
+            class="s3-dialog-close"
+            (click)="closeS3Dialog()"
+            aria-label="Close S3 dialog"
+          >
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="s3-grid">
+          <div class="form-row">
+            <label class="field-label" for="s3-access-key">Access key</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="s3-access-key"
+                matInput
+                [(ngModel)]="s3AccessKey"
+                placeholder="Access key"
+              />
+            </mat-form-field>
+          </div>
+          <div class="form-row">
+            <label class="field-label" for="s3-secret-key">Secret key</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="s3-secret-key"
+                type="password"
+                matInput
+                [(ngModel)]="s3SecretKey"
+                [placeholder]="getS3SecretPlaceholder()"
+              />
+              @if (s3SecretConfigured) {
+                <mat-hint>Leave empty to keep the stored secret.</mat-hint>
+              }
+            </mat-form-field>
+          </div>
+          <div class="form-row">
+            <label class="field-label" for="s3-bucket">Bucket</label>
+            <mat-form-field appearance="outline">
+              <input id="s3-bucket" matInput [(ngModel)]="s3Bucket" placeholder="Bucket" />
+            </mat-form-field>
+          </div>
+          <div class="form-row">
+            <label class="field-label" for="s3-region">Region (optional) </label>
+            <mat-form-field appearance="outline">
+              <input
+                id="s3-region"
+                matInput
+                [(ngModel)]="s3Region"
+                [placeholder]="defaultS3Region"
+              />
+              <span
+                matSuffix
+                class="field-help"
+                matTooltip="Optional. If left empty, the backend stores us-east-1."
+                aria-label="S3 region help"
+                >?</span
+              >
+            </mat-form-field>
+          </div>
+          <div class="form-row">
+            <label class="field-label" for="s3-endpoint">Endpoint</label>
+            <mat-form-field appearance="outline">
+              <input id="s3-endpoint" matInput [(ngModel)]="s3Endpoint" placeholder="Endpoint" />
+            </mat-form-field>
+          </div>
+          <div class="form-row">
+            <label class="field-label" for="s3-prefix">Prefix (optional)</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="s3-prefix"
+                matInput
+                [(ngModel)]="s3Prefix"
+                placeholder="Prefix (optional)"
+              />
+            </mat-form-field>
+          </div>
+          <div class="toggle-row compact s3-ssl-row">
+            <div>
+              <div class="toggle-title">SSL</div>
+              <div class="panel-hint">Validate the S3 endpoint certificate.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="s3VerifySsl" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          @if (s3VerifySsl) {
+            <div class="form-row s3-certificate-row">
+              <label class="field-label" for="s3-ca-certificate">Certificate</label>
+              <mat-form-field appearance="outline">
+                <textarea
+                  id="s3-ca-certificate"
+                  matInput
+                  rows="6"
+                  [(ngModel)]="s3CaCertificate"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                ></textarea>
+                <mat-hint>
+                  Optional. Only needed for private, self-signed, or internal CA chains.
+                </mat-hint>
+              </mat-form-field>
+              <div class="certificate-actions">
+                <input
+                  #s3CertificateInput
+                  type="file"
+                  accept=".crt,.cer,.pem"
+                  hidden
+                  (change)="onS3CertificateFileSelected($event)"
+                />
+                <button mat-stroked-button type="button" (click)="s3CertificateInput.click()">
+                  Add certificate
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="s3-dialog-actions">
+          <button mat-stroked-button type="button" (click)="closeS3Dialog()">Cancel</button>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="saveS3Config()"
+            [disabled]="s3Saving() || !canSaveS3Config()"
+          >
+            <span class="material-icons">save</span>
+            {{ s3Saving() ? "Saving..." : "Save S3 settings" }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showTritonDialog()) {
+    <div
+      class="s3-dialog-backdrop"
+      (pointerdown)="onDialogBackdropPointerDown($event)"
+      (click)="closeTritonDialogFromBackdrop($event)"
+    >
+      <div class="s3-dialog triton-dialog" (click)="$event.stopPropagation()">
+        <div class="s3-dialog-head">
+          <div>
+            <div class="panel-title">Edit Triton connection</div>
+            <div class="panel-hint">
+              Change the backend endpoint and SSL certificate verification for this instance.
+            </div>
+          </div>
+          <button
+            mat-icon-button
+            type="button"
+            class="s3-dialog-close"
+            (click)="closeTritonDialog()"
+            aria-label="Close Triton connection dialog"
+          >
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="s3-grid">
+          <div class="form-row triton-endpoint-row">
+            <label class="field-label" for="triton-endpoint">Endpoint</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="triton-endpoint"
+                matInput
+                [(ngModel)]="tritonEndpoint"
+                placeholder="http://triton:8000"
+              />
+            </mat-form-field>
+          </div>
+          <div class="form-row triton-endpoint-row">
+            <label class="field-label" for="metrics-endpoint">Metrics endpoint</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="metrics-endpoint"
+                matInput
+                [(ngModel)]="metricsEndpoint"
+                placeholder="http://triton:8002"
+              />
+            </mat-form-field>
+            <div class="panel-hint">
+              Optional Prometheus metrics endpoint for CPU, RAM, and GPU usage.
+            </div>
+          </div>
+          <div class="toggle-row compact s3-ssl-row">
+            <div>
+              <div class="toggle-title">SSL</div>
+              <div class="panel-hint">Validate the Triton endpoint certificate.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" [(ngModel)]="tritonVerifySsl" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          @if (tritonVerifySsl) {
+            <div class="form-row s3-certificate-row">
+              <label class="field-label" for="triton-ca-certificate">Certificate</label>
+              <mat-form-field appearance="outline">
+                <textarea
+                  id="triton-ca-certificate"
+                  matInput
+                  rows="6"
+                  [(ngModel)]="tritonCaCertificate"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                ></textarea>
+                <mat-hint>
+                  Optional. Only needed for private, self-signed, or internal CA chains.
+                </mat-hint>
+              </mat-form-field>
+              <div class="certificate-actions">
+                <input
+                  #tritonCertificateInput
+                  type="file"
+                  accept=".crt,.cer,.pem"
+                  hidden
+                  (change)="onTritonCertificateFileSelected($event)"
+                />
+                <button mat-stroked-button type="button" (click)="tritonCertificateInput.click()">
+                  Add certificate
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="s3-dialog-actions">
+          <button mat-stroked-button type="button" (click)="closeTritonDialog()">Cancel</button>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="saveTritonConnection()"
+            [disabled]="tritonSaving() || !tritonEndpoint.trim()"
+          >
+            <span class="material-icons">save</span>
+            {{ tritonSaving() ? "Saving..." : "Save connection" }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+}
+
+@if (showInitialLoading()) {
+  <div class="empty">
+    <span class="material-icons">sync</span>
+    <div>Loading instance...</div>
+  </div>
+}
+
+@if (showNotFound()) {
+  <div class="empty">
+    <span class="material-icons">dns</span>
+    <div>Instance not found.</div>
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}

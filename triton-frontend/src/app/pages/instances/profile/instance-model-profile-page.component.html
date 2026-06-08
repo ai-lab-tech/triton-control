@@ -1,0 +1,160 @@
+@if (hasValidRoute()) {
+  <div class="profile-page">
+    <div class="profile-header">
+      <nav class="page-breadcrumbs" aria-label="Breadcrumb">
+        <a routerLink="/instances">Triton Instances</a>
+        <span class="breadcrumb-separator">/</span>
+        <a [routerLink]="['/instances', instanceId()]">{{
+          instanceName || "Instance #" + instanceId()
+        }}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span aria-current="page">Profile {{ modelName() }}</span>
+      </nav>
+      <div class="page-title">Model Profile</div>
+      <p class="page-subtitle">{{ modelName() }} - Version {{ version() }}</p>
+    </div>
+
+    <mat-card class="card profile-card">
+      @if (loadingStatus()) {
+        <div class="panel-hint">Loading Perf Analyzer status...</div>
+      } @else if (!installed()) {
+        <div class="status-panel error-panel">
+          <div class="section-title">Perf Analyzer not installed</div>
+          <div class="panel-hint">Install the Perf Analyzer workload before running profiles.</div>
+          <a mat-stroked-button routerLink="/perf-analyzers">
+            <span class="material-icons">speed</span>
+            Open Perf Analyzer
+          </a>
+        </div>
+      }
+
+      <div class="endpoint-list">
+        <div class="endpoint-row">
+          <span class="endpoint-label">Instance</span>
+          <span class="endpoint-value">{{ instanceName || "Instance #" + instanceId() }}</span>
+        </div>
+        <div class="endpoint-row">
+          <span class="endpoint-label">Target</span>
+          <code class="endpoint-url">{{ modelName() }}:{{ version() }}</code>
+        </div>
+      </div>
+
+      <div class="profile-grid">
+        <div class="form-row">
+          <label class="field-label" for="profile-batch-size">Batch size</label>
+          <mat-form-field appearance="outline">
+            <input id="profile-batch-size" matInput type="number" min="1" [(ngModel)]="batchSize" />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="profile-concurrency">Concurrency range</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="profile-concurrency"
+              matInput
+              [(ngModel)]="concurrencyRange"
+              placeholder="1:4:1"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="profile-request-count">Request count</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="profile-request-count"
+              matInput
+              type="number"
+              min="1"
+              [(ngModel)]="measurementRequestCount"
+            />
+          </mat-form-field>
+        </div>
+      </div>
+
+      <div class="editor-section">
+        <div class="editor-pane">
+          <label class="field-label" for="profile-input-data">
+            Input data (JSON)
+            <span class="field-hint">Leave empty to use synthetic random data</span>
+          </label>
+          <app-instance-model-monaco-editor
+            [(value)]="inputData"
+            (valueChange)="saveInputData($event)"
+          ></app-instance-model-monaco-editor>
+        </div>
+        <aside class="api-config-pane">
+          <div class="editor-head">
+            <div class="section-title">API Config</div>
+            <button
+              mat-stroked-button
+              type="button"
+              class="api-config-btn"
+              (click)="toggleApiConfig()"
+              [disabled]="apiConfigLoading()"
+            >
+              <span class="material-icons">
+                {{ apiConfigOpen() ? "expand_less" : "data_object" }}
+              </span>
+              {{ apiConfigOpen() ? "Hide API Config" : "Show API Config" }}
+            </button>
+          </div>
+          @if (apiConfigOpen()) {
+            @if (apiConfigLoading()) {
+              <div class="panel-hint">Loading API config...</div>
+            } @else if (apiConfigError()) {
+              <div class="panel-hint health-error">{{ apiConfigError() }}</div>
+            } @else if (apiConfigJson()) {
+              <pre class="response-block">{{ apiConfigJson() }}</pre>
+            }
+          } @else {
+            <div class="panel-hint">Open the model API config beside the profile input.</div>
+          }
+        </aside>
+      </div>
+
+      <div class="actions">
+        <a mat-stroked-button [routerLink]="['/instances', instanceId()]">
+          <span class="material-icons">arrow_back</span>
+          Back
+        </a>
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="runProfiler()"
+          [disabled]="!canRun()"
+        >
+          <span class="material-icons">speed</span>
+          {{ running() ? "Running..." : "Run Profiler" }}
+        </button>
+      </div>
+
+      @if (otherRunInProgress()) {
+        <div class="panel-hint">
+          Another Perf Analyzer run is already in progress. Wait until it finishes.
+        </div>
+      }
+
+      @if (resolvingInstance()) {
+        <div class="panel-hint">Resolving instance metadata in background...</div>
+      }
+      @if (error()) {
+        <div class="panel-hint health-error">{{ error() }}</div>
+      }
+      @if (output()) {
+        <div class="response-panel">
+          <div class="section-title">Output</div>
+          <pre class="response-block">{{ output() }}</pre>
+        </div>
+      }
+    </mat-card>
+  </div>
+}
+
+@if (!hasValidRoute()) {
+  <div class="empty">
+    <span class="material-icons">speed</span>
+    <div>Model profile target not found.</div>
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}

@@ -1,0 +1,10 @@
+<mat-card class="stat-card" [attr.data-tone]="tone()">
+  <div class="stat-icon">
+    <span class="material-icons">{{ icon() }}</span>
+  </div>
+  <div class="stat-content">
+    <div class="stat-label">{{ label() }}</div>
+    <div class="stat-value">{{ value() }}</div>
+    <div class="stat-trend" [class.stat-trend-empty]="!trend()">{{ trend() || "\u00A0" }}</div>
+  </div>
+</mat-card>

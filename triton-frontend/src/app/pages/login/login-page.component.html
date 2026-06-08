@@ -1,0 +1,210 @@
+<div class="login-wrap">
+  <mat-card class="login-card">
+    <mat-card-header>
+      <mat-card-title>Triton Control</mat-card-title>
+      <mat-card-subtitle>
+        @if (needsBootstrap()) {
+          Create the first admin user
+        } @else if (oidcEnabled()) {
+          Sign in with your identity provider
+        } @else {
+          Sign in with email and password
+        }
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (isPendingApproval()) {
+        <div class="pending-banner" role="alert" aria-live="polite">
+          <div class="pending-title-row">
+            <span class="material-icons">warning</span>
+            <span class="pending-title">Access Pending Admin Approval</span>
+          </div>
+          <p class="pending-text">
+            Your account is authenticated but pending administrator approval. You cannot access
+            Triton Control until an administrator activates your account.
+          </p>
+        </div>
+      }
+
+      @if (isLoggedIn()) {
+        @if (accessAllowed()) {
+          <div class="status ok">
+            <span class="material-icons">check_circle</span>
+            <span
+              >Signed in as <b>{{ userName() }}</b></span
+            >
+          </div>
+        } @else {
+          <div class="status warn">
+            <span class="material-icons">hourglass_top</span>
+            <span
+              >Signed in as <b>{{ userName() }}</b
+              >. Waiting for admin role assignment.</span
+            >
+          </div>
+        }
+      } @else {
+        <div class="status warn">
+          <span class="material-icons">lock</span>
+          <span>
+            @if (needsBootstrap()) {
+              No users found. Register the first admin account.
+            } @else {
+              You are not signed in.
+            }
+          </span>
+        </div>
+
+        @if (!oidcEnabled()) {
+          <form
+            class="form"
+            (ngSubmit)="registerMode() ? registerWithPassword() : loginWithPassword()"
+          >
+            <mat-form-field appearance="outline">
+              <mat-label>Email</mat-label>
+              <input
+                matInput
+                [(ngModel)]="email"
+                name="email"
+                type="email"
+                autocomplete="username"
+                pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
+              />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Password</mat-label>
+              <input
+                matInput
+                [(ngModel)]="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                minlength="12"
+                maxlength="128"
+              />
+            </mat-form-field>
+
+            @if (needsBootstrap() || registerMode()) {
+              <mat-form-field appearance="outline">
+                <mat-label>Confirm password</mat-label>
+                <input
+                  matInput
+                  [(ngModel)]="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  minlength="12"
+                  maxlength="128"
+                />
+              </mat-form-field>
+              <div class="field-note">
+                Passwords must be 12-128 characters, include uppercase, lowercase, digit, and
+                special character, and must not contain whitespace.
+              </div>
+            }
+
+            @if (notice()) {
+              <div class="notice">{{ notice() }}</div>
+            }
+
+            @if (error()) {
+              <div class="error" [class.pending-error]="isPendingApprovalError()">
+                {{ error() }}
+              </div>
+            }
+
+            <button
+              type="submit"
+              class="hidden-submit"
+              [disabled]="loading()"
+              aria-hidden="true"
+              tabindex="-1"
+            >
+              submit
+            </button>
+          </form>
+        } @else {
+          <div class="status ok oidc-only">
+            <span class="material-icons">shield</span>
+            <span>Password login is disabled. Use OIDC to sign in.</span>
+          </div>
+          @if (error()) {
+            <div class="error" [class.pending-error]="isPendingApprovalError()">{{ error() }}</div>
+          }
+        }
+      }
+    </mat-card-content>
+
+    <mat-card-actions align="end" class="action-row">
+      @if (!isLoggedIn()) {
+        @if (oidcEnabled()) {
+          <button
+            mat-flat-button
+            color="primary"
+            class="action-btn action-btn-primary"
+            (click)="loginWithOidc()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">shield</span>
+            Log in with OIDC
+          </button>
+        } @else if (!needsBootstrap() && !registerMode()) {
+          <button
+            mat-flat-button
+            color="primary"
+            class="action-btn action-btn-primary"
+            (click)="loginWithPassword()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">login</span>
+            Log in with password
+          </button>
+          <button
+            mat-stroked-button
+            class="action-btn action-btn-secondary"
+            (click)="enableRegisterMode()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">person_add</span>
+            Register with password
+          </button>
+        } @else if (!needsBootstrap() && registerMode()) {
+          <button
+            mat-flat-button
+            color="primary"
+            class="action-btn action-btn-primary"
+            (click)="registerWithPassword()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">check</span>
+            Create account
+          </button>
+        } @else {
+          <button
+            mat-flat-button
+            color="primary"
+            class="action-btn action-btn-primary"
+            (click)="loginWithPassword()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">login</span>
+            Register user
+          </button>
+        }
+      }
+      @if (isLoggedIn()) {
+        <button
+          mat-stroked-button
+          class="action-btn action-btn-secondary"
+          (click)="continue()"
+          [disabled]="!accessAllowed()"
+        >
+          <span class="material-icons">arrow_forward</span>
+          Continue
+        </button>
+      }
+    </mat-card-actions>
+  </mat-card>
+</div>

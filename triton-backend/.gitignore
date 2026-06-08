@@ -1,0 +1,20 @@
+# Ignore virtual environments
+.venv
+.env
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pem
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+.cache/
+*.cache
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

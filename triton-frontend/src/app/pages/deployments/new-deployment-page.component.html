@@ -1,0 +1,367 @@
+﻿<div class="deployment">
+  <div class="header-row">
+    <div>
+      <div class="page-title">Add Deployment</div>
+      <p class="page-subtitle">Deploy Triton on Kubernetes from an S3 model repository.</p>
+    </div>
+  </div>
+
+  <mat-card class="card deployment-card">
+    <div class="section">
+      <div>
+        <div class="section-title">Deployment</div>
+        <div class="section-subtitle">
+          Name the Kubernetes deployment and the container image to run.
+        </div>
+      </div>
+      <div class="form-grid split">
+        <div class="form-row">
+          <label class="field-label" for="deployment-name">Deployment name</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-name"
+              matInput
+              [(ngModel)]="deploymentName"
+              placeholder="triton-deployment"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-image">Image</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-image"
+              matInput
+              [(ngModel)]="image"
+              placeholder="nvcr.io/nvidia/tritonserver:25.02-py3"
+            />
+          </mat-form-field>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div>
+        <div class="section-title">Model repository (S3)</div>
+        <div class="section-subtitle">
+          S3 endpoint, bucket path, and credentials. Credentials are stored in a Kubernetes Secret.
+        </div>
+      </div>
+      <div class="form-grid split">
+        <div class="form-row wide s3-deployment-warning">
+          <span class="material-icons" aria-hidden="true">info</span>
+          <div>
+            <div class="warning-title">Deployment S3 settings are fixed after deploy</div>
+            <div class="warning-text">
+              These S3 values are written into the Triton pod for the model repository. To change
+              that in-pod connection later, delete this deployment and create a new one. The S3
+              settings on the instance detail page are only for Triton Control's browser/editor
+              access.
+            </div>
+          </div>
+        </div>
+        <div class="form-row wide">
+          <label class="field-label" for="deployment-s3-url">S3 URL</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-s3-url"
+              matInput
+              [(ngModel)]="s3Url"
+              placeholder="https://object-store.example.com/triton-models"
+            />
+            <mat-hint>
+              Use endpoint + path (for example <code>http://</code> or <code>https://</code>).
+              Triton Control automatically stores it as <code>s3://&lt;your-url&gt;</code>.
+            </mat-hint>
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-s3-access-key">Access key</label>
+          <mat-form-field appearance="outline">
+            <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-s3-secret-key"
+              matInput
+              [(ngModel)]="s3SecretKey"
+              type="password"
+              autocomplete="new-password"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-s3-region">Region</label>
+          <mat-form-field appearance="outline">
+            <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
+          </mat-form-field>
+        </div>
+        @if (usesHttpsS3()) {
+          <div class="form-row wide">
+            <label class="field-label" for="deployment-s3-ca-certificate">S3 CA certificate</label>
+            <mat-form-field appearance="outline">
+              <textarea
+                id="deployment-s3-ca-certificate"
+                matInput
+                rows="5"
+                [(ngModel)]="s3CaCertificate"
+                placeholder="-----BEGIN CERTIFICATE-----"
+              ></textarea>
+              <mat-hint>
+                Optional. Provide only for private, self-signed, or internal CA chains.
+              </mat-hint>
+            </mat-form-field>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="section">
+      <div>
+        <div class="section-title">Triton arguments</div>
+        <div class="section-subtitle">Startup arguments passed to the Triton server container.</div>
+      </div>
+      <div class="form-grid split">
+        <div class="form-row">
+          <label class="field-label" for="deployment-model-control-mode">Model control mode</label>
+          <mat-form-field appearance="outline">
+            <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
+              <mat-option value="explicit">Explicit</mat-option>
+              <mat-option value="poll">Poll</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-model-name"
+            >Startup model
+            <span class="field-hint">Leave empty to load all models</span>
+          </label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-model-name"
+              matInput
+              [(ngModel)]="modelName"
+              [disabled]="modelControlMode !== 'explicit'"
+              placeholder="e.g. ensemble (empty = all)"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="deployment-repository-poll-secs">Poll interval</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-repository-poll-secs"
+              matInput
+              [(ngModel)]="repositoryPollSecs"
+              [disabled]="modelControlMode !== 'poll'"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="15"
+            />
+          </mat-form-field>
+        </div>
+      </div>
+    </div>
+
+    <div class="advanced-section">
+      <div class="advanced-head">
+        <div class="advanced-title-row">
+          <span class="material-icons">settings_suggest</span>
+          <div class="advanced-title">Advanced Infrastructure Settings</div>
+        </div>
+        <div class="advanced-subtitle">
+          Optional deployment infrastructure settings. Expand only what you need.
+        </div>
+      </div>
+      <mat-accordion class="optional-sections">
+        <mat-expansion-panel>
+          @let ingressPanel = ingressStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">route</span>
+              <span>Ingress</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="ingressPanel.tone">{{
+                ingressPanel.label
+              }}</span>
+              <span class="panel-status-detail">{{ ingressPanel.detail }}</span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-grid split">
+            <div class="form-row wide ingress-help">
+              <div class="field-hint">
+                You can enter a hostname only or a full URL. Hostname-only defaults to
+                <code>https://</code>. Use <code>http://</code> or <code>https://</code>
+                explicitly to control the scheme.
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-ingress-host">Ingress host</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-ingress-host"
+                  matInput
+                  [(ngModel)]="ingressHost"
+                  placeholder="http://triton.example.local"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-ingress-class">Ingress class</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-ingress-class"
+                  matInput
+                  [(ngModel)]="ingressClassName"
+                  placeholder="nginx"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row wide ingress-help">
+              <div class="field-hint">
+                TLS certificates are not configured by this form. For HTTPS ingress, provision TLS
+                via your ingress controller (for example cert-manager Certificate/Issuer or a
+                pre-created TLS Secret).
+              </div>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
+        <mat-expansion-panel>
+          @let pullSecretPanel = pullSecretStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">key</span>
+              <span>Image Pull Secret</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="pullSecretPanel.tone">{{
+                pullSecretPanel.label
+              }}</span>
+              <span class="panel-status-detail">{{ pullSecretPanel.detail }}</span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-row wide">
+            <label class="field-label" for="deployment-dockerconfigjson"
+              >Registry Credentials (.dockerconfigjson)</label
+            >
+            <div class="field-hint">
+              Paste Docker registry auth JSON used to pull private images.
+            </div>
+            <ngx-monaco-editor
+              id="deployment-dockerconfigjson"
+              class="dockerconfigjson-editor"
+              [options]="dockerconfigjsonEditorOptions"
+              [ngModel]="dockerconfigjson()"
+              (ngModelChange)="dockerconfigjson.set($event)"
+            ></ngx-monaco-editor>
+          </div>
+        </mat-expansion-panel>
+
+        <mat-expansion-panel>
+          @let requirementsPanel = requirementsStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">extension</span>
+              <span>Extra Python packages</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="requirementsPanel.tone">{{
+                requirementsPanel.label
+              }}</span>
+              <span class="panel-status-detail">
+                {{ requirementsPanel.detail }} - installed before Triton starts
+              </span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-row wide">
+            <label class="field-label" for="deployment-requirements">Extra Python packages</label>
+            <div class="field-hint">
+              Use requirements.txt format, one pip package per line with optional version pins.
+            </div>
+            <ngx-monaco-editor
+              id="deployment-requirements"
+              class="requirements-editor"
+              [options]="requirementsEditorOptions"
+              [ngModel]="requirementsTxt()"
+              (ngModelChange)="requirementsTxt.set($event)"
+            ></ngx-monaco-editor>
+          </div>
+        </mat-expansion-panel>
+
+        <mat-expansion-panel>
+          @let resourcesPanel = resourcesStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">tune</span>
+              <span>Resources</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="resourcesPanel.tone">{{
+                resourcesPanel.label
+              }}</span>
+              <span class="panel-status-detail">{{ resourcesPanel.detail }}</span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-grid split">
+            <div class="form-row">
+              <label class="field-label" for="deployment-gpu-count">GPU count</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-gpu-count"
+                  matInput
+                  type="number"
+                  min="0"
+                  step="1"
+                  [(ngModel)]="gpuCount"
+                  placeholder="0"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-cpu">CPU request</label>
+              <mat-form-field appearance="outline">
+                <input id="deployment-cpu" matInput [(ngModel)]="cpu" placeholder="4" />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-memory">Memory request</label>
+              <mat-form-field appearance="outline">
+                <input id="deployment-memory" matInput [(ngModel)]="memory" placeholder="10Gi" />
+              </mat-form-field>
+            </div>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </div>
+
+    <div class="actions">
+      <button mat-stroked-button type="button" [routerLink]="['/instances']">Cancel</button>
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        (click)="deploy()"
+        [disabled]="!canDeploy()"
+      >
+        <span class="material-icons">rocket_launch</span>
+        {{ deploying() ? "Deploying..." : "Deploy" }}
+      </button>
+    </div>
+
+    @if (message()) {
+      <div
+        class="deployment-message"
+        [class.success]="messageTone() === 'success'"
+        [class.error]="messageTone() === 'error'"
+      >
+        {{ message() }}
+      </div>
+    }
+  </mat-card>
+</div>

@@ -1,0 +1,190 @@
+<div class="settings">
+  <div class="page-title">Settings</div>
+
+  <mat-card class="card">
+    <div class="card-title">Authentication</div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-title">Enable OIDC</div>
+        <div class="toggle-sub">
+          @if (canEditOidcSettings()) {
+            Allow users to sign in with your identity provider.
+          } @else {
+            Managed by OIDC_CONFIG_SOURCE=env.
+          }
+        </div>
+      </div>
+      <label class="switch">
+        <input
+          id="oidc-enabled"
+          type="checkbox"
+          [checked]="oidcEnabled"
+          (change)="oidcEnabled = $any($event.target).checked"
+          [disabled]="!canEditOidcSettings()"
+          [attr.disabled]="!canEditOidcSettings() ? '' : null"
+        />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="oidc-form" [class.disabled]="!oidcEnabled || !canEditOidcSettings()">
+      <div class="form-row">
+        <label class="field-label" for="oidc-issuer">Issuer URL</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="oidc-issuer"
+            matInput
+            [(ngModel)]="settings.issuer"
+            placeholder="Issuer URL"
+            [readonly]="!canEditOidcSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="oidc-client">Client ID</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="oidc-client"
+            matInput
+            [(ngModel)]="settings.clientId"
+            placeholder="Client ID"
+            [readonly]="!canEditOidcSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="oidc-client-secret">Client Secret</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="oidc-client-secret"
+            matInput
+            [(ngModel)]="settings.clientSecret"
+            type="password"
+            [placeholder]="getClientSecretPlaceholder()"
+            [readonly]="!canEditOidcSettings()"
+          />
+          @if (settings.clientSecretConfigured) {
+            <mat-hint>Leave empty to keep the stored secret.</mat-hint>
+          }
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="oidc-redirect">Redirect URI</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="oidc-redirect"
+            matInput
+            [(ngModel)]="settings.redirectUri"
+            placeholder="Redirect URI"
+            [readonly]="!canEditOidcSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="oidc-scopes">Scopes</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="oidc-scopes"
+            matInput
+            [(ngModel)]="settings.scopes"
+            placeholder="Scopes"
+            [readonly]="!canEditOidcSettings()"
+          />
+        </mat-form-field>
+      </div>
+    </div>
+
+    <div class="extra-section">
+      <div class="api-form">
+        <div class="form-row">
+          <label class="field-label" for="api-base-url">Backend API base URL</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="api-base-url"
+              matInput
+              [(ngModel)]="settings.apiBaseUrl"
+              placeholder="API base URL"
+              [readonly]="true"
+            />
+          </mat-form-field>
+        </div>
+      </div>
+      <div class="ssl-section" [class.disabled]="!canEditOidcSettings()">
+        <div class="toggle-row compact">
+          <div>
+            <div class="toggle-title">SSL</div>
+            <div class="toggle-sub">
+              @if (canEditOidcSettings()) {
+                Use a trusted certificate for the OIDC HTTPS connection.
+              } @else {
+                Managed by OIDC_CA_BUNDLE.
+              }
+            </div>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [(ngModel)]="settings.strictDiscoveryDocumentValidation"
+              [disabled]="!canEditOidcSettings()"
+            />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        @if (settings.strictDiscoveryDocumentValidation) {
+          <div class="form-row">
+            <label class="field-label" for="oidc-ca-certificate">Certificate</label>
+            <mat-form-field appearance="outline">
+              <textarea
+                id="oidc-ca-certificate"
+                matInput
+                rows="6"
+                [(ngModel)]="settings.caCertificate"
+                placeholder="-----BEGIN CERTIFICATE-----"
+                [readonly]="!canEditOidcSettings()"
+              ></textarea>
+            </mat-form-field>
+            <div class="certificate-actions">
+              <input
+                #certificateInput
+                type="file"
+                accept=".crt,.cer,.pem"
+                hidden
+                (change)="onCertificateFileSelected($event)"
+              />
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="certificateInput.click()"
+                [disabled]="!canEditOidcSettings()"
+              >
+                Add certificate
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+    <div class="actions">
+      <button
+        mat-flat-button
+        color="primary"
+        (click)="saveSettings()"
+        [disabled]="!canSaveSettings()"
+      >
+        <span class="material-icons">save</span>
+        Save changes
+      </button>
+    </div>
+
+    @if (message()) {
+      <div
+        class="settings-message"
+        [class.success]="messageTone() === 'success'"
+        [class.error]="messageTone() === 'error'"
+      >
+        {{ message() }}
+      </div>
+    }
+  </mat-card>
+</div>

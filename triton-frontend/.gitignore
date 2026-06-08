@@ -1,0 +1,9 @@
+node_modules
+.npm-cache
+.angular/cache
+tools/swagger-codegen-cli.jar
+src/app/api/
+src/app/api/generated
+dist
+*.pem 
+coverage

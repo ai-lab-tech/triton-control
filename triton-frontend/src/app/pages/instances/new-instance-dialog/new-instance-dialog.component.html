@@ -1,0 +1,89 @@
+<div class="dialog">
+  <h2 mat-dialog-title class="dialog-title">Add Triton Instance</h2>
+  <p class="dialog-subtitle">Provide the server name and endpoint to register a new node.</p>
+
+  <mat-dialog-content class="dialog-form">
+    <div class="form-row">
+      <label class="field-label" for="dialog-server-name">Server name</label>
+      <mat-form-field appearance="outline">
+        <input
+          id="dialog-server-name"
+          matInput
+          [(ngModel)]="name"
+          placeholder="e.g. Triton Core EU-2"
+        />
+      </mat-form-field>
+    </div>
+    <div class="form-row">
+      <label class="field-label" for="dialog-endpoint">Endpoint</label>
+      <mat-form-field appearance="outline">
+        <input
+          id="dialog-endpoint"
+          matInput
+          [(ngModel)]="endpoint"
+          placeholder="https://triton.example.com:8000"
+        />
+      </mat-form-field>
+    </div>
+    <div class="form-row">
+      <label class="field-label" for="dialog-metrics-endpoint">Metrics endpoint</label>
+      <mat-form-field appearance="outline">
+        <input
+          id="dialog-metrics-endpoint"
+          matInput
+          [(ngModel)]="metricsEndpoint"
+          placeholder="http://triton.example.com:8002"
+        />
+      </mat-form-field>
+      <div class="dialog-hint">
+        Optional Prometheus metrics endpoint for CPU, RAM, and GPU usage.
+      </div>
+    </div>
+    <div class="toggle-row compact">
+      <div>
+        <div class="toggle-title">SSL</div>
+        <div class="dialog-hint">Validate the Triton endpoint certificate.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" [(ngModel)]="verifySsl" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    @if (verifySsl) {
+      <div class="form-row">
+        <label class="field-label" for="dialog-ca-certificate">Certificate</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="dialog-ca-certificate"
+            matInput
+            rows="6"
+            [(ngModel)]="caCertificate"
+            placeholder="-----BEGIN CERTIFICATE-----"
+          ></textarea>
+          <mat-hint>
+            Optional. Only needed for private, self-signed, or internal CA chains.
+          </mat-hint>
+        </mat-form-field>
+        <div class="certificate-actions">
+          <input
+            #certificateInput
+            type="file"
+            accept=".crt,.cer,.pem"
+            hidden
+            (change)="onCertificateFileSelected($event)"
+          />
+          <button mat-stroked-button type="button" (click)="certificateInput.click()">
+            Add certificate
+          </button>
+        </div>
+      </div>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions class="dialog-actions" align="end">
+    <button mat-stroked-button type="button" (click)="close()">Cancel</button>
+    <button mat-flat-button color="primary" type="button" (click)="save()" cdkFocusInitial>
+      Add instance
+    </button>
+  </mat-dialog-actions>
+</div>

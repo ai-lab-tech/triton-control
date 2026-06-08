@@ -1,0 +1,153 @@
+.login-wrap {
+  min-height: calc(100vh - 40px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.login-card {
+  width: min(520px, 100%);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.pending-banner {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #7c2d12;
+}
+
+.pending-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.pending-title {
+  letter-spacing: 0.02em;
+}
+
+.pending-text {
+  margin: 8px 0 0 0;
+  line-height: 1.35;
+}
+
+.status.ok {
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--ink-900);
+}
+
+.status.warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--ink-900);
+}
+
+.status.oidc-only {
+  margin-top: 16px;
+}
+
+.material-icons {
+  font-size: 20px;
+}
+
+.form {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.form .mat-mdc-form-field {
+  width: 100%;
+}
+
+.hidden-submit {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.notice {
+  color: #166534;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.error.pending-error {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+}
+
+.action-btn {
+  border-radius: 999px;
+  min-height: 42px;
+  padding: 0 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    transform 140ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.action-btn .material-icons {
+  font-size: 18px;
+  margin-right: 6px;
+}
+
+.action-btn:hover:not([disabled]) {
+  transform: translateY(-1px);
+}
+
+.action-btn-primary {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+}
+
+.action-btn-secondary {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

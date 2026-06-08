@@ -1,0 +1,42 @@
+# Triton Control Documentation
+
+Triton Control is a web application for managing and operating NVIDIA Triton
+Inference Server environments.
+The primary deployment target is Kubernetes through the Helm chart in
+`charts/triton-control`.
+
+Core capabilities:
+
+- existing Triton instance registration and management
+- self-deployed Triton serving workflows when Triton Control runs in Kubernetes
+- user management and instance access control
+- model inference workflows
+- S3-backed model repository integration with an integrated S3 Browser
+- Perf Analyzer workflows when Triton Control runs in Kubernetes
+
+The same application can also run with Docker Compose or Podman Compose for
+local evaluation, and with separate Python/npm processes for development.
+
+## What This Documentation Covers
+
+- [Getting Started](getting-started.md): Kubernetes-first setup plus Docker, Podman, and local development paths.
+- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, and Add Instance.
+- [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
+- [API](api.md): OpenAPI, Swagger, ReDoc, and generated frontend client notes.
+- [Configuration](configuration.md): backend environment variables, OIDC source modes, and GitOps examples.
+- [Deployment](deployment.md): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
+- [Architecture Overview](architecture-overview.md): high-level architecture, runtime boundaries, and core system interactions.
+- [Architecture Backend Components](architecture-backend-components.md): backend service components and responsibilities.
+- [Roadmap](roadmap.md): planned product changes for upcoming versions.
+- [Development](development.md): local Python/npm workflow, tests, and CI checks.
+- [Security](security.md): secrets, OIDC, TLS, S3 credentials, and proxy headers.
+- [Troubleshooting](troubleshooting.md): common Docker, database, and Triton issues.
+
+## Main Components
+
+- `triton-frontend/`: Angular Material frontend.
+- `triton-backend/`: Python FastAPI backend.
+- `charts/triton-control/`: Helm chart.
+- `Dockerfile`: combined frontend/backend/Nginx image.
+- `compose.yaml`: Docker Compose stack.
+- `podman-compose.yaml`: Podman Compose stack.

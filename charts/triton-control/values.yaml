@@ -1,0 +1,146 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+# e.g.
+#  - name: image-pull-secret
+
+serviceAccount:
+  create: true
+  name: ""
+
+rbac:
+  create: true
+  # Default: least privilege in release namespace only.
+  clusterWide: false
+  # Requires clusterWide=true. Enable only if backend must create/delete namespaces.
+  manageNamespaces: false
+
+podAnnotations: {}
+podLabels: {}
+
+app:
+  image:
+    repository: triton-control
+    tag: dev-20260505-1847
+    pullPolicy: IfNotPresent
+  ports:
+    frontend: 8080
+    backend: 8000
+  command: []
+  args: []
+  env:
+    - name: OIDC_CONFIG_SOURCE
+      value: "env"
+    - name:  OIDC_ENABLED
+      value: "false"
+    - name: CORS_ORIGINS
+      value: "http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200"
+    - name: BACKEND_VERBOSE
+      value: "false"
+  envFrom: []
+  existingSecret: ""
+  secretEnv:
+    # Set real values in your environment-specific values file.
+    SESSION_SECRET: ""
+    JWT_SECRET: ""
+    S3_SECRET_ENCRYPTION_KEY: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  probes:
+    readiness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    liveness:
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 20
+
+postgresql:
+  enabled: true
+  image:
+    repository: docker.io/postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  pgdata: /var/lib/postgresql/data/pgdata
+  auth:
+    database: triton_backend
+    username: triton
+    password: tritonpw
+    existingSecret: ""
+  port: 5432
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+service:
+  type: ClusterIP
+  frontendPort: 8080
+  backendPort: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  proxyBodySize: 256m
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+
+  hosts:
+    - host: #triton-control.ai-lab-tech.com
+      paths:
+        frontend:
+          - path: /
+            pathType: Prefix
+        backend:
+          - path: /api
+            pathType: Prefix
+          - path: /auth
+            pathType: Prefix
+          - path: /login
+            pathType: Prefix
+          - path: /logout
+            pathType: Prefix
+          - path: /whoami
+            pathType: Prefix
+  tls: []
+  # Example:
+  # tls:
+  #   - secretName: triton-control-tls
+  #     hosts:
+  #       - triton-control.example.com
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podSecurityContext: {}
+# e.g.
+#   runAsNonRoot: true
+#   seccompProfile:
+#     type: RuntimeDefault 
+securityContext: {}
+# e.g.
+#   runAsUser: 10001
+#   runAsGroup: 10001
+#   allowPrivilegeEscalation: false
+#   capabilities:
+#     drop:
+#       - ALL

@@ -1,0 +1,156 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+}
+
+.card {
+  padding: 1.6rem;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0 1.4rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.toggle-row.compact {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.switch {
+  position: relative;
+  width: 52px;
+  height: 30px;
+  display: inline-block;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #cbd5f5;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 4px;
+  top: 4px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.2);
+}
+
+.switch input:checked + .slider {
+  background: #14b8a6;
+}
+
+.switch input:disabled + .slider {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(22px);
+}
+
+.toggle-title {
+  font-weight: 600;
+}
+
+.toggle-sub {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.oidc-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1.4rem;
+}
+
+.oidc-form.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.oidc-form .mat-mdc-form-field {
+  width: 100%;
+}
+
+.ssl-section {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ssl-section.disabled {
+  opacity: 0.55;
+}
+
+.certificate-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.extra-section {
+  margin-top: 0.4rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  display: grid;
+  gap: 0.7rem;
+}
+
+.extra-section.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.6rem;
+}
+
+.settings-message {
+  margin-top: 0.8rem;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.settings-message.success {
+  color: #166534;
+  font-weight: 600;
+}
+
+.settings-message.error {
+  color: #b91c1c;
+  font-weight: 700;
+}

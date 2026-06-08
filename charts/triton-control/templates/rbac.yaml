@@ -1,0 +1,81 @@
+{{- if .Values.rbac.create }}
+{{- $fullname := include "triton-control.fullname" . -}}
+{{- $saName := include "triton-control.serviceAccountName" . -}}
+{{- $clusterWide := .Values.rbac.clusterWide | default false -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: {{ if $clusterWide }}ClusterRole{{ else }}Role{{ end }}
+metadata:
+  name: {{ $fullname }}
+  {{- if not $clusterWide }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+rules:
+  {{- if and $clusterWide (.Values.rbac.manageNamespaces | default false) }}
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+  - apiGroups: [""]
+    resources: ["secrets", "services", "pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: {{ if $clusterWide }}ClusterRoleBinding{{ else }}RoleBinding{{ end }}
+metadata:
+  name: {{ $fullname }}
+  {{- if not $clusterWide }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: {{ if $clusterWide }}ClusterRole{{ else }}Role{{ end }}
+  name: {{ $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $saName }}
+    namespace: {{ .Release.Namespace }}
+{{- if not $clusterWide }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-namespace-read" $fullname }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-namespace-read" $fullname }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-namespace-read" $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $saName }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

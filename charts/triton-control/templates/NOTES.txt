@@ -1,0 +1,23 @@
+Triton Control has been installed.
+
+Frontend and backend run in one combined app container:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Service:
+  {{ include "triton-control.fullname" . }} exposes:
+    - http -> frontend
+    - api  -> backend
+
+{{- if .Values.postgresql.enabled }}
+PostgreSQL:
+  {{ include "triton-control.postgresqlName" . }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+Ingress host(s):
+{{- range .Values.ingress.hosts }}
+  - {{ .host }}
+{{- end }}
+{{- end }}
+
+Set real image repositories and backend secrets in an environment-specific values file.

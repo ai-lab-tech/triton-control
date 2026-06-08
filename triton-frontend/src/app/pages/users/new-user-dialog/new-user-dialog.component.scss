@@ -1,0 +1,71 @@
+.dialog {
+  background: #ffffff !important;
+  border-radius: 16px;
+  padding: 1.2rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+:host {
+  display: block;
+  background: #ffffff !important;
+}
+
+.dialog-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+
+.dialog-subtitle {
+  color: #64748b;
+  margin: 0 0 1rem;
+}
+
+.dialog-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.field-note {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.dialog-form .mat-mdc-form-field {
+  width: 100%;
+}
+
+.dialog
+  :is(
+    .mat-mdc-text-field-wrapper,
+    .mdc-text-field,
+    .mdc-text-field--outlined,
+    .mat-mdc-form-field-flex
+  ) {
+  background: #ffffff !important;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+}
+
+.dialog-error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin-right: auto;
+}

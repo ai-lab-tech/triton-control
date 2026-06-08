@@ -1,0 +1,149 @@
+[project]
+name = "triton-control-backend"
+version = "0.0.1"
+description = "Triton Inference Server management backend"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.136.1",
+    "starlette==1.0.1",
+    "uvicorn[standard]==0.40.0",
+    "sqlmodel==0.0.31",
+    "psycopg2-binary==2.9.11",
+    "python-dotenv==1.2.2",
+    "httpx==0.28.1",
+    "python-jose[cryptography]",
+    "cachetools",
+    "authlib==1.6.12",
+    "itsdangerous==2.2.0",
+    "boto3==1.34.122",
+    "protobuf>=6.31.1",
+    "grpcio-tools>=1.73.0",
+    "kubernetes==35.0.0", 
+    "packaging>=24.0",
+    "pyyaml==6.0.3"
+]
+
+[project.optional-dependencies]
+dev = [
+    "coverage==7.10.7",
+    "mypy==1.15.0",
+    "types-cachetools",
+    "types-python-jose",
+    "types-protobuf",
+    "types-boto3",
+    "types-Authlib",
+    "bandit==1.8.3",
+    "ruff",
+    "import-linter==2.1",
+    "pip-audit==2.10.0",
+    "pipdeptree==2.35.3"
+]
+
+###################################  RUFF  CONFIG  ###################################
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# load_dotenv() must run before app imports — E402 is intentional
+"main.py" = ["E402"]
+"app/main.py" = ["E402"]
+# Imports register SQLModel models with metadata — not truly unused
+"app/db/database.py" = ["F401"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+###################################  COVERAGE  CONFIG  ###################################
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "tests/*",
+    "app/db/database.py",       # requires a real PostgreSQL connection
+    "app/services/oidc_tls.py", # requires real TLS cert files on disk
+    "app/services/s3_utils.py", # requires a real S3/MinIO connection
+]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+precision = 1
+
+###################################  MYPY  CONFIG  ###################################
+[tool.mypy]
+strict = true
+explicit_package_bases = true # tells mypy to resolve modules relative
+exclude = ["protobuff/"]
+
+# Tests use lightweight duck-typed fakes (_FakeSession, _Req) that intentionally
+# don't subclass the real types. Relaxing these checks avoids hundreds of
+# type: ignore comments with no runtime benefit.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+disable_error_code = ["arg-type", "no-untyped-call", "attr-defined", "index", "return-value", "no-any-return", "method-assign", "assignment", "union-attr", "no-untyped-def"]
+
+###################################  IMPORT-LINTER CONFIG  ###################################
+# Enforces the layered architecture (DAG, not a strict linear chain):
+#
+#   app.api ─────────────────────────┐
+#     │ (HTTP boundary)              │
+#     ↓                              ↓
+#   app.services ────────────────► app.core  (cross-cutting: usable by api AND services)
+#     │                              │
+#     │          ┌───────────────────┘
+#     ↓          ↓
+#   app.repositories   app.mappers   (independent of each other; services uses both)
+#     │                   │
+#     └─────────┬─────────┘
+#               ↓
+#   app.db  │  app.schemas  │  app.exceptions   (pure foundation — zero inward deps)
+#
+# Allowed import directions (what each layer MAY import from):
+#   api        → services, core, schemas, exceptions
+#   services   → core, repositories, mappers, schemas, exceptions
+#   core       → repositories, schemas, exceptions           (NOT services, NOT mappers)
+#   repositories → db, exceptions                            (NOT schemas, NOT core, NOT services, NOT mappers)
+#   mappers    → schemas, db                                 (NOT services, NOT repositories, NOT core)
+#   db         → (nothing inward)
+#   schemas    → (nothing inward)
+#   exceptions → (nothing inward)
+
+[tool.importlinter]
+root_packages = ["app"]
+
+[[tool.importlinter.contracts]]
+name = "(1) app.api is the HTTP entry point — lower layers must not import it"
+type = "forbidden"
+source_modules = [
+    "app.services", "app.core", "app.repositories",
+    "app.mappers", "app.db", "app.schemas", "app.exceptions",
+]
+forbidden_modules = ["app.api"]
+
+[[tool.importlinter.contracts]]
+name = "(2) core is cross-cutting — must not import services"
+type = "forbidden"
+source_modules = ["app.core"]
+forbidden_modules = ["app.services"]
+
+[[tool.importlinter.contracts]]
+name = "(3) repositories are pure data-access — must not import services or core"
+type = "forbidden"
+source_modules = ["app.repositories"]
+forbidden_modules = ["app.services", "app.core"]
+
+[[tool.importlinter.contracts]]
+name = "(4) foundation layers have no inward app dependencies"
+type = "forbidden"
+source_modules = ["app.db", "app.schemas", "app.exceptions"]
+forbidden_modules = ["app.api", "app.services", "app.core", "app.repositories", "app.mappers"]

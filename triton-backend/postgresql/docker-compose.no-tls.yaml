@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: triton-backend-postgres
+    environment:
+      POSTGRES_DB: triton_backend
+      POSTGRES_USER: triton
+      POSTGRES_PASSWORD: tritonpw
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - triton_backend_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triton -d triton_backend"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  triton_backend_pgdata:

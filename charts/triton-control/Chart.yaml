@@ -1,0 +1,6 @@
+apiVersion: v2
+name: triton-control
+description: Triton Control frontend and backend in one Kubernetes Pod.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

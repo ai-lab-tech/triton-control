@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: triton-backend-postgres
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        cp /tls/cert.pem /var/lib/postgresql/server.crt
+        cp /tls/key.pem /var/lib/postgresql/server.key
+        chown postgres:postgres /var/lib/postgresql/server.crt /var/lib/postgresql/server.key
+        chmod 600 /var/lib/postgresql/server.key
+        chmod 644 /var/lib/postgresql/server.crt
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_cert_file=/var/lib/postgresql/server.crt \
+          -c ssl_key_file=/var/lib/postgresql/server.key
+    environment:
+      POSTGRES_DB: triton_backend
+      POSTGRES_USER: triton
+      POSTGRES_PASSWORD: tritonpw
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - triton_backend_pgdata:/var/lib/postgresql/data
+      - ../tls:/tls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triton -d triton_backend"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  triton_backend_pgdata:

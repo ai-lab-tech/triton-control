@@ -1,0 +1,127 @@
+<mat-sidenav-container class="layout">
+  @if (isLoggedIn()) {
+    <mat-sidenav
+      class="sidenav"
+      [mode]="isHandset() ? 'over' : 'side'"
+      [opened]="navOpened()"
+      (openedChange)="navOpen.set($event)"
+    >
+      <div class="brand">
+        <div class="brand-icon">
+          <span class="material-icons">dns</span>
+        </div>
+        <div>
+          <div class="brand-title">Triton Control</div>
+          <div class="brand-sub">Inference fleet cockpit</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-section">Core</div>
+        @for (item of navItems(); track item.path) {
+          @if (item.disabledReason) {
+            <span
+              mat-list-item
+              class="disabled-nav-item"
+              [attr.aria-disabled]="true"
+              [attr.title]="item.disabledReason"
+            >
+              <span class="disabled-nav-content">
+                <span
+                  class="material-icons nav-icon disabled-nav-icon"
+                  [style.color]="'rgba(174, 187, 204, 0.74)'"
+                  [style.opacity]="'0.74'"
+                  >{{ item.icon }}</span
+                >
+                <span class="disabled-nav-label">{{ item.label }}</span>
+              </span>
+            </span>
+          } @else {
+            <a
+              mat-list-item
+              [routerLink]="item.path"
+              routerLinkActive="active"
+              (click)="closeNavOnMobile()"
+            >
+              <span class="material-icons nav-icon">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </a>
+          }
+        }
+      </nav>
+
+      @if (canWriteInstances()) {
+        <div class="sidenav-actions">
+          <button
+            type="button"
+            class="sidenav-add-instance"
+            (click)="openNewInstanceDialog(); closeNavOnMobile()"
+          >
+            <span class="material-icons">add</span>
+            <span>Add Instance</span>
+          </button>
+        </div>
+      }
+
+      <div class="sidenav-footer">
+        <div class="fleet-chip">
+          <span class="material-icons">bolt</span>
+          <span>{{ fleetHealthLabel() }}</span>
+        </div>
+        <div class="version">{{ appVersion }}</div>
+      </div>
+    </mat-sidenav>
+  }
+
+  <mat-sidenav-content class="content" (click)="closeAdminMenu()">
+    <mat-toolbar class="topbar">
+      <div class="topbar-title">Triton Control</div>
+      <span class="spacer"></span>
+
+      @if (isLoggedIn()) {
+        <div class="user-chip">
+          <span class="avatar">{{ initials() }}</span>
+          <span class="user-name">{{ userName() }}</span>
+        </div>
+      }
+
+      @if (showAdminMenu()) {
+        <div class="admin-menu" (click)="$event.stopPropagation()">
+          <button mat-icon-button class="admin-hamburger" (click)="toggleAdminMenu()">
+            <span class="material-icons">menu</span>
+          </button>
+          @if (adminMenuOpen()) {
+            <div class="admin-dropdown">
+              @if (!isLoggedIn()) {
+                <button type="button" class="admin-item" (click)="login()">
+                  <span class="material-icons">login</span>
+                  <span>Log in</span>
+                </button>
+              }
+              @if (isLoggedIn() && isAdmin()) {
+                <button type="button" class="admin-item" (click)="go('/users')">
+                  <span class="material-icons">group</span>
+                  <span>User Management</span>
+                </button>
+                <button type="button" class="admin-item" (click)="go('/settings')">
+                  <span class="material-icons">tune</span>
+                  <span>Settings</span>
+                </button>
+              }
+              @if (isLoggedIn()) {
+                <button type="button" class="admin-item logout" (click)="logout()">
+                  <span class="material-icons">logout</span>
+                  <span>Log out</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </mat-toolbar>
+
+    <div class="page">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

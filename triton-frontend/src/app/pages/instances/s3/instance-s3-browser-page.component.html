@@ -1,0 +1,194 @@
+@if (hasValidId()) {
+  <div class="s3-browser">
+    <div class="s3-header">
+      <nav class="page-breadcrumbs" aria-label="Breadcrumb">
+        <a routerLink="/instances">Triton Instances</a>
+        <span class="breadcrumb-separator">/</span>
+        <a [routerLink]="['/instances', instanceId()]">{{
+          instanceName() || "Instance #" + instanceId()
+        }}</a>
+        <span class="breadcrumb-separator">/</span>
+        <span aria-current="page">S3 Browser</span>
+      </nav>
+      <div class="s3-title">
+        <div class="page-title">Model Repository</div>
+        <p class="page-subtitle">
+          {{ instanceName() || "Instance #" + instanceId() }} ·
+          {{ bucketName() || "No bucket configured" }}
+        </p>
+      </div>
+    </div>
+    <mat-card class="card browser-card">
+      <div class="explorer">
+        <aside class="explorer-tree">
+          <div class="tree-title">Buckets</div>
+          <button
+            class="tree-item"
+            type="button"
+            (click)="goTo('/')"
+            [class.active]="isActivePath('/')"
+          >
+            <span class="material-icons">storage</span>
+            {{ bucketName() || "bucket" }}
+          </button>
+          @for (node of treeNodes; track node.path) {
+            <button
+              class="tree-item"
+              type="button"
+              (click)="goTo(node.path)"
+              [class.active]="isActivePath(node.path)"
+              [style.paddingLeft.px]="12 + node.level * 16"
+            >
+              <span class="material-icons">folder</span>
+              {{ node.label }}
+            </button>
+          }
+        </aside>
+        <section class="explorer-main">
+          <div class="browser-toolbar">
+            <div class="path">
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Go up one level"
+                (click)="goUp()"
+                [disabled]="currentPath() === '/'"
+              >
+                <span class="material-icons">arrow_upward</span>
+              </button>
+              <div class="breadcrumbs">
+                @for (crumb of breadcrumbs; track crumb.path) {
+                  <button mat-button type="button" (click)="goTo(crumb.path)">
+                    {{ crumb.label }}
+                  </button>
+                }
+              </div>
+            </div>
+            <div class="toolbar-actions">
+              <mat-form-field appearance="outline" class="search">
+                <mat-label>Search</mat-label>
+                <input matInput [(ngModel)]="query" placeholder="Filter files" />
+              </mat-form-field>
+              @if (canWriteInstances()) {
+                <label
+                  class="upload-btn"
+                  [class.uploading]="uploadBusy()"
+                  [attr.aria-busy]="uploadBusy()"
+                >
+                  <input type="file" (change)="onUpload($event)" [disabled]="uploadBusy()" />
+                  @if (uploadBusy()) {
+                    <span class="material-icons upload-spin" aria-hidden="true">sync</span>
+                    <span>{{ uploadStatusLabel() }}</span>
+                  } @else {
+                    <span class="material-icons">upload</span>
+                    <span>Upload</span>
+                  }
+                </label>
+              }
+            </div>
+          </div>
+          <div class="browser-grid">
+            <div class="browser-head">
+              <div>Name</div>
+              <div>Modified</div>
+              <div>Size</div>
+              <div>Actions</div>
+            </div>
+            @for (
+              entry of filteredEntries;
+              track entry.path + "|" + entry.type + "|" + entry.name
+            ) {
+              <div class="browser-row" (click)="openEntry(entry)">
+                <div class="cell name">
+                  <span class="material-icons" [class.folder]="entry.type === 'folder'">
+                    {{ entry.type === "folder" ? "folder" : "insert_drive_file" }}
+                  </span>
+                  {{ entry.name }}
+                </div>
+                <div class="cell">{{ entry.modified }}</div>
+                <div class="cell">{{ entry.size || "-" }}</div>
+                <div class="cell actions" (click)="$event.stopPropagation()">
+                  @if (entry.type === "file") {
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [attr.aria-label]="'Download ' + entry.name"
+                      (click)="download(entry); $event.stopPropagation()"
+                    >
+                      <span class="material-icons">download</span>
+                    </button>
+                  }
+                  @if (canEditEntry(entry)) {
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [attr.aria-label]="'Edit ' + entry.name"
+                      (click)="startEdit(entry); $event.stopPropagation()"
+                    >
+                      <span class="material-icons">edit</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      </div>
+    </mat-card>
+
+    @if (editorOpen() && canWriteInstances()) {
+      <div class="editor-backdrop" (click)="closeEditor()">
+        <div
+          class="editor-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="editor-dialog-title"
+          cdkTrapFocus
+          cdkTrapFocusAutoCapture
+          (click)="$event.stopPropagation()"
+        >
+          <div class="editor-modal-header">
+            <div class="editor-title">
+              <span class="material-icons" aria-hidden="true">edit_note</span>
+              <span id="editor-dialog-title">Edit {{ editorFileName() }}</span>
+            </div>
+            <button
+              mat-flat-button
+              color="primary"
+              type="button"
+              (click)="saveAndCloseEditor()"
+              [disabled]="editorLoading()"
+            >
+              Save
+            </button>
+            <button mat-icon-button type="button" aria-label="Close editor" (click)="closeEditor()">
+              <span class="material-icons" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="editor-wrapper">
+            <ngx-monaco-editor
+              class="editor"
+              [options]="editorOptions"
+              [(ngModel)]="editorContent"
+              (onInit)="onEditorInit($event)"
+            ></ngx-monaco-editor>
+            @if (editorLoading()) {
+              <div class="editor-loading">
+                <span class="material-icons">hourglass_top</span>
+                <span>Loading file…</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+@if (!hasValidId()) {
+  <div class="empty">
+    <span class="material-icons">folder</span>
+    <div>Instance not found.</div>
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}

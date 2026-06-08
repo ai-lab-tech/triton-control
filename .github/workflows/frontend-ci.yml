@@ -1,0 +1,209 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "triton-frontend/**"
+      - "triton-backend/openapi.json"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "podman-compose.yaml"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "triton-frontend/**"
+      - "triton-backend/openapi.json"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "podman-compose.yaml"
+      - ".github/workflows/frontend-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo ghcr.io/gitleaks/gitleaks:latest detect --no-git --source . --redact --verbose
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: triton-frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: triton-frontend/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=moderate
+
+      - name: Semgrep SAST scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >
+            p/typescript
+            p/owasp-top-ten
+
+      - name: Generate API client
+        run: npm run generate:api
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Prettier check
+        run: npm run format:check
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run unit tests
+        run: npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
+
+  smoke-tests:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: triton
+          POSTGRES_PASSWORD: tritonpw
+          POSTGRES_DB: triton_backend
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U triton -d triton_backend"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: triton-frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install frontend dependencies
+        working-directory: triton-frontend
+        run: npm ci
+
+      - name: Generate API client (smoke)
+        working-directory: triton-frontend
+        run: npm run generate:api
+
+      - name: Install backend dependencies
+        working-directory: triton-backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Install Playwright browser
+        working-directory: triton-frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Start mock Triton
+        working-directory: triton-frontend
+        run: nohup node e2e/mock-triton-server.mjs > ../mock-triton.log 2>&1 &
+
+      - name: Start backend
+        working-directory: triton-backend
+        env:
+          DATABASE_URL: postgresql://triton:tritonpw@127.0.0.1:5433/triton_backend
+          SERVER_HTTPS_ENABLED: "false"
+          SESSION_HTTPS_ONLY: "false"
+          OIDC_ENABLED: "false"
+          OIDC_CONFIG_SOURCE: db
+          BACKEND_VERBOSE: "true"
+        run: nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../backend-smoke.log 2>&1 &
+
+      - name: Wait for backend
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8000/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not start in time"
+          test -f backend-smoke.log && tail -n 200 backend-smoke.log || true
+          exit 1
+
+      - name: Start frontend
+        working-directory: triton-frontend
+        run: nohup npm run start:http > ../frontend-smoke.log 2>&1 &
+
+      - name: Wait for frontend
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:4200 > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Frontend did not start in time"
+          test -f frontend-smoke.log && tail -n 200 frontend-smoke.log || true
+          test -f backend-smoke.log && tail -n 100 backend-smoke.log || true
+          test -f mock-triton.log && tail -n 100 mock-triton.log || true
+          exit 1
+
+      - name: Run smoke tests
+        working-directory: triton-frontend
+        env:
+          SMOKE_BACKEND_URL: http://127.0.0.1:8000
+          SMOKE_FRONTEND_URL: http://127.0.0.1:4200
+          SMOKE_TRITON_URL: http://127.0.0.1:9000
+        run: npm run test:smoke
+
+      - name: Upload smoke logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-runtime-logs
+          path: |
+            backend-smoke.log
+            frontend-smoke.log
+            mock-triton.log
