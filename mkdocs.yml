@@ -11,9 +11,9 @@ theme:
     - content.code.copy
 
 nav:
-  - Triton Control:
-    - Home: index.md
-    - Getting Started: getting-started.md
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Product:
     - User Guide: user-guide.md
     - User Management: user-management.md
   - Architecture:
@@ -33,6 +33,7 @@ nav:
 
 markdown_extensions:
   - admonition
+  - meta
   - toc:
       permalink: true
   - pymdownx.highlight
@@ -45,3 +46,6 @@ markdown_extensions:
 extra_javascript:
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
   - assets/javascripts/mermaid-init.js
+
+extra_css:
+  - assets/stylesheets/home-nav.css

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Triton Control Documentation
 
 Triton Control is a web application for managing and operating NVIDIA Triton
@@ -20,17 +25,33 @@ local evaluation, and with separate Python/npm processes for development.
 ## What This Documentation Covers
 
 - [Getting Started](getting-started.md): Kubernetes-first setup plus Docker, Podman, and local development paths.
+
+Product:
+
 - [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, and Add Instance.
 - [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
-- [API](api.md): OpenAPI, Swagger, ReDoc, and generated frontend client notes.
-- [Configuration](configuration.md): backend environment variables, OIDC source modes, and GitOps examples.
-- [Deployment](deployment.md): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
+
+Architecture:
+
 - [Architecture Overview](architecture-overview.md): high-level architecture, runtime boundaries, and core system interactions.
 - [Architecture Backend Components](architecture-backend-components.md): backend service components and responsibilities.
-- [Roadmap](roadmap.md): planned product changes for upcoming versions.
-- [Development](development.md): local Python/npm workflow, tests, and CI checks.
+- [Model Config Validation](model-config-validation.md): model repository validation behavior and configuration rules.
+
+Operations:
+
+- [Configuration](configuration.md): backend environment variables, OIDC source modes, and GitOps examples.
+- [Deployment](deployment.md): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
 - [Security](security.md): secrets, OIDC, TLS, S3 credentials, and proxy headers.
 - [Troubleshooting](troubleshooting.md): common Docker, database, and Triton issues.
+
+Reference:
+
+- [API](api.md): OpenAPI, Swagger, ReDoc, and generated frontend client notes.
+
+Project:
+
+- [Roadmap](roadmap.md): planned product changes for upcoming versions.
+- [Development](development.md): local Python/npm workflow, tests, and CI checks.
 
 ## Main Components
 
