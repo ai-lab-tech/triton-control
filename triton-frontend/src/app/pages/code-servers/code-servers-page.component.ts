@@ -38,7 +38,9 @@ type CodeServer = CodeServerDTO;
 export class CodeServersPageComponent {
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
+    .trim()
+    .replace(/\/$/, "");
 
   name = "workspace";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
@@ -162,11 +164,7 @@ export class CodeServersPageComponent {
   }
 
   canCreate(): boolean {
-    return (
-      this.name.trim().length > 0 &&
-      this.image.trim().length > 0 &&
-      !this.saving()
-    );
+    return this.name.trim().length > 0 && this.image.trim().length > 0 && !this.saving();
   }
 
   private upsertWorkspace(workspace: CodeServer): void {
@@ -189,7 +187,9 @@ export class CodeServersPageComponent {
       this.setEmbeddedWorkspace(selected);
       return;
     }
-    const firstReady = workspaces.find((workspace) => workspace.status === "ready" && workspace.url);
+    const firstReady = workspaces.find(
+      (workspace) => workspace.status === "ready" && workspace.url,
+    );
     if (firstReady) {
       this.selectWorkspace(firstReady);
       return;

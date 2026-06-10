@@ -44,7 +44,12 @@
             <div class="form-row">
               <label class="field-label" for="code-server-storage">Workspace storage</label>
               <mat-form-field appearance="outline">
-                <input id="code-server-storage" matInput [(ngModel)]="storageSize" placeholder="20Gi" />
+                <input
+                  id="code-server-storage"
+                  matInput
+                  [(ngModel)]="storageSize"
+                  placeholder="20Gi"
+                />
               </mat-form-field>
             </div>
           </div>
@@ -108,7 +113,12 @@
                 <div class="form-row">
                   <label class="field-label" for="code-server-memory">Memory request</label>
                   <mat-form-field appearance="outline">
-                    <input id="code-server-memory" matInput [(ngModel)]="memory" placeholder="4Gi" />
+                    <input
+                      id="code-server-memory"
+                      matInput
+                      [(ngModel)]="memory"
+                      placeholder="4Gi"
+                    />
                   </mat-form-field>
                 </div>
               </div>
@@ -139,14 +149,24 @@
         </div>
 
         <div class="actions">
-          <button mat-flat-button color="primary" type="button" (click)="create()" [disabled]="!canCreate()">
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            (click)="create()"
+            [disabled]="!canCreate()"
+          >
             <span class="material-icons">terminal</span>
             {{ saving() ? "Creating..." : "Create" }}
           </button>
         </div>
 
         @if (message()) {
-          <div class="workspace-message" [class.success]="messageTone() === 'success'" [class.error]="messageTone() === 'error'">
+          <div
+            class="workspace-message"
+            [class.success]="messageTone() === 'success'"
+            [class.error]="messageTone() === 'error'"
+          >
             {{ message() }}
           </div>
         }
@@ -165,13 +185,24 @@
             <div class="workspace-main">
               <div>
                 <div class="workspace-name">{{ workspace.name }}</div>
-                <div class="workspace-meta">{{ workspace.namespace }} / {{ workspace.statefulset_name }}</div>
+                <div class="workspace-meta">
+                  {{ workspace.namespace }} / {{ workspace.statefulset_name }}
+                </div>
               </div>
-              <span class="status-chip" [attr.data-status]="workspace.status">{{ workspace.status }}</span>
+              <span class="status-chip" [attr.data-status]="workspace.status">{{
+                workspace.status
+              }}</span>
             </div>
-            <div class="workspace-detail">{{ workspace.status_message || "Status not checked yet." }}</div>
+            <div class="workspace-detail">
+              {{ workspace.status_message || "Status not checked yet." }}
+            </div>
             <div class="item-actions">
-              <button mat-icon-button type="button" aria-label="Refresh status" (click)="refresh(workspace); $event.stopPropagation()">
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Refresh status"
+                (click)="refresh(workspace); $event.stopPropagation()"
+              >
                 <span class="material-icons">refresh</span>
               </button>
               <button
@@ -187,7 +218,9 @@
             </div>
           </div>
         } @empty {
-          <mat-card class="card empty-state">No code-server workspace has been created for your user.</mat-card>
+          <mat-card class="card empty-state"
+            >No code-server workspace has been created for your user.</mat-card
+          >
         }
       </div>
     </aside>
