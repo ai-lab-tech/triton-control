@@ -8,7 +8,9 @@
   "paths": {
     "/login": {
       "get": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "summary": "Login",
         "operationId": "login_login_get",
         "responses": {
@@ -27,7 +29,9 @@
     },
     "/auth/callback": {
       "get": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "summary": "Auth Callback",
         "operationId": "auth_callback_auth_callback_get",
         "responses": {
@@ -46,7 +50,9 @@
     },
     "/logout": {
       "post": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "summary": "Logout",
         "operationId": "logout_logout_post",
         "responses": {
@@ -69,7 +75,9 @@
     },
     "/api/whoami": {
       "get": {
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "summary": "Whoami",
         "operationId": "whoami_api_whoami_get",
         "responses": {
@@ -88,7 +96,9 @@
     },
     "/api/auth/options": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Auth Options Endpoint",
         "operationId": "auth_options_endpoint_api_auth_options_get",
         "responses": {
@@ -109,7 +119,9 @@
     },
     "/api/auth/bootstrap-status": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Bootstrap Status Endpoint",
         "operationId": "bootstrap_status_endpoint_api_auth_bootstrap_status_get",
         "responses": {
@@ -128,7 +140,9 @@
     },
     "/api/auth/bootstrap/register": {
       "post": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Bootstrap Register Endpoint",
         "operationId": "bootstrap_register_endpoint_api_auth_bootstrap_register_post",
         "requestBody": {
@@ -167,7 +181,9 @@
     },
     "/api/auth/settings/preflight/callback": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Oidc Preflight Callback",
         "operationId": "oidc_preflight_callback_api_auth_settings_preflight_callback_get",
         "responses": {
@@ -186,7 +202,9 @@
     },
     "/api/auth/self-register": {
       "post": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Self Register Endpoint",
         "operationId": "self_register_endpoint_api_auth_self_register_post",
         "requestBody": {
@@ -225,7 +243,9 @@
     },
     "/api/auth/login": {
       "post": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Login Endpoint",
         "operationId": "login_endpoint_api_auth_login_post",
         "requestBody": {
@@ -264,7 +284,9 @@
     },
     "/api/auth/settings": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Get Oidc Settings Endpoint",
         "operationId": "get_oidc_settings_endpoint_api_auth_settings_get",
         "responses": {
@@ -286,7 +308,9 @@
         ]
       },
       "put": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Put Oidc Settings Endpoint",
         "operationId": "put_oidc_settings_endpoint_api_auth_settings_put",
         "requestBody": {
@@ -330,7 +354,9 @@
     },
     "/api/auth/settings/preflight/start": {
       "post": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Start Oidc Preflight Endpoint",
         "operationId": "start_oidc_preflight_endpoint_api_auth_settings_preflight_start_post",
         "requestBody": {
@@ -374,7 +400,9 @@
     },
     "/api/auth/register": {
       "post": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Register User Endpoint",
         "operationId": "register_user_endpoint_api_auth_register_post",
         "requestBody": {
@@ -418,7 +446,9 @@
     },
     "/api/auth/users": {
       "get": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "List Users",
         "operationId": "list_users_api_auth_users_get",
         "responses": {
@@ -446,7 +476,9 @@
     },
     "/api/auth/users/{user_id}": {
       "delete": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Delete User",
         "operationId": "delete_user_api_auth_users__user_id__delete",
         "security": [
@@ -484,7 +516,9 @@
     },
     "/api/auth/users/{user_id}/instances": {
       "put": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Update User Instances",
         "operationId": "update_user_instances_api_auth_users__user_id__instances_put",
         "security": [
@@ -539,7 +573,9 @@
     },
     "/api/auth/users/{user_id}/role": {
       "put": {
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "summary": "Update User Role",
         "operationId": "update_user_role_api_auth_users__user_id__role_put",
         "security": [
@@ -594,7 +630,9 @@
     },
     "/api/dashboard/alerts": {
       "get": {
-        "tags": ["dashboard"],
+        "tags": [
+          "dashboard"
+        ],
         "summary": "List Dashboard Alerts",
         "description": "Return persisted dashboard alerts visible to the current user.",
         "operationId": "list_dashboard_alerts_api_dashboard_alerts_get",
@@ -623,7 +661,9 @@
     },
     "/api/deployments": {
       "post": {
-        "tags": ["deployments"],
+        "tags": [
+          "deployments"
+        ],
         "summary": "Create Deployment",
         "description": "Deploy Triton on Kubernetes for the provided S3 model repository.",
         "operationId": "create_deployment_api_deployments_post",
@@ -668,7 +708,9 @@
     },
     "/api/deployments/{instance_id}": {
       "delete": {
-        "tags": ["deployments"],
+        "tags": [
+          "deployments"
+        ],
         "summary": "Delete Deployment",
         "description": "Delete a self-deployed Triton instance and its Kubernetes namespace.",
         "operationId": "delete_deployment_api_deployments__instance_id__delete",
@@ -714,7 +756,9 @@
     },
     "/api/deployments/{instance_id}/logs": {
       "get": {
-        "tags": ["deployments"],
+        "tags": [
+          "deployments"
+        ],
         "summary": "Get Deployment Logs",
         "description": "Return deployment and Kubernetes pod logs for an instance.",
         "operationId": "get_deployment_logs_api_deployments__instance_id__logs_get",
@@ -758,9 +802,181 @@
         }
       }
     },
+    "/api/code-servers": {
+      "get": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "List Code Servers",
+        "description": "Return code-server workspaces owned by the authenticated user.",
+        "operationId": "list_code_servers_api_code_servers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CodeServerDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List Code Servers Api Code Servers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Create Code Server",
+        "description": "Create or replace the caller's code-server workspace.",
+        "operationId": "create_code_server_api_code_servers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodeServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/code-servers/{code_server_id}": {
+      "get": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Get Code Server",
+        "description": "Return a single code-server workspace owned by the authenticated user.",
+        "operationId": "get_code_server_api_code_servers__code_server_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Delete Code Server",
+        "description": "Delete a code-server workload owned by the authenticated user.",
+        "operationId": "delete_code_server_api_code_servers__code_server_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/perf-analyzers": {
       "get": {
-        "tags": ["perf-analyzers"],
+        "tags": [
+          "perf-analyzers"
+        ],
         "summary": "Get Perf Analyzer Status",
         "description": "Return the singleton Perf Analyzer installation state.",
         "operationId": "get_perf_analyzer_status_api_perf_analyzers_get",
@@ -783,7 +999,9 @@
         ]
       },
       "post": {
-        "tags": ["perf-analyzers"],
+        "tags": [
+          "perf-analyzers"
+        ],
         "summary": "Install Perf Analyzer",
         "description": "Install a Perf Analyzer SDK container on Kubernetes.",
         "operationId": "install_perf_analyzer_api_perf_analyzers_post",
@@ -826,7 +1044,9 @@
         ]
       },
       "delete": {
-        "tags": ["perf-analyzers"],
+        "tags": [
+          "perf-analyzers"
+        ],
         "summary": "Uninstall Perf Analyzer",
         "description": "Uninstall the singleton Perf Analyzer Kubernetes workload.",
         "operationId": "uninstall_perf_analyzer_api_perf_analyzers_delete",
@@ -851,7 +1071,9 @@
     },
     "/api/perf-analyzers/runs": {
       "post": {
-        "tags": ["perf-analyzers"],
+        "tags": [
+          "perf-analyzers"
+        ],
         "summary": "Run Perf Analyzer",
         "description": "Execute Perf Analyzer for one Triton instance model.",
         "operationId": "run_perf_analyzer_api_perf_analyzers_runs_post",
@@ -896,7 +1118,9 @@
     },
     "/api/perf-analyzers/runs/latest": {
       "get": {
-        "tags": ["perf-analyzers"],
+        "tags": [
+          "perf-analyzers"
+        ],
         "summary": "Get Latest Perf Analyzer Run",
         "description": "Return the latest persisted Perf Analyzer result for one model target.",
         "operationId": "get_latest_perf_analyzer_run_api_perf_analyzers_runs_latest_get",
@@ -960,7 +1184,9 @@
     },
     "/api/instances": {
       "post": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Create Instance",
         "description": "Create a Triton instance from UI input (url + optional name).\n\nThe backend connects to Triton, reads the currently available models,\nstores the instance in the DB, and returns the created DTO.",
         "operationId": "create_instance_api_instances_post",
@@ -1003,7 +1229,9 @@
         }
       },
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "List Instances",
         "description": "List all registered Triton instances.",
         "operationId": "list_instances_api_instances_get",
@@ -1054,7 +1282,9 @@
     },
     "/api/instances/{instance_id}": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance",
         "description": "Get a single Triton instance by ID.",
         "operationId": "get_instance_api_instances__instance_id__get",
@@ -1098,7 +1328,9 @@
         }
       },
       "delete": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Delete Instance",
         "description": "Delete a registered Triton instance. Admin role required.",
         "operationId": "delete_instance_api_instances__instance_id__delete",
@@ -1135,7 +1367,9 @@
         }
       },
       "put": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Update Instance",
         "description": "Update a Triton instance endpoint and SSL verification settings.",
         "operationId": "update_instance_api_instances__instance_id__put",
@@ -1191,7 +1425,9 @@
     },
     "/api/instances/by-name/{name}": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance By Name",
         "description": "Get a single Triton instance by its unique name.",
         "operationId": "get_instance_by_name_api_instances_by_name__name__get",
@@ -1237,7 +1473,9 @@
     },
     "/api/instances/{instance_id}/models": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance Models",
         "description": "Return the live Triton model repository index for an instance.",
         "operationId": "get_instance_models_api_instances__instance_id__models_get",
@@ -1287,7 +1525,9 @@
     },
     "/api/instances/{instance_id}/models/{model_name}/versions/{version}/config": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance Model Config",
         "description": "Proxy the live Triton model config for a specific model version.",
         "operationId": "get_instance_model_config_api_instances__instance_id__models__model_name__versions__version__config_get",
@@ -1353,7 +1593,9 @@
     },
     "/api/instances/{instance_id}/models/{model_name}/load": {
       "post": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Load Instance Model",
         "description": "Trigger explicit load for a model via Triton's repository API.",
         "operationId": "load_instance_model_api_instances__instance_id__models__model_name__load_post",
@@ -1409,7 +1651,9 @@
     },
     "/api/instances/{instance_id}/models/{model_name}/unload": {
       "post": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Unload Instance Model",
         "description": "Trigger explicit unload for a model via Triton's repository API.",
         "operationId": "unload_instance_model_api_instances__instance_id__models__model_name__unload_post",
@@ -1465,7 +1709,9 @@
     },
     "/api/instances/{instance_id}/models/{model_name}/versions/{version}/infer": {
       "post": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Infer Instance Model",
         "description": "Proxy a Triton inference request for a specific model version.",
         "operationId": "infer_instance_model_api_instances__instance_id__models__model_name__versions__version__infer_post",
@@ -1540,7 +1786,9 @@
     },
     "/api/instances/{instance_id}/s3": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance S3",
         "operationId": "get_instance_s3_api_instances__instance_id__s3_get",
         "security": [
@@ -1583,7 +1831,9 @@
         }
       },
       "put": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Update Instance S3",
         "operationId": "update_instance_s3_api_instances__instance_id__s3_put",
         "security": [
@@ -1638,7 +1888,9 @@
     },
     "/api/instances/{instance_id}/s3/list": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "List Instance S3",
         "operationId": "list_instance_s3_api_instances__instance_id__s3_list_get",
         "security": [
@@ -1693,7 +1945,9 @@
     },
     "/api/instances/{instance_id}/s3/content": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance S3 Content",
         "operationId": "get_instance_s3_content_api_instances__instance_id__s3_content_get",
         "security": [
@@ -1747,7 +2001,9 @@
         }
       },
       "put": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Put Instance S3 Content",
         "operationId": "put_instance_s3_content_api_instances__instance_id__s3_content_put",
         "security": [
@@ -1831,7 +2087,9 @@
     },
     "/api/instances/{instance_id}/s3/content/raw": {
       "get": {
-        "tags": ["instances"],
+        "tags": [
+          "instances"
+        ],
         "summary": "Get Instance S3 Content Raw",
         "operationId": "get_instance_s3_content_raw_api_instances__instance_id__s3_content_raw_get",
         "security": [
@@ -1983,7 +2241,10 @@
           }
         },
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "title": "BootstrapRegisterRequest"
       },
       "BootstrapStatusResponse": {
@@ -1998,8 +2259,225 @@
           }
         },
         "type": "object",
-        "required": ["oidc_enabled", "needs_setup"],
+        "required": [
+          "oidc_enabled",
+          "needs_setup"
+        ],
         "title": "BootstrapStatusResponse"
+      },
+      "CodeServerDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "statefulset_name": {
+            "type": "string",
+            "title": "Statefulset Name"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "applied_resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applied Resources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "namespace",
+          "statefulset_name",
+          "service_name",
+          "image",
+          "url",
+          "password",
+          "status",
+          "status_message",
+          "applied_resources"
+        ],
+        "title": "CodeServerDTO",
+        "description": "Returned code-server workspace owned by the authenticated user."
+      },
+      "CodeServerDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "namespace"
+        ],
+        "title": "CodeServerDeleteResponse",
+        "description": "Response after deleting a code-server workload record."
+      },
+      "CreateCodeServerRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "workspace"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image",
+            "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "storage_size": {
+            "type": "string",
+            "title": "Storage Size",
+            "default": "20Gi"
+          },
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu"
+          },
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
+          "memory_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "CreateCodeServerRequest",
+        "description": "Request body for creating or replacing the caller's code-server workspace."
       },
       "CreateDeploymentRequest": {
         "properties": {
@@ -2065,7 +2543,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["http", "https"]
+                "enum": [
+                  "http",
+                  "https"
+                ]
               },
               {
                 "type": "null"
@@ -2086,7 +2567,10 @@
           },
           "model_control_mode": {
             "type": "string",
-            "enum": ["explicit", "poll"],
+            "enum": [
+              "explicit",
+              "poll"
+            ],
             "title": "Model Control Mode",
             "default": "explicit"
           },
@@ -2180,7 +2664,13 @@
           }
         },
         "type": "object",
-        "required": ["deployment_name", "s3_url", "s3_access_key", "s3_secret_key", "image"],
+        "required": [
+          "deployment_name",
+          "s3_url",
+          "s3_access_key",
+          "s3_secret_key",
+          "image"
+        ],
         "title": "CreateDeploymentRequest",
         "description": "Request body for ``POST /api/deployments``."
       },
@@ -2224,7 +2714,9 @@
           }
         },
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "title": "CreateTritonInstanceRequest",
         "description": "Request to create a Triton instance."
       },
@@ -2279,7 +2771,10 @@
           }
         },
         "type": "object",
-        "required": ["email", "name"],
+        "required": [
+          "email",
+          "name"
+        ],
         "title": "CreateUserRequest"
       },
       "DashboardAlertDTO": {
@@ -2329,7 +2824,13 @@
           }
         },
         "type": "object",
-        "required": ["id", "icon", "label", "tone", "created_at"],
+        "required": [
+          "id",
+          "icon",
+          "label",
+          "tone",
+          "created_at"
+        ],
         "title": "DashboardAlertDTO"
       },
       "DeploymentDeleteResponse": {
@@ -2348,7 +2849,11 @@
           }
         },
         "type": "object",
-        "required": ["status", "message", "namespace"],
+        "required": [
+          "status",
+          "message",
+          "namespace"
+        ],
         "title": "DeploymentDeleteResponse",
         "description": "Response after deleting a Kubernetes-managed Triton deployment."
       },
@@ -2441,7 +2946,9 @@
           }
         },
         "type": "object",
-        "required": ["image"],
+        "required": [
+          "image"
+        ],
         "title": "InstallPerfAnalyzerRequest",
         "description": "Request body for ``POST /api/perf-analyzers``."
       },
@@ -2453,7 +2960,9 @@
           }
         },
         "type": "object",
-        "required": ["logs"],
+        "required": [
+          "logs"
+        ],
         "title": "InstanceLogsResponse"
       },
       "InstanceS3ConfigDTO": {
@@ -2554,7 +3063,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["path", "virtual"]
+                "enum": [
+                  "path",
+                  "virtual"
+                ]
               },
               {
                 "type": "null"
@@ -2578,7 +3090,10 @@
           }
         },
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "title": "LoginRequest"
       },
       "LoginResponse": {
@@ -2597,7 +3112,10 @@
           }
         },
         "type": "object",
-        "required": ["access_token", "user"],
+        "required": [
+          "access_token",
+          "user"
+        ],
         "title": "LoginResponse"
       },
       "ModelRepositoryActionResponse": {
@@ -2619,7 +3137,9 @@
           }
         },
         "type": "object",
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "title": "ModelRepositoryActionResponse"
       },
       "OidcSettingsDTO": {
@@ -2706,7 +3226,11 @@
           }
         },
         "type": "object",
-        "required": ["status", "message", "namespace"],
+        "required": [
+          "status",
+          "message",
+          "namespace"
+        ],
         "title": "PerfAnalyzerDeleteResponse",
         "description": "Response after uninstalling the singleton Perf Analyzer workload."
       },
@@ -2733,7 +3257,12 @@
           }
         },
         "type": "object",
-        "required": ["namespace", "deployment_name", "image", "applied_resources"],
+        "required": [
+          "namespace",
+          "deployment_name",
+          "image",
+          "applied_resources"
+        ],
         "title": "PerfAnalyzerInstallResponse",
         "description": "Response after Perf Analyzer Kubernetes resources are applied."
       },
@@ -2813,7 +3342,9 @@
           }
         },
         "type": "object",
-        "required": ["found"],
+        "required": [
+          "found"
+        ],
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
       },
@@ -2832,7 +3363,10 @@
           }
         },
         "type": "object",
-        "required": ["command", "output"],
+        "required": [
+          "command",
+          "output"
+        ],
         "title": "PerfAnalyzerRunResponse",
         "description": "Output captured from a Perf Analyzer process executed in Kubernetes."
       },
@@ -2869,7 +3403,9 @@
           }
         },
         "type": "object",
-        "required": ["installed"],
+        "required": [
+          "installed"
+        ],
         "title": "PerfAnalyzerStatusResponse",
         "description": "Response describing the singleton Perf Analyzer installation state."
       },
@@ -2918,7 +3454,11 @@
           }
         },
         "type": "object",
-        "required": ["instance_id", "model_name", "model_version"],
+        "required": [
+          "instance_id",
+          "model_name",
+          "model_version"
+        ],
         "title": "RunPerfAnalyzerRequest",
         "description": "Request body for a model-level Perf Analyzer run."
       },
@@ -2934,7 +3474,10 @@
           },
           "type": {
             "type": "string",
-            "enum": ["folder", "file"],
+            "enum": [
+              "folder",
+              "file"
+            ],
             "title": "Type"
           },
           "size": {
@@ -2962,7 +3505,11 @@
           }
         },
         "type": "object",
-        "required": ["name", "path", "type"],
+        "required": [
+          "name",
+          "path",
+          "type"
+        ],
         "title": "S3EntryDTO"
       },
       "S3FileContentResponse": {
@@ -2977,7 +3524,10 @@
           }
         },
         "type": "object",
-        "required": ["path", "content"],
+        "required": [
+          "path",
+          "content"
+        ],
         "title": "S3FileContentResponse"
       },
       "S3FileWriteResponse": {
@@ -2992,7 +3542,10 @@
           }
         },
         "type": "object",
-        "required": ["path", "size"],
+        "required": [
+          "path",
+          "size"
+        ],
         "title": "S3FileWriteResponse"
       },
       "S3ListResponse": {
@@ -3010,7 +3563,10 @@
           }
         },
         "type": "object",
-        "required": ["prefix", "entries"],
+        "required": [
+          "prefix",
+          "entries"
+        ],
         "title": "S3ListResponse"
       },
       "SelfRegisterRequest": {
@@ -3036,7 +3592,10 @@
           }
         },
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "title": "SelfRegisterRequest"
       },
       "TritonInstanceDTO": {
@@ -3254,7 +3813,13 @@
           }
         },
         "type": "object",
-        "required": ["id", "url", "name", "model_names", "created_at"],
+        "required": [
+          "id",
+          "url",
+          "name",
+          "model_names",
+          "created_at"
+        ],
         "title": "TritonInstanceDTO",
         "description": "DTO for outgoing Triton instance data (API responses)."
       },
@@ -3299,7 +3864,9 @@
           }
         },
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "title": "TritonRepositoryModelDTO"
       },
       "UpdateInstanceS3Request": {
@@ -3406,7 +3973,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["path", "virtual"]
+                "enum": [
+                  "path",
+                  "virtual"
+                ]
               },
               {
                 "type": "null"
@@ -3500,7 +4070,9 @@
           }
         },
         "type": "object",
-        "required": ["url"],
+        "required": [
+          "url"
+        ],
         "title": "UpdateTritonInstanceRequest",
         "description": "Request to update an existing Triton instance connection."
       },
@@ -3525,7 +4097,9 @@
           }
         },
         "type": "object",
-        "required": ["role"],
+        "required": [
+          "role"
+        ],
         "title": "UpdateUserRoleRequest"
       },
       "UserDTO": {
@@ -3624,7 +4198,11 @@
           }
         },
         "type": "object",
-        "required": ["loc", "msg", "type"],
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
         "title": "ValidationError"
       }
     },

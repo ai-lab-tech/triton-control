@@ -35,6 +35,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
+from app.api.code_server_api import router as code_server_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.instance_api import router as instance_router
@@ -130,6 +131,7 @@ app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])
+app.include_router(code_server_router, dependencies=[Depends(get_claims)])
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])

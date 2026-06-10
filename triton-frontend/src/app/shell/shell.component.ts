@@ -69,6 +69,12 @@ export class ShellComponent {
       { label: "Dashboard", icon: "grid_view", path: "/dashboard" },
       { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
+        label: "Code Servers",
+        icon: "terminal",
+        path: "/code-servers",
+        disabledReason: kubernetesActionDisabledReason,
+      },
+      {
         label: "Add Deployment",
         icon: "rocket_launch",
         path: "/deployments/new",

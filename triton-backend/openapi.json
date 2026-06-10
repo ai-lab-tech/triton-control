@@ -802,6 +802,176 @@
         }
       }
     },
+    "/api/code-servers": {
+      "get": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "List Code Servers",
+        "description": "Return code-server workspaces owned by the authenticated user.",
+        "operationId": "list_code_servers_api_code_servers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CodeServerDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List Code Servers Api Code Servers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Create Code Server",
+        "description": "Create or replace the caller's code-server workspace.",
+        "operationId": "create_code_server_api_code_servers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodeServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/code-servers/{code_server_id}": {
+      "get": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Get Code Server",
+        "description": "Return a single code-server workspace owned by the authenticated user.",
+        "operationId": "get_code_server_api_code_servers__code_server_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Delete Code Server",
+        "description": "Delete a code-server workload owned by the authenticated user.",
+        "operationId": "delete_code_server_api_code_servers__code_server_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/perf-analyzers": {
       "get": {
         "tags": [
@@ -2094,6 +2264,220 @@
           "needs_setup"
         ],
         "title": "BootstrapStatusResponse"
+      },
+      "CodeServerDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "statefulset_name": {
+            "type": "string",
+            "title": "Statefulset Name"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "applied_resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applied Resources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "namespace",
+          "statefulset_name",
+          "service_name",
+          "image",
+          "url",
+          "password",
+          "status",
+          "status_message",
+          "applied_resources"
+        ],
+        "title": "CodeServerDTO",
+        "description": "Returned code-server workspace owned by the authenticated user."
+      },
+      "CodeServerDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "namespace"
+        ],
+        "title": "CodeServerDeleteResponse",
+        "description": "Response after deleting a code-server workload record."
+      },
+      "CreateCodeServerRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "workspace"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image",
+            "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "storage_size": {
+            "type": "string",
+            "title": "Storage Size",
+            "default": "20Gi"
+          },
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu"
+          },
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
+          "memory_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "CreateCodeServerRequest",
+        "description": "Request body for creating or replacing the caller's code-server workspace."
       },
       "CreateDeploymentRequest": {
         "properties": {
