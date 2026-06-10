@@ -147,8 +147,8 @@ def _manifests(
 ) -> list[dict[str, Any]]:
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
-        _secret_manifest(request, namespace, secret_name),
-        _statefulset_manifest(request, namespace, statefulset_name, service_name, secret_name, labels),
+        _secret_manifest(namespace, secret_name),
+        _statefulset_manifest(request, namespace, statefulset_name, service_name, labels),
         _service_manifest(namespace, service_name, labels),
     ]
     if request.dockerconfigjson:
@@ -158,13 +158,13 @@ def _manifests(
     return manifests
 
 
-def _secret_manifest(request: CreateCodeServerRequest, namespace: str, secret_name: str) -> dict[str, Any]:
+def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
     return {
         "apiVersion": "v1",
         "kind": "Secret",
         "metadata": {"name": secret_name, "namespace": namespace},
         "type": "Opaque",
-        "stringData": {"PASSWORD": request.password},
+        "stringData": {"AUTH_MODE": "triton-control-proxy"},
     }
 
 
@@ -173,7 +173,6 @@ def _statefulset_manifest(
     namespace: str,
     statefulset_name: str,
     service_name: str,
-    secret_name: str,
     labels: dict[str, str],
 ) -> dict[str, Any]:
     pod_spec: dict[str, Any] = {
@@ -189,21 +188,13 @@ def _statefulset_manifest(
                         "image": request.image,
                         "imagePullPolicy": "IfNotPresent",
                         "ports": [{"name": "http", "containerPort": 8080}],
-                        "env": [
-                            {
-                                "name": "PASSWORD",
-                                "valueFrom": {
-                                    "secretKeyRef": {"name": secret_name, "key": "PASSWORD"},
-                                },
-                            },
-                        ],
                         "command": ["/bin/sh", "-c"],
                         "args": [
                             (
                                 "if ! command -v code-server >/dev/null 2>&1; then "
                                 "curl -fsSL https://code-server.dev/install.sh | sh; "
                                 "fi; "
-                                "exec code-server --bind-addr 0.0.0.0:8080 --auth password /workspace"
+                                "exec code-server --bind-addr 0.0.0.0:8080 --auth none /workspace"
                             ),
                         ],
                         "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],

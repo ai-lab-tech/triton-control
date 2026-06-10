@@ -2,13 +2,15 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
-from app.db.database import get_session
+from app.db.database import get_session, session_factory
+from app.exceptions import AppError
 from app.schemas import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServerRequest
+from app.services.code_server import proxy as code_server_proxy
 from app.services.code_server import workspaces
 
 router = APIRouter(prefix="/api/code-servers", tags=["code-servers"])
@@ -55,3 +57,46 @@ def delete_code_server(
 ) -> CodeServerDeleteResponse:
     """Delete a code-server workload owned by the authenticated user."""
     return workspaces.delete_code_server(session, claims, code_server_id)
+
+
+@router.api_route(
+    "/{code_server_id}/proxy",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+@router.api_route(
+    "/{code_server_id}/proxy/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+@translate_app_errors
+async def proxy_code_server(
+    code_server_id: int,
+    request: Request,
+    path: str = "",
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> Response:
+    """Proxy an authenticated request to an owned code-server workspace."""
+    row = workspaces.get_owned_code_server(session, claims, code_server_id)
+    return await code_server_proxy.proxy_http(row, path, request)
+
+
+@router.websocket("/{code_server_id}/proxy")
+@router.websocket("/{code_server_id}/proxy/{path:path}")
+async def proxy_code_server_websocket(
+    websocket: WebSocket,
+    code_server_id: int,
+    path: str = "",
+) -> None:
+    """Proxy an authenticated code-server WebSocket to an owned workspace."""
+    claims = websocket.session.get("user")
+    if not claims:
+        await websocket.close(code=1008)
+        return
+    try:
+        with session_factory() as session:
+            row = workspaces.get_owned_code_server(session, claims, code_server_id)
+            await code_server_proxy.proxy_websocket(row, path, websocket)
+    except AppError:
+        await websocket.close(code=1008)

@@ -2295,10 +2295,6 @@
             "type": "string",
             "title": "Url"
           },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -2324,7 +2320,6 @@
           "service_name",
           "image",
           "url",
-          "password",
           "status",
           "status_message",
           "applied_resources"
@@ -2367,12 +2362,6 @@
             "type": "string",
             "title": "Image",
             "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 8,
-            "title": "Password"
           },
           "ingress_host": {
             "anyOf": [
@@ -2473,9 +2462,6 @@
           }
         },
         "type": "object",
-        "required": [
-          "password"
-        ],
         "title": "CreateCodeServerRequest",
         "description": "Request body for creating or replacing the caller's code-server workspace."
       },

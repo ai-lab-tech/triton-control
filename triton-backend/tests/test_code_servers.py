@@ -10,6 +10,7 @@ from app.api import code_server_api
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.schemas import CreateCodeServerRequest
 from app.services.code_server import kubernetes as k8s
+from app.services.code_server import proxy as code_proxy
 from app.services.code_server import workspaces
 
 
@@ -18,7 +19,6 @@ class CodeServerTests(unittest.TestCase):
         return CreateCodeServerRequest(
             name="Dev Workspace",
             image="nvcr.io/nvidia/tritonserver:25.02-py3",
-            password="super-secret",
             ingress_host="http://code.example.local",
             storage_size="30Gi",
             cpu="2",
@@ -36,7 +36,7 @@ class CodeServerTests(unittest.TestCase):
             "secret_name": "code-7-dev-workspace-secret",
             "image": "nvcr.io/nvidia/tritonserver:25.02-py3",
             "url": "http://code-7-dev-workspace-svc.triton-control.svc.cluster.local:8080",
-            "password_enc": "super-secret",
+            "password_enc": "",
             "status": "creating",
             "status_message": "Pending",
             "applied_resources": ["StatefulSet/code-7-dev-workspace"],
@@ -53,22 +53,20 @@ class CodeServerTests(unittest.TestCase):
 
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
-            CreateCodeServerRequest(name="!!!", image="triton", password="super-secret")
+            CreateCodeServerRequest(name="!!!", image="triton")
         with self.assertRaises(ValueError):
             CreateCodeServerRequest(
                 name="workspace",
                 image=" ",
-                password="super-secret",
             )
         with self.assertRaises(ValueError):
             CreateCodeServerRequest(
                 name="workspace",
                 image="triton",
-                password="super-secret",
                 ingress_host="https://code.example.local/path",
             )
 
-    def test_Manifests_CreateStatefulSetWithPersistentWorkspaceAndPasswordSecret(self) -> None:
+    def test_Manifests_CreateStatefulSetWithPersistentWorkspaceAndProxyAuth(self) -> None:
         request = self._request()
 
         manifests = k8s._manifests(
@@ -85,10 +83,11 @@ class CodeServerTests(unittest.TestCase):
         ingress = manifests[3]
         container = statefulset["spec"]["template"]["spec"]["containers"][0]
 
-        self.assertEqual(secret["stringData"]["PASSWORD"], "super-secret")
+        self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
         self.assertEqual(statefulset["kind"], "StatefulSet")
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("code-server --bind-addr 0.0.0.0:8080", container["args"][0])
+        self.assertIn("--auth none", container["args"][0])
         self.assertEqual(
             statefulset["spec"]["volumeClaimTemplates"][0]["spec"]["resources"]["requests"]["storage"],
             "30Gi",
@@ -145,12 +144,16 @@ class CodeServerTests(unittest.TestCase):
         ), patch(
             "app.services.code_server.workspaces.code_servers.create",
             side_effect=create_row,
-        ) as create:
+        ) as create, patch(
+            "app.services.code_server.workspaces.code_servers.save",
+            side_effect=lambda _session, row: row,
+        ) as save:
             result = workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
 
         create.assert_called_once()
+        save.assert_called_once()
         self.assertEqual(result.id, 9)
-        self.assertEqual(result.url, "http://code.example.local")
+        self.assertEqual(result.url, "/api/code-servers/9/proxy/")
         self.assertEqual(created["owner_user_id"], 7)
         self.assertEqual(created["name"], "dev-workspace")
         self.assertEqual(created["statefulset_name"], "code-7-dev-workspace")
@@ -177,7 +180,7 @@ class CodeServerTests(unittest.TestCase):
         ) as save:
             result = workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
 
-        save.assert_called_once()
+        self.assertEqual(save.call_count, 2)
         self.assertEqual(existing.image, "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertEqual(result.status, "creating")
 
@@ -301,7 +304,7 @@ class CodeServerTests(unittest.TestCase):
             service_name="code-7-workspace-svc",
             image="nvcr.io/nvidia/tritonserver:25.02-py3",
             url="http://code-7-workspace-svc.triton-control.svc.cluster.local:8080",
-            password_enc="pw123456",
+            password_enc="",
             status="ready",
             status_message="Ready",
             applied_resources=["StatefulSet/code-7-workspace"],
@@ -316,7 +319,7 @@ class CodeServerTests(unittest.TestCase):
         list_for_owner.assert_called_once_with(ANY, 7)
         refresh_status.assert_called_once_with(ANY, row)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].password, "pw123456")
+        self.assertEqual(result[0].url, "/api/code-servers/2/proxy/")
 
     def test_GetCodeServer_DifferentOwner_RaisesForbidden(self) -> None:
         user = SimpleNamespace(id=7)
@@ -440,6 +443,43 @@ class CodeServerTests(unittest.TestCase):
             k8s.workspace_url("ns", "svc"),
             "http://svc.ns.svc.cluster.local:8080",
         )
+
+    def test_ProxyHttpSync_UsesKubernetesServiceProxyAndStripsFrameHeaders(self) -> None:
+        calls: dict[str, object] = {}
+
+        class Upstream:
+            data = b"<html>code</html>"
+
+            def release_conn(self) -> None:
+                calls["released"] = True
+
+        class Api:
+            def call_api(self, resource_path: str, method: str, **kwargs: object) -> object:
+                calls["resource_path"] = resource_path
+                calls["method"] = method
+                calls.update(kwargs)
+                return Upstream(), 200, {"Content-Type": "text/html", "X-Frame-Options": "DENY"}
+
+        with patch("app.services.code_server.proxy.api_client", return_value=Api()):
+            response = code_proxy._proxy_http_sync(
+                self._row(),
+                "index.html",
+                "GET",
+                {"accept": "text/html"},
+                [("v", "1")],
+                b"",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.body, b"<html>code</html>")
+        self.assertEqual(calls["method"], "GET")
+        self.assertEqual(calls["path_params"], {
+            "namespace": "triton-control",
+            "name": "code-7-dev-workspace-svc",
+            "path": "index.html",
+        })
+        self.assertNotIn("x-frame-options", {key.lower() for key in response.headers})
+        self.assertTrue(calls["released"])
 
     def test_ApiError_FormatsStatusReasonAndBody(self) -> None:
         message = k8s._api_error(SimpleNamespace(status=500, reason="boom", body="details"))

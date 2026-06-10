@@ -7,7 +7,7 @@ from typing import List, Literal, Optional
 from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
-from sqlmodel import Field, SQLModel
+from sqlmodel import SQLModel
 
 
 class CreateCodeServerRequest(SQLModel):
@@ -15,7 +15,6 @@ class CreateCodeServerRequest(SQLModel):
 
     name: str = "workspace"
     image: str = "nvcr.io/nvidia/tritonserver:25.02-py3"
-    password: str = Field(min_length=8, max_length=256)
     ingress_host: Optional[str] = None
     ingress_scheme: Optional[Literal["http", "https"]] = None
     ingress_class_name: Optional[str] = None
@@ -89,7 +88,6 @@ class CodeServerDTO(SQLModel):
     service_name: str
     image: str
     url: str
-    password: str
     status: str
     status_message: str
     applied_resources: List[str]

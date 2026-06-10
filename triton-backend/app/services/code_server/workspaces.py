@@ -8,7 +8,6 @@ from typing import Any
 
 from sqlmodel import Session
 
-from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.identity import require_user_entity
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
@@ -41,7 +40,6 @@ def create_code_server(
     statefulset_name = resource_prefix
     service_name = f"{resource_prefix}-svc"
     secret_name = f"{resource_prefix}-secret"
-    url = k8s.workspace_url(namespace, service_name, request.ingress_host, request.ingress_scheme)
     applied_resources = k8s.apply_code_server_resources(
         request,
         namespace=namespace,
@@ -57,8 +55,8 @@ def create_code_server(
         "service_name": service_name,
         "secret_name": secret_name,
         "image": request.image,
-        "url": url,
-        "password_enc": encrypt_secret(request.password),
+        "url": "",
+        "password_enc": "",
         "status": "creating",
         "status_message": "Kubernetes resources applied; waiting for pod readiness.",
         "applied_resources": applied_resources,
@@ -76,6 +74,9 @@ def create_code_server(
             name=name,
             **values,
         )
+    if row.id:
+        row.url = proxy_url(row.id)
+        row = code_servers.save(session, row)
     return _to_dto(row)
 
 
@@ -83,6 +84,11 @@ def get_code_server(session: Session, claims: dict[str, Any], code_server_id: in
     row = _get_owned(session, claims, code_server_id)
     _refresh_status(session, row)
     return _to_dto(row)
+
+
+def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
+    """Return an owned code-server entity for internal proxy use."""
+    return _get_owned(session, claims, code_server_id)
 
 
 def delete_code_server(
@@ -149,8 +155,7 @@ def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
         statefulset_name=row.statefulset_name,
         service_name=row.service_name,
         image=row.image,
-        url=row.url,
-        password=decrypt_secret(row.password_enc),
+        url=proxy_url(row.id or 0),
         status=row.status,
         status_message=row.status_message,
         applied_resources=row.applied_resources or [],
@@ -180,3 +185,7 @@ def _workspace_namespace() -> str:
 def _resource_prefix(owner_id: int, name: str) -> str:
     base = f"code-{owner_id}-{name}"
     return base[:52].rstrip("-")
+
+
+def proxy_url(code_server_id: int) -> str:
+    return f"/api/code-servers/{code_server_id}/proxy/"

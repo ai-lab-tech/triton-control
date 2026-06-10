@@ -11,6 +11,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 
 import {
+  BASE_PATH,
   CodeServerDTO,
   CodeServersService,
   CreateCodeServerRequest,
@@ -37,10 +38,10 @@ type CodeServer = CodeServerDTO;
 export class CodeServersPageComponent {
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
 
   name = "workspace";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
-  password = "";
   ingressHost = "";
   ingressClassName = "";
   storageSize = "20Gi";
@@ -78,7 +79,7 @@ export class CodeServersPageComponent {
 
   async create(): Promise<void> {
     if (!this.canCreate()) {
-      this.setMessage("Workspace name, image, and password are required.", "error");
+      this.setMessage("Workspace name and image are required.", "error");
       return;
     }
     this.saving.set(true);
@@ -87,7 +88,6 @@ export class CodeServersPageComponent {
       const payload: CreateCodeServerRequest = {
         name: this.name.trim(),
         image: this.image.trim(),
-        password: this.password,
         ingress_host: this.ingressHost.trim() || undefined,
         ingress_class_name: this.ingressClassName.trim() || undefined,
         storage_size: this.storageSize.trim() || "20Gi",
@@ -102,7 +102,6 @@ export class CodeServersPageComponent {
       );
       this.upsertWorkspace(workspace);
       this.selectWorkspace(workspace);
-      this.password = "";
       this.setMessage("Code server created.", "success");
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create code server."), "error");
@@ -166,7 +165,6 @@ export class CodeServersPageComponent {
     return (
       this.name.trim().length > 0 &&
       this.image.trim().length > 0 &&
-      this.password.length >= 8 &&
       !this.saving()
     );
   }
@@ -203,11 +201,18 @@ export class CodeServersPageComponent {
   private setEmbeddedWorkspace(workspace: CodeServer): void {
     if (workspace.status === "ready" && workspace.url) {
       this.embeddedWorkspaceUrl.set(
-        this.sanitizer.bypassSecurityTrustResourceUrl(workspace.url),
+        this.sanitizer.bypassSecurityTrustResourceUrl(this.proxyUrl(workspace.url)),
       );
       return;
     }
     this.embeddedWorkspaceUrl.set(null);
+  }
+
+  private proxyUrl(path: string): string {
+    if (/^https?:\/\//i.test(path)) {
+      return path;
+    }
+    return `${this.basePath}${path.startsWith("/") ? path : `/${path}`}`;
   }
 
   private setMessage(message: string, tone: "info" | "success" | "error"): void {

@@ -42,20 +42,6 @@
             </div>
 
             <div class="form-row">
-              <label class="field-label" for="code-server-password">Password</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="code-server-password"
-                  matInput
-                  [(ngModel)]="password"
-                  type="password"
-                  autocomplete="new-password"
-                />
-                <mat-hint>At least 8 characters.</mat-hint>
-              </mat-form-field>
-            </div>
-
-            <div class="form-row">
               <label class="field-label" for="code-server-storage">Workspace storage</label>
               <mat-form-field appearance="outline">
                 <input id="code-server-storage" matInput [(ngModel)]="storageSize" placeholder="20Gi" />
