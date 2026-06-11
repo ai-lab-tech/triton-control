@@ -2,7 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: 1.4rem;
-  min-height: calc(100vh - 9rem);
+  height: calc(100dvh - 64px - 5rem);
+  min-height: 520px;
+  overflow: hidden;
 }
 
 .header-row {
@@ -16,7 +18,8 @@
   display: grid;
   grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 1rem;
-  min-height: calc(100vh - 13rem);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .workspace-sidebar {
@@ -24,6 +27,9 @@
   flex-direction: column;
   gap: 1rem;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .workspace-card {
@@ -229,7 +235,7 @@
 
 .workspace-frame {
   min-width: 0;
-  min-height: 640px;
+  min-height: 0;
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 8px;
   overflow: hidden;
@@ -240,7 +246,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 640px;
+  min-height: 0;
   border: 0;
   background: #0f172a;
 }
@@ -251,7 +257,7 @@
   justify-items: center;
   gap: 0.5rem;
   height: 100%;
-  min-height: 640px;
+  min-height: 0;
   padding: 2rem;
   color: #cbd5e1;
   text-align: center;
@@ -274,8 +280,25 @@
 }
 
 @media (max-width: 800px) {
+  .code-servers {
+    height: auto;
+    min-height: calc(100dvh - 64px - 5rem);
+    overflow: visible;
+  }
+
   .workspace-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-sidebar {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .workspace-frame,
+  .workspace-frame iframe,
+  .frame-placeholder {
+    min-height: 70dvh;
   }
 
   .workspace-card {
