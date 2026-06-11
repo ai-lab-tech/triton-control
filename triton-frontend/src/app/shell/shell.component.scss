@@ -8,6 +8,14 @@
   background: rgba(15, 23, 42, 0.96);
   color: #f8fafc;
   padding: 1.2rem 1.1rem 1.6rem;
+  transition:
+    width 160ms ease,
+    padding 160ms ease;
+}
+
+.sidenav.collapsed {
+  width: 72px;
+  padding: 1rem 0.6rem 1.2rem;
 }
 
 :host ::ng-deep .sidenav .mat-drawer-inner-container {
@@ -18,8 +26,16 @@
 .brand {
   display: flex;
   gap: 0.9rem;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 2rem;
+}
+
+.sidenav.collapsed .brand {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1.4rem;
 }
 
 .brand-icon {
@@ -39,9 +55,50 @@
   font-weight: 700;
 }
 
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.brand-toggle {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.brand-toggle .material-icons {
+  font-size: 1.15rem;
+}
+
+.collapsed-toggle {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.7rem;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.collapsed-toggle:hover,
+.brand-toggle:hover {
+  background: rgba(148, 163, 184, 0.14);
+  color: #f8fafc;
+}
+
 .brand-sub {
   font-size: 0.75rem;
   color: rgba(226, 232, 240, 0.65);
+}
+
+.sidenav.collapsed .brand-copy,
+.sidenav.collapsed .nav-section,
+.sidenav.collapsed .nav-label,
+.sidenav.collapsed .sidenav-action-label,
+.sidenav.collapsed .fleet-label,
+.sidenav.collapsed .version {
+  display: none;
 }
 
 .nav {
@@ -58,10 +115,24 @@
   margin: 1.2rem 0 0.4rem;
 }
 
+.sidenav.collapsed .nav {
+  align-items: center;
+}
+
 a.mat-mdc-list-item {
   border-radius: 12px;
   color: rgba(226, 232, 240, 0.85);
   font-weight: 500;
+}
+
+.sidenav.collapsed a.mat-mdc-list-item,
+.sidenav.collapsed span.mat-mdc-list-item.disabled-nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 span.mat-mdc-list-item.disabled-nav-item {
@@ -114,10 +185,18 @@ a.mat-mdc-list-item:hover {
   margin-right: 0.75rem;
 }
 
+.sidenav.collapsed .nav-icon {
+  margin-right: 0;
+}
+
 .sidenav-actions {
   display: grid;
   gap: 0.7rem;
   padding: 0.9rem 0 0;
+}
+
+.sidenav.collapsed .sidenav-actions {
+  justify-items: center;
 }
 
 .sidenav-add-instance,
@@ -138,6 +217,13 @@ a.mat-mdc-list-item:hover {
   font-weight: 650;
   text-decoration: none;
   box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.08);
+}
+
+.sidenav.collapsed .sidenav-add-instance,
+.sidenav.collapsed .sidenav-add-deployment {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
 .sidenav-add-instance:hover,
@@ -161,6 +247,10 @@ a.mat-mdc-list-item:hover {
   padding-top: 1.6rem;
 }
 
+.sidenav.collapsed .sidenav-footer {
+  justify-items: center;
+}
+
 .fleet-chip {
   display: inline-flex;
   align-items: center;
@@ -170,6 +260,13 @@ a.mat-mdc-list-item:hover {
   background: rgba(20, 184, 166, 0.15);
   color: #5eead4;
   font-size: 0.75rem;
+}
+
+.sidenav.collapsed .fleet-chip {
+  width: 44px;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
 }
 
 .version {
@@ -185,6 +282,9 @@ a.mat-mdc-list-item:hover {
   position: sticky;
   top: 0;
   z-index: 5;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 1rem;
   background: rgba(248, 250, 252, 0.8);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(226, 232, 240, 0.7);
@@ -196,6 +296,7 @@ a.mat-mdc-list-item:hover {
 
 .topbar-title {
   font-family: "Space Grotesk", sans-serif;
+  font-size: 1rem;
   font-weight: 600;
   position: absolute;
   left: 50%;
@@ -214,8 +315,8 @@ a.mat-mdc-list-item:hover {
 .user-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.25rem 0.6rem;
+  gap: 0.45rem;
+  padding: 0.18rem 0.5rem;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.06);
   font-weight: 600;
@@ -223,8 +324,8 @@ a.mat-mdc-list-item:hover {
 }
 
 .user-chip .avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: linear-gradient(135deg, #14b8a6, #f59e0b);
   color: #0f172a;
@@ -235,7 +336,7 @@ a.mat-mdc-list-item:hover {
 }
 
 .user-chip .user-name {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .admin-menu {
@@ -285,7 +386,7 @@ a.mat-mdc-list-item:hover {
 }
 
 .page {
-  padding: 2rem clamp(1.5rem, 3vw, 3rem) 3rem;
+  padding: 1rem clamp(1rem, 2vw, 2rem) 1.25rem;
 }
 
 @media (max-width: 900px) {

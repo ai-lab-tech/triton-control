@@ -1,4 +1,4 @@
-import { Component, OnDestroy, inject, signal } from "@angular/core";
+import { Component, ElementRef, OnDestroy, ViewChild, inject, signal } from "@angular/core";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
@@ -48,6 +48,7 @@ export class CodeServersPageComponent implements OnDestroy {
   private statusPollId: ReturnType<typeof setInterval> | null = null;
   private statusPollInFlight = false;
   private frameReloadNonce = 0;
+  @ViewChild("codeServerFrame") private codeServerFrame?: ElementRef<HTMLIFrameElement>;
 
   name = "workspace";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
@@ -63,6 +64,7 @@ export class CodeServersPageComponent implements OnDestroy {
   readonly workspaces = signal<CodeServer[]>([]);
   readonly selectedWorkspaceId = signal<number | null>(null);
   readonly embeddedWorkspaceUrl = signal<SafeResourceUrl | null>(null);
+  readonly workspacePanelCollapsed = signal(false);
   readonly message = signal("");
   readonly messageTone = signal<"info" | "success" | "error">("info");
 
@@ -186,6 +188,24 @@ export class CodeServersPageComponent implements OnDestroy {
     );
   }
 
+  toggleWorkspacePanel(): void {
+    this.workspacePanelCollapsed.update((collapsed) => !collapsed);
+    this.scheduleFrameResize();
+  }
+
+  selectedWorkspace(): CodeServer | null {
+    const selectedId = this.selectedWorkspaceId();
+    return this.workspaces().find((workspace) => workspace.id === selectedId) ?? null;
+  }
+
+  imageLabel(image: string): string {
+    const trimmed = image.trim();
+    if (trimmed === "nvcr.io/nvidia/tritonserver:25.02-py3") {
+      return "Triton SDK 25.02";
+    }
+    return trimmed.split("/").pop() || trimmed;
+  }
+
   private upsertWorkspace(workspace: CodeServer): void {
     this.workspaces.update((items) => {
       const index = items.findIndex((item) => item.id === workspace.id);
@@ -219,15 +239,30 @@ export class CodeServersPageComponent implements OnDestroy {
 
   private setEmbeddedWorkspace(workspace: CodeServer): void {
     if (workspace.status === "ready" && workspace.url) {
+      this.workspacePanelCollapsed.set(true);
       this.frameReloadNonce += 1;
       this.embeddedWorkspaceUrl.set(
         this.sanitizer.bypassSecurityTrustResourceUrl(
           this.withFrameReloadNonce(this.proxyUrl(workspace.url)),
         ),
       );
+      this.scheduleFrameResize();
       return;
     }
+    this.workspacePanelCollapsed.set(false);
     this.embeddedWorkspaceUrl.set(null);
+  }
+
+  private scheduleFrameResize(): void {
+    const notify = () => {
+      try {
+        this.codeServerFrame?.nativeElement.contentWindow?.dispatchEvent(new Event("resize"));
+      } catch {
+        // The iframe can briefly be unavailable while Angular swaps the src.
+      }
+    };
+    window.setTimeout(notify, 80);
+    window.setTimeout(notify, 260);
   }
 
   private proxyUrl(path: string): string {

@@ -1,17 +1,46 @@
-<mat-sidenav-container class="layout">
+<mat-sidenav-container class="layout" autosize>
   @if (isLoggedIn()) {
     <mat-sidenav
       class="sidenav"
+      [class.collapsed]="navCollapsed() && !isHandset()"
       [mode]="isHandset() ? 'over' : 'side'"
       [opened]="navOpened()"
       (openedChange)="navOpen.set($event)"
     >
+      @if (navCollapsed() && !isHandset()) {
+        <button
+          mat-icon-button
+          type="button"
+          class="brand-toggle collapsed-toggle"
+          aria-label="Expand navigation"
+          title="Expand navigation"
+          (click)="toggleNav(); $event.stopPropagation()"
+        >
+          <span class="material-icons">chevron_right</span>
+        </button>
+      }
       <div class="brand">
         <div class="brand-icon">
           <span class="material-icons">dns</span>
         </div>
-        <div>
-          <div class="brand-title">Triton Control</div>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <div class="brand-title">Triton Control</div>
+            @if (!isHandset()) {
+              <button
+                mat-icon-button
+                type="button"
+                class="brand-toggle"
+                [attr.aria-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+                [attr.title]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+                (click)="toggleNav(); $event.stopPropagation()"
+              >
+                <span class="material-icons">{{
+                  navCollapsed() ? "chevron_right" : "chevron_left"
+                }}</span>
+              </button>
+            }
+          </div>
           <div class="brand-sub">Inference fleet cockpit</div>
         </div>
       </div>
@@ -33,7 +62,7 @@
                   [style.opacity]="'0.74'"
                   >{{ item.icon }}</span
                 >
-                <span class="disabled-nav-label">{{ item.label }}</span>
+                <span class="disabled-nav-label nav-label">{{ item.label }}</span>
               </span>
             </span>
           } @else {
@@ -42,9 +71,10 @@
               [routerLink]="item.path"
               routerLinkActive="active"
               (click)="closeNavOnMobile()"
+              [attr.title]="item.label"
             >
               <span class="material-icons nav-icon">{{ item.icon }}</span>
-              <span>{{ item.label }}</span>
+              <span class="nav-label">{{ item.label }}</span>
             </a>
           }
         }
@@ -56,17 +86,18 @@
             type="button"
             class="sidenav-add-instance"
             (click)="openNewInstanceDialog(); closeNavOnMobile()"
+            [attr.title]="'Add Instance'"
           >
             <span class="material-icons">add</span>
-            <span>Add Instance</span>
+            <span class="sidenav-action-label">Add Instance</span>
           </button>
         </div>
       }
 
       <div class="sidenav-footer">
-        <div class="fleet-chip">
+        <div class="fleet-chip" [attr.title]="fleetHealthLabel()">
           <span class="material-icons">bolt</span>
-          <span>{{ fleetHealthLabel() }}</span>
+          <span class="fleet-label">{{ fleetHealthLabel() }}</span>
         </div>
         <div class="version">{{ appVersion }}</div>
       </div>
@@ -75,6 +106,17 @@
 
   <mat-sidenav-content class="content" (click)="closeAdminMenu()">
     <mat-toolbar class="topbar">
+      @if (isLoggedIn() && isHandset()) {
+        <button
+          mat-icon-button
+          type="button"
+          class="menu-btn"
+          aria-label="Open navigation"
+          (click)="toggleNav(); $event.stopPropagation()"
+        >
+          <span class="material-icons">menu</span>
+        </button>
+      }
       <div class="topbar-title">Triton Control</div>
       <span class="spacer"></span>
 

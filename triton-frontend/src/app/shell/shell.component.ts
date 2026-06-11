@@ -116,6 +116,7 @@ export class ShellComponent {
 
   readonly navOpen = signal(false);
   readonly navOpened = computed(() => (this.isHandset() ? this.navOpen() : true));
+  readonly navCollapsed = signal(false);
   readonly adminMenuOpen = signal(false);
   readonly fleetHealthPercentage = toSignal(
     this.store.select(selectDashboardFleetHealthPercentage),
@@ -170,7 +171,11 @@ export class ShellComponent {
   }
 
   toggleNav() {
-    this.navOpen.update((open: boolean) => !open);
+    if (this.isHandset()) {
+      this.navOpen.update((open: boolean) => !open);
+      return;
+    }
+    this.navCollapsed.update((collapsed: boolean) => !collapsed);
   }
 
   closeNavOnMobile() {
