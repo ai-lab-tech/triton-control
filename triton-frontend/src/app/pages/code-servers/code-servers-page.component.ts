@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, OnDestroy, inject, signal } from "@angular/core";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
@@ -9,6 +9,7 @@ import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
+import { MatSelectModule } from "@angular/material/select";
 
 import {
   BASE_PATH,
@@ -31,21 +32,26 @@ type CodeServer = CodeServerDTO;
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatSelectModule,
   ],
   styleUrl: "./code-servers-page.component.scss",
   templateUrl: "./code-servers-page.component.html",
 })
-export class CodeServersPageComponent {
+export class CodeServersPageComponent implements OnDestroy {
+  private static readonly statusPollIntervalMs = 3000;
+
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
     .replace(/\/$/, "");
+  private statusPollId: ReturnType<typeof setInterval> | null = null;
+  private statusPollInFlight = false;
+  private frameReloadNonce = 0;
 
   name = "workspace";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
-  ingressHost = "";
-  ingressClassName = "";
+  theme: CreateCodeServerRequest["theme"] = "Default Dark+";
   storageSize = "20Gi";
   cpu = "";
   memory = "";
@@ -64,6 +70,10 @@ export class CodeServersPageComponent {
     void this.load();
   }
 
+  ngOnDestroy(): void {
+    this.stopStatusPolling();
+  }
+
   async load(): Promise<void> {
     this.loading.set(true);
     try {
@@ -72,6 +82,7 @@ export class CodeServersPageComponent {
       )) as CodeServer[];
       this.workspaces.set(workspaces);
       this.ensureSelectedWorkspace();
+      this.updateStatusPolling();
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to load code servers."), "error");
     } finally {
@@ -90,8 +101,7 @@ export class CodeServersPageComponent {
       const payload: CreateCodeServerRequest = {
         name: this.name.trim(),
         image: this.image.trim(),
-        ingress_host: this.ingressHost.trim() || undefined,
-        ingress_class_name: this.ingressClassName.trim() || undefined,
+        theme: this.theme,
         storage_size: this.storageSize.trim() || "20Gi",
         cpu: this.cpu.trim() || undefined,
         cpu_limit: this.cpu.trim() || undefined,
@@ -104,6 +114,8 @@ export class CodeServersPageComponent {
       );
       this.upsertWorkspace(workspace);
       this.selectWorkspace(workspace);
+      this.updateStatusPolling();
+      void this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create code server."), "error");
@@ -121,6 +133,7 @@ export class CodeServersPageComponent {
       if (this.selectedWorkspaceId() === updated.id) {
         this.setEmbeddedWorkspace(updated);
       }
+      this.updateStatusPolling();
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to refresh code server."), "error");
     }
@@ -138,6 +151,7 @@ export class CodeServersPageComponent {
         this.embeddedWorkspaceUrl.set(null);
         this.ensureSelectedWorkspace();
       }
+      this.updateStatusPolling();
       this.setMessage("Code server deleted.", "success");
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to delete code server."), "error");
@@ -164,7 +178,12 @@ export class CodeServersPageComponent {
   }
 
   canCreate(): boolean {
-    return this.name.trim().length > 0 && this.image.trim().length > 0 && !this.saving();
+    return (
+      this.name.trim().length > 0 &&
+      this.image.trim().length > 0 &&
+      this.workspaces().length === 0 &&
+      !this.saving()
+    );
   }
 
   private upsertWorkspace(workspace: CodeServer): void {
@@ -200,8 +219,11 @@ export class CodeServersPageComponent {
 
   private setEmbeddedWorkspace(workspace: CodeServer): void {
     if (workspace.status === "ready" && workspace.url) {
+      this.frameReloadNonce += 1;
       this.embeddedWorkspaceUrl.set(
-        this.sanitizer.bypassSecurityTrustResourceUrl(this.proxyUrl(workspace.url)),
+        this.sanitizer.bypassSecurityTrustResourceUrl(
+          this.withFrameReloadNonce(this.proxyUrl(workspace.url)),
+        ),
       );
       return;
     }
@@ -218,5 +240,73 @@ export class CodeServersPageComponent {
   private setMessage(message: string, tone: "info" | "success" | "error"): void {
     this.message.set(message);
     this.messageTone.set(tone);
+  }
+
+  private updateStatusPolling(): void {
+    if (!this.shouldKeepPolling()) {
+      this.stopStatusPolling();
+      return;
+    }
+    if (this.statusPollId !== null) {
+      return;
+    }
+    this.statusPollId = setInterval(() => {
+      void this.pollPendingWorkspaces();
+    }, CodeServersPageComponent.statusPollIntervalMs);
+  }
+
+  private stopStatusPolling(): void {
+    if (this.statusPollId === null) {
+      return;
+    }
+    clearInterval(this.statusPollId);
+    this.statusPollId = null;
+  }
+
+  private shouldKeepPolling(): boolean {
+    return this.workspaces().some((workspace) => this.shouldPollWorkspace(workspace));
+  }
+
+  private shouldPollWorkspace(workspace: CodeServer): boolean {
+    if (workspace.status === "missing") {
+      return false;
+    }
+    if (workspace.status !== "ready") {
+      return true;
+    }
+    return this.selectedWorkspaceId() === workspace.id && this.embeddedWorkspaceUrl() === null;
+  }
+
+  private async pollPendingWorkspaces(): Promise<void> {
+    if (this.statusPollInFlight) {
+      return;
+    }
+    const pending = this.workspaces().filter((workspace) => this.shouldPollWorkspace(workspace));
+    if (pending.length === 0) {
+      this.stopStatusPolling();
+      return;
+    }
+    this.statusPollInFlight = true;
+    try {
+      const updates = await Promise.all(
+        pending.map((workspace) =>
+          firstValueFrom(
+            this.codeServersApi.getCodeServerApiCodeServersCodeServerIdGet(workspace.id),
+          ),
+        ),
+      );
+      updates.forEach((workspace) => this.upsertWorkspace(workspace));
+      this.ensureSelectedWorkspace();
+    } catch {
+      // Keep manual refresh as the visible error path; transient startup polls can fail briefly.
+    } finally {
+      this.statusPollInFlight = false;
+      this.updateStatusPolling();
+    }
+  }
+
+  private withFrameReloadNonce(url: string): string {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}_tc_reload=${this.frameReloadNonce}`;
   }
 }

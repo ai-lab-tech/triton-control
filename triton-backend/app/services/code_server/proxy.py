@@ -3,18 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import ssl
+import time
 from typing import Any, cast
 from urllib.parse import quote, urlencode
 
 import anyio
+import httpx
 import websockets
 from fastapi import Request, Response, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadGatewayError
-from app.services.kubernetes_client import api_client
+from app.services.kubernetes_client import api_client, is_running_in_cluster
+
+logger = logging.getLogger(__name__)
+
+_DIRECT_PROXY_STARTUP_TIMEOUT_SECONDS = 30.0
+_DIRECT_PROXY_RETRY_DELAY_SECONDS = 0.5
 
 _HOP_BY_HOP_HEADERS = {
     "connection",
@@ -29,6 +37,7 @@ _HOP_BY_HOP_HEADERS = {
 _REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {"host", "content-length", "accept-encoding"}
 _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
     "content-length",
+    "content-encoding",
     "content-security-policy",
     "x-frame-options",
 }
@@ -76,6 +85,7 @@ async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket
     except WebSocketDisconnect:
         return
     except Exception:
+        logger.exception("Code-server WebSocket proxy failed")
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close(code=1011)
     finally:
@@ -91,6 +101,59 @@ def _proxy_http_sync(
     query_params: list[tuple[str, str]],
     body: bytes,
 ) -> Response:
+    if is_running_in_cluster():
+        return _direct_proxy_http_sync(row, path, method, headers, query_params, body)
+
+    return _kubernetes_proxy_http_sync(row, path, method, headers, query_params, body)
+
+
+def _direct_proxy_http_sync(
+    row: CodeServerEntity,
+    path: str,
+    method: str,
+    headers: dict[str, str],
+    query_params: list[tuple[str, str]],
+    body: bytes,
+) -> Response:
+    target = _direct_http_url(row, path, query_params)
+    deadline = time.monotonic() + _DIRECT_PROXY_STARTUP_TIMEOUT_SECONDS
+    last_error: httpx.HTTPError | None = None
+    try:
+        with httpx.Client(follow_redirects=False, timeout=120, trust_env=False) as client:
+            while True:
+                try:
+                    upstream = client.request(
+                        method,
+                        target,
+                        headers=headers,
+                        content=body if body else None,
+                    )
+                    break
+                except httpx.ConnectError as exc:
+                    last_error = exc
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(_DIRECT_PROXY_RETRY_DELAY_SECONDS)
+    except httpx.HTTPError as exc:
+        error = last_error or exc
+        raise BadGatewayError(f"Code-server direct proxy request failed: {error}") from exc
+
+    proxied_headers = {
+        key: value
+        for key, value in upstream.headers.items()
+        if key.lower() not in _RESPONSE_SKIP_HEADERS
+    }
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=proxied_headers)
+
+
+def _kubernetes_proxy_http_sync(
+    row: CodeServerEntity,
+    path: str,
+    method: str,
+    headers: dict[str, str],
+    query_params: list[tuple[str, str]],
+    body: bytes,
+) -> Response:
     from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
     api = api_client()
@@ -98,7 +161,7 @@ def _proxy_http_sync(
     resource_path = "/api/v1/namespaces/{namespace}/services/{name}/proxy/{path}"
     path_params = {
         "namespace": row.namespace,
-        "name": row.service_name,
+        "name": _service_proxy_name(row),
         "path": encoded_path,
     }
     try:
@@ -135,6 +198,9 @@ def _websocket_upstream(
     path: str,
     query_params: list[tuple[str, str]],
 ) -> tuple[str, dict[str, str], ssl.SSLContext | None]:
+    if is_running_in_cluster():
+        return _direct_websocket_url(row, path, query_params), {}, None
+
     api = api_client()
     config = api.configuration
     host = config.host.rstrip("/")
@@ -144,7 +210,7 @@ def _websocket_upstream(
     query = urlencode(query_params, doseq=True)
     upstream_url = (
         f"{scheme}://{base}/api/v1/namespaces/{quote(row.namespace, safe='')}"
-        f"/services/{quote(row.service_name, safe='')}/proxy/{encoded_path}"
+        f"/services/{quote(_service_proxy_name(row), safe='')}/proxy/{encoded_path}"
     )
     if query:
         upstream_url = f"{upstream_url}?{query}"
@@ -152,6 +218,32 @@ def _websocket_upstream(
     headers = dict(api.default_headers)
     api.update_params_for_auth(headers, [], ["BearerToken"])
     return upstream_url, headers, _ssl_context(config) if scheme == "wss" else None
+
+
+def _service_proxy_name(row: CodeServerEntity) -> str:
+    return f"{row.service_name}:http"
+
+
+def _direct_http_url(
+    row: CodeServerEntity,
+    path: str,
+    query_params: list[tuple[str, str]],
+) -> str:
+    encoded_path = quote(path.lstrip("/"), safe="/:@")
+    query = urlencode(query_params, doseq=True)
+    url = (
+        f"http://{row.service_name}.{row.namespace}.svc.cluster.local:8080/"
+        f"{encoded_path}"
+    )
+    return f"{url}?{query}" if query else url
+
+
+def _direct_websocket_url(
+    row: CodeServerEntity,
+    path: str,
+    query_params: list[tuple[str, str]],
+) -> str:
+    return _direct_http_url(row, path, query_params).replace("http://", "ws://", 1)
 
 
 def _ssl_context(config: object) -> ssl.SSLContext:

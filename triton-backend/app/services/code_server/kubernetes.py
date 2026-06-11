@@ -6,7 +6,6 @@ from typing import Any
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
-from app.services.deployment.kubernetes import pending_url
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
 
 
@@ -117,10 +116,8 @@ def read_status(namespace: str, statefulset_name: str) -> tuple[str, str]:
 def workspace_url(
     namespace: str,
     service_name: str,
-    ingress_host: str | None = None,
-    ingress_scheme: str | None = None,
 ) -> str:
-    return pending_url(namespace, service_name, ingress_host, ingress_scheme).replace(":18000", ":8080")
+    return f"http://{service_name}.{namespace}.svc.cluster.local:8080"
 
 
 def _ensure_namespace(api: Any, namespace: str) -> None:
@@ -153,8 +150,6 @@ def _manifests(
     ]
     if request.dockerconfigjson:
         manifests.insert(0, _image_pull_secret_manifest(request, namespace, statefulset_name))
-    if request.ingress_host:
-        manifests.append(_ingress_manifest(request, namespace, statefulset_name, service_name))
     return manifests
 
 
@@ -188,13 +183,45 @@ def _statefulset_manifest(
                         "image": request.image,
                         "imagePullPolicy": "IfNotPresent",
                         "ports": [{"name": "http", "containerPort": 8080}],
+                        "startupProbe": {
+                            "httpGet": {"path": "/", "port": "http"},
+                            "periodSeconds": 5,
+                            "failureThreshold": 120,
+                        },
+                        "readinessProbe": {
+                            "httpGet": {"path": "/", "port": "http"},
+                            "periodSeconds": 5,
+                            "failureThreshold": 3,
+                        },
                         "command": ["/bin/sh", "-c"],
                         "args": [
                             (
                                 "if ! command -v code-server >/dev/null 2>&1; then "
                                 "curl -fsSL https://code-server.dev/install.sh | sh; "
                                 "fi; "
-                                "exec code-server --bind-addr 0.0.0.0:8080 --auth none /workspace"
+                                "mkdir -p /workspace/.code-server/user-data/User "
+                                "/workspace/.code-server/extensions; "
+                                "printf '%s\n' "
+                                "'{\"workbench.startupEditor\":\"none\","
+                                f"\"workbench.colorTheme\":\"{request.theme}\"}}' "
+                                "> /workspace/.code-server/user-data/User/settings.json; "
+                                "if ! code-server "
+                                "--extensions-dir /workspace/.code-server/extensions "
+                                "--list-extensions | grep -qx 'ms-python.python'; then "
+                                "code-server "
+                                "--extensions-dir /workspace/.code-server/extensions "
+                                "--install-extension ms-python.python || "
+                                "echo 'Warning: failed to install ms-python.python extension' >&2; "
+                                "fi; "
+                                "if [ ! -e /workspace/README.md ]; then "
+                                "printf '%s\n' '# Workspace' '' "
+                                "'This persistent workspace is managed by Triton Control.' "
+                                "> /workspace/README.md; "
+                                "fi; "
+                                "exec code-server --bind-addr 0.0.0.0:8080 --auth none "
+                                "--user-data-dir /workspace/.code-server/user-data "
+                                "--extensions-dir /workspace/.code-server/extensions "
+                                "/workspace"
                             ),
                         ],
                         "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
@@ -234,45 +261,6 @@ def _service_manifest(namespace: str, service_name: str, labels: dict[str, str])
         "spec": {
             "selector": labels,
             "ports": [{"name": "http", "port": 8080, "targetPort": 8080}],
-        },
-    }
-
-
-def _ingress_manifest(
-    request: CreateCodeServerRequest,
-    namespace: str,
-    statefulset_name: str,
-    service_name: str,
-) -> dict[str, Any]:
-    return {
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "Ingress",
-        "metadata": {
-            "name": f"{statefulset_name}-ingress",
-            "namespace": namespace,
-            "annotations": {"nginx.ingress.kubernetes.io/proxy-read-timeout": "3600"},
-        },
-        "spec": {
-            "ingressClassName": request.ingress_class_name or "nginx",
-            "rules": [
-                {
-                    "host": request.ingress_host,
-                    "http": {
-                        "paths": [
-                            {
-                                "path": "/",
-                                "pathType": "Prefix",
-                                "backend": {
-                                    "service": {
-                                        "name": service_name,
-                                        "port": {"number": 8080},
-                                    },
-                                },
-                            },
-                        ],
-                    },
-                },
-            ],
         },
     }
 

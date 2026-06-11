@@ -52,6 +52,19 @@
                 />
               </mat-form-field>
             </div>
+
+            <div class="form-row">
+              <label class="field-label" for="code-server-theme">VS Code theme</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="code-server-theme" [(ngModel)]="theme">
+                  <mat-option value="Default Dark+">Default Dark+</mat-option>
+                  <mat-option value="Default Light+">Default Light+</mat-option>
+                  <mat-option value="Quiet Light">Quiet Light</mat-option>
+                  <mat-option value="Monokai">Monokai</mat-option>
+                  <mat-option value="Solarized Dark">Solarized Dark</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
           </div>
         </div>
 
@@ -63,39 +76,6 @@
             </div>
           </div>
           <mat-accordion class="optional-sections">
-            <mat-expansion-panel>
-              <mat-expansion-panel-header>
-                <mat-panel-title>
-                  <span class="material-icons">route</span>
-                  <span>Ingress</span>
-                </mat-panel-title>
-              </mat-expansion-panel-header>
-              <div class="form-grid">
-                <div class="form-row">
-                  <label class="field-label" for="code-server-ingress-host">Ingress host</label>
-                  <mat-form-field appearance="outline">
-                    <input
-                      id="code-server-ingress-host"
-                      matInput
-                      [(ngModel)]="ingressHost"
-                      placeholder="code.example.local"
-                    />
-                  </mat-form-field>
-                </div>
-                <div class="form-row">
-                  <label class="field-label" for="code-server-ingress-class">Ingress class</label>
-                  <mat-form-field appearance="outline">
-                    <input
-                      id="code-server-ingress-class"
-                      matInput
-                      [(ngModel)]="ingressClassName"
-                      placeholder="nginx"
-                    />
-                  </mat-form-field>
-                </div>
-              </div>
-            </mat-expansion-panel>
-
             <mat-expansion-panel>
               <mat-expansion-panel-header>
                 <mat-panel-title>

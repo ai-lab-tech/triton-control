@@ -34,6 +34,10 @@ def create_code_server(
     _require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     owner_id = user.id or 0
+    if code_servers.find_first_for_owner(session, owner_id):
+        raise BadRequestError(
+            "A code-server workspace already exists for this user. Delete it before creating a new one.",
+        )
     name = request.name
     resource_prefix = _resource_prefix(owner_id, name)
     namespace = _workspace_namespace()
@@ -48,7 +52,6 @@ def create_code_server(
         secret_name=secret_name,
     )
 
-    row = code_servers.find_by_owner_and_name(session, owner_id, name)
     values = {
         "namespace": namespace,
         "statefulset_name": statefulset_name,
@@ -62,18 +65,12 @@ def create_code_server(
         "applied_resources": applied_resources,
         "updated_at": datetime.utcnow(),
     }
-    if row:
-        _ensure_owner(row, owner_id)
-        for key, value in values.items():
-            setattr(row, key, value)
-        row = code_servers.save(session, row)
-    else:
-        row = code_servers.create(
-            session,
-            owner_user_id=owner_id,
-            name=name,
-            **values,
-        )
+    row = code_servers.create(
+        session,
+        owner_user_id=owner_id,
+        name=name,
+        **values,
+    )
     if row.id:
         row.url = proxy_url(row.id)
         row = code_servers.save(session, row)

@@ -2257,39 +2257,11 @@
             "title": "Image",
             "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
           },
-          "ingress_host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Host"
-          },
-          "ingress_scheme": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": ["http", "https"]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Scheme"
-          },
-          "ingress_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Class Name"
+          "theme": {
+            "type": "string",
+            "enum": ["Default Dark+", "Default Light+", "Quiet Light", "Monokai", "Solarized Dark"],
+            "title": "Theme",
+            "default": "Default Dark+"
           },
           "storage_size": {
             "type": "string",
@@ -2354,7 +2326,7 @@
         },
         "type": "object",
         "title": "CreateCodeServerRequest",
-        "description": "Request body for creating or replacing the caller's code-server workspace."
+        "description": "Request body for creating the caller's code-server workspace."
       },
       "CreateDeploymentRequest": {
         "properties": {

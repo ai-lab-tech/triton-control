@@ -22,6 +22,14 @@ def find_by_owner_and_name(session: Session, owner_user_id: int, name: str) -> C
     ).first()
 
 
+def find_first_for_owner(session: Session, owner_user_id: int) -> CodeServerEntity | None:
+    return session.exec(
+        select(CodeServerEntity)
+        .where(CodeServerEntity.owner_user_id == owner_user_id)
+        .order_by(CodeServerEntity.created_at.desc()),  # type: ignore[attr-defined]
+    ).first()
+
+
 def list_for_owner(session: Session, owner_user_id: int) -> list[CodeServerEntity]:
     return list(
         session.exec(

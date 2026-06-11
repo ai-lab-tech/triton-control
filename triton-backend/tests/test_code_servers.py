@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import ANY, patch
 
+import httpx
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import code_server_api
@@ -19,7 +20,6 @@ class CodeServerTests(unittest.TestCase):
         return CreateCodeServerRequest(
             name="Dev Workspace",
             image="nvcr.io/nvidia/tritonserver:25.02-py3",
-            ingress_host="http://code.example.local",
             storage_size="30Gi",
             cpu="2",
             memory="4Gi",
@@ -44,12 +44,10 @@ class CodeServerTests(unittest.TestCase):
         values.update(overrides)
         return SimpleNamespace(**values)
 
-    def test_CreateCodeServerRequest_NormalizesNameAndIngress(self) -> None:
+    def test_CreateCodeServerRequest_NormalizesName(self) -> None:
         request = self._request()
 
         self.assertEqual(request.name, "dev-workspace")
-        self.assertEqual(request.ingress_host, "code.example.local")
-        self.assertEqual(request.ingress_scheme, "http")
 
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
@@ -60,12 +58,7 @@ class CodeServerTests(unittest.TestCase):
                 image=" ",
             )
         with self.assertRaises(ValueError):
-            CreateCodeServerRequest(
-                name="workspace",
-                image="triton",
-                ingress_host="https://code.example.local/path",
-            )
-
+            CreateCodeServerRequest(name="workspace", image="triton", theme="Unknown Theme")
     def test_Manifests_CreateStatefulSetWithPersistentWorkspaceAndProxyAuth(self) -> None:
         request = self._request()
 
@@ -80,7 +73,6 @@ class CodeServerTests(unittest.TestCase):
         secret = manifests[0]
         statefulset = manifests[1]
         service = manifests[2]
-        ingress = manifests[3]
         container = statefulset["spec"]["template"]["spec"]["containers"][0]
 
         self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
@@ -88,12 +80,33 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("code-server --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
+        self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
+        self.assertIn("--install-extension ms-python.python", container["args"][0])
+        self.assertIn("--user-data-dir /workspace/.code-server/user-data", container["args"][0])
+        self.assertIn("--extensions-dir /workspace/.code-server/extensions", container["args"][0])
+        self.assertEqual(container["startupProbe"]["httpGet"], {"path": "/", "port": "http"})
+        self.assertEqual(container["readinessProbe"]["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(
             statefulset["spec"]["volumeClaimTemplates"][0]["spec"]["resources"]["requests"]["storage"],
             "30Gi",
         )
         self.assertEqual(service["spec"]["ports"][0]["port"], 8080)
-        self.assertEqual(ingress["spec"]["rules"][0]["host"], "code.example.local")
+        self.assertEqual([manifest["kind"] for manifest in manifests], ["Secret", "StatefulSet", "Service"])
+
+    def test_Manifests_UsesSelectedCodeServerTheme(self) -> None:
+        request = self._request().model_copy(update={"theme": "Monokai"})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-control",
+            "code-7-dev-workspace",
+            "code-7-dev-workspace-svc",
+            "code-7-dev-workspace-secret",
+        )
+
+        container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+
+        self.assertIn("\"workbench.colorTheme\":\"Monokai\"", container["args"][0])
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         request = self._request().model_copy(
@@ -133,13 +146,10 @@ class CodeServerTests(unittest.TestCase):
             "app.services.code_server.workspaces.require_user_entity",
             return_value=user,
         ), patch("app.services.code_server.workspaces._workspace_namespace", return_value="triton-control"), patch(
-            "app.services.code_server.workspaces.k8s.workspace_url",
-            return_value="http://code.example.local",
-        ), patch(
             "app.services.code_server.workspaces.k8s.apply_code_server_resources",
             return_value=["Secret/code-7-dev-workspace-secret", "StatefulSet/code-7-dev-workspace"],
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_owner_and_name",
+            "app.services.code_server.workspaces.code_servers.find_first_for_owner",
             return_value=None,
         ), patch(
             "app.services.code_server.workspaces.code_servers.create",
@@ -158,31 +168,21 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(created["name"], "dev-workspace")
         self.assertEqual(created["statefulset_name"], "code-7-dev-workspace")
 
-    def test_CreateCodeServer_ExistingWorkspace_UpdatesOwnedRecord(self) -> None:
+    def test_CreateCodeServer_ExistingWorkspace_RaisesBadRequest(self) -> None:
         existing = self._row(status="ready", image="old-image")
         user = SimpleNamespace(id=7)
 
         with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
             "app.services.code_server.workspaces.require_user_entity",
             return_value=user,
-        ), patch("app.services.code_server.workspaces._workspace_namespace", return_value="triton-control"), patch(
-            "app.services.code_server.workspaces.k8s.workspace_url",
-            return_value="http://code.example.local",
         ), patch(
-            "app.services.code_server.workspaces.k8s.apply_code_server_resources",
-            return_value=["StatefulSet/code-7-dev-workspace"],
-        ), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_owner_and_name",
+            "app.services.code_server.workspaces.code_servers.find_first_for_owner",
             return_value=existing,
-        ), patch(
-            "app.services.code_server.workspaces.code_servers.save",
-            side_effect=lambda _session, row: row,
-        ) as save:
-            result = workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
+        ), patch("app.services.code_server.workspaces.k8s.apply_code_server_resources") as apply_resources:
+            with self.assertRaises(BadRequestError):
+                workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
 
-        self.assertEqual(save.call_count, 2)
-        self.assertEqual(existing.image, "nvcr.io/nvidia/tritonserver:25.02-py3")
-        self.assertEqual(result.status, "creating")
+        apply_resources.assert_not_called()
 
     def test_GetCodeServer_NotFound_RaisesNotFound(self) -> None:
         with patch(
@@ -379,7 +379,6 @@ class CodeServerTests(unittest.TestCase):
             "Secret/code-7-dev-workspace-secret",
             "StatefulSet/code-7-dev-workspace",
             "Service/code-7-dev-workspace-svc",
-            "Ingress/code-7-dev-workspace-ingress",
         ])
         self.assertEqual(applied[1]["kind"], "StatefulSet")
 
@@ -458,9 +457,16 @@ class CodeServerTests(unittest.TestCase):
                 calls["resource_path"] = resource_path
                 calls["method"] = method
                 calls.update(kwargs)
-                return Upstream(), 200, {"Content-Type": "text/html", "X-Frame-Options": "DENY"}
+                return Upstream(), 200, {
+                    "Content-Type": "text/html",
+                    "Content-Encoding": "gzip",
+                    "X-Frame-Options": "DENY",
+                }
 
-        with patch("app.services.code_server.proxy.api_client", return_value=Api()):
+        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=False), patch(
+            "app.services.code_server.proxy.api_client",
+            return_value=Api(),
+        ):
             response = code_proxy._proxy_http_sync(
                 self._row(),
                 "index.html",
@@ -475,11 +481,117 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(calls["method"], "GET")
         self.assertEqual(calls["path_params"], {
             "namespace": "triton-control",
-            "name": "code-7-dev-workspace-svc",
+            "name": "code-7-dev-workspace-svc:http",
             "path": "index.html",
         })
         self.assertNotIn("x-frame-options", {key.lower() for key in response.headers})
+        self.assertNotIn("content-encoding", {key.lower() for key in response.headers})
         self.assertTrue(calls["released"])
+
+    def test_ProxyHttpSync_InClusterUsesDirectServiceDns(self) -> None:
+        calls: dict[str, object] = {}
+
+        class Client:
+            def __init__(self, **kwargs: object) -> None:
+                calls["client_kwargs"] = kwargs
+
+            def __enter__(self) -> "Client":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def request(self, method: str, url: str, **kwargs: object) -> SimpleNamespace:
+                calls["method"] = method
+                calls["url"] = url
+                calls.update(kwargs)
+                return SimpleNamespace(
+                    content=b"<html>direct</html>",
+                    status_code=200,
+                    headers={
+                        "Content-Type": "text/html",
+                        "Content-Encoding": "gzip",
+                        "X-Frame-Options": "DENY",
+                    },
+                )
+
+        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True), patch(
+            "app.services.code_server.proxy.httpx.Client",
+            return_value=Client(),
+        ):
+            response = code_proxy._proxy_http_sync(
+                self._row(),
+                "stable/socket",
+                "GET",
+                {"accept": "text/html"},
+                [("v", "1")],
+                b"",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.body, b"<html>direct</html>")
+        self.assertEqual(calls["method"], "GET")
+        self.assertEqual(
+            calls["url"],
+            "http://code-7-dev-workspace-svc.triton-control.svc.cluster.local:8080/stable/socket?v=1",
+        )
+        self.assertNotIn("x-frame-options", {key.lower() for key in response.headers})
+        self.assertNotIn("content-encoding", {key.lower() for key in response.headers})
+
+    def test_ProxyHttpSync_InClusterRetriesStartupConnectionRefused(self) -> None:
+        calls: dict[str, int] = {"count": 0}
+
+        class Client:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            def __enter__(self) -> "Client":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def request(self, *_args: object, **_kwargs: object) -> SimpleNamespace:
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    raise httpx.ConnectError("[Errno 111] Connection refused")
+                return SimpleNamespace(
+                    content=b"<html>ready</html>",
+                    status_code=200,
+                    headers={"Content-Type": "text/html"},
+                )
+
+        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True), patch(
+            "app.services.code_server.proxy.httpx.Client",
+            return_value=Client(),
+        ), patch("app.services.code_server.proxy._DIRECT_PROXY_RETRY_DELAY_SECONDS", 0):
+            response = code_proxy._proxy_http_sync(
+                self._row(),
+                "",
+                "GET",
+                {"accept": "text/html"},
+                [],
+                b"",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.body, b"<html>ready</html>")
+        self.assertEqual(calls["count"], 2)
+
+    def test_WebsocketUpstream_InClusterUsesDirectServiceDns(self) -> None:
+        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True):
+            upstream_url, headers, ssl_context = code_proxy._websocket_upstream(
+                self._row(),
+                "stable/socket",
+                [("reconnectionToken", "abc")],
+            )
+
+        self.assertEqual(
+            upstream_url,
+            "ws://code-7-dev-workspace-svc.triton-control.svc.cluster.local:8080/stable/socket?reconnectionToken=abc",
+        )
+        self.assertEqual(headers, {})
+        self.assertIsNone(ssl_context)
 
     def test_ApiError_FormatsStatusReasonAndBody(self) -> None:
         message = k8s._api_error(SimpleNamespace(status=500, reason="boom", body="details"))
