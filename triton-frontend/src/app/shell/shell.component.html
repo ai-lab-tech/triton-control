@@ -101,6 +101,48 @@
         </div>
         <div class="version">{{ appVersion }}</div>
       </div>
+
+      <div class="sidenav-account" (click)="$event.stopPropagation()">
+        @if (adminMenuOpen()) {
+          <div class="account-menu">
+            @if (!isLoggedIn()) {
+              <button type="button" class="account-item" (click)="login()">
+                <span class="material-icons">login</span>
+                <span>Log in</span>
+              </button>
+            }
+            @if (isLoggedIn() && isAdmin()) {
+              <button type="button" class="account-item" (click)="go('/users')">
+                <span class="material-icons">group</span>
+                <span>User Management</span>
+              </button>
+              <button type="button" class="account-item" (click)="go('/settings')">
+                <span class="material-icons">tune</span>
+                <span>Settings</span>
+              </button>
+            }
+            @if (isLoggedIn()) {
+              <button type="button" class="account-item logout" (click)="logout()">
+                <span class="material-icons">logout</span>
+                <span>Log out</span>
+              </button>
+            }
+          </div>
+        }
+        <button
+          type="button"
+          class="account-trigger"
+          [class.open]="adminMenuOpen()"
+          (click)="toggleAdminMenu()"
+          [attr.title]="userName()"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="adminMenuOpen()"
+        >
+          <span class="avatar">{{ initials() }}</span>
+          <span class="account-name">{{ userName() }}</span>
+          <span class="material-icons account-caret">expand_less</span>
+        </button>
+      </div>
     </mat-sidenav>
   }
 
