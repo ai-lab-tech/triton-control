@@ -7,22 +7,16 @@
       [opened]="navOpened()"
       (openedChange)="navOpen.set($event)"
     >
-      @if (navCollapsed() && !isHandset()) {
+      <div class="brand">
         <button
-          mat-icon-button
           type="button"
-          class="brand-toggle collapsed-toggle"
-          aria-label="Expand navigation"
-          title="Expand navigation"
+          class="brand-icon"
+          [attr.aria-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+          [attr.data-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
           (click)="toggleNav(); $event.stopPropagation()"
         >
-          <span class="material-icons">chevron_right</span>
-        </button>
-      }
-      <div class="brand">
-        <div class="brand-icon">
           <span class="material-icons">dns</span>
-        </div>
+        </button>
         <div class="brand-copy">
           <div class="brand-title-row">
             <div class="brand-title">Triton Control</div>
@@ -53,7 +47,7 @@
               mat-list-item
               class="disabled-nav-item"
               [attr.aria-disabled]="true"
-              [attr.title]="item.disabledReason"
+              [attr.data-label]="item.disabledReason"
             >
               <span class="disabled-nav-content">
                 <span
@@ -71,7 +65,7 @@
               [routerLink]="item.path"
               routerLinkActive="active"
               (click)="closeNavOnMobile()"
-              [attr.title]="item.label"
+              [attr.data-label]="item.label"
             >
               <span class="material-icons nav-icon">{{ item.icon }}</span>
               <span class="nav-label">{{ item.label }}</span>
@@ -86,7 +80,7 @@
             type="button"
             class="sidenav-add-instance"
             (click)="openNewInstanceDialog(); closeNavOnMobile()"
-            [attr.title]="'Add Instance'"
+            [attr.data-label]="'Add Instance'"
           >
             <span class="material-icons">add</span>
             <span class="sidenav-action-label">Add Instance</span>
@@ -95,7 +89,7 @@
       }
 
       <div class="sidenav-footer">
-        <div class="fleet-chip" [attr.title]="fleetHealthLabel()">
+        <div class="fleet-chip" [attr.data-label]="fleetHealthLabel()">
           <span class="material-icons">bolt</span>
           <span class="fleet-label">{{ fleetHealthLabel() }}</span>
         </div>
@@ -134,7 +128,7 @@
           class="account-trigger"
           [class.open]="adminMenuOpen()"
           (click)="toggleAdminMenu()"
-          [attr.title]="userName()"
+          [attr.data-label]="userName()"
           aria-haspopup="menu"
           [attr.aria-expanded]="adminMenuOpen()"
         >

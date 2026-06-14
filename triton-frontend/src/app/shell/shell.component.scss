@@ -48,14 +48,26 @@
 }
 
 .brand-icon {
+  flex: 0 0 auto;
   width: 44px;
   height: 44px;
+  border: none;
+  padding: 0;
   border-radius: 14px;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, #14b8a6, #0ea5e9);
   color: #0f172a;
   box-shadow: 0 12px 24px rgba(20, 184, 166, 0.35);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.brand-icon:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(20, 184, 166, 0.45);
 }
 
 .brand-title {
@@ -196,6 +208,37 @@ a.mat-mdc-list-item:hover {
 
 .sidenav.collapsed .nav-icon {
   margin-right: 0;
+}
+
+// Hover-reveal flyout labels for all collapsed sidebar icons (ChatGPT style)
+.sidenav.collapsed .brand-icon,
+.sidenav.collapsed a.mat-mdc-list-item,
+.sidenav.collapsed span.mat-mdc-list-item.disabled-nav-item,
+.sidenav.collapsed .sidenav-add-instance,
+.sidenav.collapsed .fleet-chip {
+  position: relative;
+}
+
+.sidenav.collapsed .brand-icon:hover::after,
+.sidenav.collapsed a.mat-mdc-list-item:hover::after,
+.sidenav.collapsed span.mat-mdc-list-item.disabled-nav-item:hover::after,
+.sidenav.collapsed .sidenav-add-instance:hover::after,
+.sidenav.collapsed .fleet-chip:hover::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 0.6rem);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.96);
+  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.28);
+  pointer-events: none;
+  z-index: 30;
 }
 
 .sidenav-actions {
@@ -366,7 +409,7 @@ a.mat-mdc-list-item:hover {
 }
 
 .sidenav.collapsed .account-trigger:hover::after {
-  content: attr(title);
+  content: attr(data-label);
   position: absolute;
   left: calc(100% + 0.6rem);
   top: 50%;
