@@ -115,7 +115,6 @@ export class CodeServersPageComponent implements OnDestroy {
         this.codeServersApi.createCodeServerApiCodeServersPost(payload),
       );
       this.upsertWorkspace(workspace);
-      this.selectWorkspace(workspace);
       this.updateStatusPolling();
       void this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
@@ -164,6 +163,11 @@ export class CodeServersPageComponent implements OnDestroy {
 
   open(workspace: CodeServer): void {
     this.selectWorkspace(workspace);
+  }
+
+  backToList(): void {
+    this.selectedWorkspaceId.set(null);
+    this.embeddedWorkspaceUrl.set(null);
   }
 
   selectWorkspace(workspace: CodeServer): void {
@@ -220,17 +224,12 @@ export class CodeServersPageComponent implements OnDestroy {
 
   private ensureSelectedWorkspace(): void {
     const selectedId = this.selectedWorkspaceId();
-    const workspaces = this.workspaces();
-    const selected = workspaces.find((workspace) => workspace.id === selectedId);
-    if (selected) {
-      this.setEmbeddedWorkspace(selected);
+    if (selectedId === null) {
       return;
     }
-    const firstReady = workspaces.find(
-      (workspace) => workspace.status === "ready" && workspace.url,
-    );
-    if (firstReady) {
-      this.selectWorkspace(firstReady);
+    const selected = this.workspaces().find((workspace) => workspace.id === selectedId);
+    if (selected) {
+      this.setEmbeddedWorkspace(selected);
       return;
     }
     this.selectedWorkspaceId.set(null);

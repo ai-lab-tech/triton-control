@@ -18,6 +18,127 @@
   gap: 0.5rem;
 }
 
+.view-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.25rem 0.25rem 1.5rem;
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-title {
+  font-weight: 850;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.create-card {
+  max-width: 720px;
+}
+
+.workspace-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.workspace-list-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.workspace-list-card:hover,
+.workspace-list-card:focus-visible {
+  border-color: rgba(20, 184, 166, 0.55);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.list-card-icon {
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-size: 1.4rem;
+}
+
+.list-card-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.list-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.list-card-title {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.98rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-card-sub {
+  margin-top: 0.2rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.list-card-actions .material-icons {
+  font-size: 1.05rem;
+}
+
+.list-message {
+  text-align: left;
+}
+
+.back-button {
+  flex: 0 0 auto;
+}
+
+.back-button .material-icons {
+  font-size: 1.2rem;
+}
+
 .workspace-shell {
   display: flex;
   flex: 1 1 auto;

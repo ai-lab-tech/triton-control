@@ -1,9 +1,240 @@
 <div class="code-servers">
-  <section class="workspace-shell" [class.settings-open]="!workspacePanelCollapsed()">
-    <div class="workspace-toolbar">
-      <div class="workspace-heading">
-        @if (selectedWorkspace(); as workspace) {
+  @if (workspaces().length === 0) {
+    <!-- CREATE VIEW: only the create workspace form -->
+    <div class="view-scroll">
+      <div class="header-row">
+        <div>
+          <div class="page-title">Create Workspace</div>
+          <p class="page-subtitle">
+            Create a StatefulSet-backed code-server pod with persistent workspace storage.
+          </p>
+        </div>
+      </div>
+
+      <mat-card class="card workspace-card create-card">
+        <div class="section">
+          <div>
+            <div class="section-title">Workspace</div>
+            <div class="section-subtitle">
+              Name the workspace and choose the Triton development image.
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-row">
+              <label class="field-label" for="code-server-name">Workspace name</label>
+              <mat-form-field appearance="outline">
+                <input id="code-server-name" matInput [(ngModel)]="name" placeholder="workspace" />
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <label class="field-label" for="code-server-image">Triton development image</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="code-server-image"
+                  matInput
+                  [(ngModel)]="image"
+                  placeholder="nvcr.io/nvidia/tritonserver:25.02-py3"
+                />
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <label class="field-label" for="code-server-storage">Workspace storage</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="code-server-storage"
+                  matInput
+                  [(ngModel)]="storageSize"
+                  placeholder="20Gi"
+                />
+              </mat-form-field>
+            </div>
+
+            <div class="form-row">
+              <label class="field-label" for="code-server-theme">VS Code theme</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="code-server-theme" [(ngModel)]="theme">
+                  <mat-option value="Default Dark+">Default Dark+</mat-option>
+                  <mat-option value="Default Light+">Default Light+</mat-option>
+                  <mat-option value="Quiet Light">Quiet Light</mat-option>
+                  <mat-option value="Monokai">Monokai</mat-option>
+                  <mat-option value="Solarized Dark">Solarized Dark</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+        </div>
+
+        <div class="advanced-section">
+          <div class="advanced-head">
+            <div class="advanced-title-row">
+              <span class="material-icons">settings_suggest</span>
+              <div class="advanced-title">Advanced Settings</div>
+            </div>
+          </div>
+          <mat-accordion class="optional-sections">
+            <mat-expansion-panel>
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="material-icons">tune</span>
+                  <span>Resources</span>
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+              <div class="form-grid">
+                <div class="form-row">
+                  <label class="field-label" for="code-server-cpu">CPU request</label>
+                  <mat-form-field appearance="outline">
+                    <input id="code-server-cpu" matInput [(ngModel)]="cpu" placeholder="2" />
+                  </mat-form-field>
+                </div>
+                <div class="form-row">
+                  <label class="field-label" for="code-server-memory">Memory request</label>
+                  <mat-form-field appearance="outline">
+                    <input
+                      id="code-server-memory"
+                      matInput
+                      [(ngModel)]="memory"
+                      placeholder="4Gi"
+                    />
+                  </mat-form-field>
+                </div>
+              </div>
+            </mat-expansion-panel>
+
+            <mat-expansion-panel>
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="material-icons">key</span>
+                  <span>Image Pull Secret</span>
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+              <div class="form-row wide">
+                <label class="field-label" for="code-server-dockerconfigjson">
+                  Registry Credentials (.dockerconfigjson)
+                </label>
+                <mat-form-field appearance="outline">
+                  <textarea
+                    id="code-server-dockerconfigjson"
+                    matInput
+                    rows="6"
+                    [(ngModel)]="dockerconfigjson"
+                  ></textarea>
+                </mat-form-field>
+              </div>
+            </mat-expansion-panel>
+          </mat-accordion>
+        </div>
+
+        <div class="actions">
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            (click)="create()"
+            [disabled]="!canCreate()"
+          >
+            <span class="material-icons">terminal</span>
+            {{ saving() ? "Creating..." : "Create Workspace" }}
+          </button>
+        </div>
+
+        @if (message()) {
+          <div
+            class="workspace-message"
+            [class.success]="messageTone() === 'success'"
+            [class.error]="messageTone() === 'error'"
+          >
+            {{ message() }}
+          </div>
+        }
+      </mat-card>
+    </div>
+  } @else if (selectedWorkspaceId() === null) {
+    <!-- LIST VIEW: existing workspaces -->
+    <div class="view-scroll">
+      <div class="header-row">
+        <div>
+          <div class="page-title">Code Servers</div>
+          <p class="page-subtitle">Select a workspace to open the IDE.</p>
+        </div>
+      </div>
+
+      <div class="workspace-list">
+        @for (workspace of workspaces(); track workspace.id) {
+          <div
+            class="workspace-list-card"
+            role="button"
+            tabindex="0"
+            (click)="open(workspace)"
+            (keydown)="selectWorkspaceFromKeyboard($event, workspace)"
+          >
+            <span class="material-icons list-card-icon">terminal</span>
+            <div class="list-card-text">
+              <div class="list-card-title-row">
+                <div class="list-card-title">{{ workspace.name }}</div>
+                <span class="status-chip" [attr.data-status]="workspace.status">{{
+                  workspace.status
+                }}</span>
+              </div>
+              <div class="list-card-sub">
+                {{ workspace.namespace }} / {{ workspace.statefulset_name }}
+                <span class="metadata-divider">Image: {{ imageLabel(workspace.image) }}</span>
+              </div>
+            </div>
+            <div class="list-card-actions" (click)="$event.stopPropagation()">
+              <button
+                mat-stroked-button
+                type="button"
+                aria-label="Refresh workspace status"
+                title="Refresh workspace status"
+                (click)="refresh(workspace)"
+              >
+                <span class="material-icons">refresh</span>
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                class="danger"
+                aria-label="Delete code server"
+                title="Delete code server"
+                (click)="delete(workspace)"
+                [disabled]="deletingId() === workspace.id"
+              >
+                <span class="material-icons">delete</span>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (message()) {
+        <div
+          class="workspace-message list-message"
+          [class.success]="messageTone() === 'success'"
+          [class.error]="messageTone() === 'error'"
+        >
+          {{ message() }}
+        </div>
+      }
+    </div>
+  } @else if (selectedWorkspace(); as workspace) {
+    <!-- IDE VIEW: code-server frame for the selected workspace -->
+    <section class="workspace-shell">
+      <div class="workspace-toolbar">
+        <div class="workspace-heading">
           <div class="workspace-title-row">
+            <button
+              mat-icon-button
+              type="button"
+              class="back-button"
+              aria-label="Back to workspaces"
+              title="Back to workspaces"
+              (click)="backToList()"
+            >
+              <span class="material-icons">arrow_back</span>
+            </button>
             <div class="workspace-title">{{ workspace.name }}</div>
             <span class="status-chip" [attr.data-status]="workspace.status">{{
               workspace.status
@@ -14,37 +245,9 @@
             <span class="metadata-divider">Image: {{ imageLabel(workspace.image) }}</span>
             <span class="metadata-divider">Storage: {{ storageSize }}</span>
           </div>
-        } @else {
-          <div class="workspace-title-row">
-            <div class="workspace-title">No workspace selected</div>
-          </div>
-          <div class="workspace-subtitle">
-            Create or select a code-server workspace.
-            <span class="metadata-divider">Image: {{ imageLabel(image) }}</span>
-            <span class="metadata-divider">Storage: {{ storageSize }}</span>
-          </div>
-        }
-      </div>
+        </div>
 
-      <div class="workspace-toolbar-actions">
-        <button
-          mat-stroked-button
-          type="button"
-          class="settings-button"
-          [attr.aria-label]="
-            workspacePanelCollapsed() ? 'Show workspace settings' : 'Hide workspace settings'
-          "
-          [attr.title]="
-            workspacePanelCollapsed() ? 'Show workspace settings' : 'Hide workspace settings'
-          "
-          (click)="toggleWorkspacePanel()"
-        >
-          <span class="material-icons">{{
-            workspacePanelCollapsed() ? "settings" : "left_panel_close"
-          }}</span>
-          {{ workspacePanelCollapsed() ? "Settings" : "Hide Settings" }}
-        </button>
-        @if (selectedWorkspace(); as workspace) {
+        <div class="workspace-toolbar-actions">
           <button
             mat-stroked-button
             type="button"
@@ -67,197 +270,30 @@
             <span class="material-icons">delete</span>
             Delete
           </button>
-        }
+        </div>
       </div>
-    </div>
 
-    <div class="workspace-body">
-      @if (!workspacePanelCollapsed()) {
-        <aside class="settings-drawer" aria-label="Workspace settings">
-          <div class="settings-drawer-head">
-            <div>
-              <div class="settings-title">Settings</div>
-              <div class="settings-subtitle">Image, storage, resources, and pod actions</div>
-            </div>
-            <button
-              mat-icon-button
-              type="button"
-              aria-label="Close workspace settings"
-              title="Close workspace settings"
-              (click)="toggleWorkspacePanel()"
-            >
-              <span class="material-icons">close</span>
-            </button>
-          </div>
-
-          <mat-card class="card workspace-card">
-            <div class="section">
-              <div>
-                <div class="section-title">Workspace</div>
-                <div class="section-subtitle">
-                  Create a StatefulSet-backed code-server pod with persistent workspace storage.
-                </div>
-              </div>
-
-              <div class="form-grid">
-                <div class="form-row">
-                  <label class="field-label" for="code-server-name">Workspace name</label>
-                  <mat-form-field appearance="outline">
-                    <input
-                      id="code-server-name"
-                      matInput
-                      [(ngModel)]="name"
-                      placeholder="workspace"
-                    />
-                  </mat-form-field>
-                </div>
-
-                <div class="form-row">
-                  <label class="field-label" for="code-server-image">
-                    Triton development image
-                  </label>
-                  <mat-form-field appearance="outline">
-                    <input
-                      id="code-server-image"
-                      matInput
-                      [(ngModel)]="image"
-                      placeholder="nvcr.io/nvidia/tritonserver:25.02-py3"
-                    />
-                  </mat-form-field>
-                </div>
-
-                <div class="form-row">
-                  <label class="field-label" for="code-server-storage">Workspace storage</label>
-                  <mat-form-field appearance="outline">
-                    <input
-                      id="code-server-storage"
-                      matInput
-                      [(ngModel)]="storageSize"
-                      placeholder="20Gi"
-                    />
-                  </mat-form-field>
-                </div>
-
-                <div class="form-row">
-                  <label class="field-label" for="code-server-theme">VS Code theme</label>
-                  <mat-form-field appearance="outline">
-                    <mat-select id="code-server-theme" [(ngModel)]="theme">
-                      <mat-option value="Default Dark+">Default Dark+</mat-option>
-                      <mat-option value="Default Light+">Default Light+</mat-option>
-                      <mat-option value="Quiet Light">Quiet Light</mat-option>
-                      <mat-option value="Monokai">Monokai</mat-option>
-                      <mat-option value="Solarized Dark">Solarized Dark</mat-option>
-                    </mat-select>
-                  </mat-form-field>
-                </div>
+      <div class="workspace-body">
+        <section class="workspace-frame">
+          @if (embeddedWorkspaceUrl()) {
+            <iframe
+              #codeServerFrame
+              title="Code Server"
+              [src]="embeddedWorkspaceUrl()"
+              allow="clipboard-read; clipboard-write; fullscreen"
+              sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-same-origin allow-scripts"
+            ></iframe>
+          } @else {
+            <div class="frame-placeholder">
+              <span class="material-icons">terminal</span>
+              <div class="placeholder-title">Workspace is starting</div>
+              <div class="placeholder-copy">
+                The code-server is not ready yet. It will open automatically once the pod is ready.
               </div>
             </div>
-
-            <div class="advanced-section">
-              <div class="advanced-head">
-                <div class="advanced-title-row">
-                  <span class="material-icons">settings_suggest</span>
-                  <div class="advanced-title">Advanced Settings</div>
-                </div>
-              </div>
-              <mat-accordion class="optional-sections">
-                <mat-expansion-panel>
-                  <mat-expansion-panel-header>
-                    <mat-panel-title>
-                      <span class="material-icons">tune</span>
-                      <span>Resources</span>
-                    </mat-panel-title>
-                  </mat-expansion-panel-header>
-                  <div class="form-grid">
-                    <div class="form-row">
-                      <label class="field-label" for="code-server-cpu">CPU request</label>
-                      <mat-form-field appearance="outline">
-                        <input id="code-server-cpu" matInput [(ngModel)]="cpu" placeholder="2" />
-                      </mat-form-field>
-                    </div>
-                    <div class="form-row">
-                      <label class="field-label" for="code-server-memory">Memory request</label>
-                      <mat-form-field appearance="outline">
-                        <input
-                          id="code-server-memory"
-                          matInput
-                          [(ngModel)]="memory"
-                          placeholder="4Gi"
-                        />
-                      </mat-form-field>
-                    </div>
-                  </div>
-                </mat-expansion-panel>
-
-                <mat-expansion-panel>
-                  <mat-expansion-panel-header>
-                    <mat-panel-title>
-                      <span class="material-icons">key</span>
-                      <span>Image Pull Secret</span>
-                    </mat-panel-title>
-                  </mat-expansion-panel-header>
-                  <div class="form-row wide">
-                    <label class="field-label" for="code-server-dockerconfigjson">
-                      Registry Credentials (.dockerconfigjson)
-                    </label>
-                    <mat-form-field appearance="outline">
-                      <textarea
-                        id="code-server-dockerconfigjson"
-                        matInput
-                        rows="6"
-                        [(ngModel)]="dockerconfigjson"
-                      ></textarea>
-                    </mat-form-field>
-                  </div>
-                </mat-expansion-panel>
-              </mat-accordion>
-            </div>
-
-            <div class="actions">
-              <button
-                mat-flat-button
-                color="primary"
-                type="button"
-                (click)="create()"
-                [disabled]="!canCreate()"
-              >
-                <span class="material-icons">terminal</span>
-                {{ saving() ? "Creating..." : "Create" }}
-              </button>
-            </div>
-
-            @if (message()) {
-              <div
-                class="workspace-message"
-                [class.success]="messageTone() === 'success'"
-                [class.error]="messageTone() === 'error'"
-              >
-                {{ message() }}
-              </div>
-            }
-          </mat-card>
-        </aside>
-      }
-
-      <section class="workspace-frame">
-        @if (embeddedWorkspaceUrl()) {
-          <iframe
-            #codeServerFrame
-            title="Code Server"
-            [src]="embeddedWorkspaceUrl()"
-            allow="clipboard-read; clipboard-write; fullscreen"
-            sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-same-origin allow-scripts"
-          ></iframe>
-        } @else {
-          <div class="frame-placeholder">
-            <span class="material-icons">terminal</span>
-            <div class="placeholder-title">No ready workspace selected</div>
-            <div class="placeholder-copy">
-              Open Settings to create a workspace or select a ready one.
-            </div>
-          </div>
-        }
-      </section>
-    </div>
-  </section>
+          }
+        </section>
+      </div>
+    </section>
+  }
 </div>
