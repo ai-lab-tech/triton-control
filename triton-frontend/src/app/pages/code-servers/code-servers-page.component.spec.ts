@@ -87,12 +87,12 @@ describe("CodeServersPageComponent", () => {
       }),
     );
     expect(codeServersApi.getCodeServerApiCodeServersCodeServerIdGet).toHaveBeenCalledWith(3);
-    expect(component.selectedWorkspaceId()).toBeNull();
+    expect(component.selectedWorkspaceId()).toBe(3);
     expect(component.workspaces()[0].status).toBe("ready");
-    expect(component.embeddedWorkspaceUrl()).toBeNull();
+    expect(component.embeddedWorkspaceUrl()).not.toBeNull();
   });
 
-  it("Load_ReadyWorkspaceReturned_ListsWithoutAutoSelect", async () => {
+  it("Load_ReadyWorkspaceReturned_SelectsAndEmbedsWorkspace", async () => {
     // Arrange
     codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([readyWorkspace]) as any);
     const fixture = TestBed.createComponent(CodeServersPageComponent);
@@ -103,21 +103,6 @@ describe("CodeServersPageComponent", () => {
 
     // Assert
     expect(component.workspaces().length).toBe(1);
-    expect(component.selectedWorkspaceId()).toBeNull();
-    expect(component.embeddedWorkspaceUrl()).toBeNull();
-  });
-
-  it("Open_ReadyWorkspace_SelectsAndEmbedsWorkspace", async () => {
-    // Arrange
-    codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([readyWorkspace]) as any);
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
-    const component = fixture.componentInstance;
-    await component.load();
-
-    // Act
-    component.open(readyWorkspace);
-
-    // Assert
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(`${component.embeddedWorkspaceUrl()}`).toContain(
       "/api/code-servers/3/proxy/?_tc_reload=",

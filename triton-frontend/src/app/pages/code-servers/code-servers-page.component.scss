@@ -56,7 +56,7 @@
 
 .create-view .header-row {
   width: 100%;
-  max-width: 720px;
+  max-width: 1100px;
 }
 
 .header-row {
@@ -79,125 +79,8 @@
 }
 
 .create-card {
-  max-width: 720px;
-}
-
-.back-link {
-  flex: 0 0 auto;
-}
-
-.back-link .material-icons {
-  font-size: 1.1rem;
-  margin-right: 0.25rem;
-}
-
-.servers-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.1rem 1.25rem 1.25rem;
-}
-
-.servers-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.new-server-button .material-icons {
-  font-size: 1.05rem;
-  margin-right: 0.25rem;
-}
-
-.servers-table {
-  display: grid;
-  gap: 0;
-}
-
-.servers-row {
-  display: grid;
-  grid-template-columns: 70px minmax(0, 1.6fr) minmax(0, 1.4fr) 90px auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.25rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.servers-row-head {
-  border-top: none;
-  color: #64748b;
-  font-size: 0.74rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding-bottom: 0.4rem;
-}
-
-.col-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-dot .material-icons {
-  font-size: 1.3rem;
-  color: #94a3b8;
-}
-
-.status-dot[data-status="ready"] .material-icons {
-  color: #16a34a;
-}
-
-.cell-name {
-  font-weight: 800;
-  color: #0f172a;
-  font-size: 0.92rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cell-sub {
-  margin-top: 0.15rem;
-  color: #64748b;
-  font-size: 0.76rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.col-image {
-  color: #475569;
-  font-size: 0.84rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.col-storage {
-  color: #475569;
-  font-size: 0.84rem;
-}
-
-.col-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.15rem;
-}
-
-.connect-button {
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  font-size: 0.78rem;
-}
-
-.col-actions .material-icons {
-  font-size: 1.1rem;
-}
-
-.list-message {
-  text-align: left;
+  width: 100%;
+  max-width: 1100px;
 }
 
 .back-button {
@@ -487,6 +370,39 @@
   min-height: 0;
   overflow: hidden;
   background: #0f172a;
+  position: relative;
+}
+
+.frame-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.frame-loading .deployment-spinner {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 3px solid rgba(20, 184, 166, 0.2);
+  border-top-color: #14b8a6;
+  animation: deployment-progress-spin 0.9s linear infinite;
+}
+
+.frame-loading-text {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+@keyframes deployment-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workspace-frame iframe {

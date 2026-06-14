@@ -50,6 +50,10 @@ export class CodeServersPageComponent implements OnDestroy {
   private statusPollId: ReturnType<typeof setInterval> | null = null;
   private statusPollInFlight = false;
   private frameReloadNonce = 0;
+  private frameLoadStartedAt = 0;
+  private frameLoaderHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly minFrameLoaderMs = 3500;
+  private static readonly postLoadGraceMs = 2500;
   @ViewChild("codeServerFrame") private codeServerFrame?: ElementRef<HTMLIFrameElement>;
 
   name = "workspace";
@@ -67,8 +71,8 @@ export class CodeServersPageComponent implements OnDestroy {
   readonly workspaces = signal<CodeServer[]>([]);
   readonly selectedWorkspaceId = signal<number | null>(null);
   readonly embeddedWorkspaceUrl = signal<SafeResourceUrl | null>(null);
+  readonly frameLoading = signal(false);
   readonly workspacePanelCollapsed = signal(false);
-  readonly showCreate = signal(false);
   readonly message = signal("");
   readonly messageTone = signal<"info" | "success" | "error">("info");
 
@@ -86,6 +90,10 @@ export class CodeServersPageComponent implements OnDestroy {
   ngOnDestroy(): void {
     this.chrome.showTopbar();
     this.stopStatusPolling();
+    if (this.frameLoaderHideTimer !== null) {
+      clearTimeout(this.frameLoaderHideTimer);
+      this.frameLoaderHideTimer = null;
+    }
   }
 
   async load(): Promise<void> {
@@ -128,7 +136,7 @@ export class CodeServersPageComponent implements OnDestroy {
         this.codeServersApi.createCodeServerApiCodeServersPost(payload),
       );
       this.upsertWorkspace(workspace);
-      this.showCreate.set(false);
+      this.selectWorkspace(workspace);
       this.updateStatusPolling();
       void this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
@@ -175,35 +183,9 @@ export class CodeServersPageComponent implements OnDestroy {
     }
   }
 
-  open(workspace: CodeServer): void {
-    this.selectWorkspace(workspace);
-  }
-
-  backToList(): void {
-    this.selectedWorkspaceId.set(null);
-    this.embeddedWorkspaceUrl.set(null);
-  }
-
-  startCreate(): void {
-    this.setMessage("", "info");
-    this.showCreate.set(true);
-  }
-
-  cancelCreate(): void {
-    this.showCreate.set(false);
-  }
-
   selectWorkspace(workspace: CodeServer): void {
     this.selectedWorkspaceId.set(workspace.id);
     this.setEmbeddedWorkspace(workspace);
-  }
-
-  selectWorkspaceFromKeyboard(event: KeyboardEvent, workspace: CodeServer): void {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-    event.preventDefault();
-    this.selectWorkspace(workspace);
   }
 
   canCreate(): boolean {
@@ -241,23 +223,46 @@ export class CodeServersPageComponent implements OnDestroy {
   }
 
   private ensureSelectedWorkspace(): void {
+    const workspaces = this.workspaces();
     const selectedId = this.selectedWorkspaceId();
-    if (selectedId === null) {
-      return;
-    }
-    const selected = this.workspaces().find((workspace) => workspace.id === selectedId);
+    const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
       this.setEmbeddedWorkspace(selected);
+      return;
+    }
+    const first = workspaces[0];
+    if (first) {
+      this.selectWorkspace(first);
       return;
     }
     this.selectedWorkspaceId.set(null);
     this.embeddedWorkspaceUrl.set(null);
   }
 
+  onFrameLoaded(): void {
+    const elapsed = Date.now() - this.frameLoadStartedAt;
+    const remainingMin = CodeServersPageComponent.minFrameLoaderMs - elapsed;
+    const delay = Math.max(remainingMin, CodeServersPageComponent.postLoadGraceMs);
+    if (this.frameLoaderHideTimer !== null) {
+      clearTimeout(this.frameLoaderHideTimer);
+      this.frameLoaderHideTimer = null;
+    }
+    this.frameLoaderHideTimer = setTimeout(() => {
+      this.frameLoading.set(false);
+      this.frameLoaderHideTimer = null;
+    }, delay);
+  }
+
   private setEmbeddedWorkspace(workspace: CodeServer): void {
     if (workspace.status === "ready" && workspace.url) {
       this.workspacePanelCollapsed.set(true);
       this.frameReloadNonce += 1;
+      if (this.frameLoaderHideTimer !== null) {
+        clearTimeout(this.frameLoaderHideTimer);
+        this.frameLoaderHideTimer = null;
+      }
+      this.frameLoadStartedAt = Date.now();
+      this.frameLoading.set(true);
       this.embeddedWorkspaceUrl.set(
         this.sanitizer.bypassSecurityTrustResourceUrl(
           this.withFrameReloadNonce(this.proxyUrl(workspace.url)),
@@ -267,6 +272,7 @@ export class CodeServersPageComponent implements OnDestroy {
       return;
     }
     this.workspacePanelCollapsed.set(false);
+    this.frameLoading.set(false);
     this.embeddedWorkspaceUrl.set(null);
   }
 
