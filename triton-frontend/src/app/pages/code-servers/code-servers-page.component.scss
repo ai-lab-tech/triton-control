@@ -1,8 +1,13 @@
+:host {
+  display: block;
+  margin: -1rem calc(-1 * clamp(1rem, 2vw, 2rem)) -1.25rem;
+}
+
 .code-servers {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  height: calc(100dvh - 44px - 2.25rem);
+  height: 100dvh;
   min-height: 520px;
   overflow: hidden;
 }
