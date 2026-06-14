@@ -61,8 +61,6 @@ export class ShellComponent {
   readonly kubernetesEnabled = signal(false);
   readonly kubernetesCapabilityLoaded = signal(false);
 
-  readonly showAdminMenu = computed(() => true);
-
   readonly navItems = computed<NavItem[]>(() => {
     const kubernetesActionDisabledReason = this.kubernetesActionDisabledReason();
     const items: NavItem[] = [

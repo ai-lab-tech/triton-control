@@ -161,47 +161,6 @@
       }
       <div class="topbar-title">Triton Control</div>
       <span class="spacer"></span>
-
-      @if (isLoggedIn()) {
-        <div class="user-chip">
-          <span class="avatar">{{ initials() }}</span>
-          <span class="user-name">{{ userName() }}</span>
-        </div>
-      }
-
-      @if (showAdminMenu()) {
-        <div class="admin-menu" (click)="$event.stopPropagation()">
-          <button mat-icon-button class="admin-hamburger" (click)="toggleAdminMenu()">
-            <span class="material-icons">menu</span>
-          </button>
-          @if (adminMenuOpen()) {
-            <div class="admin-dropdown">
-              @if (!isLoggedIn()) {
-                <button type="button" class="admin-item" (click)="login()">
-                  <span class="material-icons">login</span>
-                  <span>Log in</span>
-                </button>
-              }
-              @if (isLoggedIn() && isAdmin()) {
-                <button type="button" class="admin-item" (click)="go('/users')">
-                  <span class="material-icons">group</span>
-                  <span>User Management</span>
-                </button>
-                <button type="button" class="admin-item" (click)="go('/settings')">
-                  <span class="material-icons">tune</span>
-                  <span>Settings</span>
-                </button>
-              }
-              @if (isLoggedIn()) {
-                <button type="button" class="admin-item logout" (click)="logout()">
-                  <span class="material-icons">logout</span>
-                  <span>Log out</span>
-                </button>
-              }
-            </div>
-          }
-        </div>
-      }
     </mat-toolbar>
 
     <div class="page">
