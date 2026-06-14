@@ -430,33 +430,16 @@ a.mat-mdc-list-item:hover {
   background: transparent;
 }
 
-.topbar {
+.floating-menu-btn {
   position: sticky;
-  top: 0;
+  top: 0.6rem;
+  left: 0.6rem;
   z-index: 5;
-  min-height: 44px;
-  height: 44px;
-  padding: 0 1rem;
-  background: rgba(248, 250, 252, 0.8);
+  margin: 0.6rem 0 0 0.6rem;
+  background: rgba(248, 250, 252, 0.9);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
-}
-
-.menu-btn {
-  margin-right: 0.6rem;
-}
-
-.topbar-title {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 1rem;
-  font-weight: 600;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.spacer {
-  flex: 1;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
 }
 
 .ghost-btn {

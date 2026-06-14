@@ -147,21 +147,17 @@
   }
 
   <mat-sidenav-content class="content" (click)="closeAdminMenu()">
-    <mat-toolbar class="topbar">
-      @if (isLoggedIn() && isHandset()) {
-        <button
-          mat-icon-button
-          type="button"
-          class="menu-btn"
-          aria-label="Open navigation"
-          (click)="toggleNav(); $event.stopPropagation()"
-        >
-          <span class="material-icons">menu</span>
-        </button>
-      }
-      <div class="topbar-title">Triton Control</div>
-      <span class="spacer"></span>
-    </mat-toolbar>
+    @if (isLoggedIn() && isHandset()) {
+      <button
+        mat-icon-button
+        type="button"
+        class="menu-btn floating-menu-btn"
+        aria-label="Open navigation"
+        (click)="toggleNav(); $event.stopPropagation()"
+      >
+        <span class="material-icons">menu</span>
+      </button>
+    }
 
     <div class="page">
       <router-outlet></router-outlet>
