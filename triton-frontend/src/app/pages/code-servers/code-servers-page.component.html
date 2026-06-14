@@ -1,5 +1,10 @@
 <div class="code-servers">
-  @if (showCreate() || workspaces().length === 0) {
+  @if (!initialLoaded()) {
+    <div class="view-loading">
+      <span class="material-icons spin">progress_activity</span>
+      <span>Loading workspaces…</span>
+    </div>
+  } @else if (showCreate() || workspaces().length === 0) {
     <!-- CREATE VIEW: only the create workspace form -->
     <div class="view-scroll create-view">
       <div class="header-row">

@@ -61,6 +61,7 @@ export class CodeServersPageComponent implements OnDestroy {
   dockerconfigjson = "";
 
   readonly loading = signal(false);
+  readonly initialLoaded = signal(false);
   readonly saving = signal(false);
   readonly deletingId = signal<number | null>(null);
   readonly workspaces = signal<CodeServer[]>([]);
@@ -100,6 +101,7 @@ export class CodeServersPageComponent implements OnDestroy {
       this.setMessage(mapApiErrorMessage(error, "Failed to load code servers."), "error");
     } finally {
       this.loading.set(false);
+      this.initialLoaded.set(true);
     }
   }
 

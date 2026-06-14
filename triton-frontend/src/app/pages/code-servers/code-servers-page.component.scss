@@ -32,6 +32,28 @@
   align-items: center;
 }
 
+.view-loading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 240px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.view-loading .spin {
+  animation: code-servers-spin 1s linear infinite;
+  color: #0f766e;
+}
+
+@keyframes code-servers-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .create-view .header-row {
   width: 100%;
   max-width: 720px;
