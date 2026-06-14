@@ -28,6 +28,15 @@
   padding: 0.25rem 0.25rem 1.5rem;
 }
 
+.create-view {
+  align-items: center;
+}
+
+.create-view .header-row {
+  width: 100%;
+  max-width: 720px;
+}
+
 .header-row {
   display: flex;
   align-items: flex-start;
@@ -51,80 +60,118 @@
   max-width: 720px;
 }
 
-.workspace-list {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.workspace-list-card {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  background: #ffffff;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.workspace-list-card:hover,
-.workspace-list-card:focus-visible {
-  border-color: rgba(20, 184, 166, 0.55);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.list-card-icon {
+.back-link {
   flex: 0 0 auto;
-  color: #0f766e;
-  font-size: 1.4rem;
 }
 
-.list-card-text {
-  flex: 1 1 auto;
-  min-width: 0;
+.back-link .material-icons {
+  font-size: 1.1rem;
+  margin-right: 0.25rem;
 }
 
-.list-card-title-row {
+.servers-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.servers-head {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.list-card-title {
+.new-server-button .material-icons {
+  font-size: 1.05rem;
+  margin-right: 0.25rem;
+}
+
+.servers-table {
+  display: grid;
+  gap: 0;
+}
+
+.servers-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1.6fr) minmax(0, 1.4fr) 90px auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.servers-row-head {
+  border-top: none;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 0.4rem;
+}
+
+.col-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-dot .material-icons {
+  font-size: 1.3rem;
+  color: #94a3b8;
+}
+
+.status-dot[data-status="ready"] .material-icons {
+  color: #16a34a;
+}
+
+.cell-name {
   font-weight: 800;
   color: #0f172a;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.list-card-sub {
-  margin-top: 0.2rem;
+.cell-sub {
+  margin-top: 0.15rem;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.list-card-actions {
+.col-image {
+  color: #475569;
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-storage {
+  color: #475569;
+  font-size: 0.84rem;
+}
+
+.col-actions {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 0.15rem;
 }
 
-.list-card-actions .material-icons {
-  font-size: 1.05rem;
+.connect-button {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.78rem;
+}
+
+.col-actions .material-icons {
+  font-size: 1.1rem;
 }
 
 .list-message {

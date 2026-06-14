@@ -1,7 +1,7 @@
 <div class="code-servers">
-  @if (workspaces().length === 0) {
+  @if (showCreate() || workspaces().length === 0) {
     <!-- CREATE VIEW: only the create workspace form -->
-    <div class="view-scroll">
+    <div class="view-scroll create-view">
       <div class="header-row">
         <div>
           <div class="page-title">Create Workspace</div>
@@ -9,6 +9,17 @@
             Create a StatefulSet-backed code-server pod with persistent workspace storage.
           </p>
         </div>
+        @if (workspaces().length > 0) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="back-link"
+            (click)="cancelCreate()"
+          >
+            <span class="material-icons">arrow_back</span>
+            Back to servers
+          </button>
+        }
       </div>
 
       <mat-card class="card workspace-card create-card">
@@ -154,70 +165,90 @@
   } @else if (selectedWorkspaceId() === null) {
     <!-- LIST VIEW: existing workspaces -->
     <div class="view-scroll">
-      <div class="header-row">
-        <div>
+      <mat-card class="card servers-card">
+        <div class="servers-head">
           <div class="page-title">Code Servers</div>
-          <p class="page-subtitle">Select a workspace to open the IDE.</p>
-        </div>
-      </div>
-
-      <div class="workspace-list">
-        @for (workspace of workspaces(); track workspace.id) {
-          <div
-            class="workspace-list-card"
-            role="button"
-            tabindex="0"
-            (click)="open(workspace)"
-            (keydown)="selectWorkspaceFromKeyboard($event, workspace)"
+          <button
+            mat-stroked-button
+            type="button"
+            color="primary"
+            class="new-server-button"
+            (click)="startCreate()"
           >
-            <span class="material-icons list-card-icon">terminal</span>
-            <div class="list-card-text">
-              <div class="list-card-title-row">
-                <div class="list-card-title">{{ workspace.name }}</div>
-                <span class="status-chip" [attr.data-status]="workspace.status">{{
-                  workspace.status
-                }}</span>
+            <span class="material-icons">add</span>
+            New Server
+          </button>
+        </div>
+
+        <div class="servers-table" role="table">
+          <div class="servers-row servers-row-head" role="row">
+            <div class="col-status" role="columnheader">Status</div>
+            <div class="col-name" role="columnheader">Name</div>
+            <div class="col-image" role="columnheader">Image</div>
+            <div class="col-storage" role="columnheader">Storage</div>
+            <div class="col-actions" role="columnheader"></div>
+          </div>
+
+          @for (workspace of workspaces(); track workspace.id) {
+            <div class="servers-row" role="row">
+              <div class="col-status" role="cell">
+                <span class="status-dot" [attr.data-status]="workspace.status">
+                  <span class="material-icons">{{
+                    workspace.status === "ready" ? "check_circle" : "hourglass_top"
+                  }}</span>
+                </span>
               </div>
-              <div class="list-card-sub">
-                {{ workspace.namespace }} / {{ workspace.statefulset_name }}
-                <span class="metadata-divider">Image: {{ imageLabel(workspace.image) }}</span>
+              <div class="col-name" role="cell">
+                <div class="cell-name">{{ workspace.name }}</div>
+                <div class="cell-sub">{{ workspace.namespace }} / {{ workspace.statefulset_name }}</div>
+              </div>
+              <div class="col-image" role="cell">{{ imageLabel(workspace.image) }}</div>
+              <div class="col-storage" role="cell">{{ storageSize }}</div>
+              <div class="col-actions" role="cell">
+                <button
+                  mat-button
+                  color="primary"
+                  type="button"
+                  class="connect-button"
+                  (click)="open(workspace)"
+                >
+                  Connect
+                </button>
+                <button
+                  mat-icon-button
+                  type="button"
+                  aria-label="Refresh workspace status"
+                  title="Refresh workspace status"
+                  (click)="refresh(workspace)"
+                >
+                  <span class="material-icons">refresh</span>
+                </button>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="danger"
+                  aria-label="Delete code server"
+                  title="Delete code server"
+                  (click)="delete(workspace)"
+                  [disabled]="deletingId() === workspace.id"
+                >
+                  <span class="material-icons">delete</span>
+                </button>
               </div>
             </div>
-            <div class="list-card-actions" (click)="$event.stopPropagation()">
-              <button
-                mat-stroked-button
-                type="button"
-                aria-label="Refresh workspace status"
-                title="Refresh workspace status"
-                (click)="refresh(workspace)"
-              >
-                <span class="material-icons">refresh</span>
-              </button>
-              <button
-                mat-stroked-button
-                type="button"
-                class="danger"
-                aria-label="Delete code server"
-                title="Delete code server"
-                (click)="delete(workspace)"
-                [disabled]="deletingId() === workspace.id"
-              >
-                <span class="material-icons">delete</span>
-              </button>
-            </div>
+          }
+        </div>
+
+        @if (message()) {
+          <div
+            class="workspace-message list-message"
+            [class.success]="messageTone() === 'success'"
+            [class.error]="messageTone() === 'error'"
+          >
+            {{ message() }}
           </div>
         }
-      </div>
-
-      @if (message()) {
-        <div
-          class="workspace-message list-message"
-          [class.success]="messageTone() === 'success'"
-          [class.error]="messageTone() === 'error'"
-        >
-          {{ message() }}
-        </div>
-      }
+      </mat-card>
     </div>
   } @else if (selectedWorkspace(); as workspace) {
     <!-- IDE VIEW: code-server frame for the selected workspace -->

@@ -494,6 +494,62 @@ a.mat-mdc-list-item:hover {
   background: transparent;
 }
 
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 1rem;
+  background: rgba(248, 250, 252, 0.8);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.menu-btn {
+  margin-right: 0.6rem;
+}
+
+.topbar-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.user-chip .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #14b8a6, #f59e0b);
+  color: #0f172a;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.user-chip .user-name {
+  font-size: 0.82rem;
+}
+
 .floating-menu-btn {
   position: sticky;
   top: 0.6rem;

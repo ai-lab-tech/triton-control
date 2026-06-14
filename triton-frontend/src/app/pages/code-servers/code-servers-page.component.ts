@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, ViewChild, inject, signal } from "@angular/core";
+import { Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from "@angular/core";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
@@ -18,6 +18,7 @@ import {
   CreateCodeServerRequest,
 } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+import { ChromeService } from "../../shared/chrome.service";
 
 type CodeServer = CodeServerDTO;
 
@@ -42,6 +43,7 @@ export class CodeServersPageComponent implements OnDestroy {
 
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly chrome = inject(ChromeService);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
     .replace(/\/$/, "");
@@ -65,14 +67,23 @@ export class CodeServersPageComponent implements OnDestroy {
   readonly selectedWorkspaceId = signal<number | null>(null);
   readonly embeddedWorkspaceUrl = signal<SafeResourceUrl | null>(null);
   readonly workspacePanelCollapsed = signal(false);
+  readonly showCreate = signal(false);
   readonly message = signal("");
   readonly messageTone = signal<"info" | "success" | "error">("info");
 
   constructor() {
+    effect(() => {
+      if (this.selectedWorkspaceId() !== null) {
+        this.chrome.hideTopbar();
+      } else {
+        this.chrome.showTopbar();
+      }
+    });
     void this.load();
   }
 
   ngOnDestroy(): void {
+    this.chrome.showTopbar();
     this.stopStatusPolling();
   }
 
@@ -115,6 +126,7 @@ export class CodeServersPageComponent implements OnDestroy {
         this.codeServersApi.createCodeServerApiCodeServersPost(payload),
       );
       this.upsertWorkspace(workspace);
+      this.showCreate.set(false);
       this.updateStatusPolling();
       void this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
@@ -170,6 +182,15 @@ export class CodeServersPageComponent implements OnDestroy {
     this.embeddedWorkspaceUrl.set(null);
   }
 
+  startCreate(): void {
+    this.setMessage("", "info");
+    this.showCreate.set(true);
+  }
+
+  cancelCreate(): void {
+    this.showCreate.set(false);
+  }
+
   selectWorkspace(workspace: CodeServer): void {
     this.selectedWorkspaceId.set(workspace.id);
     this.setEmbeddedWorkspace(workspace);
@@ -184,12 +205,7 @@ export class CodeServersPageComponent implements OnDestroy {
   }
 
   canCreate(): boolean {
-    return (
-      this.name.trim().length > 0 &&
-      this.image.trim().length > 0 &&
-      this.workspaces().length === 0 &&
-      !this.saving()
-    );
+    return this.name.trim().length > 0 && this.image.trim().length > 0 && !this.saving();
   }
 
   toggleWorkspacePanel(): void {

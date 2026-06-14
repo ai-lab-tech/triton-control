@@ -141,7 +141,30 @@
   }
 
   <mat-sidenav-content class="content" (click)="closeAdminMenu()">
-    @if (isLoggedIn() && isHandset()) {
+    @if (!topbarHidden()) {
+      <mat-toolbar class="topbar">
+        @if (isLoggedIn() && isHandset()) {
+          <button
+            mat-icon-button
+            type="button"
+            class="menu-btn"
+            aria-label="Open navigation"
+            (click)="toggleNav(); $event.stopPropagation()"
+          >
+            <span class="material-icons">menu</span>
+          </button>
+        }
+        <div class="topbar-title">Triton Control</div>
+        <span class="spacer"></span>
+
+        @if (isLoggedIn()) {
+          <div class="user-chip">
+            <span class="avatar">{{ initials() }}</span>
+            <span class="user-name">{{ userName() }}</span>
+          </div>
+        }
+      </mat-toolbar>
+    } @else if (isLoggedIn() && isHandset()) {
       <button
         mat-icon-button
         type="button"
