@@ -1,15 +1,4 @@
 <div class="code-servers">
-  <div class="header-row">
-    <div>
-      <div class="page-title">Code Servers</div>
-      <p class="page-subtitle">Workspace development environments</p>
-    </div>
-    <button mat-stroked-button type="button" (click)="load()" [disabled]="loading()">
-      <span class="material-icons">refresh</span>
-      Refresh
-    </button>
-  </div>
-
   <section class="workspace-shell" [class.settings-open]="!workspacePanelCollapsed()">
     <div class="workspace-toolbar">
       <div class="workspace-heading">

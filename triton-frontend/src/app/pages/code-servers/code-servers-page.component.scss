@@ -7,25 +7,6 @@
   overflow: hidden;
 }
 
-.header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.header-row .page-title {
-  font-size: 1.55rem;
-  line-height: 1.05;
-  font-weight: 850;
-}
-
-.header-row .page-subtitle {
-  margin: 0.1rem 0 0;
-  font-size: 0.95rem;
-  line-height: 1.2;
-}
-
 .header-actions {
   display: flex;
   align-items: center;
@@ -361,8 +342,7 @@
     overflow: visible;
   }
 
-  .workspace-toolbar,
-  .header-row {
+  .workspace-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
