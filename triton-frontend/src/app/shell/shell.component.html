@@ -26,7 +26,7 @@
                 type="button"
                 class="brand-toggle"
                 [attr.aria-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
-                [attr.title]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+                [attr.data-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
                 (click)="toggleNav(); $event.stopPropagation()"
               >
                 <span class="material-icons">{{
