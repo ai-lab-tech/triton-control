@@ -14,9 +14,12 @@
 }
 
 .sidenav.collapsed {
-  width: 72px;
-  padding: 1rem 0.6rem 1.2rem;
+  width: 55px;
+  min-width: 55px;
+  max-width: 55px;
+  padding: 1rem 0.45rem 1.2rem;
   overflow: visible;
+  box-sizing: border-box;
 }
 
 :host ::ng-deep .sidenav .mat-drawer-inner-container {
