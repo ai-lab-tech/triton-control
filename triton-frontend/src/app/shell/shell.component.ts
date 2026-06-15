@@ -10,6 +10,7 @@ import { MatSidenavModule } from "@angular/material/sidenav";
 import { MatListModule } from "@angular/material/list";
 import { MatIconModule } from "@angular/material/icon";
 import { MatButtonModule } from "@angular/material/button";
+import { MatToolbarModule } from "@angular/material/toolbar";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatDividerModule } from "@angular/material/divider";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
@@ -17,6 +18,7 @@ import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { NewInstanceDialogComponent } from "../pages/instances/new-instance-dialog/new-instance-dialog.component";
 import { AuthStore } from "../shared/auth/auth.store";
 import { AuthService } from "../shared/auth/auth.service";
+import { ChromeService } from "../shared/chrome.service";
 import { environment } from "../../environments/environment";
 import { Store } from "@ngrx/store";
 import { selectDashboardFleetHealthPercentage } from "../state/dashboard/dashboard.selectors";
@@ -40,6 +42,7 @@ type NavItem = {
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    MatToolbarModule,
     MatMenuModule,
     MatDividerModule,
     MatDialogModule,
@@ -51,6 +54,8 @@ export class ShellComponent {
   private readonly auth = inject(AuthStore);
   private readonly oidc = inject(AuthService);
   private readonly store = inject(Store);
+  private readonly chrome = inject(ChromeService);
+  readonly topbarHidden = this.chrome.topbarHidden;
   readonly userName = this.auth.userName;
   readonly role = this.auth.role;
   readonly isAdmin = this.auth.isAdmin;

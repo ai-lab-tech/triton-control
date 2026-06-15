@@ -1,7 +1,12 @@
 <div class="code-servers">
-  @if (workspaces().length === 0) {
+  @if (!initialLoaded()) {
+    <div class="view-loading">
+      <span class="material-icons spin">progress_activity</span>
+      <span>Loading workspaces…</span>
+    </div>
+  } @else if (workspaces().length === 0) {
     <!-- CREATE VIEW: only the create workspace form -->
-    <div class="view-scroll">
+    <div class="view-scroll create-view">
       <div class="header-row">
         <div>
           <div class="page-title">Create Workspace</div>
@@ -151,90 +156,12 @@
         }
       </mat-card>
     </div>
-  } @else if (selectedWorkspaceId() === null) {
-    <!-- LIST VIEW: existing workspaces -->
-    <div class="view-scroll">
-      <div class="header-row">
-        <div>
-          <div class="page-title">Code Servers</div>
-          <p class="page-subtitle">Select a workspace to open the IDE.</p>
-        </div>
-      </div>
-
-      <div class="workspace-list">
-        @for (workspace of workspaces(); track workspace.id) {
-          <div
-            class="workspace-list-card"
-            role="button"
-            tabindex="0"
-            (click)="open(workspace)"
-            (keydown)="selectWorkspaceFromKeyboard($event, workspace)"
-          >
-            <span class="material-icons list-card-icon">terminal</span>
-            <div class="list-card-text">
-              <div class="list-card-title-row">
-                <div class="list-card-title">{{ workspace.name }}</div>
-                <span class="status-chip" [attr.data-status]="workspace.status">{{
-                  workspace.status
-                }}</span>
-              </div>
-              <div class="list-card-sub">
-                {{ workspace.namespace }} / {{ workspace.statefulset_name }}
-                <span class="metadata-divider">Image: {{ imageLabel(workspace.image) }}</span>
-              </div>
-            </div>
-            <div class="list-card-actions" (click)="$event.stopPropagation()">
-              <button
-                mat-stroked-button
-                type="button"
-                aria-label="Refresh workspace status"
-                title="Refresh workspace status"
-                (click)="refresh(workspace)"
-              >
-                <span class="material-icons">refresh</span>
-              </button>
-              <button
-                mat-stroked-button
-                type="button"
-                class="danger"
-                aria-label="Delete code server"
-                title="Delete code server"
-                (click)="delete(workspace)"
-                [disabled]="deletingId() === workspace.id"
-              >
-                <span class="material-icons">delete</span>
-              </button>
-            </div>
-          </div>
-        }
-      </div>
-
-      @if (message()) {
-        <div
-          class="workspace-message list-message"
-          [class.success]="messageTone() === 'success'"
-          [class.error]="messageTone() === 'error'"
-        >
-          {{ message() }}
-        </div>
-      }
-    </div>
   } @else if (selectedWorkspace(); as workspace) {
     <!-- IDE VIEW: code-server frame for the selected workspace -->
     <section class="workspace-shell">
       <div class="workspace-toolbar">
         <div class="workspace-heading">
           <div class="workspace-title-row">
-            <button
-              mat-icon-button
-              type="button"
-              class="back-button"
-              aria-label="Back to workspaces"
-              title="Back to workspaces"
-              (click)="backToList()"
-            >
-              <span class="material-icons">arrow_back</span>
-            </button>
             <div class="workspace-title">{{ workspace.name }}</div>
             <span class="status-chip" [attr.data-status]="workspace.status">{{
               workspace.status
@@ -276,10 +203,17 @@
       <div class="workspace-body">
         <section class="workspace-frame">
           @if (embeddedWorkspaceUrl()) {
+            @if (frameLoading()) {
+              <div class="frame-loading" role="status" aria-live="polite">
+                <span class="deployment-spinner" aria-hidden="true"></span>
+                <span class="frame-loading-text">Loading workspace…</span>
+              </div>
+            }
             <iframe
               #codeServerFrame
               title="Code Server"
               [src]="embeddedWorkspaceUrl()"
+              (load)="onFrameLoaded()"
               allow="clipboard-read; clipboard-write; fullscreen"
               sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-same-origin allow-scripts"
             ></iframe>

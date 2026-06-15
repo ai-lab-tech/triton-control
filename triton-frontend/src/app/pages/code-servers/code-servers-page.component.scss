@@ -28,6 +28,37 @@
   padding: 0.25rem 0.25rem 1.5rem;
 }
 
+.create-view {
+  align-items: center;
+}
+
+.view-loading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 240px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.view-loading .spin {
+  animation: code-servers-spin 1s linear infinite;
+  color: #0f766e;
+}
+
+@keyframes code-servers-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.create-view .header-row {
+  width: 100%;
+  max-width: 1100px;
+}
+
 .header-row {
   display: flex;
   align-items: flex-start;
@@ -48,87 +79,8 @@
 }
 
 .create-card {
-  max-width: 720px;
-}
-
-.workspace-list {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.workspace-list-card {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  background: #ffffff;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.workspace-list-card:hover,
-.workspace-list-card:focus-visible {
-  border-color: rgba(20, 184, 166, 0.55);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.list-card-icon {
-  flex: 0 0 auto;
-  color: #0f766e;
-  font-size: 1.4rem;
-}
-
-.list-card-text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.list-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.list-card-title {
-  font-weight: 800;
-  color: #0f172a;
-  font-size: 0.98rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.list-card-sub {
-  margin-top: 0.2rem;
-  color: #64748b;
-  font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.list-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  flex: 0 0 auto;
-}
-
-.list-card-actions .material-icons {
-  font-size: 1.05rem;
-}
-
-.list-message {
-  text-align: left;
+  width: 100%;
+  max-width: 1100px;
 }
 
 .back-button {
@@ -418,6 +370,39 @@
   min-height: 0;
   overflow: hidden;
   background: #0f172a;
+  position: relative;
+}
+
+.frame-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.frame-loading .deployment-spinner {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 3px solid rgba(20, 184, 166, 0.2);
+  border-top-color: #14b8a6;
+  animation: deployment-progress-spin 0.9s linear infinite;
+}
+
+.frame-loading-text {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+@keyframes deployment-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workspace-frame iframe {
