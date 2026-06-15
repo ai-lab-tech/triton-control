@@ -1,7 +1,9 @@
 """Unit tests for per-user code-server workspace behavior."""
 
+import asyncio
 import unittest
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import ANY, patch
 
 import httpx
@@ -98,9 +100,11 @@ class CodeServerTests(unittest.TestCase):
             },
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
+        self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("--method=standalone --prefix=/workspace/.local", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
+        self.assertIn("--reconnection-grace-time 30", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
@@ -618,6 +622,90 @@ class CodeServerTests(unittest.TestCase):
     def test_ApiError_FormatsStatusReasonAndBody(self) -> None:
         message = k8s._api_error(SimpleNamespace(status=500, reason="boom", body="details"))
         self.assertEqual(message, "Kubernetes API error 500: boom - details")
+
+
+class WebSocketProxyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ProxyWebsocketMessages_UpstreamClose_ClosesBrowser(self) -> None:
+        websocket = _FakeWebSocket(receive_messages=[])
+        upstream = _FakeUpstream(messages=[])
+
+        await code_proxy._proxy_websocket_messages(websocket, upstream)
+
+        self.assertTrue(websocket.closed)
+        self.assertTrue(websocket.receive_cancelled)
+
+    async def test_ProxyWebsocketMessages_BrowserDisconnect_ClosesUpstream(self) -> None:
+        websocket = _FakeWebSocket(receive_messages=[{"type": "websocket.disconnect"}])
+        upstream = _FakeUpstream(wait_forever=True)
+
+        await code_proxy._proxy_websocket_messages(websocket, upstream)
+
+        self.assertFalse(websocket.closed)
+        self.assertTrue(upstream.closed)
+
+    async def test_UpstreamToBrowser_ForwardsTextAndBytes(self) -> None:
+        websocket = _FakeWebSocket(receive_messages=[])
+        upstream = _FakeUpstream(messages=["hello", b"world"])
+
+        await code_proxy._upstream_to_browser(websocket, upstream)
+
+        self.assertEqual(websocket.sent_text, ["hello"])
+        self.assertEqual(websocket.sent_bytes, [b"world"])
+
+
+class _FakeWebSocket:
+    def __init__(self, receive_messages: list[dict[str, Any]]) -> None:
+        self._receive_messages = receive_messages
+        self.client_state = SimpleNamespace(name="CONNECTED")
+        self.closed = False
+        self.receive_cancelled = False
+        self.sent_text: list[str] = []
+        self.sent_bytes: list[bytes] = []
+
+    async def receive(self) -> dict[str, Any]:
+        if self._receive_messages:
+            return self._receive_messages.pop(0)
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.receive_cancelled = True
+            raise
+        raise AssertionError("unreachable")
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed = True
+        self.close_code = code
+        self.client_state.name = "DISCONNECTED"
+
+    async def send_text(self, message: str) -> None:
+        self.sent_text.append(message)
+
+    async def send_bytes(self, message: bytes) -> None:
+        self.sent_bytes.append(message)
+
+
+class _FakeUpstream:
+    def __init__(self, messages: list[str | bytes] | None = None, wait_forever: bool = False) -> None:
+        self._messages = list(messages or [])
+        self._wait_forever = wait_forever
+        self.closed = False
+        self.sent: list[str | bytes] = []
+
+    def __aiter__(self) -> "_FakeUpstream":
+        return self
+
+    async def __anext__(self) -> str | bytes:
+        if self._messages:
+            return self._messages.pop(0)
+        if self._wait_forever:
+            await asyncio.Event().wait()
+        raise StopAsyncIteration
+
+    async def close(self) -> None:
+        self.closed = True
+
+    async def send(self, message: str | bytes) -> None:
+        self.sent.append(message)
 
 
 if __name__ == "__main__":

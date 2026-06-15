@@ -78,10 +78,7 @@ async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket
             max_size=None,
         )
         await websocket.accept(subprotocol=upstream.subprotocol)
-        await asyncio.gather(
-            _browser_to_upstream(websocket, upstream),
-            _upstream_to_browser(websocket, upstream),
-        )
+        await _proxy_websocket_messages(websocket, upstream)
     except WebSocketDisconnect:
         return
     except Exception:
@@ -91,6 +88,25 @@ async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket
     finally:
         if upstream is not None:
             await upstream.close()
+
+
+async def _proxy_websocket_messages(websocket: WebSocket, upstream: websockets.ClientConnection) -> None:
+    browser_to_upstream = asyncio.create_task(_browser_to_upstream(websocket, upstream))
+    upstream_to_browser = asyncio.create_task(_upstream_to_browser(websocket, upstream))
+    tasks = {browser_to_upstream, upstream_to_browser}
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+    try:
+        for task in done:
+            await task
+    finally:
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    if upstream_to_browser in done and websocket.client_state.name != "DISCONNECTED":
+        await websocket.close()
 
 
 def _proxy_http_sync(
@@ -284,11 +300,14 @@ async def _browser_to_upstream(websocket: WebSocket, upstream: websockets.Client
 
 
 async def _upstream_to_browser(websocket: WebSocket, upstream: websockets.ClientConnection) -> None:
-    async for message in upstream:
-        if isinstance(message, bytes):
-            await websocket.send_bytes(message)
-        else:
-            await websocket.send_text(message)
+    try:
+        async for message in upstream:
+            if isinstance(message, bytes):
+                await websocket.send_bytes(message)
+            else:
+                await websocket.send_text(message)
+    except websockets.ConnectionClosed:
+        return
 
 
 def _api_error(exc: Exception) -> str:

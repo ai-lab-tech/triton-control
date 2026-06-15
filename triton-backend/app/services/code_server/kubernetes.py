@@ -200,6 +200,7 @@ def _statefulset_manifest(
                             {"name": "XDG_CONFIG_HOME", "value": "/workspace/.config"},
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
                             {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
+                            {"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"},
                         ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
@@ -240,6 +241,7 @@ def _statefulset_manifest(
                                 "> /workspace/README.md; "
                                 "fi; "
                                 "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
+                                "--reconnection-grace-time 30 "
                                 "--user-data-dir /workspace/.code-server/user-data "
                                 "--extensions-dir /workspace/.code-server/extensions "
                                 "/workspace"
