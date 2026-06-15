@@ -73,12 +73,34 @@ class CodeServerTests(unittest.TestCase):
         secret = manifests[0]
         statefulset = manifests[1]
         service = manifests[2]
+        pod_spec = statefulset["spec"]["template"]["spec"]
         container = statefulset["spec"]["template"]["spec"]["containers"][0]
 
         self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
         self.assertEqual(statefulset["kind"], "StatefulSet")
+        self.assertFalse(pod_spec["automountServiceAccountToken"])
+        self.assertEqual(
+            pod_spec["securityContext"],
+            {
+                "runAsNonRoot": True,
+                "runAsUser": 10001,
+                "runAsGroup": 10001,
+                "fsGroup": 10001,
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
+        )
+        self.assertEqual(
+            container["securityContext"],
+            {
+                "allowPrivilegeEscalation": False,
+                "readOnlyRootFilesystem": False,
+                "capabilities": {"drop": ["ALL"]},
+            },
+        )
+        self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
-        self.assertIn("code-server --bind-addr 0.0.0.0:8080", container["args"][0])
+        self.assertIn("--method=standalone --prefix=/workspace/.local", container["args"][0])
+        self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])

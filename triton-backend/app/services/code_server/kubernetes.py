@@ -177,11 +177,30 @@ def _statefulset_manifest(
         "template": {
             "metadata": {"labels": labels},
             "spec": {
+                "automountServiceAccountToken": False,
+                "securityContext": {
+                    "runAsNonRoot": True,
+                    "runAsUser": 10001,
+                    "runAsGroup": 10001,
+                    "fsGroup": 10001,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
                 "containers": [
                     {
                         "name": "code-server",
                         "image": request.image,
                         "imagePullPolicy": "IfNotPresent",
+                        "securityContext": {
+                            "allowPrivilegeEscalation": False,
+                            "readOnlyRootFilesystem": False,
+                            "capabilities": {"drop": ["ALL"]},
+                        },
+                        "env": [
+                            {"name": "HOME", "value": "/workspace"},
+                            {"name": "XDG_CONFIG_HOME", "value": "/workspace/.config"},
+                            {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
+                            {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
+                        ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
                             "httpGet": {"path": "/", "port": "http"},
@@ -196,8 +215,10 @@ def _statefulset_manifest(
                         "command": ["/bin/sh", "-c"],
                         "args": [
                             (
-                                "if ! command -v code-server >/dev/null 2>&1; then "
-                                "curl -fsSL https://code-server.dev/install.sh | sh; "
+                                "CODE_SERVER_BIN=/workspace/.local/bin/code-server; "
+                                "if [ ! -x \"$CODE_SERVER_BIN\" ]; then "
+                                "curl -fsSL https://code-server.dev/install.sh | "
+                                "sh -s -- --method=standalone --prefix=/workspace/.local; "
                                 "fi; "
                                 "mkdir -p /workspace/.code-server/user-data/User "
                                 "/workspace/.code-server/extensions; "
@@ -205,10 +226,10 @@ def _statefulset_manifest(
                                 "'{\"workbench.startupEditor\":\"none\","
                                 f"\"workbench.colorTheme\":\"{request.theme}\"}}' "
                                 "> /workspace/.code-server/user-data/User/settings.json; "
-                                "if ! code-server "
+                                "if ! \"$CODE_SERVER_BIN\" "
                                 "--extensions-dir /workspace/.code-server/extensions "
                                 "--list-extensions | grep -qx 'ms-python.python'; then "
-                                "code-server "
+                                "\"$CODE_SERVER_BIN\" "
                                 "--extensions-dir /workspace/.code-server/extensions "
                                 "--install-extension ms-python.python || "
                                 "echo 'Warning: failed to install ms-python.python extension' >&2; "
@@ -218,7 +239,7 @@ def _statefulset_manifest(
                                 "'This persistent workspace is managed by Triton Control.' "
                                 "> /workspace/README.md; "
                                 "fi; "
-                                "exec code-server --bind-addr 0.0.0.0:8080 --auth none "
+                                "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
                                 "--user-data-dir /workspace/.code-server/user-data "
                                 "--extensions-dir /workspace/.code-server/extensions "
                                 "/workspace"
