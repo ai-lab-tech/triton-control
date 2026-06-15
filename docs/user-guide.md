@@ -152,7 +152,7 @@ The inference page shows:
 - target instance and model version
 - resolved Triton infer URL
 - JSON request body editor
-- model API config via **Show API Config**
+- model configuration side panel
 - request latency and response JSON
 - per-request inference metrics (when available)
 
@@ -166,6 +166,16 @@ Metrics behavior:
 
 - preferred source: Prometheus `/metrics` delta before/after request
 - fallback: Triton `/v2/models/stats`
+
+Configuration side panel behavior:
+
+- if the instance has an active S3 connection, the panel shows the raw
+  `config.pbtxt` file for the selected model repository path
+- members and admins can edit and save that `config.pbtxt`; viewers can inspect it
+- if S3 is not configured, the panel shows the read-only Triton **Live API
+  Config** for the selected model/version
+- **Live API Config** is Triton's parsed runtime JSON response, not the raw
+  `config.pbtxt` file
 
 ## Model Profile Page (Perf Analyzer)
 
@@ -181,6 +191,9 @@ Current behavior:
 - only one profile run can execute at a time
 - while one run is active, other profile actions are disabled
 - active run can be reopened to inspect progress/results
+- the side configuration panel follows the same behavior as the Inference page:
+  editable S3 `config.pbtxt` when S3 is configured, otherwise read-only
+  **Live API Config**
 
 ## S3 Browser Page
 
@@ -194,6 +207,9 @@ When S3 is configured and enabled for an instance, the S3 Browser supports:
 
 When saving `config.pbtxt`, backend validation is executed against the Triton
 model configuration parser for that Triton version.
+
+The same validation is used when saving `config.pbtxt` from the Inference or
+Profile page side panel.
 
 See [Model Config Validation](model-config-validation.md) for details about
 Triton version mapping and protobuf parser generation.
