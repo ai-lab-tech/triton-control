@@ -9,7 +9,14 @@ from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session, session_factory
 from app.exceptions import AppError
-from app.schemas import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServerRequest
+from app.schemas import (
+    CodeServerDeleteResponse,
+    CodeServerDeploymentNavigationRequest,
+    CodeServerDeploymentNavigationResponse,
+    CodeServerDTO,
+    CreateCodeServerRequest,
+)
+from app.services.code_server import navigation as code_server_navigation
 from app.services.code_server import proxy as code_server_proxy
 from app.services.code_server import workspaces
 
@@ -35,6 +42,26 @@ def create_code_server(
 ) -> CodeServerDTO:
     """Create or replace the caller's code-server workspace."""
     return workspaces.create_code_server(request, session, claims)
+
+
+@router.post("/deployment-navigation", response_model=CodeServerDeploymentNavigationResponse)
+def notify_code_server_deployment_navigation(
+    request: CodeServerDeploymentNavigationRequest,
+    claims: dict[str, Any] = Depends(get_claims),
+) -> CodeServerDeploymentNavigationResponse:
+    """Record a one-shot navigation target after a code-server deploy action."""
+    code_server_navigation.notify_deployment_created(claims, request.instance_id)
+    return CodeServerDeploymentNavigationResponse(instance_id=request.instance_id)
+
+
+@router.get("/deployment-navigation", response_model=CodeServerDeploymentNavigationResponse)
+def consume_code_server_deployment_navigation(
+    claims: dict[str, Any] = Depends(get_claims),
+) -> CodeServerDeploymentNavigationResponse:
+    """Return and clear a pending deployment navigation target for the user."""
+    return CodeServerDeploymentNavigationResponse(
+        instance_id=code_server_navigation.consume_deployment_created(claims),
+    )
 
 
 @router.get("/{code_server_id}", response_model=CodeServerDTO)

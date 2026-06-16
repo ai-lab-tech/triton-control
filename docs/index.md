@@ -28,7 +28,7 @@ local evaluation, and with separate Python/npm processes for development.
 
 Product:
 
-- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, and Add Instance.
+- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Code Servers, Add Deployment, Perf Analyzer, and Add Instance.
 - [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
 
 Architecture:

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from "@angular/core/testing";
+import { Router } from "@angular/router";
 import { of, throwError } from "rxjs";
 
 import { BASE_PATH, CodeServerDTO, CodeServersService } from "../../api/generated/index";
@@ -25,6 +26,8 @@ describe("CodeServersPageComponent", () => {
   };
 
   let codeServersApi: jasmine.SpyObj<CodeServersService>;
+  let router: jasmine.SpyObj<Router>;
+  let fetchSpy: jasmine.Spy;
 
   beforeEach(async () => {
     codeServersApi = jasmine.createSpyObj<CodeServersService>("CodeServersService", [
@@ -39,12 +42,22 @@ describe("CodeServersPageComponent", () => {
       of(readyWorkspace) as any,
     );
     codeServersApi.deleteCodeServerApiCodeServersCodeServerIdDelete.and.returnValue(of({}) as any);
+    router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
+    fetchSpy = spyOn(window, "fetch").and.returnValue(
+      Promise.resolve(
+        new Response(JSON.stringify({ instance_id: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
 
     await TestBed.configureTestingModule({
       imports: [CodeServersPageComponent],
       providers: [
         { provide: CodeServersService, useValue: codeServersApi },
         { provide: BASE_PATH, useValue: "" },
+        { provide: Router, useValue: router },
       ],
     }).compileComponents();
   });
@@ -154,5 +167,76 @@ describe("CodeServersPageComponent", () => {
     // Assert
     expect(codeServersApi.createCodeServerApiCodeServersPost).not.toHaveBeenCalled();
     expect(component.messageTone()).toBe("error");
+  });
+
+  it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", () => {
+    // Arrange
+    TestBed.createComponent(CodeServersPageComponent);
+
+    // Act
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          source: "triton-control-deploy",
+          type: "deploymentCreated",
+          instanceId: 42,
+        },
+        origin: window.location.origin,
+      }),
+    );
+
+    // Assert
+    expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/42", {
+      state: { openLogsOnce: true },
+    });
+  });
+
+  it("CodeServerMessage_NullOriginDeploymentCreated_NavigatesToInstanceLogs", () => {
+    // Arrange
+    TestBed.createComponent(CodeServersPageComponent);
+
+    // Act
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          source: "triton-control-deploy",
+          type: "deploymentCreated",
+          instanceId: 43,
+        },
+        origin: "null",
+      }),
+    );
+
+    // Assert
+    expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/43", {
+      state: { openLogsOnce: true },
+    });
+  });
+
+  it("DeploymentNavigationPoll_PendingTarget_NavigatesToInstanceLogs", async () => {
+    // Arrange
+    fetchSpy.and.returnValue(
+      Promise.resolve(
+        new Response(JSON.stringify({ instance_id: 44 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+    component.workspaces.set([readyWorkspace]);
+    component.selectWorkspace(readyWorkspace);
+
+    // Act
+    await (component as any).pollDeploymentNavigation();
+
+    // Assert
+    expect(fetchSpy).toHaveBeenCalledWith("/api/code-servers/deployment-navigation", {
+      credentials: "include",
+    });
+    expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/44", {
+      state: { openLogsOnce: true },
+    });
   });
 });

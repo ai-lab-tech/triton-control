@@ -1,0 +1,90 @@
+{
+  "name": "triton-control-deploy",
+  "displayName": "Triton Control Deploy",
+  "description": "Upload a Triton model repository from code-server to S3/MinIO and create a Triton Control deployment.",
+  "version": "0.1.0",
+  "publisher": "triton-control",
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:tritonControl.deployModelRepository"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tritonControl.deployModelRepository",
+        "title": "Triton Control: Deploy Model Repository"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "tritonControl.deployModelRepository",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Triton Control Deploy",
+      "properties": {
+        "tritonControlDeploy.s3Endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "S3-compatible endpoint URL."
+        },
+        "tritonControlDeploy.s3Bucket": {
+          "type": "string",
+          "default": "",
+          "description": "Target S3 bucket for uploaded Triton model repositories."
+        },
+        "tritonControlDeploy.s3Prefix": {
+          "type": "string",
+          "default": "",
+          "description": "Optional target prefix. The deployment name is appended below this prefix."
+        },
+        "tritonControlDeploy.s3Region": {
+          "type": "string",
+          "default": "us-east-1",
+          "description": "S3 region."
+        },
+        "tritonControlDeploy.s3AccessKeyId": {
+          "type": "string",
+          "default": "",
+          "description": "S3 access key. Falls back to AWS_ACCESS_KEY_ID."
+        },
+        "tritonControlDeploy.s3SecretAccessKey": {
+          "type": "string",
+          "default": "",
+          "description": "S3 secret key. Falls back to AWS_SECRET_ACCESS_KEY."
+        },
+        "tritonControlDeploy.s3ForcePathStyle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use path-style S3 requests. Keep enabled for many S3-compatible providers and custom endpoints."
+        },
+        "tritonControlDeploy.s3CaCertificate": {
+          "type": "string",
+          "default": "",
+          "description": "Optional PEM CA certificate passed to Triton deployments for HTTPS S3 endpoints."
+        },
+        "tritonControlDeploy.tritonImage": {
+          "type": "string",
+          "default": "nvcr.io/nvidia/tritonserver:25.02-py3",
+          "description": "Default Triton deployment image."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^2.15.0"
+  },
+  "scripts": {
+    "package": "vsce package"
+  }
+}

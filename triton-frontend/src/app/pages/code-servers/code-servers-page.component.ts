@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from "@angular/core";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
+import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
@@ -44,6 +45,7 @@ export class CodeServersPageComponent implements OnDestroy {
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly chrome = inject(ChromeService);
+  private readonly router = inject(Router);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
     .replace(/\/$/, "");
@@ -52,6 +54,8 @@ export class CodeServersPageComponent implements OnDestroy {
   private frameReloadNonce = 0;
   private frameLoadStartedAt = 0;
   private frameLoaderHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private deploymentNavigationPollId: ReturnType<typeof setInterval> | null = null;
+  private deploymentNavigationPollInFlight = false;
   private static readonly minFrameLoaderMs = 3500;
   private static readonly postLoadGraceMs = 2500;
   @ViewChild("codeServerFrame") private codeServerFrame?: ElementRef<HTMLIFrameElement>;
@@ -84,15 +88,88 @@ export class CodeServersPageComponent implements OnDestroy {
         this.chrome.showTopbar();
       }
     });
+    window.addEventListener("message", this.handleCodeServerMessage);
+    this.startDeploymentNavigationPolling();
     void this.load();
   }
 
   ngOnDestroy(): void {
+    window.removeEventListener("message", this.handleCodeServerMessage);
+    this.stopDeploymentNavigationPolling();
     this.chrome.showTopbar();
     this.stopStatusPolling();
     if (this.frameLoaderHideTimer !== null) {
       clearTimeout(this.frameLoaderHideTimer);
       this.frameLoaderHideTimer = null;
+    }
+  }
+
+  private readonly handleCodeServerMessage = (event: MessageEvent): void => {
+    if (
+      event.origin &&
+      event.origin !== "null" &&
+      event.origin !== window.location.origin
+    ) {
+      return;
+    }
+    const data = event.data as Record<string, unknown> | null;
+    if (
+      !data ||
+      data["source"] !== "triton-control-deploy" ||
+      data["type"] !== "deploymentCreated"
+    ) {
+      return;
+    }
+    const instanceId = Number(data["instanceId"]);
+    if (!Number.isInteger(instanceId) || instanceId <= 0) {
+      return;
+    }
+    void this.router.navigateByUrl(`/instances/${instanceId}`, {
+      state: { openLogsOnce: true },
+    });
+  };
+
+  private startDeploymentNavigationPolling(): void {
+    if (this.deploymentNavigationPollId !== null) {
+      return;
+    }
+    this.deploymentNavigationPollId = setInterval(() => {
+      void this.pollDeploymentNavigation();
+    }, 1500);
+  }
+
+  private stopDeploymentNavigationPolling(): void {
+    if (this.deploymentNavigationPollId === null) {
+      return;
+    }
+    clearInterval(this.deploymentNavigationPollId);
+    this.deploymentNavigationPollId = null;
+  }
+
+  private async pollDeploymentNavigation(): Promise<void> {
+    if (this.selectedWorkspaceId() === null || this.deploymentNavigationPollInFlight) {
+      return;
+    }
+    this.deploymentNavigationPollInFlight = true;
+    try {
+      const response = await fetch(`${this.basePath}/api/code-servers/deployment-navigation`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        return;
+      }
+      const payload = (await response.json()) as { instance_id?: number | null };
+      const instanceId = Number(payload.instance_id);
+      if (!Number.isInteger(instanceId) || instanceId <= 0) {
+        return;
+      }
+      void this.router.navigateByUrl(`/instances/${instanceId}`, {
+        state: { openLogsOnce: true },
+      });
+    } catch {
+      // Navigation handoff is best-effort; visible deployment errors stay in the plugin.
+    } finally {
+      this.deploymentNavigationPollInFlight = false;
     }
   }
 

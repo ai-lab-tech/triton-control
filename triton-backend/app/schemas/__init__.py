@@ -8,7 +8,13 @@ Internal modules:
   app.schemas.dashboard — Dashboard alert DTOs
 """
 
-from app.schemas.code_server import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServerRequest
+from app.schemas.code_server import (
+    CodeServerDeleteResponse,
+    CodeServerDeploymentNavigationRequest,
+    CodeServerDeploymentNavigationResponse,
+    CodeServerDTO,
+    CreateCodeServerRequest,
+)
 from app.schemas.dashboard import DashboardAlertDTO
 from app.schemas.deployment import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.schemas.instance import (
@@ -61,6 +67,8 @@ __all__ = [
     "BootstrapStatusResponse",
     "CodeServerDTO",
     "CodeServerDeleteResponse",
+    "CodeServerDeploymentNavigationRequest",
+    "CodeServerDeploymentNavigationResponse",
     "CreateCodeServerRequest",
     "CreateDeploymentRequest",
     "CreateTritonInstanceRequest",
