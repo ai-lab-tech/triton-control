@@ -256,6 +256,5 @@ describe("CodeServersPageComponent", () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/44", {
       state: { openLogsOnce: true },
     });
-
   });
 });
