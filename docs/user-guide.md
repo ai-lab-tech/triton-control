@@ -32,6 +32,7 @@ Main sidebar entries:
 
 - Dashboard
 - Triton Instances
+- Code Servers (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
@@ -267,6 +268,79 @@ When ingress is not configured, Triton Control uses internal service DNS:
 ```text
 http://<service>.<namespace>.svc.cluster.local:<port>
 ```
+
+## Deploy From Code Server
+
+Code-server workspaces include the **Triton Control Deploy** extension. It lets
+members and admins deploy a Triton model repository directly from the workspace:
+
+1. Open **Code Servers** and create or open a workspace.
+2. Create or edit a Triton model repository in `/workspace`. The repository
+   should follow Triton's model layout, for example:
+
+   ```text
+   repository-root/
+     model-name/
+       config.pbtxt
+       1/
+         model.py
+   ```
+
+3. Right-click either the `repository-root` folder or a single `model-name`
+   folder and run
+   **Triton Control: Deploy Model Repository**.
+4. The extension reads the model name from `config.pbtxt`. If no name is found,
+   it asks for one.
+5. Confirm the S3-compatible endpoint, bucket, optional prefix, credentials,
+   Triton image, model control mode, and optional S3 CA certificate.
+6. The extension uploads the repository to S3-compatible storage and calls the
+   same deployment API used by **Add Deployment**. If a single `model-name`
+   folder is selected, it is uploaded below the deployment prefix as
+   `model-name/config.pbtxt`; the deployment `s3_url` still points at the
+   parent repository prefix.
+7. Triton Control switches to the new instance detail page and opens deployment
+   logs.
+
+The extension reuses S3/R2 Explorer settings when they are configured in
+code-server:
+
+| S3/R2 Explorer setting | Used for |
+| --- | --- |
+| `s3x.endpointUrl` | S3-compatible endpoint |
+| `s3x.region` | S3 region |
+| `s3x.accessKeyId` | access key |
+| `s3x.secretAccessKey` | secret key |
+| `s3x.forcePathStyle` | path-style request mode |
+
+If required S3 values are missing, the extension prompts for them and saves the
+answers in the code-server workspace settings for the next deploy. Bucket and
+prefix are deployment choices: use the bucket that should hold model
+repositories, and use the prefix to group uploaded deployments.
+
+For HTTPS S3 endpoints with private or self-signed certificates, paste the PEM
+CA certificate into **S3 CA certificate for Triton HTTPS access**. The extension
+uses that value in the deployment request so the Triton pod can trust the object
+store. The extension's own upload path is intended for workspace-side use and
+does not replace the Triton pod CA configuration.
+
+Path-style S3 means the bucket is part of the URL path, for example
+`https://s3.example.com/bucket/key`. Virtual-host style means the bucket is part
+of the hostname, for example `https://bucket.s3.example.com/key`. Keep
+path-style enabled for S3-compatible or custom endpoints that require it.
+
+The deployment created by the extension behaves like any other self-deployed
+Triton instance. Its in-pod S3 repository connection is fixed at deployment
+time; changing it later requires deleting and recreating the deployment.
+
+Deployment note:
+
+- In the Docker image, the extension source is bundled at
+  `/opt/code-server-extensions/triton-deploy` and is installed automatically
+  into newly created code-server workspaces.
+- For local backend development outside the image, set
+  `TRITON_DEPLOY_CODE_SERVER_EXTENSION_DIR` if the backend cannot find the
+  repository's `code-server-extensions/triton-deploy` directory automatically.
+- Existing code-server pods must be recreated to receive extension changes.
 
 ## Perf Analyzer (Sidebar Entry)
 

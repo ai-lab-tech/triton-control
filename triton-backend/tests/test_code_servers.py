@@ -2,6 +2,7 @@
 
 import asyncio
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import ANY, patch
@@ -74,12 +75,15 @@ class CodeServerTests(unittest.TestCase):
         )
 
         secret = manifests[0]
-        statefulset = manifests[1]
-        service = manifests[2]
+        extension_configmap = manifests[1]
+        statefulset = manifests[2]
+        service = manifests[3]
         pod_spec = statefulset["spec"]["template"]["spec"]
         container = statefulset["spec"]["template"]["spec"]["containers"][0]
 
         self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
+        self.assertEqual(extension_configmap["kind"], "ConfigMap")
+        self.assertIn("triton-control-deploy.vsix.b64", extension_configmap["data"])
         self.assertEqual(statefulset["kind"], "StatefulSet")
         self.assertFalse(pod_spec["automountServiceAccountToken"])
         self.assertEqual(
@@ -102,6 +106,7 @@ class CodeServerTests(unittest.TestCase):
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
+        self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("--method=standalone --prefix=/workspace/.local", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
@@ -109,8 +114,19 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
+        self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
+        self.assertIn("--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\"", container["args"][0])
+        self.assertIn("rm -f /workspace/.code-server/extensions/.obsolete", container["args"][0])
         self.assertIn("--user-data-dir /workspace/.code-server/user-data", container["args"][0])
         self.assertIn("--extensions-dir /workspace/.code-server/extensions", container["args"][0])
+        self.assertIn(
+            {
+                "name": "triton-deploy-extension",
+                "mountPath": "/opt/triton-control/extensions/triton-deploy",
+                "readOnly": True,
+            },
+            container["volumeMounts"],
+        )
         self.assertEqual(container["startupProbe"]["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(container["readinessProbe"]["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(
@@ -118,7 +134,7 @@ class CodeServerTests(unittest.TestCase):
             "30Gi",
         )
         self.assertEqual(service["spec"]["ports"][0]["port"], 8080)
-        self.assertEqual([manifest["kind"] for manifest in manifests], ["Secret", "StatefulSet", "Service"])
+        self.assertEqual([manifest["kind"] for manifest in manifests], ["Secret", "ConfigMap", "StatefulSet", "Service"])
 
     def test_Manifests_UsesSelectedCodeServerTheme(self) -> None:
         request = self._request().model_copy(update={"theme": "Monokai"})
@@ -131,7 +147,7 @@ class CodeServerTests(unittest.TestCase):
             "code-7-dev-workspace-secret",
         )
 
-        container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+        container = manifests[2]["spec"]["template"]["spec"]["containers"][0]
 
         self.assertIn("\"workbench.colorTheme\":\"Monokai\"", container["args"][0])
 
@@ -150,6 +166,18 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("command -v code-server", container["args"][0])
         self.assertNotIn("install.sh", container["args"][0])
+        
+    def test_TritonDeployExtensionDir_ConfiguredParentDirectory_UsesChildExtension(self) -> None:
+        configured = Path(__file__).resolve().parents[2] / "code-server-extensions"
+
+        with patch.dict(
+            "os.environ",
+            {"TRITON_DEPLOY_CODE_SERVER_EXTENSION_DIR": str(configured)},
+        ):
+            self.assertEqual(
+                k8s._triton_deploy_extension_dir(),
+                configured / "triton-deploy",
+            )
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         request = self._request().model_copy(
@@ -166,7 +194,7 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertEqual(manifests[0]["kind"], "Secret")
         self.assertEqual(manifests[0]["type"], "kubernetes.io/dockerconfigjson")
-        statefulset = manifests[2]
+        statefulset = manifests[3]
         self.assertEqual(
             statefulset["spec"]["template"]["spec"]["imagePullSecrets"],
             [{"name": "code-7-dev-workspace-pull-secret"}],
@@ -400,6 +428,20 @@ class CodeServerTests(unittest.TestCase):
         get_service.assert_called_once()
         delete_service.assert_called_once()
 
+    def test_DeploymentNavigation_StoresAndConsumesPerUserTarget(self) -> None:
+        claims = {"user_id": 42, "email": "u@example.com"}
+
+        code_server_api.notify_code_server_deployment_navigation(
+            code_server_api.CodeServerDeploymentNavigationRequest(instance_id=77),
+            claims=claims,
+        )
+
+        first = code_server_api.consume_code_server_deployment_navigation(claims=claims)
+        second = code_server_api.consume_code_server_deployment_navigation(claims=claims)
+
+        self.assertEqual(first.instance_id, 77)
+        self.assertIsNone(second.instance_id)
+
     def test_ApplyCodeServerResources_AppliesKubernetesObjects(self) -> None:
         applied: list[dict[str, object]] = []
 
@@ -420,10 +462,11 @@ class CodeServerTests(unittest.TestCase):
         ensure_namespace.assert_called_once()
         self.assertEqual(result, [
             "Secret/code-7-dev-workspace-secret",
+            "ConfigMap/code-7-dev-workspace-triton-deploy-ext",
             "StatefulSet/code-7-dev-workspace",
             "Service/code-7-dev-workspace-svc",
         ])
-        self.assertEqual(applied[1]["kind"], "StatefulSet")
+        self.assertEqual(applied[2]["kind"], "StatefulSet")
 
     def test_ReadStatus_PodsReadyAndMissing_ReturnsStatus(self) -> None:
         ready_pod = SimpleNamespace(

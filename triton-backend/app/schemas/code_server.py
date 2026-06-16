@@ -73,3 +73,15 @@ class CodeServerDeleteResponse(SQLModel):
     status: str
     message: str
     namespace: str
+
+
+class CodeServerDeploymentNavigationRequest(SQLModel):
+    """Handoff request after a code-server extension created a deployment."""
+
+    instance_id: int
+
+
+class CodeServerDeploymentNavigationResponse(SQLModel):
+    """One-shot pending deployment navigation target for the current user."""
+
+    instance_id: Optional[int] = None

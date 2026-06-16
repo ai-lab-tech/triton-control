@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import html
+import io
+import json
+import os
+import zipfile
+from pathlib import Path
 from typing import Any
 
 from app.exceptions import BadGatewayError
@@ -73,6 +80,7 @@ def delete_code_server_resources(
     _delete(core.delete_namespaced_service, "Service", service_name)
     _delete(core.delete_namespaced_secret, "Secret", secret_name)
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(statefulset_name))
+    _delete(core.delete_namespaced_config_map, "ConfigMap", _triton_deploy_extension_configmap_name(statefulset_name))
     _delete(net.delete_namespaced_ingress, "Ingress", f"{statefulset_name}-ingress")
     return ", ".join(deleted) if deleted else "No code-server resources found to delete."
 
@@ -145,6 +153,7 @@ def _manifests(
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
         _secret_manifest(namespace, secret_name),
+        _triton_deploy_extension_configmap(namespace, statefulset_name),
         _statefulset_manifest(request, namespace, statefulset_name, service_name, labels),
         _service_manifest(namespace, service_name, labels),
     ]
@@ -247,6 +256,7 @@ def _statefulset_manifest(
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
                             {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
                             {"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"},
+                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"},
                         ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
@@ -263,7 +273,20 @@ def _statefulset_manifest(
                         "args": [
                             startup_command,
                         ],
-                        "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
+                        "volumeMounts": [
+                            {"name": "workspace", "mountPath": "/workspace"},
+                            {
+                                "name": "triton-deploy-extension",
+                                "mountPath": "/opt/triton-control/extensions/triton-deploy",
+                                "readOnly": True,
+                            },
+                        ],
+                    },
+                ],
+                "volumes": [
+                    {
+                        "name": "triton-deploy-extension",
+                        "configMap": {"name": _triton_deploy_extension_configmap_name(statefulset_name)},
                     },
                 ],
             },
@@ -290,6 +313,112 @@ def _statefulset_manifest(
         "metadata": {"name": statefulset_name, "namespace": namespace},
         "spec": pod_spec,
     }
+
+
+def _triton_deploy_extension_configmap(namespace: str, statefulset_name: str) -> dict[str, Any]:
+    extension_dir = _triton_deploy_extension_dir()
+    package_json = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
+    return {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "data": {
+            "triton-control-deploy.vsix.b64": _triton_deploy_extension_vsix_b64(extension_dir, package_json),
+        },
+        "immutable": False,
+        "metadata": {
+            "name": _triton_deploy_extension_configmap_name(statefulset_name),
+            "namespace": namespace,
+            "labels": {
+                "app": "code-server",
+                "workspace": statefulset_name,
+                "extension": package_json.get("name", "triton-control-deploy"),
+            },
+        },
+    }
+
+
+def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[str, Any]) -> str:
+    files = {
+        "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
+        "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/README.md": (extension_dir / "README.md").read_text(encoding="utf-8"),
+        "extension.vsixmanifest": _triton_deploy_vsix_manifest(package_json),
+        "[Content_Types].xml": _vsix_content_types(),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _triton_deploy_vsix_manifest(package_json: dict[str, Any]) -> str:
+    name = str(package_json.get("name", "triton-control-deploy"))
+    version = str(package_json.get("version", "0.1.0"))
+    publisher = str(package_json.get("publisher", "triton-control"))
+    display_name = str(package_json.get("displayName", name))
+    description = str(package_json.get("description", display_name))
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<PackageManifest Version="2.0.0" '
+        'xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" '
+        'xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">\n'
+        "  <Metadata>\n"
+        f'    <Identity Language="en-US" Id="{html.escape(name)}" '
+        f'Version="{html.escape(version)}" Publisher="{html.escape(publisher)}" />\n'
+        f"    <DisplayName>{html.escape(display_name)}</DisplayName>\n"
+        f'    <Description xml:space="preserve">{html.escape(description)}</Description>\n'
+        "    <Categories>Other</Categories>\n"
+        "  </Metadata>\n"
+        "  <Installation>\n"
+        '    <InstallationTarget Id="Microsoft.VisualStudio.Code" />\n'
+        "  </Installation>\n"
+        "  <Dependencies />\n"
+        "  <Assets>\n"
+        '    <Asset Type="Microsoft.VisualStudio.Code.Manifest" '
+        'Path="extension/package.json" Addressable="true" />\n'
+        "  </Assets>\n"
+        "</PackageManifest>\n"
+    )
+
+
+def _vsix_content_types() -> str:
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
+        '  <Default Extension="json" ContentType="application/json" />\n'
+        '  <Default Extension="js" ContentType="application/javascript" />\n'
+        '  <Default Extension="md" ContentType="text/markdown" />\n'
+        '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n'
+        "</Types>\n"
+    )
+
+
+def _triton_deploy_extension_configmap_name(statefulset_name: str) -> str:
+    suffix = "-triton-deploy-ext"
+    return f"{statefulset_name[:63 - len(suffix)].rstrip('-')}{suffix}"
+
+
+def _triton_deploy_extension_dir() -> Path:
+    candidates = _triton_deploy_extension_dir_candidates()
+    for candidate in candidates:
+        if (candidate / "extension.js").is_file() and (candidate / "package.json").is_file():
+            return candidate
+    paths = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"Triton deploy code-server extension files were not found in: {paths}")
+
+
+def _triton_deploy_extension_dir_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    configured = os.getenv("TRITON_DEPLOY_CODE_SERVER_EXTENSION_DIR", "").strip()
+    if configured:
+        # Double-quoted Windows paths in .env can turn "\t" into a tab.
+        configured_path = Path(configured.replace("\t", "\\t"))
+        candidates.append(configured_path)
+        candidates.append(configured_path / "triton-deploy")
+    candidates.append(Path(__file__).resolve().parents[4] / "code-server-extensions" / "triton-deploy")
+    candidates.append(Path("/opt/code-server-extensions/triton-deploy"))
+    return candidates
 
 
 def _service_manifest(namespace: str, service_name: str, labels: dict[str, str]) -> dict[str, Any]:

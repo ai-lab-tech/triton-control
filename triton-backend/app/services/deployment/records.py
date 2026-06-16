@@ -19,7 +19,7 @@ from sqlmodel import Session
 from app.core.crypto import encrypt_secret, hash_secret
 from app.core.identity import require_user_entity
 from app.db.database import session_factory
-from app.exceptions import BadRequestError
+from app.exceptions import BadRequestError, ConflictError
 from app.repositories import dashboard_alerts, instances, users
 from app.repositories import perf_analyzer as perf_analyzer_repo
 from app.schemas import CreateDeploymentRequest
@@ -88,15 +88,17 @@ def upsert_deployed_instance(
         "s3_secret_key_hash": hash_secret(request.s3_secret_key),
         "s3_secret_key_enc": encrypt_secret(request.s3_secret_key),
     }
-    row = instances.find_by_name(session, deployment_name) or instances.find_by_url(session, triton_url)
-    if row:
-        for key, value in values.items():
-            setattr(row, key, value)
-        if row.created_by_user_id is None:
-            row.created_by_user_id = user.id
-        instances.save(session, row)
-    else:
-        row = instances.create(session, created_by_user_id=user.id, **values)
+    if instances.find_by_name(session, deployment_name):
+        raise ConflictError(
+            f"Deployment name '{deployment_name}' already exists. "
+            "Choose a different deployment name or delete the existing deployment first."
+        )
+    if instances.find_by_url(session, triton_url):
+        raise ConflictError(
+            f"Deployment target URL '{triton_url}' already exists. "
+            "Choose a different deployment name or delete the existing deployment first."
+        )
+    row = instances.create(session, created_by_user_id=user.id, **values)
     if deployment_name not in (user.assigned_instances or []):
         user.assigned_instances = [*user.assigned_instances, deployment_name]
         users.save(session, user)
