@@ -7,9 +7,9 @@ import html
 import io
 import json
 import os
+import zipfile
 from pathlib import Path
 from typing import Any
-import zipfile
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
