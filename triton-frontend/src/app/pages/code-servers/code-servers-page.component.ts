@@ -105,11 +105,7 @@ export class CodeServersPageComponent implements OnDestroy {
   }
 
   private readonly handleCodeServerMessage = (event: MessageEvent): void => {
-    if (
-      event.origin &&
-      event.origin !== "null" &&
-      event.origin !== window.location.origin
-    ) {
+    if (event.origin && event.origin !== "null" && event.origin !== window.location.origin) {
       return;
     }
     const data = event.data as Record<string, unknown> | null;
