@@ -162,7 +162,8 @@ class CodeServerTests(unittest.TestCase):
             "code-7-dev-workspace-secret",
         )
 
-        container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+        statefulset = next(manifest for manifest in manifests if manifest.get("kind") == "StatefulSet")
+        container = statefulset["spec"]["template"]["spec"]["containers"][0]
 
         self.assertIn("command -v code-server", container["args"][0])
         self.assertNotIn("install.sh", container["args"][0])
