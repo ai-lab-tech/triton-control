@@ -275,6 +275,9 @@ function validateForm(form) {
   if (!fs.existsSync(form.sourceFolder) || !fs.statSync(form.sourceFolder).isDirectory()) {
     throw new Error("Selected source folder does not exist.");
   }
+  if (!findConfigPbtxt(form.sourceFolder)) {
+    throw new Error("Selected folder must contain config.pbtxt directly or in a child model folder.");
+  }
   if (!/^https?:\/\//i.test(form.endpoint)) {
     throw new Error("S3 endpoint must start with http:// or https://.");
   }
@@ -286,13 +289,29 @@ async function uploadRepository(sourceFolder, form, report) {
     throw new Error("Selected folder does not contain files to upload.");
   }
   const basePrefix = targetPrefix(form);
+  const layout = repositoryLayout(sourceFolder, form.modelName);
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
-    const relative = toS3Path(path.relative(sourceFolder, file));
-    const key = [basePrefix, relative].filter(Boolean).join("/");
-    report(`${index + 1}/${files.length} ${relative}`, 100 / files.length);
+    const relative = toS3Path(path.relative(layout.relativeRoot, file));
+    const key = [basePrefix, layout.modelFolderName, relative].filter(Boolean).join("/");
+    const displayPath = [layout.modelFolderName, relative].filter(Boolean).join("/");
+    report(`${index + 1}/${files.length} ${displayPath}`, 100 / files.length);
     await putS3Object(form, key, file);
   }
+}
+
+function repositoryLayout(sourceFolder, modelName) {
+  const directConfig = path.join(sourceFolder, "config.pbtxt");
+  if (fs.existsSync(directConfig)) {
+    return {
+      relativeRoot: sourceFolder,
+      modelFolderName: sanitizeS3ModelFolderName(modelName || path.basename(sourceFolder)),
+    };
+  }
+  return {
+    relativeRoot: sourceFolder,
+    modelFolderName: "",
+  };
 }
 
 async function putS3Object(form, key, filePath) {
@@ -482,6 +501,14 @@ function toS3Path(value) {
   return value.replace(/\\/g, "/");
 }
 
+function sanitizeS3ModelFolderName(value) {
+  const cleaned = cleanPrefix(String(value || ""));
+  if (!cleaned || cleaned.includes("/")) {
+    throw new Error("Model name must be a single folder name for Triton repository upload.");
+  }
+  return cleaned;
+}
+
 function encodePathSegment(value) {
   return String(value)
     .split("/")
@@ -522,7 +549,7 @@ function renderHtml(webview, nonce, initial) {
     <label>Triton image<input name="image" required></label>
     <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com" required></label>
     <label>S3 bucket<input name="bucket" required></label>
-    <label>S3 prefix<input name="prefix"></label>
+    <label>S3 repository parent prefix<input name="prefix"></label>
     <label>S3 region<input name="region" required></label>
     <label>S3 access key<input name="accessKeyId" required></label>
     <label>S3 secret key<input name="secretAccessKey" type="password" required></label>

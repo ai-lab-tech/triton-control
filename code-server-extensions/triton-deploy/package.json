@@ -1,7 +1,7 @@
 {
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
-  "description": "Upload a Triton model repository from code-server to S3/MinIO and create a Triton Control deployment.",
+  "description": "Upload a Triton model repository from code-server to S3-compatible storage and create a Triton Control deployment.",
   "version": "0.1.0",
   "publisher": "triton-control",
   "engines": {
@@ -46,7 +46,7 @@
         "tritonControlDeploy.s3Prefix": {
           "type": "string",
           "default": "",
-          "description": "Optional target prefix. The deployment name is appended below this prefix."
+          "description": "Optional repository parent prefix. The deployment name is appended below this prefix."
         },
         "tritonControlDeploy.s3Region": {
           "type": "string",

@@ -1,19 +1,46 @@
 # Triton Control Deploy Extension
 
-This code-server extension uploads a selected Triton model repository folder to
-S3/MinIO, then calls Triton Control's existing `POST /api/deployments` endpoint.
+This code-server extension uploads a selected Triton model folder or Triton
+model repository root to S3-compatible storage, then calls Triton Control's
+existing `POST /api/deployments` endpoint.
 
 ## Flow
 
-1. Right-click a Triton model repository folder in code-server.
+1. Right-click a Triton model folder or model repository root in code-server.
 2. Run `Triton Control: Deploy Model Repository`.
 3. The extension detects the model name from `config.pbtxt`. If no model name is
    found, it asks for one.
 4. Confirm S3 and deployment settings. The deployment name is filled from the
    model name.
-5. The extension uploads files to `bucket/prefix/deployment-name`.
+5. The extension uploads files below `bucket/prefix/deployment-name`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
+
+Triton expects the model repository root to contain one folder per model:
+
+```text
+repository-root/
+  model-name/
+    config.pbtxt
+    1/
+      model.py
+```
+
+If you select the `model-name` folder directly, the extension uploads it as:
+
+```text
+bucket/prefix/deployment-name/model-name/config.pbtxt
+bucket/prefix/deployment-name/model-name/1/model.py
+```
+
+The deployment `s3_url` points at the repository root:
+
+```text
+s3://<endpoint>/<bucket>/prefix/deployment-name
+```
+
+It does not point at `.../model-name`, because that would make Triton start one
+directory too deep.
 
 ## Settings
 

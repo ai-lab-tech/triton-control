@@ -279,20 +279,25 @@ members and admins deploy a Triton model repository directly from the workspace:
    should follow Triton's model layout, for example:
 
    ```text
-   model-name/
-     config.pbtxt
-     1/
-       model.py
+   repository-root/
+     model-name/
+       config.pbtxt
+       1/
+         model.py
    ```
 
-3. Right-click the model repository folder and run
+3. Right-click either the `repository-root` folder or a single `model-name`
+   folder and run
    **Triton Control: Deploy Model Repository**.
 4. The extension reads the model name from `config.pbtxt`. If no name is found,
    it asks for one.
 5. Confirm the S3-compatible endpoint, bucket, optional prefix, credentials,
    Triton image, model control mode, and optional S3 CA certificate.
 6. The extension uploads the repository to S3-compatible storage and calls the
-   same deployment API used by **Add Deployment**.
+   same deployment API used by **Add Deployment**. If a single `model-name`
+   folder is selected, it is uploaded below the deployment prefix as
+   `model-name/config.pbtxt`; the deployment `s3_url` still points at the
+   parent repository prefix.
 7. Triton Control switches to the new instance detail page and opens deployment
    logs.
 
