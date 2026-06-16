@@ -878,6 +878,78 @@
         ]
       }
     },
+    "/api/code-servers/deployment-navigation": {
+      "get": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Consume Code Server Deployment Navigation",
+        "description": "Return and clear a pending deployment navigation target for the user.",
+        "operationId": "consume_code_server_deployment_navigation_api_code_servers_deployment_navigation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeploymentNavigationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "code-servers"
+        ],
+        "summary": "Notify Code Server Deployment Navigation",
+        "description": "Record a one-shot navigation target after a code-server deploy action.",
+        "operationId": "notify_code_server_deployment_navigation_api_code_servers_deployment_navigation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeServerDeploymentNavigationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeploymentNavigationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/code-servers/{code_server_id}": {
       "get": {
         "tags": [
@@ -2350,6 +2422,38 @@
         ],
         "title": "CodeServerDeleteResponse",
         "description": "Response after deleting a code-server workload record."
+      },
+      "CodeServerDeploymentNavigationRequest": {
+        "properties": {
+          "instance_id": {
+            "type": "integer",
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id"
+        ],
+        "title": "CodeServerDeploymentNavigationRequest",
+        "description": "Handoff request after a code-server extension created a deployment."
+      },
+      "CodeServerDeploymentNavigationResponse": {
+        "properties": {
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "title": "CodeServerDeploymentNavigationResponse",
+        "description": "One-shot pending deployment navigation target for the current user."
       },
       "CreateCodeServerRequest": {
         "properties": {
