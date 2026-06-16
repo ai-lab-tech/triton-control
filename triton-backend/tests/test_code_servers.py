@@ -101,6 +101,7 @@ class CodeServerTests(unittest.TestCase):
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
+        self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("--method=standalone --prefix=/workspace/.local", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])

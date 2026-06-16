@@ -201,6 +201,7 @@ def _statefulset_manifest(
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
                             {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
                             {"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"},
+                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"},
                         ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
