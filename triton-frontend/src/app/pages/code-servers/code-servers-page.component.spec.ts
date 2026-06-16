@@ -84,6 +84,7 @@ describe("CodeServersPageComponent", () => {
         memory: "4Gi",
         memory_limit: "4Gi",
         dockerconfigjson: '{"auths":{}}',
+        image_has_code_server: false,
       }),
     );
     expect(codeServersApi.getCodeServerApiCodeServersCodeServerIdGet).toHaveBeenCalledWith(3);
@@ -154,5 +155,22 @@ describe("CodeServersPageComponent", () => {
     // Assert
     expect(codeServersApi.createCodeServerApiCodeServersPost).not.toHaveBeenCalled();
     expect(component.messageTone()).toBe("error");
+  });
+
+  it("Create_ImageHasCodeServerEnabled_SendsTrueFlag", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+    component.imageHasCodeServer = true;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        image_has_code_server: true,
+      }),
+    );
   });
 });

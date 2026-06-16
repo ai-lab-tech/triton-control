@@ -160,8 +160,8 @@ export class ShellComponent {
 
   private async refreshKubernetesCapability(): Promise<void> {
     try {
-      const settings = await this.oidc.getOidcSettings();
-      this.kubernetesEnabled.set(!!settings.kubernetesEnabled);
+      const options = await this.oidc.getAuthOptions();
+      this.kubernetesEnabled.set(!!options.kubernetesEnabled);
       this.kubernetesCapabilityLoaded.set(true);
     } catch (error) {
       this.kubernetesEnabled.set(false);

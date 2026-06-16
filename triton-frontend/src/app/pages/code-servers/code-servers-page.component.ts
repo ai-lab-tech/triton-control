@@ -10,6 +10,7 @@ import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
+import { MatCheckboxModule } from "@angular/material/checkbox";
 
 import {
   BASE_PATH,
@@ -34,6 +35,7 @@ type CodeServer = CodeServerDTO;
     MatIconModule,
     MatInputModule,
     MatSelectModule,
+    MatCheckboxModule,
   ],
   styleUrl: "./code-servers-page.component.scss",
   templateUrl: "./code-servers-page.component.html",
@@ -63,6 +65,7 @@ export class CodeServersPageComponent implements OnDestroy {
   cpu = "";
   memory = "";
   dockerconfigjson = "";
+  imageHasCodeServer = false;
 
   readonly loading = signal(false);
   readonly initialLoaded = signal(false);
@@ -131,6 +134,7 @@ export class CodeServersPageComponent implements OnDestroy {
         memory: this.memory.trim() || undefined,
         memory_limit: this.memory.trim() || undefined,
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
+        image_has_code_server: this.imageHasCodeServer,
       };
       const workspace = await firstValueFrom(
         this.codeServersApi.createCodeServerApiCodeServersPost(payload),

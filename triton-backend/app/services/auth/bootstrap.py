@@ -29,7 +29,10 @@ from app.services.oidc.config import get_settings
 
 def auth_options(session: Session) -> dict[str, object]:
     settings = get_settings(session)
-    return {"oidc_enabled": settings.oidc_enabled}
+    return {
+        "oidc_enabled": settings.oidc_enabled,
+        "kubernetes_enabled": settings.kubernetes_enabled,
+    }
 
 
 def bootstrap_status(session: Session) -> BootstrapStatusResponse:

@@ -27,6 +27,7 @@ class CreateCodeServerRequest(SQLModel):
     memory: Optional[str] = None
     memory_limit: Optional[str] = None
     dockerconfigjson: Optional[str] = None
+    image_has_code_server: bool = False
 
     @field_validator("name", "image", "storage_size")
     @classmethod

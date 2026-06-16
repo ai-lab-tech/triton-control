@@ -50,6 +50,7 @@ class CodeServerTests(unittest.TestCase):
         request = self._request()
 
         self.assertEqual(request.name, "dev-workspace")
+        self.assertFalse(request.image_has_code_server)
 
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
@@ -134,6 +135,22 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("\"workbench.colorTheme\":\"Monokai\"", container["args"][0])
 
+    def test_Manifests_ImageAlreadyHasCodeServer_SkipsInstallScript(self) -> None:
+        request = self._request().model_copy(update={"image_has_code_server": True})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-control",
+            "code-7-dev-workspace",
+            "code-7-dev-workspace-svc",
+            "code-7-dev-workspace-secret",
+        )
+
+        container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+
+        self.assertIn("command -v code-server", container["args"][0])
+        self.assertNotIn("install.sh", container["args"][0])
+
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         request = self._request().model_copy(
             update={"dockerconfigjson": '{"auths":{"registry.example":{"auth":"token"}}}'},
@@ -189,7 +206,7 @@ class CodeServerTests(unittest.TestCase):
         create.assert_called_once()
         save.assert_called_once()
         self.assertEqual(result.id, 9)
-        self.assertEqual(result.url, "/api/code-servers/9/proxy/")
+        self.assertEqual(result.url, "/api/code-servers/9/proxy/?folder=/workspace")
         self.assertEqual(created["owner_user_id"], 7)
         self.assertEqual(created["name"], "dev-workspace")
         self.assertEqual(created["statefulset_name"], "code-7-dev-workspace")
@@ -345,7 +362,7 @@ class CodeServerTests(unittest.TestCase):
         list_for_owner.assert_called_once_with(ANY, 7)
         refresh_status.assert_called_once_with(ANY, row)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].url, "/api/code-servers/2/proxy/")
+        self.assertEqual(result[0].url, "/api/code-servers/2/proxy/?folder=/workspace")
 
     def test_GetCodeServer_DifferentOwner_RaisesForbidden(self) -> None:
         user = SimpleNamespace(id=7)

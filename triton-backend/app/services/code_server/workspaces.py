@@ -185,4 +185,4 @@ def _resource_prefix(owner_id: int, name: str) -> str:
 
 
 def proxy_url(code_server_id: int) -> str:
-    return f"/api/code-servers/{code_server_id}/proxy/"
+    return f"/api/code-servers/{code_server_id}/proxy/?folder=/workspace"

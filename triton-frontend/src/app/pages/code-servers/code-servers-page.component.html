@@ -45,6 +45,16 @@
               </mat-form-field>
             </div>
 
+            <div class="form-row wide image-code-server-row">
+              <mat-checkbox id="code-server-image-has-code-server" [(ngModel)]="imageHasCodeServer">
+                Image already has code-server installed
+              </mat-checkbox>
+              <div class="field-hint">
+                Enable this only when the selected image already contains the code-server binary.
+                If enabled incorrectly, workspace startup will fail.
+              </div>
+            </div>
+
             <div class="form-row">
               <label class="field-label" for="code-server-storage">Workspace storage</label>
               <mat-form-field appearance="outline">
@@ -69,6 +79,7 @@
                 </mat-select>
               </mat-form-field>
             </div>
+
           </div>
         </div>
 

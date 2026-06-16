@@ -170,6 +170,52 @@ def _statefulset_manifest(
     service_name: str,
     labels: dict[str, str],
 ) -> dict[str, Any]:
+    if request.image_has_code_server:
+        binary_setup = (
+            "CODE_SERVER_BIN=$(command -v code-server || true); "
+            "if [ -z \"$CODE_SERVER_BIN\" ]; then "
+            "echo 'Error: image_has_code_server=true but code-server is not available in PATH.' >&2; "
+            "exit 1; "
+            "fi; "
+        )
+    else:
+        binary_setup = (
+            "CODE_SERVER_BIN=/workspace/.local/bin/code-server; "
+            "if [ ! -x \"$CODE_SERVER_BIN\" ]; then "
+            "curl -fsSL https://code-server.dev/install.sh | "
+            "sh -s -- --method=standalone --prefix=/workspace/.local; "
+            "fi; "
+        )
+
+    startup_command = (
+        binary_setup
+        + "mkdir -p /workspace/.code-server/user-data/User "
+        "/workspace/.code-server/extensions; "
+        "printf '%s\n' "
+        "'{\"workbench.startupEditor\":\"none\","
+        "\"window.restoreWindows\":\"none\","
+        f"\"workbench.colorTheme\":\"{request.theme}\"}}' "
+        "> /workspace/.code-server/user-data/User/settings.json; "
+        "if ! \"$CODE_SERVER_BIN\" "
+        "--extensions-dir /workspace/.code-server/extensions "
+        "--list-extensions | grep -qx 'ms-python.python'; then "
+        "\"$CODE_SERVER_BIN\" "
+        "--extensions-dir /workspace/.code-server/extensions "
+        "--install-extension ms-python.python || "
+        "echo 'Warning: failed to install ms-python.python extension' >&2; "
+        "fi; "
+        "if [ ! -e /workspace/README.md ]; then "
+        "printf '%s\n' '# Workspace' '' "
+        "'This persistent workspace is managed by Triton Control.' "
+        "> /workspace/README.md; "
+        "fi; "
+        "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
+        "--reconnection-grace-time 30 "
+        "--user-data-dir /workspace/.code-server/user-data "
+        "--extensions-dir /workspace/.code-server/extensions "
+        "/workspace"
+    )
+
     pod_spec: dict[str, Any] = {
         "serviceName": service_name,
         "replicas": 1,
@@ -215,37 +261,7 @@ def _statefulset_manifest(
                         },
                         "command": ["/bin/sh", "-c"],
                         "args": [
-                            (
-                                "CODE_SERVER_BIN=/workspace/.local/bin/code-server; "
-                                "if [ ! -x \"$CODE_SERVER_BIN\" ]; then "
-                                "curl -fsSL https://code-server.dev/install.sh | "
-                                "sh -s -- --method=standalone --prefix=/workspace/.local; "
-                                "fi; "
-                                "mkdir -p /workspace/.code-server/user-data/User "
-                                "/workspace/.code-server/extensions; "
-                                "printf '%s\n' "
-                                "'{\"workbench.startupEditor\":\"none\","
-                                f"\"workbench.colorTheme\":\"{request.theme}\"}}' "
-                                "> /workspace/.code-server/user-data/User/settings.json; "
-                                "if ! \"$CODE_SERVER_BIN\" "
-                                "--extensions-dir /workspace/.code-server/extensions "
-                                "--list-extensions | grep -qx 'ms-python.python'; then "
-                                "\"$CODE_SERVER_BIN\" "
-                                "--extensions-dir /workspace/.code-server/extensions "
-                                "--install-extension ms-python.python || "
-                                "echo 'Warning: failed to install ms-python.python extension' >&2; "
-                                "fi; "
-                                "if [ ! -e /workspace/README.md ]; then "
-                                "printf '%s\n' '# Workspace' '' "
-                                "'This persistent workspace is managed by Triton Control.' "
-                                "> /workspace/README.md; "
-                                "fi; "
-                                "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
-                                "--reconnection-grace-time 30 "
-                                "--user-data-dir /workspace/.code-server/user-data "
-                                "--extensions-dir /workspace/.code-server/extensions "
-                                "/workspace"
-                            ),
+                            startup_command,
                         ],
                         "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                     },
