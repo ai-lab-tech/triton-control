@@ -27,6 +27,8 @@ describe("InstanceModelProfilePageComponent", () => {
   beforeEach(async () => {
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "getInstanceApiInstancesInstanceIdGet",
+      "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
+      "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
     ]);
     perfAnalyzersApiMock = jasmine.createSpyObj<PerfAnalyzersService>("PerfAnalyzersService", [
       "getLatestPerfAnalyzerRunApiPerfAnalyzersRunsLatestGet",
@@ -34,7 +36,11 @@ describe("InstanceModelProfilePageComponent", () => {
     ]);
 
     instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
-      of({ name: "node-7", url: "http://localhost:8000" } as any),
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: true, endpoint: "https://s3.local", bucket: "models", prefix: "repo" },
+      } as any),
     );
     perfAnalyzersApiMock.getPerfAnalyzerStatusApiPerfAnalyzersGet.and.returnValue(
       of({ installed: true } as any),
@@ -90,6 +96,7 @@ describe("InstanceModelProfilePageComponent", () => {
     // Assert
     expect(component.instanceName).toBe("node-7");
     expect(component.installed()).toBeTrue();
+    expect(component.instanceS3()?.bucket).toBe("models");
   });
 
   it("RunProfiler_ValidForm_SendsSelectedModelRunPayload", async () => {

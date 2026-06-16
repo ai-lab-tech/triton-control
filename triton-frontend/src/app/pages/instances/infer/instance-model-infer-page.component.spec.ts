@@ -29,10 +29,16 @@ describe("InstanceModelInferPageComponent", () => {
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "getInstanceApiInstancesInstanceIdGet",
       "getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet",
+      "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
       "inferInstanceModelApiInstancesInstanceIdModelsModelNameVersionsVersionInferPost",
+      "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
     ]);
     instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
-      of({ name: "node-7", url: "http://localhost:8000" } as any),
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: true, endpoint: "https://s3.local", bucket: "models", prefix: "repo" },
+      } as any),
     );
     instancesApiMock.inferInstanceModelApiInstancesInstanceIdModelsModelNameVersionsVersionInferPost.and.returnValue(
       of({ outputs: [] } as any),
@@ -101,6 +107,7 @@ describe("InstanceModelInferPageComponent", () => {
     // Assert
     expect(component.instanceName).toBe("node-7");
     expect(component.instanceUrl).toBe("http://localhost:8000");
+    expect(component.instanceS3()?.bucket).toBe("models");
   });
 
   it("NgOnInit_SavedResultExists_HydratesInferResult", async () => {
@@ -185,41 +192,6 @@ describe("InstanceModelInferPageComponent", () => {
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: inferRequestStarted.type }),
     );
-  });
-
-  it("ToggleApiConfig_ApiSuccess_LoadsAndCachesConfigJson", async () => {
-    // Arrange
-    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
-    const component = fixture.componentInstance;
-
-    // Act
-    await component.toggleApiConfig();
-    await component.toggleApiConfig();
-    await component.toggleApiConfig();
-
-    // Assert
-    expect(component.apiConfigOpen()).toBeTrue();
-    expect(component.apiConfigJson()).toContain("max_batch_size");
-    expect(component.apiConfigLoading()).toBeFalse();
-    expect(
-      instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet,
-    ).toHaveBeenCalledTimes(1);
-  });
-
-  it("ToggleApiConfig_ApiFails_ShowsConfigError", async () => {
-    // Arrange
-    instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
-      throwError(() => new Error("down")),
-    );
-    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
-    const component = fixture.componentInstance;
-
-    // Act
-    await component.toggleApiConfig();
-
-    // Assert
-    expect(component.apiConfigError()).toBe("Failed to load API config.");
-    expect(component.apiConfigLoading()).toBeFalse();
   });
 
   it("NgOnInit_InvalidRoute_DoesNotResolveInstanceDetails", async () => {

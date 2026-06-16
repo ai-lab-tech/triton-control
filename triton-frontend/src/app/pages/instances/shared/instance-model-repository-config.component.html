@@ -1,0 +1,87 @@
+<aside class="repository-config-pane">
+  <div class="editor-head">
+    <div>
+      <div class="section-title">{{ title() }}</div>
+      @if (effectivePath()) {
+        <code class="config-path">{{ effectivePath() }}</code>
+      }
+    </div>
+    <button
+      mat-stroked-button
+      type="button"
+      class="config-btn"
+      (click)="toggleConfig()"
+      [disabled]="loading() || !canLoadConfig()"
+    >
+      <span class="material-icons">
+        {{ open() ? "expand_less" : "article" }}
+      </span>
+      {{ open() ? "Hide Config" : "Show Config" }}
+    </button>
+  </div>
+
+  @if (!s3()) {
+    <div class="panel-hint">Loading instance repository settings...</div>
+  } @else if (open()) {
+    @if (loading()) {
+      <div class="panel-hint">Loading {{ title() }}...</div>
+    } @else {
+      @if (error()) {
+        <div class="panel-hint health-error">{{ error() }}</div>
+      }
+      <app-instance-model-monaco-editor
+        class="repository-config-editor"
+        [value]="content()"
+        (valueChange)="content.set($event)"
+        [language]="editorLanguage()"
+        [readOnly]="saving() || !hasS3Config()"
+      ></app-instance-model-monaco-editor>
+      @if (hasS3Config()) {
+        <div class="config-actions">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="reloadConfig()"
+            [disabled]="loading() || saving()"
+          >
+            <span class="material-icons">sync</span>
+            Reload
+          </button>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            (click)="saveConfig()"
+            [disabled]="saving() || loading() || !canWriteInstances()"
+          >
+            <span class="material-icons">save</span>
+            {{ saving() ? "Saving..." : "Save" }}
+          </button>
+        </div>
+      } @else {
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="reloadConfig()"
+          [disabled]="loading() || saving()"
+        >
+          <span class="material-icons">sync</span>
+          Reload
+        </button>
+      }
+      @if (hasS3Config() && !canWriteInstances()) {
+        <div class="panel-hint">Your role can view this config but cannot save changes.</div>
+      }
+      @if (!hasS3Config()) {
+        <div class="panel-hint">
+          Read-only Triton runtime config. Raw config.pbtxt editing requires S3 access.
+        </div>
+      }
+      @if (savedMessage()) {
+        <div class="panel-hint save-message">{{ savedMessage() }}</div>
+      }
+    }
+  } @else {
+    <div class="panel-hint">{{ closedHint() }}</div>
+  }
+</aside>
