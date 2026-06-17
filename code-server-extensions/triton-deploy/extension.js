@@ -54,6 +54,7 @@ function openDeployPanel(context, initial) {
       try {
         const form = normalizeForm(message.form || {});
         validateForm(form);
+        await saveS3Settings(form);
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -234,10 +235,13 @@ async function saveS3Settings(values) {
   const target = vscode.ConfigurationTarget.Global;
   await cfg.update("s3Endpoint", values.endpoint, target);
   await cfg.update("s3Bucket", values.bucket, target);
+  await cfg.update("s3Prefix", values.prefix, target);
   await cfg.update("s3AccessKeyId", values.accessKeyId, target);
   await cfg.update("s3SecretAccessKey", values.secretAccessKey, target);
   await cfg.update("s3Region", values.region, target);
   await cfg.update("s3ForcePathStyle", values.forcePathStyle, target);
+  await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
+  await cfg.update("tritonImage", values.image, target);
 }
 
 function normalizeForm(form) {
@@ -617,14 +621,6 @@ function renderHtml(webview, nonce, initial) {
             type: 'deploymentCreated',
             instanceId: body.instance_id,
           };
-          try {
-            await fetch('/api/code-servers/deployment-navigation', {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ instance_id: body.instance_id }),
-            });
-          } catch {}
           postToHostFrames(navigationMessage);
         } catch (error) {
           submit.disabled = false;

@@ -4,6 +4,7 @@ import { Router } from "@angular/router";
 import { of, throwError } from "rxjs";
 
 import { BASE_PATH, CodeServerDTO, CodeServersService } from "../../api/generated/index";
+import { AuthService } from "../../shared/auth/auth.service";
 import { CodeServersPageComponent } from "./code-servers-page.component";
 
 describe("CodeServersPageComponent", () => {
@@ -26,15 +27,17 @@ describe("CodeServersPageComponent", () => {
   };
 
   let codeServersApi: jasmine.SpyObj<CodeServersService>;
+  let authService: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
-  let fetchSpy: jasmine.Spy;
 
   beforeEach(async () => {
+    window.sessionStorage.clear();
     codeServersApi = jasmine.createSpyObj<CodeServersService>("CodeServersService", [
       "listCodeServersApiCodeServersGet",
       "createCodeServerApiCodeServersPost",
       "getCodeServerApiCodeServersCodeServerIdGet",
       "deleteCodeServerApiCodeServersCodeServerIdDelete",
+      "consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet",
     ]);
     codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([]) as any);
     codeServersApi.createCodeServerApiCodeServersPost.and.returnValue(of(creatingWorkspace) as any);
@@ -42,20 +45,23 @@ describe("CodeServersPageComponent", () => {
       of(readyWorkspace) as any,
     );
     codeServersApi.deleteCodeServerApiCodeServersCodeServerIdDelete.and.returnValue(of({}) as any);
-    router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
-    fetchSpy = spyOn(window, "fetch").and.returnValue(
-      Promise.resolve(
-        new Response(JSON.stringify({ instance_id: null }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
+    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+      of({ instance_id: null }) as any,
     );
+    authService = jasmine.createSpyObj<AuthService>("AuthService", [
+      "refreshSession",
+      "getAccessToken",
+    ]);
+    authService.refreshSession.and.resolveTo();
+    authService.getAccessToken.and.returnValue("token-1");
+    router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
+    Object.defineProperty(router, "url", { value: "/code-servers", configurable: true });
 
     await TestBed.configureTestingModule({
       imports: [CodeServersPageComponent],
       providers: [
         { provide: CodeServersService, useValue: codeServersApi },
+        { provide: AuthService, useValue: authService },
         { provide: BASE_PATH, useValue: "" },
         { provide: Router, useValue: router },
       ],
@@ -85,6 +91,7 @@ describe("CodeServersPageComponent", () => {
 
     // Act
     await component.create();
+    await Promise.resolve();
     await Promise.resolve();
 
     // Assert
@@ -187,7 +194,7 @@ describe("CodeServersPageComponent", () => {
     );
   });
 
-  it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", () => {
+  it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
     TestBed.createComponent(CodeServersPageComponent);
 
@@ -202,14 +209,19 @@ describe("CodeServersPageComponent", () => {
         origin: window.location.origin,
       }),
     );
+    await Promise.resolve();
+    await Promise.resolve();
 
     // Assert
+    expect(
+      codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet,
+    ).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/42", {
       state: { openLogsOnce: true },
     });
   });
 
-  it("CodeServerMessage_NullOriginDeploymentCreated_NavigatesToInstanceLogs", () => {
+  it("CodeServerMessage_NullOriginDeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
     TestBed.createComponent(CodeServersPageComponent);
 
@@ -224,6 +236,8 @@ describe("CodeServersPageComponent", () => {
         origin: "null",
       }),
     );
+    await Promise.resolve();
+    await Promise.resolve();
 
     // Assert
     expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/43", {
@@ -231,15 +245,35 @@ describe("CodeServersPageComponent", () => {
     });
   });
 
-  it("DeploymentNavigationPoll_PendingTarget_NavigatesToInstanceLogs", async () => {
+  it("CodeServerMessage_ReplayedDeploymentCreated_DoesNotNavigateAgain", async () => {
     // Arrange
-    fetchSpy.and.returnValue(
-      Promise.resolve(
-        new Response(JSON.stringify({ instance_id: 44 }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
+    TestBed.createComponent(CodeServersPageComponent);
+    const message = new MessageEvent("message", {
+      data: {
+        source: "triton-control-deploy",
+        type: "deploymentCreated",
+        instanceId: 45,
+      },
+      origin: window.location.origin,
+    });
+
+    // Act
+    window.dispatchEvent(message);
+    await Promise.resolve();
+    await Promise.resolve();
+    router.navigateByUrl.calls.reset();
+    window.dispatchEvent(message);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Assert
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it("FrameLoaded_PendingDeploymentNavigationTarget_DoesNotNavigateBackToInstance", () => {
+    // Arrange
+    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+      of({ instance_id: 44 }) as any,
     );
     const fixture = TestBed.createComponent(CodeServersPageComponent);
     const component = fixture.componentInstance;
@@ -247,14 +281,12 @@ describe("CodeServersPageComponent", () => {
     component.selectWorkspace(readyWorkspace);
 
     // Act
-    await (component as any).pollDeploymentNavigation();
+    component.onFrameLoaded();
 
     // Assert
-    expect(fetchSpy).toHaveBeenCalledWith("/api/code-servers/deployment-navigation", {
-      credentials: "include",
-    });
-    expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/44", {
-      state: { openLogsOnce: true },
-    });
+    expect(
+      codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet,
+    ).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 });

@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -139,7 +139,19 @@ app.include_router(s3_router, dependencies=[Depends(get_claims)])
 
 
 @app.get("/api/auth/me")
-async def auth_me(claims: dict[str, Any] = Depends(get_claims_allow_pending)) -> dict[str, Any]:
+async def auth_me(
+    request: Request,
+    claims: dict[str, Any] = Depends(get_claims_allow_pending),
+) -> dict[str, Any]:
+    request.session["user"] = {
+        "sub": claims.get("sub") or claims.get("email") or claims.get("user_id"),
+        "email": claims.get("email"),
+        "name": claims.get("name"),
+        "role": claims.get("role"),
+        "auth_provider": claims.get("auth_provider"),
+        "access_allowed": bool(claims.get("access_allowed", True)),
+        "user_id": claims.get("user_id"),
+    }
     return {
         "authenticated": True,
         "access_allowed": bool(claims.get("access_allowed", True)),

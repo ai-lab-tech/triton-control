@@ -315,7 +315,10 @@ code-server:
 If required S3 values are missing, the extension prompts for them and saves the
 answers in the code-server workspace settings for the next deploy. Bucket and
 prefix are deployment choices: use the bucket that should hold model
-repositories, and use the prefix to group uploaded deployments.
+repositories, and use the prefix to group uploaded deployments. In
+Triton Control-managed workspaces, these code-server settings are persisted at
+`/workspace/.triton-control/code-server-settings.json`, so they survive pod
+restarts as long as the workspace PVC is retained.
 
 For HTTPS S3 endpoints with private or self-signed certificates, paste the PEM
 CA certificate into **S3 CA certificate for Triton HTTPS access**. The extension

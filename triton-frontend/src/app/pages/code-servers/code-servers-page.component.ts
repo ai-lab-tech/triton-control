@@ -21,6 +21,7 @@ import {
 } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import { ChromeService } from "../../shared/chrome.service";
+import { AuthService } from "../../shared/auth/auth.service";
 
 type CodeServer = CodeServerDTO;
 
@@ -43,10 +44,13 @@ type CodeServer = CodeServerDTO;
 })
 export class CodeServersPageComponent implements OnDestroy {
   private static readonly statusPollIntervalMs = 3000;
+  private static readonly handledDeploymentNavigationKey =
+    "triton-control-handled-deployment-navigation-instance-ids";
 
   private readonly codeServersApi = inject(CodeServersService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly chrome = inject(ChromeService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
@@ -56,8 +60,6 @@ export class CodeServersPageComponent implements OnDestroy {
   private frameReloadNonce = 0;
   private frameLoadStartedAt = 0;
   private frameLoaderHideTimer: ReturnType<typeof setTimeout> | null = null;
-  private deploymentNavigationPollId: ReturnType<typeof setInterval> | null = null;
-  private deploymentNavigationPollInFlight = false;
   private static readonly minFrameLoaderMs = 3500;
   private static readonly postLoadGraceMs = 2500;
   @ViewChild("codeServerFrame") private codeServerFrame?: ElementRef<HTMLIFrameElement>;
@@ -92,13 +94,11 @@ export class CodeServersPageComponent implements OnDestroy {
       }
     });
     window.addEventListener("message", this.handleCodeServerMessage);
-    this.startDeploymentNavigationPolling();
     void this.load();
   }
 
   ngOnDestroy(): void {
     window.removeEventListener("message", this.handleCodeServerMessage);
-    this.stopDeploymentNavigationPolling();
     this.chrome.showTopbar();
     this.stopStatusPolling();
     if (this.frameLoaderHideTimer !== null) {
@@ -108,6 +108,10 @@ export class CodeServersPageComponent implements OnDestroy {
   }
 
   private readonly handleCodeServerMessage = (event: MessageEvent): void => {
+    void this.handleCodeServerMessageAsync(event);
+  };
+
+  private async handleCodeServerMessageAsync(event: MessageEvent): Promise<void> {
     if (event.origin && event.origin !== "null" && event.origin !== window.location.origin) {
       return;
     }
@@ -123,53 +127,64 @@ export class CodeServersPageComponent implements OnDestroy {
     if (!Number.isInteger(instanceId) || instanceId <= 0) {
       return;
     }
+    if (!this.router.url.startsWith("/code-servers")) {
+      return;
+    }
+    if (this.hasHandledDeploymentNavigation(instanceId)) {
+      await this.consumeDeploymentNavigationTarget();
+      return;
+    }
+    this.markDeploymentNavigationHandled(instanceId);
+    await this.consumeDeploymentNavigationTarget();
     void this.router.navigateByUrl(`/instances/${instanceId}`, {
       state: { openLogsOnce: true },
     });
-  };
-
-  private startDeploymentNavigationPolling(): void {
-    if (this.deploymentNavigationPollId !== null) {
-      return;
-    }
-    this.deploymentNavigationPollId = setInterval(() => {
-      void this.pollDeploymentNavigation();
-    }, 1500);
   }
 
-  private stopDeploymentNavigationPolling(): void {
-    if (this.deploymentNavigationPollId === null) {
-      return;
-    }
-    clearInterval(this.deploymentNavigationPollId);
-    this.deploymentNavigationPollId = null;
-  }
-
-  private async pollDeploymentNavigation(): Promise<void> {
-    if (this.selectedWorkspaceId() === null || this.deploymentNavigationPollInFlight) {
-      return;
-    }
-    this.deploymentNavigationPollInFlight = true;
+  private async consumeDeploymentNavigationTarget(): Promise<number | null> {
     try {
-      const response = await fetch(`${this.basePath}/api/code-servers/deployment-navigation`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        return;
-      }
-      const payload = (await response.json()) as { instance_id?: number | null };
+      const payload = await firstValueFrom(
+        this.codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet(),
+      );
       const instanceId = Number(payload.instance_id);
-      if (!Number.isInteger(instanceId) || instanceId <= 0) {
-        return;
-      }
-      void this.router.navigateByUrl(`/instances/${instanceId}`, {
-        state: { openLogsOnce: true },
-      });
+      return Number.isInteger(instanceId) && instanceId > 0 ? instanceId : null;
     } catch {
-      // Navigation handoff is best-effort; visible deployment errors stay in the plugin.
-    } finally {
-      this.deploymentNavigationPollInFlight = false;
+      return null;
     }
+  }
+
+  private hasHandledDeploymentNavigation(instanceId: number): boolean {
+    try {
+      return this.readHandledDeploymentNavigationIds().includes(instanceId);
+    } catch {
+      return false;
+    }
+  }
+
+  private markDeploymentNavigationHandled(instanceId: number): void {
+    try {
+      const ids = this.readHandledDeploymentNavigationIds().filter((id) => id !== instanceId);
+      ids.push(instanceId);
+      window.sessionStorage.setItem(
+        CodeServersPageComponent.handledDeploymentNavigationKey,
+        JSON.stringify(ids.slice(-25)),
+      );
+    } catch {
+      // Session storage can be unavailable in constrained browser contexts.
+    }
+  }
+
+  private readHandledDeploymentNavigationIds(): number[] {
+    const raw = window.sessionStorage.getItem(
+      CodeServersPageComponent.handledDeploymentNavigationKey,
+    );
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
   }
 
   async load(): Promise<void> {
@@ -179,7 +194,7 @@ export class CodeServersPageComponent implements OnDestroy {
         this.codeServersApi.listCodeServersApiCodeServersGet(),
       )) as CodeServer[];
       this.workspaces.set(workspaces);
-      this.ensureSelectedWorkspace();
+      await this.ensureSelectedWorkspace();
       this.updateStatusPolling();
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to load code servers."), "error");
@@ -215,7 +230,7 @@ export class CodeServersPageComponent implements OnDestroy {
       this.upsertWorkspace(workspace);
       this.selectWorkspace(workspace);
       this.updateStatusPolling();
-      void this.pollPendingWorkspaces();
+      await this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create code server."), "error");
@@ -231,6 +246,7 @@ export class CodeServersPageComponent implements OnDestroy {
       );
       this.upsertWorkspace(updated);
       if (this.selectedWorkspaceId() === updated.id) {
+        await this.auth.refreshSession().catch(() => undefined);
         this.setEmbeddedWorkspace(updated);
       }
       this.updateStatusPolling();
@@ -249,7 +265,7 @@ export class CodeServersPageComponent implements OnDestroy {
       if (this.selectedWorkspaceId() === workspace.id) {
         this.selectedWorkspaceId.set(null);
         this.embeddedWorkspaceUrl.set(null);
-        this.ensureSelectedWorkspace();
+        await this.ensureSelectedWorkspace();
       }
       this.updateStatusPolling();
       this.setMessage("Code server deleted.", "success");
@@ -261,8 +277,7 @@ export class CodeServersPageComponent implements OnDestroy {
   }
 
   selectWorkspace(workspace: CodeServer): void {
-    this.selectedWorkspaceId.set(workspace.id);
-    this.setEmbeddedWorkspace(workspace);
+    void this.selectWorkspaceAsync(workspace);
   }
 
   canCreate(): boolean {
@@ -299,21 +314,34 @@ export class CodeServersPageComponent implements OnDestroy {
     });
   }
 
-  private ensureSelectedWorkspace(): void {
+  private async ensureSelectedWorkspace(): Promise<void> {
     const workspaces = this.workspaces();
     const selectedId = this.selectedWorkspaceId();
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
-      this.setEmbeddedWorkspace(selected);
+      await this.selectWorkspaceAsync(selected);
       return;
     }
     const first = workspaces[0];
     if (first) {
-      this.selectWorkspace(first);
+      await this.selectWorkspaceAsync(first);
       return;
     }
     this.selectedWorkspaceId.set(null);
     this.embeddedWorkspaceUrl.set(null);
+  }
+
+  private async selectWorkspaceAsync(workspace: CodeServer): Promise<void> {
+    this.selectedWorkspaceId.set(workspace.id);
+    if (workspace.status === "ready" && workspace.url) {
+      this.embeddedWorkspaceUrl.set(null);
+      this.frameLoading.set(true);
+      await this.auth.refreshSession().catch(() => undefined);
+    }
+    if (this.selectedWorkspaceId() !== workspace.id) {
+      return;
+    }
+    this.setEmbeddedWorkspace(workspace);
   }
 
   onFrameLoaded(): void {
@@ -431,7 +459,7 @@ export class CodeServersPageComponent implements OnDestroy {
         ),
       );
       updates.forEach((workspace) => this.upsertWorkspace(workspace));
-      this.ensureSelectedWorkspace();
+      await this.ensureSelectedWorkspace();
     } catch {
       // Keep manual refresh as the visible error path; transient startup polls can fail briefly.
     } finally {

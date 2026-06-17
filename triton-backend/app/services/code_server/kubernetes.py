@@ -189,54 +189,72 @@ def _statefulset_manifest(
         )
     else:
         binary_setup = (
-            "CODE_SERVER_BIN=/workspace/.local/bin/code-server; "
+            "CODE_SERVER_BIN=$CODE_SERVER_RUNTIME/bin/code-server; "
             "if [ ! -x \"$CODE_SERVER_BIN\" ]; then "
             "curl -fsSL https://code-server.dev/install.sh | "
-            "sh -s -- --method=standalone --prefix=/workspace/.local; "
+            "sh -s -- --method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"; "
             "fi; "
         )
 
     startup_command = (
-        binary_setup
-        + "mkdir -p /workspace/.code-server/user-data/User "
-        "/workspace/.code-server/extensions; "
+        "CODE_SERVER_RUNTIME=/tmp/triton-control-code-server; "
+        "mkdir -p \"$CODE_SERVER_RUNTIME/bin\" "
+        "\"$CODE_SERVER_RUNTIME/user-data/User\" "
+        "\"$CODE_SERVER_RUNTIME/extensions\"; "
+        + binary_setup
+        +
         "TRITON_DEPLOY_EXTENSION_B64=/opt/triton-control/extensions/triton-deploy/"
         "triton-control-deploy.vsix.b64; "
-        "TRITON_DEPLOY_EXTENSION_VSIX=/workspace/.code-server/extensions/"
+        "TRITON_DEPLOY_EXTENSION_VSIX=$CODE_SERVER_RUNTIME/extensions/"
         "triton-control-deploy.vsix; "
         "if [ -f \"$TRITON_DEPLOY_EXTENSION_B64\" ]; then "
         "base64 -d \"$TRITON_DEPLOY_EXTENSION_B64\" > \"$TRITON_DEPLOY_EXTENSION_VSIX\" 2>/dev/null || "
         "base64 --decode \"$TRITON_DEPLOY_EXTENSION_B64\" > \"$TRITON_DEPLOY_EXTENSION_VSIX\"; "
         "fi; "
-        "printf '%s\n' "
-        "'{\"workbench.startupEditor\":\"none\","
+        "PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json; "
+        "DEFAULT_SETTINGS='{\"workbench.startupEditor\":\"none\","
         "\"window.restoreWindows\":\"none\","
-        f"\"workbench.colorTheme\":\"{request.theme}\"}}' "
-        "> /workspace/.code-server/user-data/User/settings.json; "
+        f"\"workbench.colorTheme\":\"{request.theme}\"}}'; "
+        "if mkdir -p /workspace/.triton-control 2>/dev/null && "
+        "touch \"$PERSISTENT_SETTINGS\" 2>/dev/null; then "
+        "if [ ! -s \"$PERSISTENT_SETTINGS\" ]; then "
+        "printf '%s\n' \"$DEFAULT_SETTINGS\" > \"$PERSISTENT_SETTINGS\"; "
+        "fi; "
+        "ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"; "
+        "else "
+        "printf '%s\n' \"$DEFAULT_SETTINGS\" > \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"; "
+        "fi; "
         "if ! \"$CODE_SERVER_BIN\" "
-        "--extensions-dir /workspace/.code-server/extensions "
+        "--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" "
         "--list-extensions | grep -qx 'ms-python.python'; then "
         "\"$CODE_SERVER_BIN\" "
-        "--extensions-dir /workspace/.code-server/extensions "
+        "--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" "
         "--install-extension ms-python.python || "
         "echo 'Warning: failed to install ms-python.python extension' >&2; "
         "fi; "
         "if [ -f \"$TRITON_DEPLOY_EXTENSION_VSIX\" ]; then "
         "\"$CODE_SERVER_BIN\" "
-        "--extensions-dir /workspace/.code-server/extensions "
-        "--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\" || "
-        "echo 'Warning: failed to install Triton deploy extension' >&2; "
+        "--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" "
+        "--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\" --force || "
+        "{ echo 'Error: failed to install Triton deploy extension' >&2; exit 1; }; "
+        "if ! \"$CODE_SERVER_BIN\" "
+        "--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" "
+        "--list-extensions | grep -qx 'triton-control.triton-control-deploy'; then "
+        "echo 'Error: Triton deploy extension was not installed.' >&2; "
+        "\"$CODE_SERVER_BIN\" --extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" --list-extensions >&2; "
+        "exit 1; "
         "fi; "
-        "rm -f /workspace/.code-server/extensions/.obsolete; "
-        "if [ ! -e /workspace/README.md ]; then "
+        "fi; "
+        "rm -f \"$CODE_SERVER_RUNTIME/extensions/.obsolete\"; "
+        "if [ -w /workspace ] && [ ! -e /workspace/README.md ]; then "
         "printf '%s\n' '# Workspace' '' "
         "'This persistent workspace is managed by Triton Control.' "
         "> /workspace/README.md; "
         "fi; "
         "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
         "--reconnection-grace-time 30 "
-        "--user-data-dir /workspace/.code-server/user-data "
-        "--extensions-dir /workspace/.code-server/extensions "
+        "--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\" "
+        "--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\" "
         "/workspace"
     )
 
@@ -290,6 +308,7 @@ def _statefulset_manifest(
                         ],
                         "volumeMounts": [
                             {"name": "workspace", "mountPath": "/workspace"},
+                            {"name": "code-server-runtime", "mountPath": "/tmp/triton-control-code-server"},
                             {
                                 "name": "triton-deploy-extension",
                                 "mountPath": "/opt/triton-control/extensions/triton-deploy",
@@ -302,6 +321,10 @@ def _statefulset_manifest(
                     {
                         "name": "triton-deploy-extension",
                         "configMap": {"name": _triton_deploy_extension_configmap_name(statefulset_name)},
+                    },
+                    {
+                        "name": "code-server-runtime",
+                        "emptyDir": {},
                     },
                 ],
             },

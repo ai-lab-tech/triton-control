@@ -96,6 +96,7 @@ class CodeServerTests(unittest.TestCase):
                 "seccompProfile": {"type": "RuntimeDefault"},
             },
         )
+        self.assertNotIn("initContainers", pod_spec)
         self.assertEqual(
             container["securityContext"],
             {
@@ -108,17 +109,23 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
-        self.assertIn("--method=standalone --prefix=/workspace/.local", container["args"][0])
+        self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
+        self.assertIn("CODE_SERVER_RUNTIME=/tmp/triton-control-code-server", container["args"][0])
+        self.assertIn("PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json", container["args"][0])
+        self.assertIn("ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
         self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
         self.assertIn("--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\"", container["args"][0])
-        self.assertIn("rm -f /workspace/.code-server/extensions/.obsolete", container["args"][0])
-        self.assertIn("--user-data-dir /workspace/.code-server/user-data", container["args"][0])
-        self.assertIn("--extensions-dir /workspace/.code-server/extensions", container["args"][0])
+        self.assertIn("--force", container["args"][0])
+        self.assertIn("triton-control.triton-control-deploy", container["args"][0])
+        self.assertIn("Error: Triton deploy extension was not installed.", container["args"][0])
+        self.assertIn("rm -f \"$CODE_SERVER_RUNTIME/extensions/.obsolete\"", container["args"][0])
+        self.assertIn("--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\"", container["args"][0])
+        self.assertIn("--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\"", container["args"][0])
         self.assertIn(
             {
                 "name": "triton-deploy-extension",
@@ -127,6 +134,11 @@ class CodeServerTests(unittest.TestCase):
             },
             container["volumeMounts"],
         )
+        self.assertIn(
+            {"name": "code-server-runtime", "mountPath": "/tmp/triton-control-code-server"},
+            container["volumeMounts"],
+        )
+        self.assertIn({"name": "code-server-runtime", "emptyDir": {}}, pod_spec["volumes"])
         self.assertEqual(container["startupProbe"]["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(container["readinessProbe"]["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(

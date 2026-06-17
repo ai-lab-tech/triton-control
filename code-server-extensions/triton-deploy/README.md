@@ -63,7 +63,15 @@ If S3/R2 Explorer is configured, this extension reuses:
 
 When required S3 values are missing and the extension prompts for them, it saves
 the answers to `tritonControlDeploy.*` settings for the next deploy in the same
-code-server workspace.
+code-server workspace. In Triton Control-managed workspaces, those settings are
+backed by `/workspace/.triton-control/code-server-settings.json` so they survive
+pod restarts.
+
+The deploy form also saves reusable values on submit, including
+`tritonControlDeploy.s3Prefix`, `tritonControlDeploy.s3CaCertificate`,
+`tritonControlDeploy.s3ForcePathStyle`, and `tritonControlDeploy.tritonImage`.
+That means a pasted S3 CA certificate is pre-filled for the next deployment from
+the same workspace.
 
 Keep `tritonControlDeploy.s3ForcePathStyle` enabled for providers and custom
 endpoints that require path-style bucket URLs. Disable it only when your S3
