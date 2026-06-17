@@ -578,6 +578,9 @@ function renderHtml(webview, nonce, initial) {
     .status { margin-top: 18px; white-space: pre-wrap; color: var(--vscode-descriptionForeground); }
     .error { color: var(--vscode-errorForeground); }
     .success { color: var(--vscode-testing-iconPassed); }
+    .preview { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); padding: 10px; color: var(--vscode-descriptionForeground); }
+    .preview strong { display: block; margin-bottom: 5px; color: var(--vscode-foreground); }
+    .preview code { color: var(--vscode-textLink-foreground); word-break: break-all; }
   </style>
 </head>
 <body>
@@ -589,6 +592,10 @@ function renderHtml(webview, nonce, initial) {
     <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com" required></label>
     <label>S3 bucket<input name="bucket" required></label>
     <label>S3 repository parent prefix<input name="prefix"></label>
+    <div class="wide preview">
+      <strong>S3 destination</strong>
+      <code id="destination-path">s3://bucket/deployment-name</code>
+    </div>
     <label>S3 region<input name="region" required></label>
     <label>S3 access key<input name="accessKeyId" required></label>
     <label>S3 secret key<input name="secretAccessKey" type="password" required></label>
@@ -615,6 +622,10 @@ function renderHtml(webview, nonce, initial) {
       if (input.type === 'checkbox') input.checked = !!value;
       else input.value = value ?? '';
     }
+    updateDestinationPath();
+
+    form.addEventListener('input', updateDestinationPath);
+    form.addEventListener('change', updateDestinationPath);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -672,6 +683,18 @@ function renderHtml(webview, nonce, initial) {
         data[element.name] = element.type === 'checkbox' ? element.checked : element.value;
       }
       return data;
+    }
+
+    function updateDestinationPath() {
+      const destination = document.getElementById('destination-path');
+      const data = readForm();
+      const bucket = cleanS3Path(data.bucket || 'bucket');
+      const target = cleanS3Path([data.prefix, data.deploymentName || 'deployment-name'].filter(Boolean).join('/'));
+      destination.textContent = ['s3:/' + '/' + bucket, target].filter(Boolean).join('/');
+    }
+
+    function cleanS3Path(value) {
+      return String(value || '').replace(/\\\\/g, '/').replace(/^\\/+|\\/+$/g, '').replace(/\\/+/g, '/');
     }
 
     function postToHostFrames(message) {

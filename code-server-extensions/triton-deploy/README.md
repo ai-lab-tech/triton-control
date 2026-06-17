@@ -65,7 +65,9 @@ When required S3 values are missing and the extension prompts for them, it saves
 the answers to `tritonControlDeploy.*` settings for the next deploy in the same
 code-server workspace. In Triton Control-managed workspaces, those settings are
 backed by `/workspace/.triton-control/code-server-settings.json` so they survive
-pod restarts.
+pod restarts. Extensions installed from the code-server UI are stored at
+`/workspace/.triton-control/code-server-extensions`, so S3/R2 Explorer and other
+live-installed extensions survive workspace pod restarts too.
 
 The deploy form also saves reusable values on submit, including
 `tritonControlDeploy.s3Prefix`, `tritonControlDeploy.s3CaCertificate`,
