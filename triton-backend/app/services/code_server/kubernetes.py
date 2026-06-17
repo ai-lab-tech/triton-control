@@ -308,7 +308,8 @@ def _statefulset_manifest(
                         ],
                         "volumeMounts": [
                             {"name": "workspace", "mountPath": "/workspace"},
-                            {"name": "code-server-runtime", "mountPath": "/tmp/triton-control-code-server"},
+                            # Kubernetes emptyDir mount, not a host temp file.
+                            {"name": "code-server-runtime", "mountPath": "/tmp/triton-control-code-server"},  # nosec B108
                             {
                                 "name": "triton-deploy-extension",
                                 "mountPath": "/opt/triton-control/extensions/triton-deploy",
