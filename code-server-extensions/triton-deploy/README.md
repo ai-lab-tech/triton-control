@@ -73,6 +73,12 @@ The deploy form also saves reusable values on submit, including
 That means a pasted S3 CA certificate is pre-filled for the next deployment from
 the same workspace.
 
+The same submit action also syncs compatible S3/R2 Explorer settings
+(`s3x.endpointUrl`, `s3x.region`, `s3x.accessKeyId`, `s3x.secretAccessKey`,
+and `s3x.forcePathStyle`). Local, MinIO, minikube, `.local`, `.internal`, and
+IP endpoints are forced to path-style addressing to avoid bucket-prefixed DNS
+lookups such as `bucket.host.minikube.internal`.
+
 Keep `tritonControlDeploy.s3ForcePathStyle` enabled for providers and custom
 endpoints that require path-style bucket URLs. Disable it only when your S3
 provider requires virtual-host bucket URLs.

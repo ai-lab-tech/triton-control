@@ -92,17 +92,21 @@ async function initialFormValues(sourceFolder) {
     return null;
   }
   const deploymentName = toKubernetesName(modelName);
+  const endpoint = cfg.get("s3Endpoint") || s3x.get("endpointUrl") || process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT || "";
   const initial = {
     sourceFolder,
     deploymentName,
     image: cfg.get("tritonImage") || "nvcr.io/nvidia/tritonserver:25.02-py3",
-    endpoint: cfg.get("s3Endpoint") || s3x.get("endpointUrl") || process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT || "",
+    endpoint,
     bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
     accessKeyId: cfg.get("s3AccessKeyId") || s3x.get("accessKeyId") || process.env.AWS_ACCESS_KEY_ID || "",
     secretAccessKey: cfg.get("s3SecretAccessKey") || s3x.get("secretAccessKey") || process.env.AWS_SECRET_ACCESS_KEY || "",
     region: cfg.get("s3Region") || s3x.get("region") || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1",
-    forcePathStyle: cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
+    forcePathStyle: effectiveForcePathStyle(
+      endpoint,
+      cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
+    ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
     modelControlMode: "explicit",
     repositoryPollSecs: 15,
@@ -232,35 +236,66 @@ async function promptForMissingS3Settings(initial) {
 
 async function saveS3Settings(values) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
+  const s3x = vscode.workspace.getConfiguration("s3x");
   const target = vscode.ConfigurationTarget.Global;
+  const forcePathStyle = effectiveForcePathStyle(values.endpoint, values.forcePathStyle);
   await cfg.update("s3Endpoint", values.endpoint, target);
   await cfg.update("s3Bucket", values.bucket, target);
   await cfg.update("s3Prefix", values.prefix, target);
   await cfg.update("s3AccessKeyId", values.accessKeyId, target);
   await cfg.update("s3SecretAccessKey", values.secretAccessKey, target);
   await cfg.update("s3Region", values.region, target);
-  await cfg.update("s3ForcePathStyle", values.forcePathStyle, target);
+  await cfg.update("s3ForcePathStyle", forcePathStyle, target);
   await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
   await cfg.update("tritonImage", values.image, target);
+  await s3x.update("endpointUrl", values.endpoint, target);
+  await s3x.update("accessKeyId", values.accessKeyId, target);
+  await s3x.update("secretAccessKey", values.secretAccessKey, target);
+  await s3x.update("region", values.region, target);
+  await s3x.update("forcePathStyle", forcePathStyle, target);
 }
 
 function normalizeForm(form) {
+  const endpoint = String(form.endpoint || "").trim().replace(/\/+$/, "");
   return {
     sourceFolder: String(form.sourceFolder || ""),
     deploymentName: String(form.deploymentName || "").trim(),
     image: String(form.image || "").trim(),
-    endpoint: String(form.endpoint || "").trim().replace(/\/+$/, ""),
+    endpoint,
     bucket: String(form.bucket || "").trim(),
     prefix: cleanPrefix(String(form.prefix || "")),
     accessKeyId: String(form.accessKeyId || "").trim(),
     secretAccessKey: String(form.secretAccessKey || ""),
     region: String(form.region || "us-east-1").trim() || "us-east-1",
-    forcePathStyle: !!form.forcePathStyle,
+    forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
     modelControlMode: form.modelControlMode === "poll" ? "poll" : "explicit",
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
   };
+}
+
+function effectiveForcePathStyle(endpoint, configuredValue) {
+  return requiresPathStyle(endpoint) || configuredValue !== false;
+}
+
+function requiresPathStyle(endpoint) {
+  let host = "";
+  try {
+    host = new URL(endpoint).hostname.toLowerCase();
+  } catch {
+    host = String(endpoint || "").split("/")[0].split(":")[0].toLowerCase();
+  }
+  if (!host) {
+    return false;
+  }
+  if (["localhost", "host.docker.internal", "host.minikube.internal", "minio"].includes(host)) {
+    return true;
+  }
+  if (host.endsWith(".local") || host.endsWith(".internal")) {
+    return true;
+  }
+  return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(":");
 }
 
 function validateForm(form) {

@@ -236,6 +236,22 @@ class ApiHelperTests(unittest.TestCase):
         self.assertEqual(boto.call_args.kwargs["endpoint_url"], "https://s3-nue1.datev.cloud:443")
         self.assertTrue(boto.call_args.kwargs["use_ssl"])
 
+    def test_BuildS3Client_LocalEndpointWithVirtualStyle_ForcesPathStyle(self):
+        # Arrange
+        entity = self._instance()
+        entity.s3_endpoint = "https://host.minikube.internal:9000"
+        entity.s3_address_style = "virtual"
+
+        # Act
+        with patch("app.services.storage.s3_client.decrypt_secret", return_value="secret"), patch(
+            "app.services.storage.s3_client.boto3.client", return_value="client"
+        ) as boto:
+            client = _build_s3_client(entity)
+
+        # Assert
+        self.assertEqual(client, "client")
+        self.assertEqual(boto.call_args.kwargs["config"].s3["addressing_style"], "path")
+
     def test_BuildS3Client_HttpsEndpointWithUnsetVerify_DefaultsToVerifyTrue(self):
         # Arrange
         entity = self._instance()

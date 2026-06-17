@@ -214,6 +214,7 @@ def _statefulset_manifest(
         "PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json; "
         "DEFAULT_SETTINGS='{\"workbench.startupEditor\":\"none\","
         "\"window.restoreWindows\":\"none\","
+        "\"s3x.forcePathStyle\":true,"
         f"\"workbench.colorTheme\":\"{request.theme}\"}}'; "
         "if mkdir -p /workspace/.triton-control 2>/dev/null && "
         "touch \"$PERSISTENT_SETTINGS\" 2>/dev/null; then "

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import tempfile
 from hashlib import sha256
+from ipaddress import ip_address
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from urllib.parse import urlparse
@@ -129,7 +130,7 @@ def build_s3_client(entity_or_config: TritonInstanceEntity | S3Config) -> Any:
         else ""
     )
     verify: bool | str = ca_bundle if (verify_ssl and ca_bundle) else verify_ssl
-    address_style = cfg.get("s3_address_style") or "path"
+    address_style = _effective_address_style(endpoint, cfg.get("s3_address_style"))
 
     return boto3.client(
         "s3",
@@ -151,6 +152,28 @@ def _normalize_endpoint_for_client(endpoint: str | None) -> str | None:
     if parsed.scheme == "http" and parsed.port == 443:
         return f"https://{parsed.netloc}{parsed.path}".rstrip("/")
     return value
+
+
+def _effective_address_style(endpoint: str | None, configured_style: str | None) -> str:
+    style = configured_style if configured_style in {"auto", "virtual", "path"} else "path"
+    if style == "virtual" and _requires_path_style(endpoint):
+        return "path"
+    return style
+
+
+def _requires_path_style(endpoint: str | None) -> bool:
+    host = (urlparse((endpoint or "").strip()).hostname or "").strip().lower()
+    if not host:
+        return False
+    if host in {"localhost", "host.docker.internal", "host.minikube.internal", "minio"}:
+        return True
+    if host.endswith(".local") or host.endswith(".internal"):
+        return True
+    try:
+        ip_address(host)
+        return True
+    except ValueError:
+        return False
 
 
 def format_s3_error(exc: BotoCoreError | ClientError) -> str:

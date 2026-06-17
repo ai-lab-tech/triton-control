@@ -114,6 +114,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
+        self.assertIn("\"s3x.forcePathStyle\":true", container["args"][0])
         self.assertIn("CODE_SERVER_RUNTIME=/tmp/triton-control-code-server", container["args"][0])
         self.assertIn("PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json", container["args"][0])
         self.assertIn("ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"", container["args"][0])

@@ -220,6 +220,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(created["s3_endpoint"], "https://object-store.example.com:443")
         self.assertEqual(created["s3_bucket"], "triton-models")
         self.assertEqual(created["s3_prefix"], "prefix")
+        self.assertEqual(created["s3_address_style"], "path")
 
     def test_UpsertDeployedInstance_DuplicateDeploymentName_RaisesConflict(self) -> None:
         # Arrange

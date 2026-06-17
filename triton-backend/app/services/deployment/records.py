@@ -87,6 +87,7 @@ def upsert_deployed_instance(
         "s3_access_key": request.s3_access_key,
         "s3_secret_key_hash": hash_secret(request.s3_secret_key),
         "s3_secret_key_enc": encrypt_secret(request.s3_secret_key),
+        "s3_address_style": "path",
     }
     if instances.find_by_name(session, deployment_name):
         raise ConflictError(
