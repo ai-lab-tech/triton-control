@@ -116,17 +116,20 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
         self.assertIn("\"s3x.forcePathStyle\":true", container["args"][0])
         self.assertIn("CODE_SERVER_RUNTIME=/tmp/triton-control-code-server", container["args"][0])
+        self.assertIn("CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions", container["args"][0])
         self.assertIn("PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json", container["args"][0])
+        self.assertIn("PERSISTENT_EXTENSIONS=/workspace/.triton-control/code-server-extensions", container["args"][0])
         self.assertIn("ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"", container["args"][0])
+        self.assertIn("CODE_SERVER_EXTENSIONS=$PERSISTENT_EXTENSIONS", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
         self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
         self.assertIn("--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\"", container["args"][0])
         self.assertIn("--force", container["args"][0])
         self.assertIn("triton-control.triton-control-deploy", container["args"][0])
         self.assertIn("Error: Triton deploy extension was not installed.", container["args"][0])
-        self.assertIn("rm -f \"$CODE_SERVER_RUNTIME/extensions/.obsolete\"", container["args"][0])
+        self.assertIn("rm -f \"$CODE_SERVER_EXTENSIONS/.obsolete\"", container["args"][0])
         self.assertIn("--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\"", container["args"][0])
-        self.assertIn("--extensions-dir \"$CODE_SERVER_RUNTIME/extensions\"", container["args"][0])
+        self.assertIn("--extensions-dir \"$CODE_SERVER_EXTENSIONS\"", container["args"][0])
         self.assertIn(
             {
                 "name": "triton-deploy-extension",
