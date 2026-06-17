@@ -115,6 +115,20 @@
                     />
                   </mat-form-field>
                 </div>
+                <div class="form-row">
+                  <label class="field-label" for="code-server-gpu">GPU count</label>
+                  <mat-form-field appearance="outline">
+                    <input
+                      id="code-server-gpu"
+                      matInput
+                      type="number"
+                      min="0"
+                      step="1"
+                      [(ngModel)]="gpuCount"
+                      placeholder="0"
+                    />
+                  </mat-form-field>
+                </div>
               </div>
             </mat-expansion-panel>
 

@@ -194,6 +194,52 @@ describe("CodeServersPageComponent", () => {
     );
   });
 
+  it("Create_RequestCanceled_ShowsCanceledMessage", async () => {
+    // Arrange
+    codeServersApi.createCodeServerApiCodeServersPost.and.returnValue(
+      throwError(() => new Error("Canceled")) as any,
+    );
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(component.messageTone()).toBe("error");
+    expect(component.message()).toContain("Request was canceled in the browser");
+  });
+
+  it("Create_RefreshSessionFails_StillCallsCreateApi", async () => {
+    // Arrange
+    authService.refreshSession.and.rejectWith(new Error("Not authenticated"));
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalled();
+  });
+
+  it("Create_GpuCountAsNumber_SendsParsedGpuCount", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+    component.gpuCount = 1;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        gpu_count: 1,
+      }),
+    );
+  });
+
   it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
     TestBed.createComponent(CodeServersPageComponent);

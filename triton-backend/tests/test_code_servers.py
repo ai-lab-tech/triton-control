@@ -180,6 +180,23 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("command -v code-server", container["args"][0])
         self.assertNotIn("install.sh", container["args"][0])
+
+    def test_Resources_WithGpu_UsesLimitsOnlyForGpu(self) -> None:
+        request = self._request().model_copy(update={"gpu_count": 1})
+
+        resources = k8s._resources(request)
+
+        self.assertEqual(resources["limits"]["nvidia.com/gpu"], "1")
+        self.assertIn("requests", resources)
+        self.assertNotIn("nvidia.com/gpu", resources["requests"])
+
+    def test_Resources_WithOnlyGpu_OmitsRequestsBlock(self) -> None:
+        request = CreateCodeServerRequest(name="workspace", image="triton", gpu_count=1)
+
+        resources = k8s._resources(request)
+
+        self.assertNotIn("requests", resources)
+        self.assertEqual(resources["limits"], {"nvidia.com/gpu": "1"})
         
     def test_TritonDeployExtensionDir_ConfiguredParentDirectory_UsesChildExtension(self) -> None:
         configured = Path(__file__).resolve().parents[2] / "code-server-extensions"

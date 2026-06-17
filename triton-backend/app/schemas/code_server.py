@@ -26,6 +26,7 @@ class CreateCodeServerRequest(SQLModel):
     cpu_limit: Optional[str] = None
     memory: Optional[str] = None
     memory_limit: Optional[str] = None
+    gpu_count: Optional[int] = None
     dockerconfigjson: Optional[str] = None
     image_has_code_server: bool = False
 

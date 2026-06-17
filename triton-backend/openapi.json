@@ -2528,6 +2528,17 @@
             ],
             "title": "Memory Limit"
           },
+          "gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Count"
+          },
           "dockerconfigjson": {
             "anyOf": [
               {

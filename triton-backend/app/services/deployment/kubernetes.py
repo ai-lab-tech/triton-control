@@ -461,7 +461,7 @@ def _resources_block(request: CreateDeploymentRequest) -> str:
     cpu_lim = (request.cpu_limit or "").strip() or cpu_req
     mem_req = (request.memory or "").strip()
     mem_lim = (request.memory_limit or "").strip() or mem_req
-    has_requests = bool(cpu_req or mem_req or has_gpu)
+    has_requests = bool(cpu_req or mem_req)
     has_limits = bool(cpu_lim or mem_lim or has_gpu)
     if not has_requests and not has_limits:
         return ""
@@ -472,8 +472,6 @@ def _resources_block(request: CreateDeploymentRequest) -> str:
             lines.append(f'              cpu: "{cpu_req}"')
         if mem_req:
             lines.append(f"              memory: {mem_req}")
-        if has_gpu:
-            lines.append(f"              nvidia.com/gpu: {request.gpu_count}")
     if has_limits:
         lines.append("            limits:")
         if cpu_lim:
@@ -481,7 +479,7 @@ def _resources_block(request: CreateDeploymentRequest) -> str:
         if mem_lim:
             lines.append(f"              memory: {mem_lim}")
         if has_gpu:
-            lines.append(f"              nvidia.com/gpu: {request.gpu_count}")
+            lines.append(f'              nvidia.com/gpu: "{request.gpu_count}"')
     return "\n".join(lines) + "\n"
 
 

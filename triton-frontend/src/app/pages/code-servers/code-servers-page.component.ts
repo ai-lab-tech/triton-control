@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from "@angular/core";
+import { HttpErrorResponse } from "@angular/common/http";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
@@ -70,6 +71,7 @@ export class CodeServersPageComponent implements OnDestroy {
   storageSize = "20Gi";
   cpu = "";
   memory = "";
+  gpuCount: string | number = "";
   dockerconfigjson = "";
   imageHasCodeServer = false;
 
@@ -212,6 +214,8 @@ export class CodeServersPageComponent implements OnDestroy {
     this.saving.set(true);
     this.setMessage("", "info");
     try {
+      // Best effort: do not block workspace creation when refresh probes fail.
+      await this.auth.refreshSession().catch(() => undefined);
       const payload: CreateCodeServerRequest = {
         name: this.name.trim(),
         image: this.image.trim(),
@@ -221,6 +225,7 @@ export class CodeServersPageComponent implements OnDestroy {
         cpu_limit: this.cpu.trim() || undefined,
         memory: this.memory.trim() || undefined,
         memory_limit: this.memory.trim() || undefined,
+        gpu_count: this.parseGpuCount(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
         image_has_code_server: this.imageHasCodeServer,
       };
@@ -233,10 +238,38 @@ export class CodeServersPageComponent implements OnDestroy {
       await this.pollPendingWorkspaces();
       this.setMessage("Code server created.", "success");
     } catch (error) {
+      console.error("Code server create failed", error);
+      if (this.isCanceledError(error)) {
+        this.setMessage(
+          "Request was canceled in the browser. Please retry and check Network tab for POST /api/code-servers.",
+          "error",
+        );
+        return;
+      }
+      if (!(error instanceof HttpErrorResponse) && error instanceof Error && error.message.trim()) {
+        this.setMessage(`Create failed before API request: ${error.message.trim()}`, "error");
+        return;
+      }
       this.setMessage(mapApiErrorMessage(error, "Failed to create code server."), "error");
     } finally {
       this.saving.set(false);
     }
+  }
+
+  private isCanceledError(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const maybe = error as { name?: unknown; message?: unknown };
+    const name = typeof maybe.name === "string" ? maybe.name.toLowerCase() : "";
+    const message = typeof maybe.message === "string" ? maybe.message.toLowerCase() : "";
+    return name.includes("canceled") || message.includes("canceled");
+  }
+
+  private parseGpuCount(): number | undefined {
+    const raw = typeof this.gpuCount === "number" ? String(this.gpuCount) : this.gpuCount;
+    const parsed = Number.parseInt((raw || "").trim(), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
   }
 
   async refresh(workspace: CodeServer): Promise<void> {

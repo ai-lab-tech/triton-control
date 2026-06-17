@@ -6,7 +6,9 @@ import base64
 import html
 import io
 import json
+import logging
 import os
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,22 @@ from typing import Any
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
+
+logger = logging.getLogger(__name__)
+
+
+def _diag(event: str, **fields: Any) -> None:
+    """Emit structured diagnostics even when logging handlers are not configured."""
+    details = " ".join(f"{key}={_diag_value(value)}" for key, value in fields.items())
+    line = f"[code-server] {event}" if not details else f"[code-server] {event} {details}"
+    print(line, file=sys.stderr, flush=True)
+
+
+def _diag_value(value: Any) -> str:
+    text = str(value).replace("\n", "\\n")
+    if len(text) > 400:
+        return f"{text[:400]}...(truncated)"
+    return text
 
 
 def apply_code_server_resources(
@@ -29,25 +47,47 @@ def apply_code_server_resources(
     from kubernetes.utils.create_from_yaml import FailToCreateError  # type: ignore[import-untyped]
 
     try:
+        _diag(
+            "create.begin",
+            namespace=namespace,
+            statefulset=statefulset_name,
+            service=service_name,
+            gpu_count=request.gpu_count,
+            image=request.image,
+        )
         api = api_client()
         _ensure_namespace(api, namespace)
         applied = []
         for manifest in _manifests(request, namespace, statefulset_name, service_name, secret_name):
             from kubernetes import utils  # type: ignore[import-untyped]
 
-            utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
-            applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
+            kind = manifest.get("kind", "Resource")
+            name = meta.get("name", "unknown")
+            _diag("create.apply.begin", kind=kind, name=name)
+            utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
+            _diag("create.apply.success", kind=kind, name=name)
+            applied.append(f"{kind}/{name}")
+        _diag("create.success", applied=applied)
         return applied
     except ConfigException as exc:
+        logger.exception("Code-server create failed: Kubernetes configuration could not be loaded")
+        _diag("create.failed.config", error=exc)
         raise BadGatewayError("Kubernetes configuration could not be loaded") from exc
     except ApiException as exc:
-        raise BadGatewayError(_api_error(exc)) from exc
+        logger.exception("Code-server create failed with Kubernetes API error")
+        error = _api_error(exc)
+        _diag("create.failed.api", error=error)
+        raise BadGatewayError(error) from exc
     except FailToCreateError as exc:
         errs = getattr(exc, "api_exceptions", []) or []
         message = "; ".join(_api_error(e) for e in errs) or "Failed to apply Kubernetes resources"
+        logger.exception("Code-server create failed while applying Kubernetes resources: %s", message)
+        _diag("create.failed.apply", errors_count=len(errs), error=message)
         raise BadGatewayError(message) from exc
     except Exception as exc:
+        logger.exception("Code-server create failed with unexpected error")
+        _diag("create.failed.unexpected", error=exc)
         raise BadGatewayError(f"Failed to apply code-server resources: {exc}") from exc
 
 
@@ -497,6 +537,7 @@ def _resources(request: CreateCodeServerRequest) -> dict[str, Any]:
     cpu_lim = (request.cpu_limit or "").strip() or cpu_req
     mem_req = (request.memory or "").strip()
     mem_lim = (request.memory_limit or "").strip() or mem_req
+    gpu = request.gpu_count if (request.gpu_count is not None and request.gpu_count > 0) else 0
     resources: dict[str, Any] = {}
     if cpu_req or mem_req:
         resources["requests"] = {}
@@ -504,12 +545,14 @@ def _resources(request: CreateCodeServerRequest) -> dict[str, Any]:
             resources["requests"]["cpu"] = cpu_req
         if mem_req:
             resources["requests"]["memory"] = mem_req
-    if cpu_lim or mem_lim:
+    if cpu_lim or mem_lim or gpu:
         resources["limits"] = {}
         if cpu_lim:
             resources["limits"]["cpu"] = cpu_lim
         if mem_lim:
             resources["limits"]["memory"] = mem_lim
+        if gpu:
+            resources["limits"]["nvidia.com/gpu"] = str(gpu)
     return resources
 
 
