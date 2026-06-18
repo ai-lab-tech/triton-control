@@ -1,7 +1,8 @@
 ﻿# Triton Control
 
 Triton Control is a web application for managing and operating NVIDIA Triton
-Inference Server environments. The primary deployment target is Kubernetes.
+Inference Server environments. The primary deployment target is Kubernetes
+through the Helm chart in `charts/triton-control`.
 The same application can also run with Docker Compose or Podman Compose for
 local evaluation (with reduced Kubernetes-specific functionality, for example
 no self-deployed Triton deployment workflows), and with separate Python/npm
@@ -13,6 +14,7 @@ Core capabilities include:
 
 - existing Triton instance registration and management
 - self-deployed Triton serving workflows when Triton Control runs in Kubernetes
+- per-user browser-based development workspaces backed by code-server
 - user management and instance access control
 - model inference workflows with model configuration inspection
 - S3-backed model repository integration with an integrated S3 Browser
