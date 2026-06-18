@@ -68,6 +68,13 @@
       <div class="side">
         <mat-card class="card alert-card">
           <div class="card-title">Attention Needed</div>
+          @if (auth.isAdmin()) {
+            <div class="alert-item">
+              <span class="material-icons alert-icon">bug_report</span>
+              <span class="alert-text">Application error logs</span>
+              <a mat-stroked-button class="run-link-btn" routerLink="/error-logs">Open logs</a>
+            </div>
+          }
           @if (activeProfileRun(); as run) {
             <div class="alert-item perf-running-item">
               <span class="material-icons alert-icon">speed</span>

@@ -20,6 +20,7 @@ Environment variables consumed here:
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -38,6 +39,7 @@ from app.api.auth_api import public_router as public_auth_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
+from app.api.error_log_api import router as error_log_router
 from app.api.instance_api import router as instance_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
@@ -46,11 +48,35 @@ from app.api.s3_api import router as s3_router
 from app.api.user_api import router as user_router
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
 from app.core.security import get_claims, get_claims_allow_pending
-from app.db.database import init_db
+from app.db.database import init_db, session_factory
+from app.services import error_logs
 from app.services.triton.client import TritonService
 from app.services.triton.health import instance_health_refresher
 
 configure_logging()
+
+
+class DatabaseErrorLogHandler(logging.Handler):
+    """Persist app logger errors without coupling logging setup to the DB layer."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.levelno < logging.ERROR or not record.name.startswith("app."):
+            return
+        try:
+            detail = self.format(record) if record.exc_info else None
+            with session_factory() as session:
+                error_logs.create_backend_log_event(
+                    session,
+                    logger_name=record.name,
+                    level=record.levelname,
+                    message=record.getMessage(),
+                    detail=detail,
+                )
+        except Exception:
+            pass
+
+
+logging.getLogger().addHandler(DatabaseErrorLogHandler())
 
 app = FastAPI(
     title="Triton Backend",
@@ -95,6 +121,20 @@ app.add_middleware(
     max_age=session_max_age or 14 * 24 * 60 * 60,
 )
 
+
+@app.middleware("http")
+async def capture_unhandled_backend_errors(request: Request, call_next: Any) -> Any:
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if not request.url.path.startswith("/api/admin/error-logs"):
+            try:
+                with session_factory() as session:
+                    error_logs.create_backend_exception_event(session, request, exc)
+            except Exception:
+                pass
+        raise
+
 cors_origins = _parse_csv(
     os.getenv(
         "CORS_ORIGINS",
@@ -130,6 +170,7 @@ app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
+app.include_router(error_log_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])
 app.include_router(code_server_router)
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])

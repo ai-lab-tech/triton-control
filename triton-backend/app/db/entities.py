@@ -17,7 +17,7 @@ Defines the following database tables:
 from datetime import datetime
 from typing import Any, List, Optional
 
-from sqlalchemy import JSON, String, UniqueConstraint
+from sqlalchemy import JSON, String, Text, UniqueConstraint
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -197,3 +197,22 @@ class DashboardAlertEntity(SQLModel, table=True):
     label: str
     tone: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ErrorEventEntity(SQLModel, table=True):
+    """Persisted sanitized error event visible to administrators."""
+
+    __tablename__ = "error_events"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source: str = Field(index=True)
+    level: str = Field(default="ERROR", index=True)
+    message: str = Field(sa_column=Column(Text))
+    detail: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    path: Optional[str] = Field(default=None, index=True)
+    method: Optional[str] = None
+    status_code: Optional[int] = Field(default=None, index=True)
+    user_email: Optional[str] = Field(default=None, index=True)
+    user_id: Optional[int] = Field(default=None, index=True)
+    user_agent: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

@@ -114,6 +114,10 @@
                 <span class="material-icons">tune</span>
                 <span>Settings</span>
               </button>
+              <button type="button" class="account-item" (click)="go('/error-logs')">
+                <span class="material-icons">bug_report</span>
+                <span>Error Logs</span>
+              </button>
             }
             @if (isLoggedIn()) {
               <button type="button" class="account-item logout" (click)="logout()">

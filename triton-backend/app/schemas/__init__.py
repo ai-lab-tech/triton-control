@@ -17,6 +17,7 @@ from app.schemas.development import (
     CodeServerDTO,
     CreateCodeServerRequest,
 )
+from app.schemas.error_log import ErrorEventDTO, FrontendErrorEventRequest
 from app.schemas.instance import (
     CreateTritonInstanceRequest,
     InstanceLogsResponse,
@@ -76,6 +77,8 @@ __all__ = [
     "DashboardAlertDTO",
     "DeploymentDeleteResponse",
     "DeploymentResponse",
+    "ErrorEventDTO",
+    "FrontendErrorEventRequest",
     "InstanceS3ConfigDTO",
     "InstanceLogsResponse",
     "InstallPerfAnalyzerRequest",

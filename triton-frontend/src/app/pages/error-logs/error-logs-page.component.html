@@ -1,0 +1,104 @@
+<div class="error-logs">
+  <div class="header-row">
+    <div>
+      <div class="page-title">Error Logs</div>
+      <p class="page-subtitle">Admin view of captured frontend and backend application errors.</p>
+    </div>
+    <div class="header-actions">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-select [value]="source()" (valueChange)="selectSource($event)">
+          <mat-option value="">All sources</mat-option>
+          <mat-option value="frontend">Frontend</mat-option>
+          <mat-option value="backend">Backend</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="refresh()" [disabled]="loading()">
+        <span class="material-icons">refresh</span>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="logs-layout">
+    <mat-card class="card table-card">
+      <div class="card-title">Recent errors</div>
+      @if (loading()) {
+        <p class="muted">Loading logs...</p>
+      }
+      @if (error()) {
+        <p class="error-text">{{ error() }}</p>
+      }
+      @if (!loading() && !events().length) {
+        <p class="muted">No captured errors.</p>
+      }
+
+      <table mat-table [dataSource]="events()" class="logs-table">
+        <ng-container matColumnDef="created_at">
+          <th mat-header-cell *matHeaderCellDef>Time</th>
+          <td mat-cell *matCellDef="let row">{{ row.created_at | date: "short" }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="source">
+          <th mat-header-cell *matHeaderCellDef>Source</th>
+          <td mat-cell *matCellDef="let row">
+            <span class="chip" [attr.data-tone]="row.source === 'backend' ? 'warn' : 'info'">
+              {{ row.source }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="level">
+          <th mat-header-cell *matHeaderCellDef>Level</th>
+          <td mat-cell *matCellDef="let row">{{ row.level }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status_code">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let row">{{ row.status_code || "-" }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="path">
+          <th mat-header-cell *matHeaderCellDef>Path</th>
+          <td mat-cell *matCellDef="let row" class="path-cell">{{ row.path || "-" }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="message">
+          <th mat-header-cell *matHeaderCellDef>Message</th>
+          <td mat-cell *matCellDef="let row" class="message-cell">{{ row.message }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr
+          mat-row
+          *matRowDef="let row; columns: displayedColumns"
+          class="log-row"
+          [class.selected]="selected()?.id === row.id"
+          (click)="selectEvent(row)"
+        ></tr>
+      </table>
+    </mat-card>
+
+    <mat-card class="card detail-card">
+      <div class="card-title">Details</div>
+      @if (selected(); as event) {
+        <dl class="metadata">
+          <div>
+            <dt>User</dt>
+            <dd>{{ event.user_email || "Unknown" }}</dd>
+          </div>
+          <div>
+            <dt>Method</dt>
+            <dd>{{ event.method || "-" }}</dd>
+          </div>
+          <div>
+            <dt>User agent</dt>
+            <dd>{{ event.user_agent || "-" }}</dd>
+          </div>
+        </dl>
+        <pre>{{ selectedDetail() }}</pre>
+      } @else {
+        <p class="muted">Select an error row to inspect its details.</p>
+      }
+    </mat-card>
+  </div>
+</div>
