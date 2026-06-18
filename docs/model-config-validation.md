@@ -6,7 +6,8 @@ Triton server version of the selected instance.
 
 ## Runtime Behavior
 
-When a user saves `config.pbtxt` in the S3 Browser, the backend:
+When a user saves `config.pbtxt` in the S3 Browser or from the Inference/Profile
+side panel, the backend:
 
 - detects the Triton server version from instance metadata
 - maps the version to the matching Triton release branch
@@ -21,3 +22,15 @@ happen statically for each Triton Control version, not dynamically at runtime.
 
 This means a deployed Triton Control version supports the Triton release branches
 included in that release.
+
+## Live API Config Fallback
+
+If an instance has no active S3 connection, Triton Control can still show
+Triton's live model config through:
+
+```text
+/v2/models/<model>/versions/<version>/config
+```
+
+That response is read-only and is Triton's parsed runtime JSON config. It is not
+the raw `config.pbtxt` file and cannot be written back to the repository.

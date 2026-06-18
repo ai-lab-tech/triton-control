@@ -25,7 +25,7 @@ describe("InstanceModelMonacoEditorComponent", () => {
     const component = fixture.componentInstance;
 
     // Act
-    const options = component.editorOptions;
+    const options = component.editorOptions();
 
     // Assert
     expect(options.language).toBe("json");

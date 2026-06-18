@@ -36,7 +36,7 @@ from grpc_tools import protoc  # type: ignore[import-untyped]
 from app.exceptions import InternalError, UnprocessableEntityError, UnsupportedMediaTypeError
 from protobuff.triton_release_map import TRITON_SEMVER_TO_RELEASE_BRANCH
 
-PROTOBUFF_DIR = Path(__file__).resolve().parents[2] / "protobuff"
+PROTOBUFF_DIR = Path(__file__).resolve().parents[3] / "protobuff"
 _MODEL_CONFIG_CLASS_CACHE: dict[str, type[Any]] = {}
 
 

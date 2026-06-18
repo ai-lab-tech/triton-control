@@ -45,34 +45,12 @@
             [(value)]="editorContent"
           ></app-instance-model-monaco-editor>
         </div>
-        <aside class="api-config-pane">
-          <div class="editor-head">
-            <div class="section-title">API Config</div>
-            <button
-              mat-stroked-button
-              type="button"
-              class="api-config-btn"
-              (click)="toggleApiConfig()"
-              [disabled]="apiConfigLoading()"
-            >
-              <span class="material-icons">
-                {{ apiConfigOpen() ? "expand_less" : "data_object" }}
-              </span>
-              {{ apiConfigOpen() ? "Hide API Config" : "Show API Config" }}
-            </button>
-          </div>
-          @if (apiConfigOpen()) {
-            @if (apiConfigLoading()) {
-              <div class="panel-hint">Loading API config...</div>
-            } @else if (apiConfigError()) {
-              <div class="panel-hint error-text">{{ apiConfigError() }}</div>
-            } @else if (apiConfigJson()) {
-              <pre class="response-block">{{ apiConfigJson() }}</pre>
-            }
-          } @else {
-            <div class="panel-hint">Open the model API config beside the request body.</div>
-          }
-        </aside>
+        <app-instance-model-repository-config
+          [instanceId]="instanceId()"
+          [modelName]="modelName()"
+          [version]="version()"
+          [s3]="instanceS3()"
+        ></app-instance-model-repository-config>
       </div>
 
       <div class="actions">

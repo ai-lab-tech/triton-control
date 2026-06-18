@@ -12,12 +12,13 @@ import { MatInputModule } from "@angular/material/input";
 import { Store } from "@ngrx/store";
 
 import {
+  InstanceS3ConfigDTO,
   InstancesService,
   PerfAnalyzersService,
   TritonInstanceDTO,
 } from "../../../api/generated/index";
 import { mapApiErrorMessage } from "../../../shared/api-error-message";
-import { toggleModelApiConfig } from "../shared/model-api-config";
+import { InstanceModelRepositoryConfigComponent } from "../shared/instance-model-repository-config.component";
 import {
   profileLastResultLoadStarted,
   profilePageOpened,
@@ -45,6 +46,7 @@ import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-mona
     MatIconModule,
     MatInputModule,
     InstanceModelMonacoEditorComponent,
+    InstanceModelRepositoryConfigComponent,
   ],
   styleUrl: "./instance-model-profile-page.component.scss",
   templateUrl: "./instance-model-profile-page.component.html",
@@ -82,6 +84,7 @@ export class InstanceModelProfilePageComponent implements OnInit {
   readonly loadingStatus = signal(true);
   readonly installed = signal(false);
   readonly resolvingInstance = signal(false);
+  readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
   readonly statusError = signal("");
   readonly running = toSignal(this.store.select(selectProfileRunning), { initialValue: false });
   readonly activeProfileKey = toSignal(this.store.select(selectActiveKey), { initialValue: "" });
@@ -95,10 +98,6 @@ export class InstanceModelProfilePageComponent implements OnInit {
   readonly otherRunInProgress = computed(
     () => this.running() && !!this.activeRunKey() && this.activeRunKey() !== this.profileKey(),
   );
-  readonly apiConfigOpen = signal(false);
-  readonly apiConfigLoading = signal(false);
-  readonly apiConfigJson = signal("");
-  readonly apiConfigError = signal("");
   private readonly applyLoadedResult = effect(() => {
     const entry = this.profileEntry();
     if (!entry.output || this.activeProfileKey() !== this.profileKey()) {
@@ -179,26 +178,6 @@ export class InstanceModelProfilePageComponent implements OnInit {
     this.inputData = this.normalizeLegacyInputData(value);
   }
 
-  async toggleApiConfig(): Promise<void> {
-    await toggleModelApiConfig({
-      hasValidRoute: this.hasValidRoute(),
-      state: {
-        open: this.apiConfigOpen,
-        loading: this.apiConfigLoading,
-        json: this.apiConfigJson,
-        error: this.apiConfigError,
-      },
-      loadConfig: () =>
-        firstValueFrom(
-          this.instancesApi.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet(
-            this.instanceId(),
-            this.modelName(),
-            this.version(),
-          ),
-        ),
-    });
-  }
-
   private async loadStatus(): Promise<void> {
     this.loadingStatus.set(true);
     try {
@@ -215,10 +194,6 @@ export class InstanceModelProfilePageComponent implements OnInit {
   }
 
   private async resolveInstance(): Promise<void> {
-    if (this.instanceName && this.instanceUrl) {
-      return;
-    }
-
     this.resolvingInstance.set(true);
     try {
       const instance = (await firstValueFrom(
@@ -227,6 +202,7 @@ export class InstanceModelProfilePageComponent implements OnInit {
 
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl = instance?.url ?? this.instanceUrl;
+      this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
     } catch {
       this.statusError.set("Failed to load instance details.");
     } finally {

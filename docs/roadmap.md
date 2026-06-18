@@ -147,13 +147,6 @@ Goal:
 - Enable deleting files in the S3 Browser.
 - Enable renaming files in the S3 Browser.
 
-#### Editable `config.pbtxt` from Inference and Profile
-
-Goal:
-
-- Make model `config.pbtxt` editable from the Inference and Profile pages (`Show API Config`).
-- Enable editing only when an active S3 connection is available.
-
 ## Prioritization
 
 ### Next

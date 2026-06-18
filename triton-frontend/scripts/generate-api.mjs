@@ -11,6 +11,10 @@ const out = join(root, "src", "app", "api", "generated");
 const jarDir = join(root, "tools");
 const jar = join(jarDir, "swagger-codegen-cli.jar");
 const version = "3.0.52";
+const javaExecutable =
+  process.env.JAVA_HOME && existsSync(join(process.env.JAVA_HOME, "bin", "java.exe"))
+    ? join(process.env.JAVA_HOME, "bin", "java.exe")
+    : "java";
 const defaultJarPath = `io/swagger/codegen/v3/swagger-codegen-cli/${version}/swagger-codegen-cli-${version}.jar`;
 const jarUrls = [
   process.env.SWAGGER_CODEGEN_JAR_URL,
@@ -52,22 +56,30 @@ if (!existsSync(jar)) {
 
 rmSync(out, { recursive: true, force: true });
 
-execFileSync(
-  "java",
-  [
-    "-jar",
-    jar,
-    "generate",
-    "-i",
-    spec,
-    "-l",
-    "typescript-angular",
-    "-o",
-    out,
-    "--additional-properties=ngVersion=21.1.2,providedInRoot=true,modelPropertyNaming=original",
-  ],
-  { stdio: "inherit" },
-);
+try {
+  execFileSync(
+    javaExecutable,
+    [
+      "-jar",
+      jar,
+      "generate",
+      "-i",
+      spec,
+      "-l",
+      "typescript-angular",
+      "-o",
+      out,
+      "--additional-properties=ngVersion=21.1.2,providedInRoot=true,modelPropertyNaming=original",
+    ],
+    { stdio: "inherit" },
+  );
+} catch (error) {
+  throw new Error(
+    `Failed to run swagger-codegen with ${javaExecutable}. Use Java 11 or newer. ${
+      error instanceof Error ? error.message : String(error)
+    }`,
+  );
+}
 
 const encoderPath = join(out, "encoder.ts");
 if (existsSync(encoderPath)) {

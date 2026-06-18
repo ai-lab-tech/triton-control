@@ -1,4 +1,4 @@
-import { Component, model } from "@angular/core";
+import { Component, computed, input, model } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 
@@ -17,7 +17,7 @@ import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-
   template: `
     <ngx-monaco-editor
       class="editor"
-      [options]="editorOptions"
+      [options]="editorOptions()"
       [(ngModel)]="value"
     ></ngx-monaco-editor>
   `,
@@ -41,12 +41,15 @@ import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-
 })
 export class InstanceModelMonacoEditorComponent {
   readonly value = model("");
+  readonly language = input("json");
+  readonly readOnly = input(false);
 
-  readonly editorOptions = {
+  readonly editorOptions = computed(() => ({
     theme: "vs-dark",
-    language: "json",
+    language: this.language(),
+    readOnly: this.readOnly(),
     automaticLayout: true,
     minimap: { enabled: false },
     wordWrap: "on" as const,
-  };
+  }));
 }
