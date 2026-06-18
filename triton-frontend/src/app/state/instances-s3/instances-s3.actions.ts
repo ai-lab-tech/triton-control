@@ -32,6 +32,11 @@ export const s3EntriesLoadFailed = createAction(
   props<{ message: string }>(),
 );
 
+export const s3FolderTreeRemoved = createAction(
+  "[Instances S3] Folder Tree Removed",
+  props<{ path: string }>(),
+);
+
 export const s3EditorOpenRequested = createAction(
   "[Instances S3] Editor Open Requested",
   props<{ instanceId: string; filePath: string; fileName: string }>(),

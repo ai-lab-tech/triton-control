@@ -25,6 +25,7 @@ import {
   s3EditorSaveRequested,
   s3EditorSaveSucceeded,
   s3FileUploadRequested,
+  s3FolderTreeRemoved,
   s3NavigateTo,
   s3PageOpened,
 } from "../../../state/instances-s3/instances-s3.actions";
@@ -131,6 +132,8 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   uploadFolderInProgress = false;
   uploadFolderCompleted = 0;
   uploadFolderTotal = 0;
+  creatingFolder = false;
+  newFolderName = "";
   editorContent = "";
   editorOptions = {
     theme: "vs-dark",
@@ -412,6 +415,59 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     this.store.dispatch(displaySuccess({ message: `Uploaded folder with ${files.length} files.` }));
   }
 
+  startCreateFolder(): void {
+    if (!this.canWriteInstances() || this.uploadBusy()) {
+      return;
+    }
+    this.creatingFolder = true;
+    this.newFolderName = "";
+  }
+
+  cancelCreateFolder(): void {
+    this.creatingFolder = false;
+    this.newFolderName = "";
+  }
+
+  async createFolder(): Promise<void> {
+    const folderName = this.newFolderName.trim();
+    const validationError = this.getFolderNameError(folderName);
+    if (validationError) {
+      this.store.dispatch(
+        displayFailure({ title: "Create folder failed", message: validationError }),
+      );
+      return;
+    }
+
+    const instanceId = (this.instanceId() ?? "").trim();
+    if (!instanceId || !this.canWriteInstances()) {
+      return;
+    }
+
+    const currentPath = this.currentPath();
+    const folderPath = this.joinFolderMarkerPath(currentPath, folderName);
+    try {
+      await firstValueFrom(
+        this.instancesApi.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut(
+          new Uint8Array([0]).buffer,
+          folderPath,
+          instanceId,
+          "application/x-directory",
+        ),
+      );
+      this.creatingFolder = false;
+      this.newFolderName = "";
+      this.store.dispatch(displaySuccess({ message: `Created folder ${folderName}.` }));
+      this.store.dispatch(s3NavigateTo({ instanceId, path: currentPath }));
+    } catch (error) {
+      this.store.dispatch(
+        displayFailure({
+          title: "Create folder failed",
+          message: mapApiErrorMessage(error, `Failed to create folder ${folderName}.`),
+        }),
+      );
+    }
+  }
+
   canEditEntry(entry: BrowserEntry): boolean {
     return this.canWriteInstances() && this.isEditableEntry(entry);
   }
@@ -586,6 +642,48 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     }
   }
 
+  async deleteEntry(entry: BrowserEntry): Promise<void> {
+    if (!this.canWriteInstances()) {
+      return;
+    }
+    const instanceId = (this.instanceId() ?? "").trim();
+    if (!instanceId) {
+      return;
+    }
+
+    const entryPath =
+      entry.type === "folder"
+        ? this.joinFolderMarkerPath(this.currentPath(), entry.name)
+        : this.joinPath(this.currentPath(), entry.name);
+    const targetLabel =
+      entry.type === "folder" ? `folder ${entry.name} and all child files` : `file ${entry.name}`;
+    const confirmed = window.confirm(`Delete ${targetLabel}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await firstValueFrom(
+        this.instancesApi.deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete(
+          instanceId,
+          entryPath,
+        ),
+      );
+      if (entry.type === "folder") {
+        this.store.dispatch(s3FolderTreeRemoved({ path: entryPath }));
+      }
+      this.store.dispatch(displaySuccess({ message: `Deleted ${entry.name}.` }));
+      this.store.dispatch(s3NavigateTo({ instanceId, path: this.currentPath() }));
+    } catch (error) {
+      this.store.dispatch(
+        displayFailure({
+          title: "Delete failed",
+          message: mapApiErrorMessage(error, `Failed to delete ${entry.name}.`),
+        }),
+      );
+    }
+  }
+
   private saveBlob(fileName: string, blob: Blob): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -613,6 +711,32 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   private normalizePath(path: string | null | undefined): string {
     const clean = `${path ?? ""}`.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
     return clean ? `/${clean}` : "/";
+  }
+
+  private joinFolderMarkerPath(basePath: string, folderName: string): string {
+    return `${this.joinPath(basePath, folderName)}/`;
+  }
+
+  private getFolderNameError(folderName: string): string {
+    if (!folderName) {
+      return "Folder name is required.";
+    }
+    if (folderName === "." || folderName === "..") {
+      return "Folder name must not be '.' or '..'.";
+    }
+    if (/[\\/]/.test(folderName)) {
+      return "Folder name must not contain slashes.";
+    }
+    const duplicate = this.entries().some(
+      (entry) =>
+        entry.path === this.currentPath() &&
+        entry.type === "folder" &&
+        entry.name.toLowerCase() === folderName.toLowerCase(),
+    );
+    if (duplicate) {
+      return `Folder ${folderName} already exists.`;
+    }
+    return "";
   }
 
   private getUploadRelativePath(file: File): string {

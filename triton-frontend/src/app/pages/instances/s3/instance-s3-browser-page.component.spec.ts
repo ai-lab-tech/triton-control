@@ -57,6 +57,7 @@ describe("InstanceS3BrowserPageComponent", () => {
       "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
       "getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet",
       "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
+      "deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete",
     ]);
     snackBarMock = jasmine.createSpyObj<MatSnackBar>("MatSnackBar", ["open"]);
     actionsSubject = new Subject<Action>();
@@ -78,6 +79,9 @@ describe("InstanceS3BrowserPageComponent", () => {
     );
     instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.and.returnValue(
       of({} as any),
+    );
+    instancesApiMock.deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete.and.returnValue(
+      of({ deleted: 1 } as any),
     );
 
     await TestBed.configureTestingModule({
@@ -427,6 +431,100 @@ describe("InstanceS3BrowserPageComponent", () => {
     expect(dispatchSpy).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
     );
+  });
+
+  it("CreateFolder_ValidFolderName_WritesFolderMarkerAndRefreshesCurrentPath", async () => {
+    mockStore.overrideSelector(selectS3CurrentPath, "/models");
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    component.creatingFolder = true;
+    component.newFolderName = "resnet";
+    const dispatchSpy = spyOn(mockStore, "dispatch");
+
+    await component.createFolder();
+
+    expect(
+      instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut,
+    ).toHaveBeenCalledWith(
+      jasmine.any(ArrayBuffer),
+      "/models/resnet/",
+      "7",
+      "application/x-directory",
+    );
+    expect(component.creatingFolder).toBeFalse();
+    expect(component.newFolderName).toBe("");
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
+    );
+  });
+
+  it("CreateFolder_InvalidFolderName_DispatchesFailureAndSkipsUpload", async () => {
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    component.newFolderName = "bad/name";
+    const dispatchSpy = spyOn(mockStore, "dispatch");
+
+    await component.createFolder();
+
+    expect(
+      instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut,
+    ).not.toHaveBeenCalled();
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      displayFailure({
+        title: "Create folder failed",
+        message: "Folder name must not contain slashes.",
+      }),
+    );
+  });
+
+  it("DeleteEntry_FileConfirmed_DeletesFileAndRefreshesCurrentPath", async () => {
+    mockStore.overrideSelector(selectS3CurrentPath, "/models");
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    spyOn(window, "confirm").and.returnValue(true);
+    const dispatchSpy = spyOn(mockStore, "dispatch");
+
+    await component.deleteEntry({
+      name: "config.pbtxt",
+      path: "/models",
+      type: "file",
+      modified: "",
+    });
+
+    expect(
+      instancesApiMock.deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete,
+    ).toHaveBeenCalledWith("7", "/models/config.pbtxt");
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
+    );
+  });
+
+  it("DeleteEntry_FolderConfirmed_DeletesFolderPrefix", async () => {
+    mockStore.overrideSelector(selectS3CurrentPath, "/models");
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    spyOn(window, "confirm").and.returnValue(true);
+
+    await component.deleteEntry({ name: "resnet", path: "/models", type: "folder", modified: "" });
+
+    expect(
+      instancesApiMock.deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete,
+    ).toHaveBeenCalledWith("7", "/models/resnet/");
+  });
+
+  it("DeleteEntry_UserCancels_DoesNotDelete", async () => {
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    spyOn(window, "confirm").and.returnValue(false);
+
+    await component.deleteEntry({ name: "config.pbtxt", path: "/", type: "file", modified: "" });
+
+    expect(
+      instancesApiMock.deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete,
+    ).not.toHaveBeenCalled();
   });
 
   it("IsActivePath_CurrentPathIsRoot_ReturnsTrue", () => {

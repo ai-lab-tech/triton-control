@@ -18,7 +18,7 @@ Members and admins can additionally perform write workflows.
 - run model inference
 - browse and download S3 model repository files when S3 is configured
 - request model load or unload operations (`member`/`admin`)
-- edit or upload S3 model repository files when S3 is configured (`member`/`admin`)
+- edit or upload S3 model repository files and folders when S3 is configured (`member`/`admin`)
 - update Triton or S3 connection for that instance (`member`/`admin`)
 - add Triton instances (`member`/`admin`)
 - delete Triton instances (`admin` only)
@@ -201,10 +201,13 @@ Current behavior:
 When S3 is configured and enabled for an instance, the S3 Browser supports:
 
 - browsing folders/files under repository prefix
+- creating folders (`member`/`admin`)
 - downloading files
+- deleting files and folders (`member`/`admin`)
 - opening editable files (`.py`, `.pbtxt`) (`member`/`admin`)
 - editing and saving `.py` and `.pbtxt` (`member`/`admin`)
 - uploading files (`member`/`admin`)
+- uploading folders with nested child files (`member`/`admin`)
 
 When saving `config.pbtxt`, backend validation is executed against the Triton
 model configuration parser for that Triton version.
@@ -212,12 +215,21 @@ model configuration parser for that Triton version.
 The same validation is used when saving `config.pbtxt` from the Inference or
 Profile page side panel.
 
+Folder upload preserves the selected folder structure below the current S3
+browser path. For example, uploading a local folder that contains
+`resnet/1/model.plan` while the browser is open at `/models` writes the object
+to `/models/resnet/1/model.plan`.
+
 See [Model Config Validation](model-config-validation.md) for details about
 Triton version mapping and protobuf parser generation.
 
+Deleting a file removes that S3 object. Deleting a folder removes all S3
+objects below that folder prefix. After a folder delete succeeds, the folder
+and its child paths are also removed from the S3 Browser tree.
+
 Current limitation:
 
-- rename, move, and delete actions are not available in the current release
+- rename and move actions are not available in the current release
 
 ## Add Deployment (Sidebar Entry)
 

@@ -39,6 +39,7 @@ from app.schemas.perf_analyzer import (
     RunPerfAnalyzerRequest,
 )
 from app.schemas.s3 import (
+    S3DeleteResponse,
     S3EntryDTO,
     S3FileContentResponse,
     S3FileWriteResponse,
@@ -96,6 +97,7 @@ __all__ = [
     "RunPerfAnalyzerRequest",
     "ROLE_ALIASES",
     "S3EntryDTO",
+    "S3DeleteResponse",
     "S3FileContentResponse",
     "S3FileWriteResponse",
     "S3ListResponse",

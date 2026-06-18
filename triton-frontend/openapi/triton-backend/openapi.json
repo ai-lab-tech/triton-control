@@ -2155,6 +2155,62 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "instances"
+        ],
+        "summary": "Delete Instance S3 Content",
+        "operationId": "delete_instance_s3_content_api_instances__instance_id__s3_content_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "S3 object path",
+              "title": "Path"
+            },
+            "description": "S3 object path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3DeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/instances/{instance_id}/s3/content/raw": {
@@ -3542,6 +3598,24 @@
         ],
         "title": "RunPerfAnalyzerRequest",
         "description": "Request body for a model-level Perf Analyzer run."
+      },
+      "S3DeleteResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "deleted"
+        ],
+        "title": "S3DeleteResponse"
       },
       "S3EntryDTO": {
         "properties": {

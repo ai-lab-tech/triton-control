@@ -23,6 +23,7 @@ from app.core.identity import require_user_entity
 from app.services.triton.client import TritonService
 from app.services.triton.config import extract_triton_error_detail
 from app.api.s3_api import (
+    delete_instance_s3_content,
     get_instance_s3_content,
     get_instance_s3_content_raw,
     list_instance_s3,
@@ -91,8 +92,20 @@ class _S3Body:
 class _S3Client:
     def __init__(self):
         self.put_calls = []
+        self.delete_calls = []
+        self.delete_objects_calls = []
 
-    def list_objects_v2(self, **_kwargs):
+    def list_objects_v2(self, **kwargs):
+        if "Delimiter" not in kwargs:
+            prefix = kwargs.get("Prefix", "")
+            return {
+                "Contents": [
+                    {"Key": f"{prefix}"},
+                    {"Key": f"{prefix}config.pbtxt"},
+                    {"Key": f"{prefix}1/model.plan"},
+                ],
+                "IsTruncated": False,
+            }
         return {
             "CommonPrefixes": [{"Prefix": "models/folder/"}],
             "Contents": [
@@ -108,6 +121,12 @@ class _S3Client:
 
     def put_object(self, **kwargs):
         self.put_calls.append(kwargs)
+
+    def delete_object(self, **kwargs):
+        self.delete_calls.append(kwargs)
+
+    def delete_objects(self, **kwargs):
+        self.delete_objects_calls.append(kwargs)
 
 
 class _BodyRequest:
@@ -958,6 +977,45 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.size, 3)
         self.assertEqual(client.put_calls[0]["Body"], b"\x00\xff\x01")
         self.assertEqual(client.put_calls[0]["ContentType"], "application/octet-stream")
+
+    async def test_DeleteInstanceS3Content_FileOrFolderPath_DeletesExpectedObjects(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="gpu-a",
+            model_names=[],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="models/",
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3Client()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            file_result = delete_instance_s3_content(
+                1,
+                path="resnet/config.pbtxt",
+                session=session,
+                claims={"role": "admin"},
+            )
+            folder_result = delete_instance_s3_content(
+                1,
+                path="resnet/",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(file_result.deleted, 1)
+        self.assertEqual(client.delete_calls[0]["Key"], "models/resnet/config.pbtxt")
+        self.assertEqual(folder_result.deleted, 3)
+        self.assertEqual(client.delete_objects_calls[0]["Delete"]["Objects"][0]["Key"], "models/resnet/")
 
 
 class DashboardApiTests(unittest.TestCase):

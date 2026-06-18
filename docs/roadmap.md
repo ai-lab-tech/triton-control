@@ -144,8 +144,8 @@ Goal:
 
 Goal:
 
-- Enable deleting files in the S3 Browser.
 - Enable renaming files in the S3 Browser.
+- Enable moving files and folders in the S3 Browser.
 
 ## Prioritization
 
@@ -166,4 +166,4 @@ Goal:
 
 - Resource management for Triton deployments (GPU/RAM/CPU)
 - User management with groups
-- S3 Browser: file delete and rename
+- S3 Browser: rename and move
