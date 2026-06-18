@@ -760,15 +760,9 @@
     },
     "/api/development": {
       "get": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "List Development Workspaces",
         "description": "Return Development workspaces owned by the authenticated user.",
-=======
-        "tags": ["code-servers"],
-        "summary": "List Code Servers",
-        "description": "Return code-server workspaces owned by the authenticated user.",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "operationId": "list_code_servers_api_code_servers_get",
         "responses": {
           "200": {
@@ -793,15 +787,9 @@
         ]
       },
       "post": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "Create Development Workspace",
         "description": "Create or replace the caller's Development workspace.",
-=======
-        "tags": ["code-servers"],
-        "summary": "Create Code Server",
-        "description": "Create or replace the caller's code-server workspace.",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "operationId": "create_code_server_api_code_servers_post",
         "requestBody": {
           "content": {
@@ -844,13 +832,8 @@
     },
     "/api/development/deployment-navigation": {
       "get": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "Consume Development Deployment Navigation",
-=======
-        "tags": ["code-servers"],
-        "summary": "Consume Code Server Deployment Navigation",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "description": "Return and clear a pending deployment navigation target for the user.",
         "operationId": "consume_code_server_deployment_navigation_api_code_servers_deployment_navigation_get",
         "responses": {
@@ -872,15 +855,9 @@
         ]
       },
       "post": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "Notify Development Deployment Navigation",
         "description": "Record a one-shot navigation target after a Development deploy action.",
-=======
-        "tags": ["code-servers"],
-        "summary": "Notify Code Server Deployment Navigation",
-        "description": "Record a one-shot navigation target after a code-server deploy action.",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "operationId": "notify_code_server_deployment_navigation_api_code_servers_deployment_navigation_post",
         "requestBody": {
           "content": {
@@ -923,15 +900,9 @@
     },
     "/api/development/{code_server_id}": {
       "get": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "Get Development Workspace",
         "description": "Return a single Development workspace owned by the authenticated user.",
-=======
-        "tags": ["code-servers"],
-        "summary": "Get Code Server",
-        "description": "Return a single code-server workspace owned by the authenticated user.",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "operationId": "get_code_server_api_code_servers__code_server_id__get",
         "security": [
           {
@@ -973,15 +944,9 @@
         }
       },
       "delete": {
-<<<<<<< HEAD
         "tags": ["development"],
         "summary": "Delete Development Workspace",
         "description": "Delete a Development workload owned by the authenticated user.",
-=======
-        "tags": ["code-servers"],
-        "summary": "Delete Code Server",
-        "description": "Delete a code-server workload owned by the authenticated user.",
->>>>>>> 2a752ac4fa49c7f71306ca559aac671b840408a5
         "operationId": "delete_code_server_api_code_servers__code_server_id__delete",
         "security": [
           {
