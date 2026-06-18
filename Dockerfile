@@ -42,6 +42,7 @@ RUN mkdir -p /tmp/nginx \
 WORKDIR /opt/triton-backend
 
 COPY triton-backend/ /opt/triton-backend/
+COPY code-server-extensions/ /opt/code-server-extensions/
 RUN ln -s /opt/triton-backend/protobuff /opt/triton-backend/app/protobuff
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir /opt/triton-backend

@@ -10,6 +10,13 @@ Internal modules:
 
 from app.schemas.dashboard import DashboardAlertDTO
 from app.schemas.deployment import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
+from app.schemas.development import (
+    CodeServerDeleteResponse,
+    CodeServerDeploymentNavigationRequest,
+    CodeServerDeploymentNavigationResponse,
+    CodeServerDTO,
+    CreateCodeServerRequest,
+)
 from app.schemas.instance import (
     CreateTritonInstanceRequest,
     InstanceLogsResponse,
@@ -58,6 +65,11 @@ from app.schemas.user import (
 __all__ = [
     "BootstrapRegisterRequest",
     "BootstrapStatusResponse",
+    "CodeServerDTO",
+    "CodeServerDeleteResponse",
+    "CodeServerDeploymentNavigationRequest",
+    "CodeServerDeploymentNavigationResponse",
+    "CreateCodeServerRequest",
     "CreateDeploymentRequest",
     "CreateTritonInstanceRequest",
     "CreateUserRequest",

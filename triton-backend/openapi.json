@@ -802,6 +802,248 @@
         }
       }
     },
+    "/api/development": {
+      "get": {
+        "tags": [
+          "development"
+        ],
+        "summary": "List Code Servers",
+        "description": "Return Development workspaces owned by the authenticated user.",
+        "operationId": "list_code_servers_api_development_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CodeServerDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List Code Servers Api Development Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "development"
+        ],
+        "summary": "Create Code Server",
+        "description": "Create or replace the caller's Development workspace.",
+        "operationId": "create_code_server_api_development_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCodeServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/development/deployment-navigation": {
+      "get": {
+        "tags": [
+          "development"
+        ],
+        "summary": "Consume Code Server Deployment Navigation",
+        "description": "Return and clear a pending deployment navigation target for the user.",
+        "operationId": "consume_code_server_deployment_navigation_api_development_deployment_navigation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeploymentNavigationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "development"
+        ],
+        "summary": "Notify Code Server Deployment Navigation",
+        "description": "Record a one-shot navigation target after a Development deploy action.",
+        "operationId": "notify_code_server_deployment_navigation_api_development_deployment_navigation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeServerDeploymentNavigationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeploymentNavigationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/development/{code_server_id}": {
+      "get": {
+        "tags": [
+          "development"
+        ],
+        "summary": "Get Code Server",
+        "description": "Return a single Development workspace owned by the authenticated user.",
+        "operationId": "get_code_server_api_development__code_server_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "development"
+        ],
+        "summary": "Delete Code Server",
+        "description": "Delete a Development workload owned by the authenticated user.",
+        "operationId": "delete_code_server_api_development__code_server_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Code Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeServerDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/perf-analyzers": {
       "get": {
         "tags": [
@@ -2094,6 +2336,229 @@
           "needs_setup"
         ],
         "title": "BootstrapStatusResponse"
+      },
+      "CodeServerDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "statefulset_name": {
+            "type": "string",
+            "title": "Statefulset Name"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "applied_resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applied Resources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "namespace",
+          "statefulset_name",
+          "service_name",
+          "image",
+          "url",
+          "status",
+          "status_message",
+          "applied_resources"
+        ],
+        "title": "CodeServerDTO",
+        "description": "Returned Development workspace owned by the authenticated user."
+      },
+      "CodeServerDeleteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "namespace"
+        ],
+        "title": "CodeServerDeleteResponse",
+        "description": "Response after deleting a Development workload record."
+      },
+      "CodeServerDeploymentNavigationRequest": {
+        "properties": {
+          "instance_id": {
+            "type": "integer",
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id"
+        ],
+        "title": "CodeServerDeploymentNavigationRequest",
+        "description": "Handoff request after a Development extension created a deployment."
+      },
+      "CodeServerDeploymentNavigationResponse": {
+        "properties": {
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "title": "CodeServerDeploymentNavigationResponse",
+        "description": "One-shot pending deployment navigation target for the current user."
+      },
+      "CreateCodeServerRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "workspace"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image",
+            "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "Default Dark+",
+              "Default Light+",
+              "Quiet Light",
+              "Monokai",
+              "Solarized Dark"
+            ],
+            "title": "Theme",
+            "default": "Default Dark+"
+          },
+          "storage_size": {
+            "type": "string",
+            "title": "Storage Size",
+            "default": "20Gi"
+          },
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu"
+          },
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
+          "memory_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit"
+          },
+          "gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Count"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          },
+          "image_has_code_server": {
+            "type": "boolean",
+            "title": "Image Has Code Server",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CreateCodeServerRequest",
+        "description": "Request body for creating the caller's Development workspace."
       },
       "CreateDeploymentRequest": {
         "properties": {

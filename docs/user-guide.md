@@ -32,6 +32,7 @@ Main sidebar entries:
 
 - Dashboard
 - Triton Instances
+- Development (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
@@ -283,6 +284,20 @@ When ingress is not configured, Triton Control uses internal service DNS:
 ```text
 http://<service>.<namespace>.svc.cluster.local:<port>
 ```
+
+## Development Workspace (Sidebar Entry)
+
+**Development** is a standalone product feature that creates a private,
+Kubernetes-backed code-server workspace for the signed-in user. It is separate
+from development of the Triton Control application itself.
+
+Users can create one persistent workspace, edit model repositories under
+`/workspace`, and deploy them through the bundled **Triton Control Deploy**
+extension.
+
+See [Development Workspaces](development-workspaces.md) for workspace fields,
+Kubernetes resources, persistence, proxy behavior, deployment steps, and API
+details.
 
 ## Perf Analyzer (Sidebar Entry)
 

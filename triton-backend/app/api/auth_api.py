@@ -125,6 +125,18 @@ def self_register_endpoint(
 @public_router.post("/login", response_model=LoginResponse)
 @translate_app_errors
 def login_endpoint(
-    request: LoginRequest, session: Session = Depends(get_session)
+    request: LoginRequest,
+    http_request: Request,
+    session: Session = Depends(get_session),
 ) -> LoginResponse:
-    return login(request, session)
+    response = login(request, session)
+    user = response.user
+    http_request.session["user"] = {
+        "sub": user.email,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "auth_provider": user.auth_provider,
+        "access_allowed": user.is_active,
+    }
+    return response

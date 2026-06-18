@@ -18,8 +18,11 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   {{- end }}
   - apiGroups: [""]
-    resources: ["secrets", "services", "pods"]
+    resources: ["secrets", "services", "pods", "configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list"]
@@ -31,6 +34,9 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

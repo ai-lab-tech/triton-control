@@ -44,6 +44,7 @@ enter a new value to replace it.
 | `TRITON_HTTP_TRUST_ENV` | No | `false` | Allows direct Triton HTTP clients to honor `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when true. Keep false for local Minikube/hosts-file ingress names unless a proxy is required. |
 | `KUBERNETES_ENABLED` | No | auto-detected | Optional override for whether Kubernetes-backed features should be considered available. If unset, the backend detects in-cluster ServiceAccount credentials. |
 | `KUBERNETES_KUBECONFIG_PATH` | No | unset | Development/testing kubeconfig path for backend runs outside Kubernetes. Leave unset for in-cluster deployments. |
+| `TRITON_DEPLOY_CODE_SERVER_EXTENSION_DIR` | No | auto-detected | Optional source directory for the bundled Triton Deploy extension used by Development workspaces. Set this for local backend runs if the repository extension directory is not found automatically. Use forward slashes in Windows `.env` files. |
 | `OIDC_CONFIG_SOURCE` | No | `db` | Selects OIDC source: `db` for application-managed settings, `env` for environment-managed settings. |
 | `OIDC_ENABLED` | No | `true` in `.env.example`, `false` in Compose/Helm defaults | Enables OIDC login when OIDC settings are valid. |
 | `OIDC_ISSUER` | In `env` mode | `https://identity.example.com/realms/triton` | OIDC issuer URL published by your identity provider. |

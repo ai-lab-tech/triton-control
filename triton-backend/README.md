@@ -75,6 +75,16 @@ python main.py
 - [Protobuf generation and Triton release mapping](protobuff/README.md)
 - [Technology choices](TECHNOLOGY_CHOICES.md)
 
+## Development Workspace Backend
+
+The `/api/development` endpoints manage each user's Kubernetes-backed
+Development workspace via code-server.
+
+The backend creates the StatefulSet, Service, persistent workspace volume,
+Secrets, and the ConfigMap containing the bundled **Triton Control Deploy**
+extension. The extension is installed automatically during workspace startup.
+S3/R2 Explorer is optional and is installed manually by the user when needed.
+
 ## Perf Analyzer Notes
 
 When running Perf Analyzer in Kubernetes, JSON input payloads are written to

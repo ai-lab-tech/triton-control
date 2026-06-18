@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -37,6 +37,7 @@ from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
+from app.api.development_api import router as code_server_router
 from app.api.instance_api import router as instance_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
@@ -130,6 +131,7 @@ app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])
+app.include_router(code_server_router)
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])
@@ -137,7 +139,19 @@ app.include_router(s3_router, dependencies=[Depends(get_claims)])
 
 
 @app.get("/api/auth/me")
-async def auth_me(claims: dict[str, Any] = Depends(get_claims_allow_pending)) -> dict[str, Any]:
+async def auth_me(
+    request: Request,
+    claims: dict[str, Any] = Depends(get_claims_allow_pending),
+) -> dict[str, Any]:
+    request.session["user"] = {
+        "sub": claims.get("sub") or claims.get("email") or claims.get("user_id"),
+        "email": claims.get("email"),
+        "name": claims.get("name"),
+        "role": claims.get("role"),
+        "auth_provider": claims.get("auth_provider"),
+        "access_allowed": bool(claims.get("access_allowed", True)),
+        "user_id": claims.get("user_id"),
+    }
     return {
         "authenticated": True,
         "access_allowed": bool(claims.get("access_allowed", True)),

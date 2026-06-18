@@ -1,4 +1,5 @@
 dist
 coverage
 node_modules
+openapi/triton-backend/openapi.json
 src/app/api/generated

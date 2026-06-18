@@ -3,6 +3,7 @@ import { adminGuard, authGuard } from "./shared/auth/auth.guard";
 import { ShellComponent } from "./shell/shell.component";
 import { DashboardPageComponent } from "./pages/dashboard/dashboard-page.component";
 import { InstancesPageComponent } from "./pages/instances/instances-page.component";
+import { DevelopmentPageComponent } from "./pages/development/development-page.component";
 import { NewDeploymentPageComponent } from "./pages/deployments/new-deployment-page.component";
 import { NewPerfAnalyzerPageComponent } from "./pages/perf-analyzers/new-perf-analyzer-page.component";
 import { InstanceDetailPageComponent } from "./pages/instances/detail/instance-detail-page.component";
@@ -23,6 +24,7 @@ export const APP_ROUTES: Routes = [
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
       { path: "instances", component: InstancesPageComponent },
+      { path: "development", component: DevelopmentPageComponent },
       { path: "deployments/new", component: NewDeploymentPageComponent },
       { path: "perf-analyzers", component: NewPerfAnalyzerPageComponent },
       { path: "instances/:id", component: InstanceDetailPageComponent },

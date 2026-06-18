@@ -7,10 +7,10 @@ import { map } from "rxjs/operators";
 import { interval } from "rxjs";
 
 import { MatSidenavModule } from "@angular/material/sidenav";
-import { MatToolbarModule } from "@angular/material/toolbar";
 import { MatListModule } from "@angular/material/list";
 import { MatIconModule } from "@angular/material/icon";
 import { MatButtonModule } from "@angular/material/button";
+import { MatToolbarModule } from "@angular/material/toolbar";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatDividerModule } from "@angular/material/divider";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
@@ -18,6 +18,7 @@ import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { NewInstanceDialogComponent } from "../pages/instances/new-instance-dialog/new-instance-dialog.component";
 import { AuthStore } from "../shared/auth/auth.store";
 import { AuthService } from "../shared/auth/auth.service";
+import { ChromeService } from "../shared/chrome.service";
 import { environment } from "../../environments/environment";
 import { Store } from "@ngrx/store";
 import { selectDashboardFleetHealthPercentage } from "../state/dashboard/dashboard.selectors";
@@ -38,10 +39,10 @@ type NavItem = {
     RouterLink,
     RouterLinkActive,
     MatSidenavModule,
-    MatToolbarModule,
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    MatToolbarModule,
     MatMenuModule,
     MatDividerModule,
     MatDialogModule,
@@ -53,6 +54,8 @@ export class ShellComponent {
   private readonly auth = inject(AuthStore);
   private readonly oidc = inject(AuthService);
   private readonly store = inject(Store);
+  private readonly chrome = inject(ChromeService);
+  readonly topbarHidden = this.chrome.topbarHidden;
   readonly userName = this.auth.userName;
   readonly role = this.auth.role;
   readonly isAdmin = this.auth.isAdmin;
@@ -61,13 +64,17 @@ export class ShellComponent {
   readonly kubernetesEnabled = signal(false);
   readonly kubernetesCapabilityLoaded = signal(false);
 
-  readonly showAdminMenu = computed(() => true);
-
   readonly navItems = computed<NavItem[]>(() => {
     const kubernetesActionDisabledReason = this.kubernetesActionDisabledReason();
     const items: NavItem[] = [
       { label: "Dashboard", icon: "grid_view", path: "/dashboard" },
       { label: "Triton Instances", icon: "dns", path: "/instances" },
+      {
+        label: "Development",
+        icon: "terminal",
+        path: "/development",
+        disabledReason: kubernetesActionDisabledReason,
+      },
       {
         label: "Add Deployment",
         icon: "rocket_launch",
@@ -110,6 +117,7 @@ export class ShellComponent {
 
   readonly navOpen = signal(false);
   readonly navOpened = computed(() => (this.isHandset() ? this.navOpen() : true));
+  readonly navCollapsed = signal(false);
   readonly adminMenuOpen = signal(false);
   readonly fleetHealthPercentage = toSignal(
     this.store.select(selectDashboardFleetHealthPercentage),
@@ -152,8 +160,8 @@ export class ShellComponent {
 
   private async refreshKubernetesCapability(): Promise<void> {
     try {
-      const settings = await this.oidc.getOidcSettings();
-      this.kubernetesEnabled.set(!!settings.kubernetesEnabled);
+      const options = await this.oidc.getAuthOptions();
+      this.kubernetesEnabled.set(!!options.kubernetesEnabled);
       this.kubernetesCapabilityLoaded.set(true);
     } catch (error) {
       this.kubernetesEnabled.set(false);
@@ -164,7 +172,11 @@ export class ShellComponent {
   }
 
   toggleNav() {
-    this.navOpen.update((open: boolean) => !open);
+    if (this.isHandset()) {
+      this.navOpen.update((open: boolean) => !open);
+      return;
+    }
+    this.navCollapsed.update((collapsed: boolean) => !collapsed);
   }
 
   closeNavOnMobile() {

@@ -8,6 +8,8 @@ Defines the following database tables:
                           with roles, assigned instances, and auth metadata.
   ``oidc_config``        (``OidcConfigEntity``)      — singleton row that
                           persists the OIDC provider configuration.
+  ``code_servers``       (``CodeServerEntity``)       — per-user Kubernetes
+                          Development workspaces.
   ``dashboard_alerts``   (``DashboardAlertEntity``)  — ephemeral health-alert
                           snapshots rebuilt on every health-refresh cycle.
 """
@@ -152,6 +154,35 @@ class PerfAnalyzerRunEntity(SQLModel, table=True):
     command: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     output: str = Field(default="", sa_column=Column(String))
     executed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class CodeServerEntity(SQLModel, table=True):
+    """Database model for a user's Kubernetes Development workspace."""
+
+    __tablename__ = "code_servers"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "name",
+            name="uq_code_server_owner_name",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_user_id: int = Field(foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    namespace: str
+    statefulset_name: str
+    service_name: str
+    secret_name: str
+    image: str
+    url: str = Field(default="")
+    password_enc: str = Field(default="")
+    status: str = Field(default="creating")
+    status_message: str = Field(default="")
+    applied_resources: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class DashboardAlertEntity(SQLModel, table=True):

@@ -10,7 +10,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api.deployment_api import create_deployment as create_deployment_api
 from app.api.deployment_api import delete_deployment as delete_deployment_api
-from app.exceptions import BadRequestError
+from app.exceptions import BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment import deployment as deployments
 from app.services.deployment import kubernetes as k8s
@@ -220,6 +220,37 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(created["s3_endpoint"], "https://object-store.example.com:443")
         self.assertEqual(created["s3_bucket"], "triton-models")
         self.assertEqual(created["s3_prefix"], "prefix")
+        self.assertEqual(created["s3_address_style"], "path")
+
+    def test_UpsertDeployedInstance_DuplicateDeploymentName_RaisesConflict(self) -> None:
+        # Arrange
+        request = self._request()
+        user = SimpleNamespace(id=11, assigned_instances=[])
+
+        # Act / Assert
+        with patch("app.services.deployment.records.require_user_entity", return_value=user), patch(
+            "app.services.deployment.records.instances.find_by_name",
+            return_value=SimpleNamespace(id=3, name="triton-minio"),
+        ), patch("app.services.deployment.records.instances.find_by_url", return_value=None), patch(
+            "app.services.deployment.records.instances.create"
+        ) as create_instance:
+            with self.assertRaises(ConflictError) as raised:
+                records.upsert_deployed_instance(
+                    request,
+                    SimpleNamespace(),
+                    {"role": "admin"},
+                    namespace="triton-minio",
+                    deployment_name="triton-minio",
+                    service_name="triton-minio-service",
+                    secret_name="triton-minio-s3-credentials",
+                    image="triton-image",
+                    triton_url="http://triton-minio-service.triton-minio.svc.cluster.local:18000",
+                    metrics_url=None,
+                    initial_snapshot=k8s.pending_snapshot(),
+                )
+
+        self.assertIn("Deployment name 'triton-minio' already exists", raised.exception.detail)
+        create_instance.assert_not_called()
 
     def test_UpsertDeployedInstance_HttpsS3WithoutCaCertificate_StoresEmptyS3Ca(self) -> None:
         # Arrange
@@ -612,6 +643,25 @@ class DeploymentServiceTests(unittest.TestCase):
                     claims={"role": "viewer"},
                 )
         self.assertEqual(raised.exception.status_code, 400)
+
+    def test_CreateDeploymentApi_ServiceRaisesConflict_ReturnsConflictHttpError(self) -> None:
+        # Arrange
+        request = self._request()
+
+        # Act / Assert
+        with patch(
+            "app.services.deployment.deployment.create_deployment",
+            side_effect=ConflictError("Deployment name 'triton-minio' already exists"),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                create_deployment_api(
+                    request,
+                    background_tasks=SimpleNamespace(add_task=lambda *_args: None),
+                    session=SimpleNamespace(),
+                    claims={"role": "viewer"},
+                )
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("already exists", str(raised.exception.detail))
 
     def test_DeleteDeploymentApi_ServiceReturnsResult_ReturnsDeleteResponse(self) -> None:
         # Act

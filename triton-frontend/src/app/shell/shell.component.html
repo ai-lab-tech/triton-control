@@ -1,17 +1,40 @@
-<mat-sidenav-container class="layout">
+<mat-sidenav-container class="layout" autosize>
   @if (isLoggedIn()) {
     <mat-sidenav
       class="sidenav"
+      [class.collapsed]="navCollapsed() && !isHandset()"
       [mode]="isHandset() ? 'over' : 'side'"
       [opened]="navOpened()"
       (openedChange)="navOpen.set($event)"
     >
       <div class="brand">
-        <div class="brand-icon">
+        <button
+          type="button"
+          class="brand-icon"
+          [attr.aria-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+          [attr.data-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+          (click)="toggleNav(); $event.stopPropagation()"
+        >
           <span class="material-icons">dns</span>
-        </div>
-        <div>
-          <div class="brand-title">Triton Control</div>
+        </button>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <div class="brand-title">Triton Control</div>
+            @if (!isHandset()) {
+              <button
+                mat-icon-button
+                type="button"
+                class="brand-toggle"
+                [attr.aria-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+                [attr.data-label]="navCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
+                (click)="toggleNav(); $event.stopPropagation()"
+              >
+                <span class="material-icons">{{
+                  navCollapsed() ? "chevron_right" : "chevron_left"
+                }}</span>
+              </button>
+            }
+          </div>
           <div class="brand-sub">Inference fleet cockpit</div>
         </div>
       </div>
@@ -24,7 +47,7 @@
               mat-list-item
               class="disabled-nav-item"
               [attr.aria-disabled]="true"
-              [attr.title]="item.disabledReason"
+              [attr.data-label]="item.disabledReason"
             >
               <span class="disabled-nav-content">
                 <span
@@ -33,7 +56,7 @@
                   [style.opacity]="'0.74'"
                   >{{ item.icon }}</span
                 >
-                <span class="disabled-nav-label">{{ item.label }}</span>
+                <span class="disabled-nav-label nav-label">{{ item.label }}</span>
               </span>
             </span>
           } @else {
@@ -42,9 +65,10 @@
               [routerLink]="item.path"
               routerLinkActive="active"
               (click)="closeNavOnMobile()"
+              [attr.data-label]="item.label"
             >
               <span class="material-icons nav-icon">{{ item.icon }}</span>
-              <span>{{ item.label }}</span>
+              <span class="nav-label">{{ item.label }}</span>
             </a>
           }
         }
@@ -56,69 +80,101 @@
             type="button"
             class="sidenav-add-instance"
             (click)="openNewInstanceDialog(); closeNavOnMobile()"
+            [attr.data-label]="'Add Instance'"
           >
             <span class="material-icons">add</span>
-            <span>Add Instance</span>
+            <span class="sidenav-action-label">Add Instance</span>
           </button>
         </div>
       }
 
       <div class="sidenav-footer">
-        <div class="fleet-chip">
+        <div class="fleet-chip" [attr.data-label]="fleetHealthLabel()">
           <span class="material-icons">bolt</span>
-          <span>{{ fleetHealthLabel() }}</span>
+          <span class="fleet-label">{{ fleetHealthLabel() }}</span>
         </div>
         <div class="version">{{ appVersion }}</div>
+      </div>
+
+      <div class="sidenav-account" (click)="$event.stopPropagation()">
+        @if (adminMenuOpen()) {
+          <div class="account-menu">
+            @if (!isLoggedIn()) {
+              <button type="button" class="account-item" (click)="login()">
+                <span class="material-icons">login</span>
+                <span>Log in</span>
+              </button>
+            }
+            @if (isLoggedIn() && isAdmin()) {
+              <button type="button" class="account-item" (click)="go('/users')">
+                <span class="material-icons">group</span>
+                <span>User Management</span>
+              </button>
+              <button type="button" class="account-item" (click)="go('/settings')">
+                <span class="material-icons">tune</span>
+                <span>Settings</span>
+              </button>
+            }
+            @if (isLoggedIn()) {
+              <button type="button" class="account-item logout" (click)="logout()">
+                <span class="material-icons">logout</span>
+                <span>Log out</span>
+              </button>
+            }
+          </div>
+        }
+        <button
+          type="button"
+          class="account-trigger"
+          [class.open]="adminMenuOpen()"
+          (click)="toggleAdminMenu()"
+          [attr.data-label]="userName()"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="adminMenuOpen()"
+        >
+          <span class="avatar">{{ initials() }}</span>
+          <span class="account-name">{{ userName() }}</span>
+          <span class="material-icons account-caret">expand_less</span>
+        </button>
       </div>
     </mat-sidenav>
   }
 
   <mat-sidenav-content class="content" (click)="closeAdminMenu()">
-    <mat-toolbar class="topbar">
-      <div class="topbar-title">Triton Control</div>
-      <span class="spacer"></span>
-
-      @if (isLoggedIn()) {
-        <div class="user-chip">
-          <span class="avatar">{{ initials() }}</span>
-          <span class="user-name">{{ userName() }}</span>
-        </div>
-      }
-
-      @if (showAdminMenu()) {
-        <div class="admin-menu" (click)="$event.stopPropagation()">
-          <button mat-icon-button class="admin-hamburger" (click)="toggleAdminMenu()">
+    @if (!topbarHidden()) {
+      <mat-toolbar class="topbar">
+        @if (isLoggedIn() && isHandset()) {
+          <button
+            mat-icon-button
+            type="button"
+            class="menu-btn"
+            aria-label="Open navigation"
+            (click)="toggleNav(); $event.stopPropagation()"
+          >
             <span class="material-icons">menu</span>
           </button>
-          @if (adminMenuOpen()) {
-            <div class="admin-dropdown">
-              @if (!isLoggedIn()) {
-                <button type="button" class="admin-item" (click)="login()">
-                  <span class="material-icons">login</span>
-                  <span>Log in</span>
-                </button>
-              }
-              @if (isLoggedIn() && isAdmin()) {
-                <button type="button" class="admin-item" (click)="go('/users')">
-                  <span class="material-icons">group</span>
-                  <span>User Management</span>
-                </button>
-                <button type="button" class="admin-item" (click)="go('/settings')">
-                  <span class="material-icons">tune</span>
-                  <span>Settings</span>
-                </button>
-              }
-              @if (isLoggedIn()) {
-                <button type="button" class="admin-item logout" (click)="logout()">
-                  <span class="material-icons">logout</span>
-                  <span>Log out</span>
-                </button>
-              }
-            </div>
-          }
-        </div>
-      }
-    </mat-toolbar>
+        }
+        <div class="topbar-title">Triton Control</div>
+        <span class="spacer"></span>
+
+        @if (isLoggedIn()) {
+          <div class="user-chip">
+            <span class="avatar">{{ initials() }}</span>
+            <span class="user-name">{{ userName() }}</span>
+          </div>
+        }
+      </mat-toolbar>
+    } @else if (isLoggedIn() && isHandset()) {
+      <button
+        mat-icon-button
+        type="button"
+        class="menu-btn floating-menu-btn"
+        aria-label="Open navigation"
+        (click)="toggleNav(); $event.stopPropagation()"
+      >
+        <span class="material-icons">menu</span>
+      </button>
+    }
 
     <div class="page">
       <router-outlet></router-outlet>
