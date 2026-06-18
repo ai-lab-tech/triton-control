@@ -41,7 +41,7 @@ import {
   selectS3InstanceName,
   selectS3KnownFolderPaths,
 } from "../../../state/instances-s3/instances-s3.selectors";
-import { displayFailure } from "../../../state/shared/shared.actions";
+import { displayFailure, displaySuccess } from "../../../state/shared/shared.actions";
 import { AuthStore } from "../../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../../shared/api-error-message";
 
@@ -107,11 +107,16 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   readonly uploadFileName = toSignal(this.store.select(selectS3UploadFileName), {
     initialValue: "",
   });
-  readonly uploadBusy = computed(() => this.readingUploadFile || this.uploadLoading());
+  readonly uploadBusy = computed(
+    () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
+  );
   readonly canWriteInstances = this.auth.canWriteInstances;
   readonly uploadStatusLabel = computed(() => {
     if (this.readingUploadFile) {
       return `Reading ${this.readingUploadFileName || "file"}...`;
+    }
+    if (this.uploadFolderInProgress) {
+      return `Uploading ${this.uploadFolderCompleted}/${this.uploadFolderTotal} files...`;
     }
     if (this.uploadLoading()) {
       return `Uploading ${this.uploadFileName() || "file"}...`;
@@ -123,6 +128,9 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   query = "";
   readingUploadFile = false;
   readingUploadFileName = "";
+  uploadFolderInProgress = false;
+  uploadFolderCompleted = 0;
+  uploadFolderTotal = 0;
   editorContent = "";
   editorOptions = {
     theme: "vs-dark",
@@ -337,6 +345,73 @@ export class InstanceS3BrowserPageComponent implements OnInit {
       });
   }
 
+  async onUploadFolder(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement | null;
+    const files = Array.from(input?.files ?? []);
+    if (!files.length) {
+      return;
+    }
+    if (!this.canWriteInstances() || this.uploadBusy()) {
+      if (input) {
+        input.value = "";
+      }
+      return;
+    }
+    const instanceId = (this.instanceId() ?? "").trim();
+    if (!instanceId) {
+      if (input) {
+        input.value = "";
+      }
+      return;
+    }
+
+    const currentPath = this.currentPath();
+    this.uploadFolderInProgress = true;
+    this.uploadFolderCompleted = 0;
+    this.uploadFolderTotal = files.length;
+
+    const failed: string[] = [];
+    for (const file of files) {
+      const relativePath = this.getUploadRelativePath(file);
+      const filePath = this.joinPath(currentPath, relativePath);
+      try {
+        const buffer = await file.arrayBuffer();
+        await firstValueFrom(
+          this.instancesApi.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut(
+            buffer,
+            filePath,
+            instanceId,
+            file.type || "application/octet-stream",
+          ),
+        );
+      } catch {
+        failed.push(relativePath);
+      } finally {
+        this.uploadFolderCompleted += 1;
+      }
+    }
+
+    this.uploadFolderInProgress = false;
+    if (input) {
+      input.value = "";
+    }
+    this.store.dispatch(s3NavigateTo({ instanceId, path: currentPath }));
+
+    if (failed.length) {
+      const shown = failed.slice(0, 3).join(", ");
+      const suffix = failed.length > 3 ? ` and ${failed.length - 3} more` : "";
+      this.store.dispatch(
+        displayFailure({
+          title: "Folder upload incomplete",
+          message: `Uploaded ${files.length - failed.length}/${files.length} files. Failed: ${shown}${suffix}.`,
+        }),
+      );
+      return;
+    }
+
+    this.store.dispatch(displaySuccess({ message: `Uploaded folder with ${files.length} files.` }));
+  }
+
   canEditEntry(entry: BrowserEntry): boolean {
     return this.canWriteInstances() && this.isEditableEntry(entry);
   }
@@ -538,5 +613,10 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   private normalizePath(path: string | null | undefined): string {
     const clean = `${path ?? ""}`.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
     return clean ? `/${clean}` : "/";
+  }
+
+  private getUploadRelativePath(file: File): string {
+    const withRelativePath = file as File & { webkitRelativePath?: string };
+    return `${withRelativePath.webkitRelativePath || file.name}`.replace(/\\/g, "/");
   }
 }

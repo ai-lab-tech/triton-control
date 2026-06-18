@@ -81,7 +81,28 @@
                     <span>{{ uploadStatusLabel() }}</span>
                   } @else {
                     <span class="material-icons">upload</span>
-                    <span>Upload</span>
+                    <span>Upload File</span>
+                  }
+                </label>
+                <label
+                  class="upload-btn folder-upload-btn"
+                  [class.uploading]="uploadBusy()"
+                  [attr.aria-busy]="uploadBusy()"
+                >
+                  <input
+                    type="file"
+                    multiple
+                    webkitdirectory
+                    directory
+                    (change)="onUploadFolder($event)"
+                    [disabled]="uploadBusy()"
+                  />
+                  @if (uploadBusy()) {
+                    <span class="material-icons upload-spin" aria-hidden="true">sync</span>
+                    <span>{{ uploadStatusLabel() }}</span>
+                  } @else {
+                    <span class="material-icons">drive_folder_upload</span>
+                    <span>Upload Folder</span>
                   }
                 </label>
               }

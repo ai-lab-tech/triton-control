@@ -396,6 +396,39 @@ describe("InstanceS3BrowserPageComponent", () => {
     expect(component.readingUploadFileName).toBe("");
   });
 
+  it("OnUploadFolder_FolderSelected_UploadsAllFilesWithRelativePaths", async () => {
+    mockStore.overrideSelector(selectS3CurrentPath, "/models");
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+    const config = new File(['name: "demo"'], "config.pbtxt", { type: "text/plain" });
+    const weights = new File(["weights"], "model.plan", { type: "application/octet-stream" });
+    Object.defineProperty(config, "webkitRelativePath", {
+      value: "resnet/config.pbtxt",
+    });
+    Object.defineProperty(weights, "webkitRelativePath", {
+      value: "resnet/1/model.plan",
+    });
+    const input = document.createElement("input");
+    Object.defineProperty(input, "files", { value: [config, weights] });
+    const dispatchSpy = spyOn(mockStore, "dispatch");
+
+    await component.onUploadFolder({ target: input } as unknown as Event);
+
+    expect(
+      instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut,
+    ).toHaveBeenCalledTimes(2);
+    const uploadCalls =
+      instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.calls.allArgs();
+    expect(uploadCalls[0][1]).toBe("/models/resnet/config.pbtxt");
+    expect(uploadCalls[1][1]).toBe("/models/resnet/1/model.plan");
+    expect(component.uploadFolderInProgress).toBeFalse();
+    expect(component.uploadFolderCompleted).toBe(2);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
+    );
+  });
+
   it("IsActivePath_CurrentPathIsRoot_ReturnsTrue", () => {
     const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
     const component = fixture.componentInstance;
