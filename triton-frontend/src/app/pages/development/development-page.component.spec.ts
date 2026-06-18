@@ -3,7 +3,7 @@ import { TestBed } from "@angular/core/testing";
 import { Router } from "@angular/router";
 import { of, throwError } from "rxjs";
 
-import { BASE_PATH, CodeServerDTO, CodeServersService } from "../../api/generated/index";
+import { BASE_PATH, CodeServerDTO, DevelopmentService } from "../../api/generated/index";
 import { AuthService } from "../../shared/auth/auth.service";
 import { DevelopmentPageComponent } from "./development-page.component";
 
@@ -26,13 +26,13 @@ describe("DevelopmentPageComponent", () => {
     status_message: "code-1-workspace-0: Running (Ready)",
   };
 
-  let codeServersApi: jasmine.SpyObj<CodeServersService>;
+  let codeServersApi: jasmine.SpyObj<DevelopmentService>;
   let authService: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     window.sessionStorage.clear();
-    codeServersApi = jasmine.createSpyObj<CodeServersService>("CodeServersService", [
+    codeServersApi = jasmine.createSpyObj<DevelopmentService>("DevelopmentService", [
       "listCodeServersApiCodeServersGet",
       "createCodeServerApiCodeServersPost",
       "getCodeServerApiCodeServersCodeServerIdGet",
@@ -60,7 +60,7 @@ describe("DevelopmentPageComponent", () => {
     await TestBed.configureTestingModule({
       imports: [DevelopmentPageComponent],
       providers: [
-        { provide: CodeServersService, useValue: codeServersApi },
+        { provide: DevelopmentService, useValue: codeServersApi },
         { provide: AuthService, useValue: authService },
         { provide: BASE_PATH, useValue: "" },
         { provide: Router, useValue: router },
@@ -296,7 +296,7 @@ describe("DevelopmentPageComponent", () => {
     codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 46 }) as any,
     );
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
     // Act
