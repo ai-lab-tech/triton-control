@@ -8,9 +8,13 @@ import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
 import { Store } from "@ngrx/store";
 
-import { InstancesService, TritonInstanceDTO } from "../../../api/generated/index";
+import {
+  InstanceS3ConfigDTO,
+  InstancesService,
+  TritonInstanceDTO,
+} from "../../../api/generated/index";
 import { InstanceModelMonacoEditorComponent } from "./instance-model-monaco-editor.component";
-import { toggleModelApiConfig } from "../shared/model-api-config";
+import { InstanceModelRepositoryConfigComponent } from "../shared/instance-model-repository-config.component";
 import {
   type InferenceMetrics,
   inferRequestStarted,
@@ -34,6 +38,7 @@ import {
     MatCardModule,
     MatIconModule,
     InstanceModelMonacoEditorComponent,
+    InstanceModelRepositoryConfigComponent,
   ],
   styleUrl: "./instance-model-infer-page.component.scss",
   templateUrl: "./instance-model-infer-page.component.html",
@@ -56,6 +61,7 @@ export class InstanceModelInferPageComponent implements OnInit {
   instanceName = "";
   instanceUrl = "";
   resolvingInstance = false;
+  readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
   private readonly resolveError = signal("");
   readonly submitting = toSignal(this.store.select(selectInferSubmitting), { initialValue: false });
   readonly processingResponse = toSignal(this.store.select(selectInferProcessingResponse), {
@@ -80,10 +86,6 @@ export class InstanceModelInferPageComponent implements OnInit {
     }
     this.saveInferResult(responseJson, this.requestLatencyMs(), this.inferenceMetrics());
   });
-  readonly apiConfigOpen = signal(false);
-  readonly apiConfigLoading = signal(false);
-  readonly apiConfigJson = signal("");
-  readonly apiConfigError = signal("");
   readonly sendLabel = computed(() =>
     this.submitting()
       ? "Sending..."
@@ -159,22 +161,7 @@ export class InstanceModelInferPageComponent implements OnInit {
       this.instanceUrl = stateUrl;
     }
 
-    if (!this.instanceName || !this.instanceUrl) {
-      this.resolvingInstance = true;
-      this.resolveError.set("");
-      try {
-        const instance = (await firstValueFrom(
-          this.instancesApi.getInstanceApiInstancesInstanceIdGet(this.instanceId()),
-        )) as TritonInstanceDTO;
-
-        this.instanceName = instance?.name ?? this.instanceName;
-        this.instanceUrl = instance?.url ?? this.instanceUrl;
-      } catch {
-        this.resolveError.set("Failed to load instance details.");
-      } finally {
-        this.resolvingInstance = false;
-      }
-    }
+    await this.resolveInstance();
   }
 
   async sendInference(): Promise<void> {
@@ -200,26 +187,6 @@ export class InstanceModelInferPageComponent implements OnInit {
         version: this.version(),
       }),
     );
-  }
-
-  async toggleApiConfig(): Promise<void> {
-    await toggleModelApiConfig({
-      hasValidRoute: this.hasValidRoute(),
-      state: {
-        open: this.apiConfigOpen,
-        loading: this.apiConfigLoading,
-        json: this.apiConfigJson,
-        error: this.apiConfigError,
-      },
-      loadConfig: () =>
-        firstValueFrom(
-          this.instancesApi.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet(
-            this.instanceId(),
-            this.modelName(),
-            this.version(),
-          ),
-        ),
-    });
   }
 
   async copyInferUrl(): Promise<void> {
@@ -347,5 +314,23 @@ export class InstanceModelInferPageComponent implements OnInit {
       typeof (value as InferenceMetrics).available === "boolean" &&
       Array.isArray((value as InferenceMetrics).models)
     );
+  }
+
+  private async resolveInstance(): Promise<void> {
+    this.resolvingInstance = true;
+    this.resolveError.set("");
+    try {
+      const instance = (await firstValueFrom(
+        this.instancesApi.getInstanceApiInstancesInstanceIdGet(this.instanceId()),
+      )) as TritonInstanceDTO;
+
+      this.instanceName = instance?.name ?? this.instanceName;
+      this.instanceUrl = instance?.url ?? this.instanceUrl;
+      this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
+    } catch {
+      this.resolveError.set("Failed to load instance details.");
+    } finally {
+      this.resolvingInstance = false;
+    }
   }
 }

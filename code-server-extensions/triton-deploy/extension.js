@@ -236,7 +236,6 @@ async function promptForMissingS3Settings(initial) {
 
 async function saveS3Settings(values) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
-  const s3x = vscode.workspace.getConfiguration("s3x");
   const target = vscode.ConfigurationTarget.Global;
   const forcePathStyle = effectiveForcePathStyle(values.endpoint, values.forcePathStyle);
   await cfg.update("s3Endpoint", values.endpoint, target);
@@ -248,11 +247,24 @@ async function saveS3Settings(values) {
   await cfg.update("s3ForcePathStyle", forcePathStyle, target);
   await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
   await cfg.update("tritonImage", values.image, target);
-  await s3x.update("endpointUrl", values.endpoint, target);
-  await s3x.update("accessKeyId", values.accessKeyId, target);
-  await s3x.update("secretAccessKey", values.secretAccessKey, target);
-  await s3x.update("region", values.region, target);
-  await s3x.update("forcePathStyle", forcePathStyle, target);
+  await saveS3xSettingsIfAvailable(values, forcePathStyle, target);
+}
+
+async function saveS3xSettingsIfAvailable(values, forcePathStyle, target) {
+  const s3x = vscode.workspace.getConfiguration("s3x");
+  try {
+    await s3x.update("endpointUrl", values.endpoint, target);
+    await s3x.update("accessKeyId", values.accessKeyId, target);
+    await s3x.update("secretAccessKey", values.secretAccessKey, target);
+    await s3x.update("region", values.region, target);
+    await s3x.update("forcePathStyle", forcePathStyle, target);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/not a registered configuration/i.test(message)) {
+      throw error;
+    }
+    console.warn(`Skipping optional S3X settings sync: ${message}`);
+  }
 }
 
 function normalizeForm(form) {
@@ -662,6 +674,7 @@ function renderHtml(webview, nonce, initial) {
           }
           statusEl.className = 'status success';
           statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
+          await notifyDeploymentNavigation(body.instance_id);
           const navigationMessage = {
             source: 'triton-control-deploy',
             type: 'deploymentCreated',
@@ -675,6 +688,17 @@ function renderHtml(webview, nonce, initial) {
         }
       }
     });
+
+    async function notifyDeploymentNavigation(instanceId) {
+      try {
+        await fetch('/api/code-servers/deployment-navigation', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instance_id: instanceId }),
+        });
+      } catch {}
+    }
 
     function readForm() {
       const data = {};

@@ -55,6 +55,10 @@ class TritonConfigEdgeTests(unittest.TestCase):
         self.assertIn("Line 2: input [", message)
         self.assertIn("Likely missing closing square bracket", message)
 
+    def test_ValidateTritonConfigPbtxt_KnownRelease_LoadsBundledProto(self):
+        # Act / Assert
+        triton_config.validate_triton_config_pbtxt(b'name: "m"\nbackend: "python"\n', "25.02")
+
     def test_LoadModelConfigClass_MissingProto_RaisesUsefulError(self):
         # Act / Assert
         with patch("app.services.triton.config.PROTOBUFF_DIR", triton_config.Path("missing-protos")):

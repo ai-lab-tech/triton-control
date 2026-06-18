@@ -16,7 +16,7 @@ Core capabilities:
 - self-deployed Triton serving workflows when Triton Control runs in Kubernetes
 - per-user browser-based Development workspaces backed by code-server
 - user management and instance access control
-- model inference workflows
+- model inference workflows with model configuration inspection
 - S3-backed model repository integration with an integrated S3 Browser
 - Perf Analyzer workflows when Triton Control runs in Kubernetes
 

@@ -291,6 +291,23 @@ describe("DevelopmentPageComponent", () => {
     });
   });
 
+  it("DeploymentNavigationPoll_TargetReturned_NavigatesToInstanceLogs", async () => {
+    // Arrange
+    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+      of({ instance_id: 46 }) as any,
+    );
+    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await (component as any).pollDeploymentNavigationTarget();
+
+    // Assert
+    expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/46", {
+      state: { openLogsOnce: true },
+    });
+  });
+
   it("CodeServerMessage_ReplayedDeploymentCreated_DoesNotNavigateAgain", async () => {
     // Arrange
     TestBed.createComponent(DevelopmentPageComponent);

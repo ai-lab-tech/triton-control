@@ -14,7 +14,7 @@ Core capabilities include:
 - existing Triton instance registration and management
 - self-deployed Triton serving workflows when Triton Control runs in Kubernetes
 - user management and instance access control
-- model inference workflows
+- model inference workflows with model configuration inspection
 - S3-backed model repository integration with an integrated S3 Browser
 - Perf Analyzer workflows when Triton Control runs in Kubernetes
 

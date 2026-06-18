@@ -45,6 +45,7 @@ type CodeServer = CodeServerDTO;
 })
 export class DevelopmentPageComponent implements OnDestroy {
   private static readonly statusPollIntervalMs = 3000;
+  private static readonly deploymentNavigationPollIntervalMs = 1500;
   private static readonly handledDeploymentNavigationKey =
     "triton-control-handled-deployment-navigation-instance-ids";
 
@@ -58,6 +59,8 @@ export class DevelopmentPageComponent implements OnDestroy {
     .replace(/\/$/, "");
   private statusPollId: ReturnType<typeof setInterval> | null = null;
   private statusPollInFlight = false;
+  private deploymentNavigationPollId: ReturnType<typeof setInterval> | null = null;
+  private deploymentNavigationPollInFlight = false;
   private frameReloadNonce = 0;
   private frameLoadStartedAt = 0;
   private frameLoaderHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,6 +99,7 @@ export class DevelopmentPageComponent implements OnDestroy {
       }
     });
     window.addEventListener("message", this.handleCodeServerMessage);
+    this.startDeploymentNavigationPolling();
     void this.load();
   }
 
@@ -103,6 +107,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     window.removeEventListener("message", this.handleCodeServerMessage);
     this.chrome.showTopbar();
     this.stopStatusPolling();
+    this.stopDeploymentNavigationPolling();
     if (this.frameLoaderHideTimer !== null) {
       clearTimeout(this.frameLoaderHideTimer);
       this.frameLoaderHideTimer = null;
@@ -136,8 +141,30 @@ export class DevelopmentPageComponent implements OnDestroy {
       await this.consumeDeploymentNavigationTarget();
       return;
     }
-    this.markDeploymentNavigationHandled(instanceId);
     await this.consumeDeploymentNavigationTarget();
+    this.navigateToDeploymentInstance(instanceId);
+  }
+
+  private async pollDeploymentNavigationTarget(): Promise<void> {
+    if (this.deploymentNavigationPollInFlight || !this.router.url.startsWith("/code-servers")) {
+      return;
+    }
+    this.deploymentNavigationPollInFlight = true;
+    try {
+      const instanceId = await this.consumeDeploymentNavigationTarget();
+      if (instanceId !== null) {
+        this.navigateToDeploymentInstance(instanceId);
+      }
+    } finally {
+      this.deploymentNavigationPollInFlight = false;
+    }
+  }
+
+  private navigateToDeploymentInstance(instanceId: number): void {
+    if (this.hasHandledDeploymentNavigation(instanceId)) {
+      return;
+    }
+    this.markDeploymentNavigationHandled(instanceId);
     void this.router.navigateByUrl(`/instances/${instanceId}`, {
       state: { openLogsOnce: true },
     });
@@ -457,6 +484,23 @@ export class DevelopmentPageComponent implements OnDestroy {
     }
     clearInterval(this.statusPollId);
     this.statusPollId = null;
+  }
+
+  private startDeploymentNavigationPolling(): void {
+    if (this.deploymentNavigationPollId !== null) {
+      return;
+    }
+    this.deploymentNavigationPollId = setInterval(() => {
+      void this.pollDeploymentNavigationTarget();
+    }, CodeServersPageComponent.deploymentNavigationPollIntervalMs);
+  }
+
+  private stopDeploymentNavigationPolling(): void {
+    if (this.deploymentNavigationPollId === null) {
+      return;
+    }
+    clearInterval(this.deploymentNavigationPollId);
+    this.deploymentNavigationPollId = null;
   }
 
   private shouldKeepPolling(): boolean {
