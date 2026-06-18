@@ -1,4 +1,4 @@
-"""Data-access helpers for per-user code-server workspaces."""
+"""Data-access helpers for per-user Development workspaces."""
 
 from __future__ import annotations
 

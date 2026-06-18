@@ -9,7 +9,7 @@ Defines the following database tables:
   ``oidc_config``        (``OidcConfigEntity``)      — singleton row that
                           persists the OIDC provider configuration.
   ``code_servers``       (``CodeServerEntity``)       — per-user Kubernetes
-                          code-server workspaces.
+                          Development workspaces.
   ``dashboard_alerts``   (``DashboardAlertEntity``)  — ephemeral health-alert
                           snapshots rebuilt on every health-refresh cycle.
 """
@@ -157,7 +157,7 @@ class PerfAnalyzerRunEntity(SQLModel, table=True):
 
 
 class CodeServerEntity(SQLModel, table=True):
-    """Database model for a user's Kubernetes code-server workspace."""
+    """Database model for a user's Kubernetes Development workspace."""
 
     __tablename__ = "code_servers"
     __table_args__ = (

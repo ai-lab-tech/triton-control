@@ -802,13 +802,13 @@
         }
       }
     },
-    "/api/code-servers": {
+    "/api/development": {
       "get": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "List Code Servers",
-        "description": "Return code-server workspaces owned by the authenticated user.",
+        "summary": "List Development Workspaces",
+        "description": "Return Development workspaces owned by the authenticated user.",
         "operationId": "list_code_servers_api_code_servers_get",
         "responses": {
           "200": {
@@ -820,7 +820,7 @@
                     "$ref": "#/components/schemas/CodeServerDTO"
                   },
                   "type": "array",
-                  "title": "Response List Code Servers Api Code Servers Get"
+                  "title": "Response List Development Workspaces Api Code Servers Get"
                 }
               }
             }
@@ -834,10 +834,10 @@
       },
       "post": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "Create Code Server",
-        "description": "Create or replace the caller's code-server workspace.",
+        "summary": "Create Development Workspace",
+        "description": "Create or replace the caller's Development workspace.",
         "operationId": "create_code_server_api_code_servers_post",
         "requestBody": {
           "content": {
@@ -878,12 +878,12 @@
         ]
       }
     },
-    "/api/code-servers/deployment-navigation": {
+    "/api/development/deployment-navigation": {
       "get": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "Consume Code Server Deployment Navigation",
+        "summary": "Consume Development Deployment Navigation",
         "description": "Return and clear a pending deployment navigation target for the user.",
         "operationId": "consume_code_server_deployment_navigation_api_code_servers_deployment_navigation_get",
         "responses": {
@@ -906,10 +906,10 @@
       },
       "post": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "Notify Code Server Deployment Navigation",
-        "description": "Record a one-shot navigation target after a code-server deploy action.",
+        "summary": "Notify Development Deployment Navigation",
+        "description": "Record a one-shot navigation target after a Development deploy action.",
         "operationId": "notify_code_server_deployment_navigation_api_code_servers_deployment_navigation_post",
         "requestBody": {
           "content": {
@@ -950,13 +950,13 @@
         ]
       }
     },
-    "/api/code-servers/{code_server_id}": {
+    "/api/development/{code_server_id}": {
       "get": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "Get Code Server",
-        "description": "Return a single code-server workspace owned by the authenticated user.",
+        "summary": "Get Development Workspace",
+        "description": "Return a single Development workspace owned by the authenticated user.",
         "operationId": "get_code_server_api_code_servers__code_server_id__get",
         "security": [
           {
@@ -970,7 +970,7 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Code Server Id"
+              "title": "Development Workspace Id"
             }
           }
         ],
@@ -999,10 +999,10 @@
       },
       "delete": {
         "tags": [
-          "code-servers"
+          "development"
         ],
-        "summary": "Delete Code Server",
-        "description": "Delete a code-server workload owned by the authenticated user.",
+        "summary": "Delete Development Workspace",
+        "description": "Delete a Development workload owned by the authenticated user.",
         "operationId": "delete_code_server_api_code_servers__code_server_id__delete",
         "security": [
           {
@@ -1016,7 +1016,7 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Code Server Id"
+              "title": "Development Workspace Id"
             }
           }
         ],
@@ -2397,7 +2397,7 @@
           "applied_resources"
         ],
         "title": "CodeServerDTO",
-        "description": "Returned code-server workspace owned by the authenticated user."
+        "description": "Returned Development workspace owned by the authenticated user."
       },
       "CodeServerDeleteResponse": {
         "properties": {
@@ -2421,7 +2421,7 @@
           "namespace"
         ],
         "title": "CodeServerDeleteResponse",
-        "description": "Response after deleting a code-server workload record."
+        "description": "Response after deleting a Development workload record."
       },
       "CodeServerDeploymentNavigationRequest": {
         "properties": {
@@ -2435,7 +2435,7 @@
           "instance_id"
         ],
         "title": "CodeServerDeploymentNavigationRequest",
-        "description": "Handoff request after a code-server extension created a deployment."
+        "description": "Handoff request after a Development extension created a deployment."
       },
       "CodeServerDeploymentNavigationResponse": {
         "properties": {
@@ -2552,13 +2552,13 @@
           },
           "image_has_code_server": {
             "type": "boolean",
-            "title": "Image Has Code Server",
+            "title": "Image Has Development",
             "default": false
           }
         },
         "type": "object",
         "title": "CreateCodeServerRequest",
-        "description": "Request body for creating the caller's code-server workspace."
+        "description": "Request body for creating the caller's Development workspace."
       },
       "CreateDeploymentRequest": {
         "properties": {

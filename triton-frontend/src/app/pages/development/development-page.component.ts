@@ -27,7 +27,7 @@ import { AuthService } from "../../shared/auth/auth.service";
 type CodeServer = CodeServerDTO;
 
 @Component({
-  selector: "app-code-servers-page",
+  selector: "app-development-page",
   standalone: true,
   imports: [
     FormsModule,
@@ -40,10 +40,10 @@ type CodeServer = CodeServerDTO;
     MatSelectModule,
     MatCheckboxModule,
   ],
-  styleUrl: "./code-servers-page.component.scss",
-  templateUrl: "./code-servers-page.component.html",
+  styleUrl: "./development-page.component.scss",
+  templateUrl: "./development-page.component.html",
 })
-export class CodeServersPageComponent implements OnDestroy {
+export class DevelopmentPageComponent implements OnDestroy {
   private static readonly statusPollIntervalMs = 3000;
   private static readonly handledDeploymentNavigationKey =
     "triton-control-handled-deployment-navigation-instance-ids";
@@ -129,7 +129,7 @@ export class CodeServersPageComponent implements OnDestroy {
     if (!Number.isInteger(instanceId) || instanceId <= 0) {
       return;
     }
-    if (!this.router.url.startsWith("/code-servers")) {
+    if (!this.router.url.startsWith("/development")) {
       return;
     }
     if (this.hasHandledDeploymentNavigation(instanceId)) {
@@ -168,7 +168,7 @@ export class CodeServersPageComponent implements OnDestroy {
       const ids = this.readHandledDeploymentNavigationIds().filter((id) => id !== instanceId);
       ids.push(instanceId);
       window.sessionStorage.setItem(
-        CodeServersPageComponent.handledDeploymentNavigationKey,
+        DevelopmentPageComponent.handledDeploymentNavigationKey,
         JSON.stringify(ids.slice(-25)),
       );
     } catch {
@@ -178,7 +178,7 @@ export class CodeServersPageComponent implements OnDestroy {
 
   private readHandledDeploymentNavigationIds(): number[] {
     const raw = window.sessionStorage.getItem(
-      CodeServersPageComponent.handledDeploymentNavigationKey,
+      DevelopmentPageComponent.handledDeploymentNavigationKey,
     );
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     if (!Array.isArray(parsed)) {
@@ -199,7 +199,7 @@ export class CodeServersPageComponent implements OnDestroy {
       await this.ensureSelectedWorkspace();
       this.updateStatusPolling();
     } catch (error) {
-      this.setMessage(mapApiErrorMessage(error, "Failed to load code servers."), "error");
+      this.setMessage(mapApiErrorMessage(error, "Failed to load Development workspaces."), "error");
     } finally {
       this.loading.set(false);
       this.initialLoaded.set(true);
@@ -236,12 +236,12 @@ export class CodeServersPageComponent implements OnDestroy {
       this.selectWorkspace(workspace);
       this.updateStatusPolling();
       await this.pollPendingWorkspaces();
-      this.setMessage("Code server created.", "success");
+      this.setMessage("Development workspace created.", "success");
     } catch (error) {
-      console.error("Code server create failed", error);
+      console.error("Development workspace create failed", error);
       if (this.isCanceledError(error)) {
         this.setMessage(
-          "Request was canceled in the browser. Please retry and check Network tab for POST /api/code-servers.",
+          "Request was canceled in the browser. Please retry and check Network tab for POST /api/development.",
           "error",
         );
         return;
@@ -250,7 +250,7 @@ export class CodeServersPageComponent implements OnDestroy {
         this.setMessage(`Create failed before API request: ${error.message.trim()}`, "error");
         return;
       }
-      this.setMessage(mapApiErrorMessage(error, "Failed to create code server."), "error");
+      this.setMessage(mapApiErrorMessage(error, "Failed to create Development workspace."), "error");
     } finally {
       this.saving.set(false);
     }
@@ -284,7 +284,7 @@ export class CodeServersPageComponent implements OnDestroy {
       }
       this.updateStatusPolling();
     } catch (error) {
-      this.setMessage(mapApiErrorMessage(error, "Failed to refresh code server."), "error");
+      this.setMessage(mapApiErrorMessage(error, "Failed to refresh Development workspace."), "error");
     }
   }
 
@@ -301,9 +301,9 @@ export class CodeServersPageComponent implements OnDestroy {
         await this.ensureSelectedWorkspace();
       }
       this.updateStatusPolling();
-      this.setMessage("Code server deleted.", "success");
+      this.setMessage("Development workspace deleted.", "success");
     } catch (error) {
-      this.setMessage(mapApiErrorMessage(error, "Failed to delete code server."), "error");
+      this.setMessage(mapApiErrorMessage(error, "Failed to delete Development workspace."), "error");
     } finally {
       this.deletingId.set(null);
     }
@@ -379,8 +379,8 @@ export class CodeServersPageComponent implements OnDestroy {
 
   onFrameLoaded(): void {
     const elapsed = Date.now() - this.frameLoadStartedAt;
-    const remainingMin = CodeServersPageComponent.minFrameLoaderMs - elapsed;
-    const delay = Math.max(remainingMin, CodeServersPageComponent.postLoadGraceMs);
+    const remainingMin = DevelopmentPageComponent.minFrameLoaderMs - elapsed;
+    const delay = Math.max(remainingMin, DevelopmentPageComponent.postLoadGraceMs);
     if (this.frameLoaderHideTimer !== null) {
       clearTimeout(this.frameLoaderHideTimer);
       this.frameLoaderHideTimer = null;
@@ -448,7 +448,7 @@ export class CodeServersPageComponent implements OnDestroy {
     }
     this.statusPollId = setInterval(() => {
       void this.pollPendingWorkspaces();
-    }, CodeServersPageComponent.statusPollIntervalMs);
+    }, DevelopmentPageComponent.statusPollIntervalMs);
   }
 
   private stopStatusPolling(): void {

@@ -1,4 +1,4 @@
-"""Authenticated proxy helpers for per-user code-server workspaces."""
+"""Authenticated proxy helpers for per-user Development workspaces."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket
     except WebSocketDisconnect:
         return
     except Exception:
-        logger.exception("Code-server WebSocket proxy failed")
+        logger.exception("Development WebSocket proxy failed")
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close(code=1011)
     finally:
@@ -152,7 +152,7 @@ def _direct_proxy_http_sync(
                     time.sleep(_DIRECT_PROXY_RETRY_DELAY_SECONDS)
     except httpx.HTTPError as exc:
         error = last_error or exc
-        raise BadGatewayError(f"Code-server direct proxy request failed: {error}") from exc
+        raise BadGatewayError(f"Development direct proxy request failed: {error}") from exc
 
     proxied_headers = {
         key: value
@@ -199,7 +199,7 @@ def _kubernetes_proxy_http_sync(
     except ApiException as exc:
         raise BadGatewayError(_api_error(exc)) from exc
     except Exception as exc:
-        raise BadGatewayError(f"Code-server proxy request failed: {exc}") from exc
+        raise BadGatewayError(f"Development proxy request failed: {exc}") from exc
 
     proxied_headers = {
         key: value

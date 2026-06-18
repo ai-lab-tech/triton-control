@@ -14,6 +14,7 @@ Core capabilities:
 
 - existing Triton instance registration and management
 - self-deployed Triton serving workflows when Triton Control runs in Kubernetes
+- per-user browser-based Development workspaces backed by code-server
 - user management and instance access control
 - model inference workflows
 - S3-backed model repository integration with an integrated S3 Browser
@@ -28,8 +29,9 @@ local evaluation, and with separate Python/npm processes for development.
 
 Product:
 
-- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Code Servers, Add Deployment, Perf Analyzer, and Add Instance.
+- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, and Add Instance.
 - [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
+- [Development Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
 
 Architecture:
 
@@ -51,7 +53,7 @@ Reference:
 Project:
 
 - [Roadmap](roadmap.md): planned product changes for upcoming versions.
-- [Development](development.md): local Python/npm workflow, tests, and CI checks.
+- [Local Project Development](development.md): local Python/npm workflow, tests, and CI checks for Triton Control itself.
 
 ## Main Components
 

@@ -35,7 +35,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
-from app.api.code_server_api import router as code_server_router
+from app.api.development_api import router as code_server_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.instance_api import router as instance_router

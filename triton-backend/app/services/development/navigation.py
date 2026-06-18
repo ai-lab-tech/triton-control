@@ -1,4 +1,4 @@
-"""Ephemeral navigation handoff from code-server extensions to the web UI."""
+"""Ephemeral navigation handoff from Development extensions to the web UI."""
 
 from __future__ import annotations
 

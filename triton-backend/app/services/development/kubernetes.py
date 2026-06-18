@@ -1,4 +1,4 @@
-"""Kubernetes operations for per-user code-server workspaces."""
+"""Kubernetes operations for per-user Development workspaces."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def _diag(event: str, **fields: Any) -> None:
     """Emit structured diagnostics even when logging handlers are not configured."""
     details = " ".join(f"{key}={_diag_value(value)}" for key, value in fields.items())
-    line = f"[code-server] {event}" if not details else f"[code-server] {event} {details}"
+    line = f"[development] {event}" if not details else f"[development] {event} {details}"
     print(line, file=sys.stderr, flush=True)
 
 
@@ -71,24 +71,24 @@ def apply_code_server_resources(
         _diag("create.success", applied=applied)
         return applied
     except ConfigException as exc:
-        logger.exception("Code-server create failed: Kubernetes configuration could not be loaded")
+        logger.exception("Development create failed: Kubernetes configuration could not be loaded")
         _diag("create.failed.config", error=exc)
         raise BadGatewayError("Kubernetes configuration could not be loaded") from exc
     except ApiException as exc:
-        logger.exception("Code-server create failed with Kubernetes API error")
+        logger.exception("Development create failed with Kubernetes API error")
         error = _api_error(exc)
         _diag("create.failed.api", error=error)
         raise BadGatewayError(error) from exc
     except FailToCreateError as exc:
         errs = getattr(exc, "api_exceptions", []) or []
         message = "; ".join(_api_error(e) for e in errs) or "Failed to apply Kubernetes resources"
-        logger.exception("Code-server create failed while applying Kubernetes resources: %s", message)
+        logger.exception("Development create failed while applying Kubernetes resources: %s", message)
         _diag("create.failed.apply", errors_count=len(errs), error=message)
         raise BadGatewayError(message) from exc
     except Exception as exc:
-        logger.exception("Code-server create failed with unexpected error")
+        logger.exception("Development create failed with unexpected error")
         _diag("create.failed.unexpected", error=exc)
-        raise BadGatewayError(f"Failed to apply code-server resources: {exc}") from exc
+        raise BadGatewayError(f"Failed to apply Development resources: {exc}") from exc
 
 
 def delete_code_server_resources(
@@ -122,7 +122,7 @@ def delete_code_server_resources(
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(statefulset_name))
     _delete(core.delete_namespaced_config_map, "ConfigMap", _triton_deploy_extension_configmap_name(statefulset_name))
     _delete(net.delete_namespaced_ingress, "Ingress", f"{statefulset_name}-ingress")
-    return ", ".join(deleted) if deleted else "No code-server resources found to delete."
+    return ", ".join(deleted) if deleted else "No Development resources found to delete."
 
 
 def read_status(namespace: str, statefulset_name: str) -> tuple[str, str]:
@@ -487,7 +487,7 @@ def _triton_deploy_extension_dir() -> Path:
         if (candidate / "extension.js").is_file() and (candidate / "package.json").is_file():
             return candidate
     paths = ", ".join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError(f"Triton deploy code-server extension files were not found in: {paths}")
+    raise FileNotFoundError(f"Triton deploy Development extension files were not found in: {paths}")
 
 
 def _triton_deploy_extension_dir_candidates() -> list[Path]:

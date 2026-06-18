@@ -1,4 +1,4 @@
-<div class="code-servers">
+<div class="development">
   @if (!initialLoaded()) {
     <div class="view-loading">
       <span class="material-icons spin">progress_activity</span>
@@ -11,7 +11,7 @@
         <div>
           <div class="page-title">Create Workspace</div>
           <p class="page-subtitle">
-            Create a StatefulSet-backed code-server pod with persistent workspace storage.
+            Create a StatefulSet-backed Development workspace pod with persistent workspace storage.
           </p>
         </div>
       </div>
@@ -47,10 +47,10 @@
 
             <div class="form-row wide image-code-server-row">
               <mat-checkbox id="code-server-image-has-code-server" [(ngModel)]="imageHasCodeServer">
-                Image already has code-server installed
+                Image already has Development installed
               </mat-checkbox>
               <div class="field-hint">
-                Enable this only when the selected image already contains the code-server binary. If
+                Enable this only when the selected image already contains the Development binary. If
                 enabled incorrectly, workspace startup will fail.
               </div>
             </div>
@@ -181,7 +181,7 @@
       </mat-card>
     </div>
   } @else if (selectedWorkspace(); as workspace) {
-    <!-- IDE VIEW: code-server frame for the selected workspace -->
+    <!-- IDE VIEW: Development frame for the selected workspace -->
     <section class="workspace-shell">
       <div class="workspace-toolbar">
         <div class="workspace-heading">
@@ -213,8 +213,8 @@
             mat-stroked-button
             type="button"
             class="danger"
-            aria-label="Delete code server"
-            title="Delete code server"
+            aria-label="Delete Development workspace"
+            title="Delete Development workspace"
             (click)="delete(workspace)"
             [disabled]="deletingId() === workspace.id"
           >
@@ -235,7 +235,7 @@
             }
             <iframe
               #codeServerFrame
-              title="Code Server"
+              title="Development"
               [src]="embeddedWorkspaceUrl()"
               (load)="onFrameLoaded()"
               allow="clipboard-read; clipboard-write; fullscreen"
@@ -246,7 +246,8 @@
               <span class="material-icons">terminal</span>
               <div class="placeholder-title">Workspace is starting</div>
               <div class="placeholder-copy">
-                The code-server is not ready yet. It will open automatically once the pod is ready.
+                The Development workspace is not ready yet. It will open automatically once the pod is
+                ready.
               </div>
             </div>
           }

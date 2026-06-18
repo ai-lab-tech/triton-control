@@ -3,7 +3,7 @@
   margin: -1rem calc(-1 * clamp(1rem, 2vw, 2rem)) -1.25rem;
 }
 
-.code-servers {
+.development {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -44,11 +44,11 @@
 }
 
 .view-loading .spin {
-  animation: code-servers-spin 1s linear infinite;
+  animation: development-spin 1s linear infinite;
   color: #0f766e;
 }
 
-@keyframes code-servers-spin {
+@keyframes development-spin {
   to {
     transform: rotate(360deg);
   }
@@ -481,7 +481,7 @@
 }
 
 @media (max-width: 800px) {
-  .code-servers {
+  .development {
     height: auto;
     min-height: calc(100dvh - 64px - 5rem);
     overflow: visible;

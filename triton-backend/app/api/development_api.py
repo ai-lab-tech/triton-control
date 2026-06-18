@@ -1,4 +1,4 @@
-"""HTTP endpoints for per-user Kubernetes code-server workspaces."""
+"""HTTP endpoints for per-user Kubernetes Development workspaces."""
 
 from typing import Any
 
@@ -16,11 +16,11 @@ from app.schemas import (
     CodeServerDTO,
     CreateCodeServerRequest,
 )
-from app.services.code_server import navigation as code_server_navigation
-from app.services.code_server import proxy as code_server_proxy
-from app.services.code_server import workspaces
+from app.services.development import navigation as code_server_navigation
+from app.services.development import proxy as code_server_proxy
+from app.services.development import workspaces
 
-router = APIRouter(prefix="/api/code-servers", tags=["code-servers"])
+router = APIRouter(prefix="/api/development", tags=["development"])
 
 
 @router.get("", response_model=list[CodeServerDTO])
@@ -29,7 +29,7 @@ def list_code_servers(
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> list[CodeServerDTO]:
-    """Return code-server workspaces owned by the authenticated user."""
+    """Return Development workspaces owned by the authenticated user."""
     return workspaces.list_code_servers(session, claims)
 
 
@@ -40,7 +40,7 @@ def create_code_server(
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> CodeServerDTO:
-    """Create or replace the caller's code-server workspace."""
+    """Create or replace the caller's Development workspace."""
     return workspaces.create_code_server(request, session, claims)
 
 
@@ -49,7 +49,7 @@ def notify_code_server_deployment_navigation(
     request: CodeServerDeploymentNavigationRequest,
     claims: dict[str, Any] = Depends(get_claims),
 ) -> CodeServerDeploymentNavigationResponse:
-    """Record a one-shot navigation target after a code-server deploy action."""
+    """Record a one-shot navigation target after a Development deploy action."""
     code_server_navigation.notify_deployment_created(claims, request.instance_id)
     return CodeServerDeploymentNavigationResponse(instance_id=request.instance_id)
 
@@ -71,7 +71,7 @@ def get_code_server(
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> CodeServerDTO:
-    """Return a single code-server workspace owned by the authenticated user."""
+    """Return a single Development workspace owned by the authenticated user."""
     return workspaces.get_code_server(session, claims, code_server_id)
 
 
@@ -82,7 +82,7 @@ def delete_code_server(
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> CodeServerDeleteResponse:
-    """Delete a code-server workload owned by the authenticated user."""
+    """Delete a Development workload owned by the authenticated user."""
     return workspaces.delete_code_server(session, claims, code_server_id)
 
 
@@ -104,7 +104,7 @@ async def proxy_code_server(
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> Response:
-    """Proxy an authenticated request to an owned code-server workspace."""
+    """Proxy an authenticated request to an owned Development workspace."""
     row = workspaces.get_owned_code_server(session, claims, code_server_id)
     return await code_server_proxy.proxy_http(row, path, request)
 
@@ -116,7 +116,7 @@ async def proxy_code_server_websocket(
     code_server_id: int,
     path: str = "",
 ) -> None:
-    """Proxy an authenticated code-server WebSocket to an owned workspace."""
+    """Proxy an authenticated Development WebSocket to an owned workspace."""
     claims = websocket.session.get("user")
     if not claims:
         await websocket.close(code=1008)

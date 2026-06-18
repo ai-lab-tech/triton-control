@@ -1,4 +1,4 @@
-"""Schemas for per-user Kubernetes code-server workspaces."""
+"""Schemas for per-user Kubernetes Development workspaces."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sqlmodel import SQLModel
 
 
 class CreateCodeServerRequest(SQLModel):
-    """Request body for creating the caller's code-server workspace."""
+    """Request body for creating the caller's Development workspace."""
 
     name: str = "workspace"
     image: str = "nvcr.io/nvidia/tritonserver:25.02-py3"
@@ -54,7 +54,7 @@ class CreateCodeServerRequest(SQLModel):
 
 
 class CodeServerDTO(SQLModel):
-    """Returned code-server workspace owned by the authenticated user."""
+    """Returned Development workspace owned by the authenticated user."""
 
     id: int
     name: str
@@ -69,7 +69,7 @@ class CodeServerDTO(SQLModel):
 
 
 class CodeServerDeleteResponse(SQLModel):
-    """Response after deleting a code-server workload record."""
+    """Response after deleting a Development workload record."""
 
     status: str
     message: str
@@ -77,7 +77,7 @@ class CodeServerDeleteResponse(SQLModel):
 
 
 class CodeServerDeploymentNavigationRequest(SQLModel):
-    """Handoff request after a code-server extension created a deployment."""
+    """Handoff request after a Development extension created a deployment."""
 
     instance_id: int
 

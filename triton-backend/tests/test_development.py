@@ -1,4 +1,4 @@
-"""Unit tests for per-user code-server workspace behavior."""
+"""Unit tests for per-user Development workspace behavior."""
 
 import asyncio
 import unittest
@@ -10,12 +10,12 @@ from unittest.mock import ANY, patch
 import httpx
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
-from app.api import code_server_api
+from app.api import development_api as code_server_api
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.schemas import CreateCodeServerRequest
-from app.services.code_server import kubernetes as k8s
-from app.services.code_server import proxy as code_proxy
-from app.services.code_server import workspaces
+from app.services.development import kubernetes as k8s
+from app.services.development import proxy as code_proxy
+from app.services.development import workspaces
 
 
 class CodeServerTests(unittest.TestCase):
@@ -235,7 +235,7 @@ class CodeServerTests(unittest.TestCase):
         )
 
     def test_CreateCodeServer_KubernetesDisabled_RaisesBadRequest(self) -> None:
-        with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=False):
+        with patch("app.services.development.workspaces.kubernetes_enabled", return_value=False):
             with self.assertRaises(BadRequestError):
                 workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
 
@@ -247,20 +247,20 @@ class CodeServerTests(unittest.TestCase):
             created.update(kwargs)
             return self._row(id=9, **kwargs)
 
-        with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
-            "app.services.code_server.workspaces.require_user_entity",
+        with patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
+            "app.services.development.workspaces.require_user_entity",
             return_value=user,
-        ), patch("app.services.code_server.workspaces._workspace_namespace", return_value="triton-control"), patch(
-            "app.services.code_server.workspaces.k8s.apply_code_server_resources",
+        ), patch("app.services.development.workspaces._workspace_namespace", return_value="triton-control"), patch(
+            "app.services.development.workspaces.k8s.apply_code_server_resources",
             return_value=["Secret/code-7-dev-workspace-secret", "StatefulSet/code-7-dev-workspace"],
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_first_for_owner",
+            "app.services.development.workspaces.code_servers.find_first_for_owner",
             return_value=None,
         ), patch(
-            "app.services.code_server.workspaces.code_servers.create",
+            "app.services.development.workspaces.code_servers.create",
             side_effect=create_row,
         ) as create, patch(
-            "app.services.code_server.workspaces.code_servers.save",
+            "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, row: row,
         ) as save:
             result = workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
@@ -268,7 +268,7 @@ class CodeServerTests(unittest.TestCase):
         create.assert_called_once()
         save.assert_called_once()
         self.assertEqual(result.id, 9)
-        self.assertEqual(result.url, "/api/code-servers/9/proxy/?folder=/workspace")
+        self.assertEqual(result.url, "/api/development/9/proxy/?folder=/workspace")
         self.assertEqual(created["owner_user_id"], 7)
         self.assertEqual(created["name"], "dev-workspace")
         self.assertEqual(created["statefulset_name"], "code-7-dev-workspace")
@@ -277,13 +277,13 @@ class CodeServerTests(unittest.TestCase):
         existing = self._row(status="ready", image="old-image")
         user = SimpleNamespace(id=7)
 
-        with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
-            "app.services.code_server.workspaces.require_user_entity",
+        with patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
+            "app.services.development.workspaces.require_user_entity",
             return_value=user,
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_first_for_owner",
+            "app.services.development.workspaces.code_servers.find_first_for_owner",
             return_value=existing,
-        ), patch("app.services.code_server.workspaces.k8s.apply_code_server_resources") as apply_resources:
+        ), patch("app.services.development.workspaces.k8s.apply_code_server_resources") as apply_resources:
             with self.assertRaises(BadRequestError):
                 workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
 
@@ -291,10 +291,10 @@ class CodeServerTests(unittest.TestCase):
 
     def test_GetCodeServer_NotFound_RaisesNotFound(self) -> None:
         with patch(
-            "app.services.code_server.workspaces.require_user_entity",
+            "app.services.development.workspaces.require_user_entity",
             return_value=SimpleNamespace(id=7),
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_id",
+            "app.services.development.workspaces.code_servers.find_by_id",
             return_value=None,
         ):
             with self.assertRaises(NotFoundError):
@@ -304,16 +304,16 @@ class CodeServerTests(unittest.TestCase):
         row = self._row(status="creating", status_message="Pending")
 
         with patch(
-            "app.services.code_server.workspaces.require_user_entity",
+            "app.services.development.workspaces.require_user_entity",
             return_value=SimpleNamespace(id=7),
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_id",
+            "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
-        ), patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
-            "app.services.code_server.workspaces.k8s.read_status",
+        ), patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
+            "app.services.development.workspaces.k8s.read_status",
             return_value=("ready", "pod Ready"),
         ), patch(
-            "app.services.code_server.workspaces.code_servers.save",
+            "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, saved: saved,
         ) as save:
             result = workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
@@ -326,13 +326,13 @@ class CodeServerTests(unittest.TestCase):
         row = self._row(status="ready", status_message="old ready")
 
         with patch(
-            "app.services.code_server.workspaces.require_user_entity",
+            "app.services.development.workspaces.require_user_entity",
             return_value=SimpleNamespace(id=7),
         ), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_id",
+            "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
-        ), patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=False), patch(
-            "app.services.code_server.workspaces.code_servers.save",
+        ), patch("app.services.development.workspaces.kubernetes_enabled", return_value=False), patch(
+            "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, saved: saved,
         ) as save:
             result = workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
@@ -344,13 +344,13 @@ class CodeServerTests(unittest.TestCase):
     def test_DeleteCodeServer_Success_DeletesKubernetesResourcesAndRecord(self) -> None:
         row = self._row()
 
-        with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
-            "app.services.code_server.workspaces.require_user_entity",
+        with patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
+            "app.services.development.workspaces.require_user_entity",
             return_value=SimpleNamespace(id=7),
-        ), patch("app.services.code_server.workspaces.code_servers.find_by_id", return_value=row), patch(
-            "app.services.code_server.workspaces.k8s.delete_code_server_resources",
+        ), patch("app.services.development.workspaces.code_servers.find_by_id", return_value=row), patch(
+            "app.services.development.workspaces.k8s.delete_code_server_resources",
             return_value="StatefulSet/code-7-dev-workspace",
-        ) as delete_k8s, patch("app.services.code_server.workspaces.code_servers.delete") as delete_row:
+        ) as delete_k8s, patch("app.services.development.workspaces.code_servers.delete") as delete_row:
             result = workspaces.delete_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
 
         delete_k8s.assert_called_once_with(
@@ -365,18 +365,18 @@ class CodeServerTests(unittest.TestCase):
     def test_DeleteCodeServer_KubernetesError_RaisesBadRequest(self) -> None:
         row = self._row()
 
-        with patch("app.services.code_server.workspaces.kubernetes_enabled", return_value=True), patch(
-            "app.services.code_server.workspaces.require_user_entity",
+        with patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
+            "app.services.development.workspaces.require_user_entity",
             return_value=SimpleNamespace(id=7),
-        ), patch("app.services.code_server.workspaces.code_servers.find_by_id", return_value=row), patch(
-            "app.services.code_server.workspaces.k8s.delete_code_server_resources",
+        ), patch("app.services.development.workspaces.code_servers.find_by_id", return_value=row), patch(
+            "app.services.development.workspaces.k8s.delete_code_server_resources",
             side_effect=RuntimeError("no kubeconfig"),
         ):
             with self.assertRaises(BadRequestError):
                 workspaces.delete_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
 
     def test_WorkspaceNamespace_OutOfClusterWithoutEnv_UsesControlNamespace(self) -> None:
-        with patch("app.services.code_server.workspaces.is_running_in_cluster", return_value=False), patch.dict(
+        with patch("app.services.development.workspaces.is_running_in_cluster", return_value=False), patch.dict(
             "os.environ",
             {},
             clear=True,
@@ -384,14 +384,14 @@ class CodeServerTests(unittest.TestCase):
             self.assertEqual(workspaces._workspace_namespace(), "triton-control")
 
     def test_WorkspaceNamespace_InCluster_UsesControlNamespace(self) -> None:
-        with patch("app.services.code_server.workspaces.is_running_in_cluster", return_value=True), patch(
-            "app.services.code_server.workspaces.in_cluster_namespace",
+        with patch("app.services.development.workspaces.is_running_in_cluster", return_value=True), patch(
+            "app.services.development.workspaces.in_cluster_namespace",
             return_value="triton-control",
         ):
             self.assertEqual(workspaces._workspace_namespace(), "triton-control")
 
     def test_WorkspaceNamespace_ConfiguredEnv_UsesConfiguredNamespace(self) -> None:
-        with patch("app.services.code_server.workspaces.is_running_in_cluster", return_value=False), patch.dict(
+        with patch("app.services.development.workspaces.is_running_in_cluster", return_value=False), patch.dict(
             "os.environ",
             {"KUBERNETES_NAMESPACE": "dev-tools"},
             clear=True,
@@ -415,23 +415,23 @@ class CodeServerTests(unittest.TestCase):
             applied_resources=["StatefulSet/code-7-workspace"],
         )
 
-        with patch("app.services.code_server.workspaces.require_user_entity", return_value=user), patch(
-            "app.services.code_server.workspaces.code_servers.list_for_owner",
+        with patch("app.services.development.workspaces.require_user_entity", return_value=user), patch(
+            "app.services.development.workspaces.code_servers.list_for_owner",
             return_value=[row],
-        ) as list_for_owner, patch("app.services.code_server.workspaces._refresh_status") as refresh_status:
+        ) as list_for_owner, patch("app.services.development.workspaces._refresh_status") as refresh_status:
             result = workspaces.list_code_servers(SimpleNamespace(), {"email": "u@example.com"})
 
         list_for_owner.assert_called_once_with(ANY, 7)
         refresh_status.assert_called_once_with(ANY, row)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].url, "/api/code-servers/2/proxy/?folder=/workspace")
+        self.assertEqual(result[0].url, "/api/development/2/proxy/?folder=/workspace")
 
     def test_GetCodeServer_DifferentOwner_RaisesForbidden(self) -> None:
         user = SimpleNamespace(id=7)
         row = SimpleNamespace(owner_user_id=8)
 
-        with patch("app.services.code_server.workspaces.require_user_entity", return_value=user), patch(
-            "app.services.code_server.workspaces.code_servers.find_by_id",
+        with patch("app.services.development.workspaces.require_user_entity", return_value=user), patch(
+            "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
         ):
             with self.assertRaises(ForbiddenError):
@@ -439,17 +439,17 @@ class CodeServerTests(unittest.TestCase):
 
     def test_ApiEndpoints_DelegateToWorkspaceService(self) -> None:
         dto = self._row()
-        with patch("app.services.code_server.workspaces.list_code_servers", return_value=[dto]) as list_service:
+        with patch("app.services.development.workspaces.list_code_servers", return_value=[dto]) as list_service:
             self.assertEqual(code_server_api.list_code_servers(session=SimpleNamespace(), claims={}), [dto])
-        with patch("app.services.code_server.workspaces.create_code_server", return_value=dto) as create_service:
+        with patch("app.services.development.workspaces.create_code_server", return_value=dto) as create_service:
             self.assertEqual(
                 code_server_api.create_code_server(self._request(), session=SimpleNamespace(), claims={}),
                 dto,
             )
-        with patch("app.services.code_server.workspaces.get_code_server", return_value=dto) as get_service:
+        with patch("app.services.development.workspaces.get_code_server", return_value=dto) as get_service:
             self.assertEqual(code_server_api.get_code_server(2, session=SimpleNamespace(), claims={}), dto)
         with patch(
-            "app.services.code_server.workspaces.delete_code_server",
+            "app.services.development.workspaces.delete_code_server",
             return_value=SimpleNamespace(status="deleted"),
         ) as delete_service:
             self.assertEqual(
@@ -479,8 +479,8 @@ class CodeServerTests(unittest.TestCase):
     def test_ApplyCodeServerResources_AppliesKubernetesObjects(self) -> None:
         applied: list[dict[str, object]] = []
 
-        with patch("app.services.code_server.kubernetes.api_client", return_value=object()), patch(
-            "app.services.code_server.kubernetes._ensure_namespace",
+        with patch("app.services.development.kubernetes.api_client", return_value=object()), patch(
+            "app.services.development.kubernetes._ensure_namespace",
         ) as ensure_namespace, patch(
             "kubernetes.utils.create_from_dict",
             side_effect=lambda _api_client, data, **_kwargs: applied.append(data),
@@ -515,7 +515,7 @@ class CodeServerTests(unittest.TestCase):
         )
         apps_api = SimpleNamespace(read_namespaced_stateful_set=lambda **_kwargs: SimpleNamespace())
 
-        with patch("app.services.code_server.kubernetes.api_client", return_value=object()), patch(
+        with patch("app.services.development.kubernetes.api_client", return_value=object()), patch(
             "kubernetes.client.AppsV1Api",
             return_value=apps_api,
         ), patch(
@@ -530,7 +530,7 @@ class CodeServerTests(unittest.TestCase):
         empty_core_api = SimpleNamespace(
             list_namespaced_pod=lambda **_kwargs: SimpleNamespace(items=[]),
         )
-        with patch("app.services.code_server.kubernetes.api_client", return_value=object()), patch(
+        with patch("app.services.development.kubernetes.api_client", return_value=object()), patch(
             "kubernetes.client.AppsV1Api",
             return_value=apps_api,
         ), patch(
@@ -548,7 +548,7 @@ class CodeServerTests(unittest.TestCase):
 
         apps_api = SimpleNamespace(read_namespaced_stateful_set=raise_not_found)
 
-        with patch("app.services.code_server.kubernetes.api_client", return_value=object()), patch(
+        with patch("app.services.development.kubernetes.api_client", return_value=object()), patch(
             "kubernetes.client.AppsV1Api",
             return_value=apps_api,
         ):
@@ -583,8 +583,8 @@ class CodeServerTests(unittest.TestCase):
                     "X-Frame-Options": "DENY",
                 }
 
-        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=False), patch(
-            "app.services.code_server.proxy.api_client",
+        with patch("app.services.development.proxy.is_running_in_cluster", return_value=False), patch(
+            "app.services.development.proxy.api_client",
             return_value=Api(),
         ):
             response = code_proxy._proxy_http_sync(
@@ -635,8 +635,8 @@ class CodeServerTests(unittest.TestCase):
                     },
                 )
 
-        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True), patch(
-            "app.services.code_server.proxy.httpx.Client",
+        with patch("app.services.development.proxy.is_running_in_cluster", return_value=True), patch(
+            "app.services.development.proxy.httpx.Client",
             return_value=Client(),
         ):
             response = code_proxy._proxy_http_sync(
@@ -681,10 +681,10 @@ class CodeServerTests(unittest.TestCase):
                     headers={"Content-Type": "text/html"},
                 )
 
-        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True), patch(
-            "app.services.code_server.proxy.httpx.Client",
+        with patch("app.services.development.proxy.is_running_in_cluster", return_value=True), patch(
+            "app.services.development.proxy.httpx.Client",
             return_value=Client(),
-        ), patch("app.services.code_server.proxy._DIRECT_PROXY_RETRY_DELAY_SECONDS", 0):
+        ), patch("app.services.development.proxy._DIRECT_PROXY_RETRY_DELAY_SECONDS", 0):
             response = code_proxy._proxy_http_sync(
                 self._row(),
                 "",
@@ -699,7 +699,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(calls["count"], 2)
 
     def test_WebsocketUpstream_InClusterUsesDirectServiceDns(self) -> None:
-        with patch("app.services.code_server.proxy.is_running_in_cluster", return_value=True):
+        with patch("app.services.development.proxy.is_running_in_cluster", return_value=True):
             upstream_url, headers, ssl_context = code_proxy._websocket_upstream(
                 self._row(),
                 "stable/socket",

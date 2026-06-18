@@ -8,7 +8,7 @@ Internal modules:
   app.schemas.dashboard — Dashboard alert DTOs
 """
 
-from app.schemas.code_server import (
+from app.schemas.development import (
     CodeServerDeleteResponse,
     CodeServerDeploymentNavigationRequest,
     CodeServerDeploymentNavigationResponse,

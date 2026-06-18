@@ -1,4 +1,4 @@
-"""Use cases for per-user code-server workspaces on Kubernetes."""
+"""Use cases for per-user Development workspaces on Kubernetes."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from sqlmodel import Session
 from app.core.identity import require_user_entity
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
-from app.repositories import code_servers
+from app.repositories import developments as code_servers
 from app.schemas import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServerRequest
-from app.services.code_server import kubernetes as k8s
+from app.services.development import kubernetes as k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.oidc.config import kubernetes_enabled
 
@@ -36,7 +36,7 @@ def create_code_server(
     owner_id = user.id or 0
     if code_servers.find_first_for_owner(session, owner_id):
         raise BadRequestError(
-            "A code-server workspace already exists for this user. Delete it before creating a new one.",
+            "A Development workspace already exists for this user. Delete it before creating a new one.",
         )
     name = request.name
     resource_prefix = _resource_prefix(owner_id, name)
@@ -84,7 +84,7 @@ def get_code_server(session: Session, claims: dict[str, Any], code_server_id: in
 
 
 def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
-    """Return an owned code-server entity for internal proxy use."""
+    """Return an owned Development entity for internal proxy use."""
     return _get_owned(session, claims, code_server_id)
 
 
@@ -113,14 +113,14 @@ def _get_owned(session: Session, claims: dict[str, Any], code_server_id: int) ->
     user = require_user_entity(session, claims)
     row = code_servers.find_by_id(session, code_server_id)
     if not row:
-        raise NotFoundError("Code server not found")
+        raise NotFoundError("Development workspace not found")
     _ensure_owner(row, user.id or 0)
     return row
 
 
 def _ensure_owner(row: CodeServerEntity, owner_id: int) -> None:
     if row.owner_user_id != owner_id:
-        raise ForbiddenError("Code server access denied")
+        raise ForbiddenError("Development workspace access denied")
 
 
 def _refresh_status(session: Session, row: CodeServerEntity) -> None:
@@ -162,7 +162,7 @@ def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
 def _require_kubernetes_enabled() -> None:
     if not kubernetes_enabled():
         raise BadRequestError(
-            "Code server is available only when Kubernetes is enabled for Triton Control",
+            "Development workspaces are available only when Kubernetes is enabled for Triton Control",
         )
 
 
@@ -185,4 +185,4 @@ def _resource_prefix(owner_id: int, name: str) -> str:
 
 
 def proxy_url(code_server_id: int) -> str:
-    return f"/api/code-servers/{code_server_id}/proxy/?folder=/workspace"
+    return f"/api/development/{code_server_id}/proxy/?folder=/workspace"

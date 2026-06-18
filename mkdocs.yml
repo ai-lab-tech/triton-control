@@ -16,6 +16,7 @@ nav:
   - Product:
     - User Guide: user-guide.md
     - User Management: user-management.md
+    - Development Workspaces: development-workspaces.md
   - Architecture:
     - Overview: architecture-overview.md
     - Backend Components: architecture-backend-components.md
@@ -29,7 +30,7 @@ nav:
     - API: api.md
   - Project:
     - Roadmap: roadmap.md
-    - Development: development.md
+    - Local Project Development: development.md
 
 markdown_extensions:
   - admonition

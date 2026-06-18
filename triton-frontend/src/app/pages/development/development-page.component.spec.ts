@@ -5,9 +5,9 @@ import { of, throwError } from "rxjs";
 
 import { BASE_PATH, CodeServerDTO, CodeServersService } from "../../api/generated/index";
 import { AuthService } from "../../shared/auth/auth.service";
-import { CodeServersPageComponent } from "./code-servers-page.component";
+import { DevelopmentPageComponent } from "./development-page.component";
 
-describe("CodeServersPageComponent", () => {
+describe("DevelopmentPageComponent", () => {
   const creatingWorkspace: CodeServerDTO = {
     id: 3,
     name: "workspace",
@@ -15,7 +15,7 @@ describe("CodeServersPageComponent", () => {
     statefulset_name: "code-1-workspace",
     service_name: "code-1-workspace-svc",
     image: "nvcr.io/nvidia/tritonserver:25.02-py3",
-    url: "/api/code-servers/3/proxy/",
+    url: "/api/development/3/proxy/",
     status: "creating",
     status_message: "Waiting for pod readiness.",
     applied_resources: [],
@@ -55,10 +55,10 @@ describe("CodeServersPageComponent", () => {
     authService.refreshSession.and.resolveTo();
     authService.getAccessToken.and.returnValue("token-1");
     router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
-    Object.defineProperty(router, "url", { value: "/code-servers", configurable: true });
+    Object.defineProperty(router, "url", { value: "/development", configurable: true });
 
     await TestBed.configureTestingModule({
-      imports: [CodeServersPageComponent],
+      imports: [DevelopmentPageComponent],
       providers: [
         { provide: CodeServersService, useValue: codeServersApi },
         { provide: AuthService, useValue: authService },
@@ -70,7 +70,7 @@ describe("CodeServersPageComponent", () => {
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
 
     // Act
     const component = fixture.componentInstance;
@@ -82,7 +82,7 @@ describe("CodeServersPageComponent", () => {
 
   it("Create_SelectedThemeProvided_SendsThemeAndStartsPolling", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.theme = "Monokai";
     component.cpu = "2";
@@ -116,7 +116,7 @@ describe("CodeServersPageComponent", () => {
   it("Load_ReadyWorkspaceReturned_SelectsAndEmbedsWorkspace", async () => {
     // Arrange
     codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([readyWorkspace]) as any);
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -126,7 +126,7 @@ describe("CodeServersPageComponent", () => {
     expect(component.workspaces().length).toBe(1);
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(`${component.embeddedWorkspaceUrl()}`).toContain(
-      "/api/code-servers/3/proxy/?_tc_reload=",
+      "/api/development/3/proxy/?_tc_reload=",
     );
   });
 
@@ -135,20 +135,20 @@ describe("CodeServersPageComponent", () => {
     codeServersApi.getCodeServerApiCodeServersCodeServerIdGet.and.returnValue(
       throwError(() => ({ error: { detail: "backend failed" } })) as any,
     );
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
     // Act
     await component.refresh(creatingWorkspace);
 
     // Assert
-    expect(component.message()).toBe("Failed to refresh code server.");
+    expect(component.message()).toBe("Failed to refresh Development workspace.");
     expect(component.messageTone()).toBe("error");
   });
 
   it("Delete_SelectedWorkspaceDeleted_ClearsSelectionAndFrame", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.workspaces.set([readyWorkspace]);
     component.selectWorkspace(readyWorkspace);
@@ -165,7 +165,7 @@ describe("CodeServersPageComponent", () => {
 
   it("Create_InvalidForm_DoesNotCallApi", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.name = "";
 
@@ -179,7 +179,7 @@ describe("CodeServersPageComponent", () => {
 
   it("Create_ImageHasCodeServerEnabled_SendsTrueFlag", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.imageHasCodeServer = true;
 
@@ -199,7 +199,7 @@ describe("CodeServersPageComponent", () => {
     codeServersApi.createCodeServerApiCodeServersPost.and.returnValue(
       throwError(() => new Error("Canceled")) as any,
     );
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -213,7 +213,7 @@ describe("CodeServersPageComponent", () => {
   it("Create_RefreshSessionFails_StillCallsCreateApi", async () => {
     // Arrange
     authService.refreshSession.and.rejectWith(new Error("Not authenticated"));
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -225,7 +225,7 @@ describe("CodeServersPageComponent", () => {
 
   it("Create_GpuCountAsNumber_SendsParsedGpuCount", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.gpuCount = 1;
 
@@ -242,7 +242,7 @@ describe("CodeServersPageComponent", () => {
 
   it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
-    TestBed.createComponent(CodeServersPageComponent);
+    TestBed.createComponent(DevelopmentPageComponent);
 
     // Act
     window.dispatchEvent(
@@ -269,7 +269,7 @@ describe("CodeServersPageComponent", () => {
 
   it("CodeServerMessage_NullOriginDeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
-    TestBed.createComponent(CodeServersPageComponent);
+    TestBed.createComponent(DevelopmentPageComponent);
 
     // Act
     window.dispatchEvent(
@@ -293,7 +293,7 @@ describe("CodeServersPageComponent", () => {
 
   it("CodeServerMessage_ReplayedDeploymentCreated_DoesNotNavigateAgain", async () => {
     // Arrange
-    TestBed.createComponent(CodeServersPageComponent);
+    TestBed.createComponent(DevelopmentPageComponent);
     const message = new MessageEvent("message", {
       data: {
         source: "triton-control-deploy",
@@ -321,7 +321,7 @@ describe("CodeServersPageComponent", () => {
     codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 44 }) as any,
     );
-    const fixture = TestBed.createComponent(CodeServersPageComponent);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
     component.workspaces.set([readyWorkspace]);
     component.selectWorkspace(readyWorkspace);
