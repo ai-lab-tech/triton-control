@@ -33,19 +33,19 @@ describe("DevelopmentPageComponent", () => {
   beforeEach(async () => {
     window.sessionStorage.clear();
     codeServersApi = jasmine.createSpyObj<DevelopmentService>("DevelopmentService", [
-      "listCodeServersApiCodeServersGet",
-      "createCodeServerApiCodeServersPost",
-      "getCodeServerApiCodeServersCodeServerIdGet",
-      "deleteCodeServerApiCodeServersCodeServerIdDelete",
-      "consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet",
+      "listCodeServersApiDevelopmentGet",
+      "createCodeServerApiDevelopmentPost",
+      "getCodeServerApiDevelopmentCodeServerIdGet",
+      "deleteCodeServerApiDevelopmentCodeServerIdDelete",
+      "consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet",
     ]);
-    codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([]) as any);
-    codeServersApi.createCodeServerApiCodeServersPost.and.returnValue(of(creatingWorkspace) as any);
-    codeServersApi.getCodeServerApiCodeServersCodeServerIdGet.and.returnValue(
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([]) as any);
+    codeServersApi.createCodeServerApiDevelopmentPost.and.returnValue(of(creatingWorkspace) as any);
+    codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet.and.returnValue(
       of(readyWorkspace) as any,
     );
-    codeServersApi.deleteCodeServerApiCodeServersCodeServerIdDelete.and.returnValue(of({}) as any);
-    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+    codeServersApi.deleteCodeServerApiDevelopmentCodeServerIdDelete.and.returnValue(of({}) as any);
+    codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet.and.returnValue(
       of({ instance_id: null }) as any,
     );
     authService = jasmine.createSpyObj<AuthService>("AuthService", [
@@ -77,7 +77,7 @@ describe("DevelopmentPageComponent", () => {
 
     // Assert
     expect(component).toBeTruthy();
-    expect(codeServersApi.listCodeServersApiCodeServersGet).toHaveBeenCalled();
+    expect(codeServersApi.listCodeServersApiDevelopmentGet).toHaveBeenCalled();
   });
 
   it("Create_SelectedThemeProvided_SendsThemeAndStartsPolling", async () => {
@@ -95,7 +95,7 @@ describe("DevelopmentPageComponent", () => {
     await Promise.resolve();
 
     // Assert
-    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalledWith(
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         name: "workspace",
         theme: "Monokai",
@@ -107,7 +107,7 @@ describe("DevelopmentPageComponent", () => {
         image_has_code_server: false,
       }),
     );
-    expect(codeServersApi.getCodeServerApiCodeServersCodeServerIdGet).toHaveBeenCalledWith(3);
+    expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(3);
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(component.workspaces()[0].status).toBe("ready");
     expect(component.embeddedWorkspaceUrl()).not.toBeNull();
@@ -115,7 +115,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Load_ReadyWorkspaceReturned_SelectsAndEmbedsWorkspace", async () => {
     // Arrange
-    codeServersApi.listCodeServersApiCodeServersGet.and.returnValue(of([readyWorkspace]) as any);
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([readyWorkspace]) as any);
     const fixture = TestBed.createComponent(DevelopmentPageComponent);
     const component = fixture.componentInstance;
 
@@ -132,7 +132,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Refresh_ApiFails_SetsErrorMessage", async () => {
     // Arrange
-    codeServersApi.getCodeServerApiCodeServersCodeServerIdGet.and.returnValue(
+    codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet.and.returnValue(
       throwError(() => ({ error: { detail: "backend failed" } })) as any,
     );
     const fixture = TestBed.createComponent(DevelopmentPageComponent);
@@ -157,7 +157,7 @@ describe("DevelopmentPageComponent", () => {
     await component.delete(readyWorkspace);
 
     // Assert
-    expect(codeServersApi.deleteCodeServerApiCodeServersCodeServerIdDelete).toHaveBeenCalledWith(3);
+    expect(codeServersApi.deleteCodeServerApiDevelopmentCodeServerIdDelete).toHaveBeenCalledWith(3);
     expect(component.workspaces()).toEqual([]);
     expect(component.selectedWorkspaceId()).toBeNull();
     expect(component.embeddedWorkspaceUrl()).toBeNull();
@@ -173,7 +173,7 @@ describe("DevelopmentPageComponent", () => {
     await component.create();
 
     // Assert
-    expect(codeServersApi.createCodeServerApiCodeServersPost).not.toHaveBeenCalled();
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).not.toHaveBeenCalled();
     expect(component.messageTone()).toBe("error");
   });
 
@@ -187,7 +187,7 @@ describe("DevelopmentPageComponent", () => {
     await component.create();
 
     // Assert
-    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalledWith(
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         image_has_code_server: true,
       }),
@@ -196,7 +196,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_RequestCanceled_ShowsCanceledMessage", async () => {
     // Arrange
-    codeServersApi.createCodeServerApiCodeServersPost.and.returnValue(
+    codeServersApi.createCodeServerApiDevelopmentPost.and.returnValue(
       throwError(() => new Error("Canceled")) as any,
     );
     const fixture = TestBed.createComponent(DevelopmentPageComponent);
@@ -220,7 +220,7 @@ describe("DevelopmentPageComponent", () => {
     await component.create();
 
     // Assert
-    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalled();
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalled();
   });
 
   it("Create_GpuCountAsNumber_SendsParsedGpuCount", async () => {
@@ -233,7 +233,7 @@ describe("DevelopmentPageComponent", () => {
     await component.create();
 
     // Assert
-    expect(codeServersApi.createCodeServerApiCodeServersPost).toHaveBeenCalledWith(
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         gpu_count: 1,
       }),
@@ -260,7 +260,7 @@ describe("DevelopmentPageComponent", () => {
 
     // Assert
     expect(
-      codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet,
+      codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet,
     ).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/42", {
       state: { openLogsOnce: true },
@@ -293,7 +293,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("DeploymentNavigationPoll_TargetReturned_NavigatesToInstanceLogs", async () => {
     // Arrange
-    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+    codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 46 }) as any,
     );
     const fixture = TestBed.createComponent(DevelopmentPageComponent);
@@ -335,7 +335,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("FrameLoaded_PendingDeploymentNavigationTarget_DoesNotNavigateBackToInstance", () => {
     // Arrange
-    codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet.and.returnValue(
+    codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 44 }) as any,
     );
     const fixture = TestBed.createComponent(DevelopmentPageComponent);
@@ -348,7 +348,7 @@ describe("DevelopmentPageComponent", () => {
 
     // Assert
     expect(
-      codeServersApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet,
+      codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet,
     ).not.toHaveBeenCalled();
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });

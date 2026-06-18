@@ -173,7 +173,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   private async consumeDeploymentNavigationTarget(): Promise<number | null> {
     try {
       const payload = await firstValueFrom(
-        this.developmentApi.consumeCodeServerDeploymentNavigationApiCodeServersDeploymentNavigationGet(),
+        this.developmentApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet(),
       );
       const instanceId = Number(payload.instance_id);
       return Number.isInteger(instanceId) && instanceId > 0 ? instanceId : null;
@@ -220,7 +220,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     this.loading.set(true);
     try {
       const workspaces = (await firstValueFrom(
-        this.developmentApi.listCodeServersApiCodeServersGet(),
+        this.developmentApi.listCodeServersApiDevelopmentGet(),
       )) as CodeServer[];
       this.workspaces.set(workspaces);
       await this.ensureSelectedWorkspace();
@@ -257,7 +257,7 @@ export class DevelopmentPageComponent implements OnDestroy {
         image_has_code_server: this.imageHasCodeServer,
       };
       const workspace = await firstValueFrom(
-        this.developmentApi.createCodeServerApiCodeServersPost(payload),
+        this.developmentApi.createCodeServerApiDevelopmentPost(payload),
       );
       this.upsertWorkspace(workspace);
       this.selectWorkspace(workspace);
@@ -305,7 +305,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   async refresh(workspace: CodeServer): Promise<void> {
     try {
       const updated = await firstValueFrom(
-        this.developmentApi.getCodeServerApiCodeServersCodeServerIdGet(workspace.id),
+        this.developmentApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
       );
       this.upsertWorkspace(updated);
       if (this.selectedWorkspaceId() === updated.id) {
@@ -325,7 +325,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     this.deletingId.set(workspace.id);
     try {
       await firstValueFrom(
-        this.developmentApi.deleteCodeServerApiCodeServersCodeServerIdDelete(workspace.id),
+        this.developmentApi.deleteCodeServerApiDevelopmentCodeServerIdDelete(workspace.id),
       );
       this.workspaces.update((items) => items.filter((item) => item.id !== workspace.id));
       if (this.selectedWorkspaceId() === workspace.id) {
@@ -540,7 +540,7 @@ export class DevelopmentPageComponent implements OnDestroy {
       const updates = await Promise.all(
         pending.map((workspace) =>
           firstValueFrom(
-            this.developmentApi.getCodeServerApiCodeServersCodeServerIdGet(workspace.id),
+            this.developmentApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
           ),
         ),
       );

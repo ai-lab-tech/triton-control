@@ -807,9 +807,9 @@
         "tags": [
           "development"
         ],
-        "summary": "List Development Workspaces",
+        "summary": "List Code Servers",
         "description": "Return Development workspaces owned by the authenticated user.",
-        "operationId": "list_code_servers_api_code_servers_get",
+        "operationId": "list_code_servers_api_development_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -820,7 +820,7 @@
                     "$ref": "#/components/schemas/CodeServerDTO"
                   },
                   "type": "array",
-                  "title": "Response List Development Workspaces Api Code Servers Get"
+                  "title": "Response List Code Servers Api Development Get"
                 }
               }
             }
@@ -836,9 +836,9 @@
         "tags": [
           "development"
         ],
-        "summary": "Create Development Workspace",
+        "summary": "Create Code Server",
         "description": "Create or replace the caller's Development workspace.",
-        "operationId": "create_code_server_api_code_servers_post",
+        "operationId": "create_code_server_api_development_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -883,9 +883,9 @@
         "tags": [
           "development"
         ],
-        "summary": "Consume Development Deployment Navigation",
+        "summary": "Consume Code Server Deployment Navigation",
         "description": "Return and clear a pending deployment navigation target for the user.",
-        "operationId": "consume_code_server_deployment_navigation_api_code_servers_deployment_navigation_get",
+        "operationId": "consume_code_server_deployment_navigation_api_development_deployment_navigation_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -908,9 +908,9 @@
         "tags": [
           "development"
         ],
-        "summary": "Notify Development Deployment Navigation",
+        "summary": "Notify Code Server Deployment Navigation",
         "description": "Record a one-shot navigation target after a Development deploy action.",
-        "operationId": "notify_code_server_deployment_navigation_api_code_servers_deployment_navigation_post",
+        "operationId": "notify_code_server_deployment_navigation_api_development_deployment_navigation_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -955,9 +955,9 @@
         "tags": [
           "development"
         ],
-        "summary": "Get Development Workspace",
+        "summary": "Get Code Server",
         "description": "Return a single Development workspace owned by the authenticated user.",
-        "operationId": "get_code_server_api_code_servers__code_server_id__get",
+        "operationId": "get_code_server_api_development__code_server_id__get",
         "security": [
           {
             "HTTPBearer": []
@@ -970,7 +970,7 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Development Workspace Id"
+              "title": "Code Server Id"
             }
           }
         ],
@@ -1001,9 +1001,9 @@
         "tags": [
           "development"
         ],
-        "summary": "Delete Development Workspace",
+        "summary": "Delete Code Server",
         "description": "Delete a Development workload owned by the authenticated user.",
-        "operationId": "delete_code_server_api_code_servers__code_server_id__delete",
+        "operationId": "delete_code_server_api_development__code_server_id__delete",
         "security": [
           {
             "HTTPBearer": []
@@ -1016,7 +1016,7 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Development Workspace Id"
+              "title": "Code Server Id"
             }
           }
         ],
@@ -2552,7 +2552,7 @@
           },
           "image_has_code_server": {
             "type": "boolean",
-            "title": "Image Has Development",
+            "title": "Image Has Code Server",
             "default": false
           }
         },
