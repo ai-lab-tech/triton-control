@@ -2216,6 +2216,33 @@
         }
       }
     },
+    "/api/workflows": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Get Argo Workflows Status",
+        "description": "Return readiness for the global Helm-managed Argo Workflows server.",
+        "operationId": "get_argo_workflows_status_api_workflows_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArgoWorkflowsStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/auth/me": {
       "get": {
         "summary": "Auth Me",
@@ -2290,6 +2317,50 @@
   },
   "components": {
     "schemas": {
+      "ArgoWorkflowsStatusResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "base_path": {
+            "type": "string",
+            "title": "Base Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "ready",
+          "status",
+          "status_message",
+          "namespace",
+          "service_name",
+          "base_path"
+        ],
+        "title": "ArgoWorkflowsStatusResponse",
+        "description": "Runtime state of the Helm-managed global Argo Workflows server."
+      },
       "BootstrapRegisterRequest": {
         "properties": {
           "email": {

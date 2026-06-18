@@ -1,0 +1,55 @@
+<div class="workflows-page">
+  <header class="workflows-toolbar">
+    <div>
+      <div class="page-title">Workflows</div>
+      <div class="page-subtitle">
+        Global Argo Workflows server managed by the Triton Control Helm release.
+      </div>
+    </div>
+    <button mat-stroked-button type="button" (click)="reload()">
+      <span class="material-icons">refresh</span>
+      Refresh
+    </button>
+  </header>
+
+  @if (loading()) {
+    <div class="state-panel" role="status">
+      <span class="material-icons spin">progress_activity</span>
+      <span>Checking Argo Workflows…</span>
+    </div>
+  } @else if (frameUrl()) {
+    <section class="frame-shell">
+      @if (frameLoading()) {
+        <div class="frame-loading" role="status">
+          <span class="material-icons spin">progress_activity</span>
+          <span>Loading Argo Workflows…</span>
+        </div>
+      }
+      <iframe
+        title="Argo Workflows"
+        [src]="frameUrl()"
+        (load)="onFrameLoaded()"
+        allow="clipboard-read; clipboard-write"
+      ></iframe>
+    </section>
+  } @else {
+    <mat-card class="state-card">
+      <span class="material-icons state-icon">account_tree</span>
+      <div class="state-title">
+        {{ status()?.enabled ? "Argo Workflows is unavailable" : "Argo Workflows is disabled" }}
+      </div>
+      <div class="state-message">
+        {{
+          message() ||
+            status()?.status_message ||
+            "Enable argoWorkflows.enabled in the Triton Control Helm values."
+        }}
+      </div>
+      @if (status()?.namespace) {
+        <div class="state-meta">
+          Workflow namespace: <code>{{ status()?.namespace }}</code>
+        </div>
+      }
+    </mat-card>
+  }
+</div>

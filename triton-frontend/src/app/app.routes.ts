@@ -13,6 +13,7 @@ import { InstanceS3BrowserPageComponent } from "./pages/instances/s3/instance-s3
 import { UsersPageComponent } from "./pages/users/users-page.component";
 import { SettingsPageComponent } from "./pages/settings/settings-page.component";
 import { LoginPageComponent } from "./pages/login/login-page.component";
+import { WorkflowsPageComponent } from "./pages/workflows/workflows-page.component";
 
 export const APP_ROUTES: Routes = [
   { path: "signin", component: LoginPageComponent },
@@ -27,6 +28,7 @@ export const APP_ROUTES: Routes = [
       { path: "development", component: DevelopmentPageComponent },
       { path: "deployments/new", component: NewDeploymentPageComponent },
       { path: "perf-analyzers", component: NewPerfAnalyzerPageComponent },
+      { path: "workflows", component: WorkflowsPageComponent },
       { path: "instances/:id", component: InstanceDetailPageComponent },
       {
         path: "instances/:id/models/:modelName/versions/:version/infer",

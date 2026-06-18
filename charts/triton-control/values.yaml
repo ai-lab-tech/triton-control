@@ -89,6 +89,140 @@ postgresql:
       cpu: 500m
       memory: 512Mi
 
+# Connection consumed by the Triton Control backend proxy. Leave serverUrl and
+# serviceName empty to derive the Service created by the bundled subchart.
+argoIntegration:
+  serverUrl: ""
+  serviceName: ""
+  basePath: /api/workflows/proxy/
+
+# Optional official Argo Workflows subchart. Disabled by default so existing
+# Triton Control installations are unchanged until explicitly enabled.
+argoWorkflows:
+  enabled: false
+  # The dependency alias contains an uppercase character. Force an RFC-1123
+  # compatible lowercase name for all generated Kubernetes resources.
+  fullnameOverride: argo-workflows
+
+  # Argo system images are pulled directly from their public registries.
+  # These settings do not configure credentials for images referenced by
+  # user-submitted Workflows.
+  images:
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+    tag: ""
+
+  crds:
+    install: true
+    keep: true
+
+  # Do not create the optional aggregate ClusterRoles (view/edit/admin).
+  # Triton Control runs Argo in a single namespace and does not need them.
+  createAggregateRoles: false
+
+  # Run Argo Server, controller, workflow RBAC, and Workflow pods only in the
+  # Triton Control Helm release namespace.
+  singleNamespace: true
+
+  workflow:
+    namespace: ""
+    serviceAccount:
+      create: true
+      createSecret: false
+      name: argo-service-account
+      pullSecrets: []
+      annotations:
+        workflows.argoproj.io/rbac-rule: "true"
+        workflows.argoproj.io/rbac-rule-precedence: "0"
+    rbac:
+      create: true
+
+  controller:
+    image:
+      registry: quay.io
+      repository: argoproj/workflow-controller
+      tag: ""
+    securityContext:
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    workflowDefaults:
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        serviceAccountName: argo-service-account
+        templateDefaults:
+          container:
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              seccompProfile:
+                type: RuntimeDefault
+    workflowNamespaces: []
+    clusterWorkflowTemplates:
+      enabled: false
+
+  executor:
+    image:
+      registry: quay.io
+      repository: argoproj/argoexec
+      tag: ""
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+
+  mainContainer:
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+
+  server:
+    enabled: true
+    baseHref: /api/workflows/proxy/
+    authModes:
+      - server
+    image:
+      registry: quay.io
+      repository: argoproj/argocli
+      tag: ""
+    revisionHistoryLimit: 2
+    securityContext:
+      readOnlyRootFilesystem: false
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    # Argo Server exposes HTTP internally; external TLS terminates at the
+    # Triton Control ingress/proxy.
+    secure: false
+    serviceType: ClusterIP
+    servicePort: 2746
+    clusterWorkflowTemplates:
+      enabled: false
+
 service:
   type: ClusterIP
   frontendPort: 8080

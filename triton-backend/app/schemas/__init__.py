@@ -61,8 +61,10 @@ from app.schemas.user import (
     UserDTO,
     validate_password_policy,
 )
+from app.schemas.workflows import ArgoWorkflowsStatusResponse
 
 __all__ = [
+    "ArgoWorkflowsStatusResponse",
     "BootstrapRegisterRequest",
     "BootstrapStatusResponse",
     "CodeServerDTO",

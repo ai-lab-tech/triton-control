@@ -35,6 +35,7 @@ Main sidebar entries:
 - Development (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
+- Workflows (when Kubernetes actions and Argo Workflows are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
@@ -334,6 +335,27 @@ fixed template; use the Docker config JSON required by your registry:
   }
 }
 ```
+
+## Workflows (Sidebar Entry)
+
+**Workflows** embeds the single global Argo Workflows server installed by the
+Triton Control Helm release. The browser connects only to Triton Control:
+
+```text
+/api/workflows/proxy/
+```
+
+The backend authenticates member/admin access and proxies Argo UI, API,
+streaming, and WebSocket traffic to the internal Argo Server `ClusterIP`
+Service. The Argo Service is not exposed directly to the browser.
+
+When `argoWorkflows.enabled=false`, the page shows that the feature is disabled.
+When enabled but the Argo Server is unavailable, it displays the readiness
+error instead of loading the iframe.
+
+Workflows run in the same Kubernetes namespace as Triton Control. Images
+referenced by uploaded Workflow YAML are separate from the public Argo system
+images. Private Workflow images require a pull Secret in that namespace.
 
 ## Add Instance (Sidebar Action)
 
