@@ -72,7 +72,8 @@ class DatabaseErrorLogHandler(logging.Handler):
                     message=record.getMessage(),
                     detail=detail,
                 )
-        except Exception:
+        # Error persistence must not recurse or break application logging.
+        except Exception:  # nosec B110
             pass
 
 
@@ -131,7 +132,8 @@ async def capture_unhandled_backend_errors(request: Request, call_next: Any) -> 
             try:
                 with session_factory() as session:
                     error_logs.create_backend_exception_event(session, request, exc)
-            except Exception:
+            # Error capture must not replace the original request exception.
+            except Exception:  # nosec B110
                 pass
         raise
 
