@@ -156,7 +156,6 @@ Goal:
 - Perf Analyzer parallel execution
 - Perf Analyzer profile page links
 - Kubernetes events in dashboard
-- Central backend logs in dashboard
 - TLS configuration in the Add Deployment flow
 - OIDC provider examples
 - Local email/password invite and password reset flow
