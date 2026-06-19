@@ -237,8 +237,8 @@ Current limitation:
 It creates a self-deployed Triton workload on Kubernetes.
 
 Prerequisite: an S3-compatible object store and bucket must already exist. The
-bucket path used as the model repository must contain models in the directory
-structure expected by Triton Inference Server.
+bucket, or the optional repository prefix within it, must contain models in the
+directory structure expected by Triton Inference Server.
 
 The S3 settings entered during **Add Deployment** are written into the
 Kubernetes deployment and are consumed from inside the Triton pod as the model
@@ -257,7 +257,8 @@ pod.
 | --- | --- | --- | --- |
 | Deployment name | Yes | Base name for Kubernetes resources (deployment/service/secret) and, in external backend mode, namespace. | Keep stable and DNS-safe. |
 | Image | Yes | Triton server container image to run. | Pin explicit version tags in stage/prod. |
-| S3 URL | Yes | Triton model repository path passed to `--model-repository`. | Use valid S3-compatible repository path. |
+| S3 endpoint | Yes | Object-store endpoint, optionally followed by its bucket. | Do not include the repository prefix in this field. |
+| Repository prefix | Optional | Path to the model repository within the bucket. | Leave empty when models are stored at the bucket root. |
 | S3 CA certificate | Optional | PEM CA certificate for HTTPS S3 endpoints. | Provide for private/self-signed/internal CAs. |
 | Access key / Secret key / Region | Yes | Repository credentials and region. | Use least-privilege credentials. |
 | Model control mode | Yes | Triton behavior (`explicit` or `poll`). | Use mode based on model operation strategy. |

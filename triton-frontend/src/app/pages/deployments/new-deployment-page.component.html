@@ -44,7 +44,8 @@
       <div>
         <div class="section-title">Model repository (S3)</div>
         <div class="section-subtitle">
-          S3 endpoint, bucket path, and credentials. Credentials are stored in a Kubernetes Secret.
+          S3 endpoint, optional bucket, optional repository prefix, and credentials. Credentials are
+          stored in a Kubernetes Secret.
         </div>
       </div>
       <div class="form-grid split">
@@ -61,7 +62,7 @@
           </div>
         </div>
         <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-url">S3 URL</label>
+          <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
           <mat-form-field appearance="outline">
             <input
               id="deployment-s3-url"
@@ -70,8 +71,22 @@
               placeholder="https://object-store.example.com/triton-models"
             />
             <mat-hint>
-              Use endpoint + path (for example <code>http://</code> or <code>https://</code>).
-              Triton Control automatically stores it as <code>s3://&lt;your-url&gt;</code>.
+              Enter only the endpoint, optionally followed by its bucket. For example
+              <code>https://object-store.example.com/triton-models</code>.
+            </mat-hint>
+          </mat-form-field>
+        </div>
+        <div class="form-row wide">
+          <label class="field-label" for="deployment-s3-prefix">Repository prefix (optional)</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="deployment-s3-prefix"
+              matInput
+              [(ngModel)]="s3Prefix"
+              placeholder="team/model-repository"
+            />
+            <mat-hint>
+              Optional path within the bucket. Do not include it in the S3 endpoint above.
             </mat-hint>
           </mat-form-field>
         </div>
