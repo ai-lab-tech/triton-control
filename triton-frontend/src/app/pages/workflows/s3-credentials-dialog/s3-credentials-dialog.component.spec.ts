@@ -91,4 +91,28 @@ describe("S3CredentialsDialogComponent", () => {
 
     expect(component.message()).toContain("created");
   });
+
+  it("toggles and resets the form before closing the dialog", async () => {
+    const fixture = TestBed.createComponent(S3CredentialsDialogComponent);
+    const component = fixture.componentInstance;
+
+    await flushMicrotasks();
+    http.expectOne("/api/workflows/s3-credentials").flush([]);
+
+    component.toggleForm();
+    expect(component.showForm()).toBeTrue();
+
+    component.credentialName = "finance";
+    component.accessKeyId = "AKIA123";
+    component.secretAccessKey = "SECRET123";
+    component.toggleForm();
+
+    expect(component.showForm()).toBeFalse();
+    expect(component.credentialName).toBe("");
+    expect(component.accessKeyId).toBe("");
+    expect(component.secretAccessKey).toBe("");
+
+    component.close();
+    expect(dialogRef.close).toHaveBeenCalled();
+  });
 });
