@@ -30,6 +30,7 @@ from app.mappers import s3_entity_to_dto
 from app.repositories import instances
 from app.schemas import (
     InstanceS3ConfigDTO,
+    S3DeleteResponse,
     S3EntryDTO,
     S3FileContentResponse,
     S3FileWriteResponse,
@@ -275,3 +276,62 @@ def put_instance_s3_content(
         raise BadGatewayError(f"Failed to write S3 object ({format_s3_error(exc)})") from exc
 
     return S3FileWriteResponse(path=f"/{path}", size=len(content_bytes))
+
+
+def delete_instance_s3_content(
+    session: Session,
+    claims: dict[str, Any],
+    instance_id: int,
+    path: str,
+) -> S3DeleteResponse:
+    require_member_or_admin(claims)
+    instance = get_instance_or_404(session, instance_id, claims)
+    if not instance.s3_enabled:
+        raise BadRequestError("S3 is not enabled for this instance")
+
+    client = require_s3_client(instance)
+    bucket = instance.s3_bucket
+    if not bucket:
+        raise BadRequestError("S3 bucket is required")
+    object_key = f"{instance.s3_prefix or ''}{path}".lstrip("/")
+
+    try:
+        if path.endswith("/"):
+            deleted = _delete_s3_prefix(client, bucket, object_key)
+        else:
+            client.delete_object(Bucket=bucket, Key=object_key)
+            deleted = 1
+    except (BotoCoreError, ClientError) as exc:
+        raise BadGatewayError(f"Failed to delete S3 object ({format_s3_error(exc)})") from exc
+
+    return S3DeleteResponse(path=f"/{path}", deleted=deleted)
+
+
+def _delete_s3_prefix(client: Any, bucket: str, prefix: str) -> int:
+    deleted = 0
+    continuation_token: str | None = None
+
+    while True:
+        list_args: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
+        if continuation_token:
+            list_args["ContinuationToken"] = continuation_token
+        response = client.list_objects_v2(**list_args)
+        keys = [{"Key": item.get("Key")} for item in response.get("Contents", []) or [] if item.get("Key")]
+
+        for index in range(0, len(keys), 1000):
+            chunk = keys[index : index + 1000]
+            if not chunk:
+                continue
+            client.delete_objects(Bucket=bucket, Delete={"Objects": chunk, "Quiet": True})
+            deleted += len(chunk)
+
+        if not response.get("IsTruncated"):
+            break
+        continuation_token = response.get("NextContinuationToken")
+        if not continuation_token:
+            break
+
+    if deleted == 0:
+        client.delete_object(Bucket=bucket, Key=prefix)
+
+    return deleted

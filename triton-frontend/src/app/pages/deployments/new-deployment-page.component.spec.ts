@@ -169,4 +169,32 @@ describe("NewDeploymentPageComponent", () => {
       }),
     );
   });
+
+  it("Deploy_RepositoryPrefixProvided_AppendsNormalizedPrefixToS3Url", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const component = fixture.componentInstance;
+    const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
+    deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
+      of({ instance_id: 7 }) as unknown as ReturnType<
+        DeploymentsService["createDeploymentApiDeploymentsPost"]
+      >,
+    );
+    component.deploymentName = "triton";
+    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.s3Url = "https://object-store.example.com/triton-models/";
+    component.s3Prefix = "/team/model-repository/";
+    component.s3AccessKey = "access";
+    component.s3SecretKey = "secret";
+
+    // Act
+    await component.deploy();
+
+    // Assert
+    expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        s3_url: "s3://https://object-store.example.com/triton-models/team/model-repository",
+      }),
+    );
+  });
 });

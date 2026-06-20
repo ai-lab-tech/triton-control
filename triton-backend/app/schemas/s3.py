@@ -40,3 +40,8 @@ class S3FileContentResponse(SQLModel):
 class S3FileWriteResponse(SQLModel):
     path: str
     size: int
+
+
+class S3DeleteResponse(SQLModel):
+    path: str
+    deleted: int

@@ -128,7 +128,9 @@ Assigned users can open that instance and use its available workflows.
 - inference
 - model load/unload when Triton allows explicit model control (`member`/`admin`)
 - S3 browser access and file download
-- `.py` / `.pbtxt` editing and file upload when S3 is configured (`member`/`admin`)
+- S3 folder creation when S3 is configured (`member`/`admin`)
+- S3 file and folder deletion when S3 is configured (`member`/`admin`)
+- `.py` / `.pbtxt` editing and file or folder upload when S3 is configured (`member`/`admin`)
 - Triton and S3 connection updates (`member`/`admin`)
 - instance creation (`member`/`admin`)
 - instance deletion (`admin` only)

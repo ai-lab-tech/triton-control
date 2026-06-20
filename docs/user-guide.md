@@ -18,7 +18,7 @@ Members and admins can additionally perform write workflows.
 - run model inference
 - browse and download S3 model repository files when S3 is configured
 - request model load or unload operations (`member`/`admin`)
-- edit or upload S3 model repository files when S3 is configured (`member`/`admin`)
+- edit or upload S3 model repository files and folders when S3 is configured (`member`/`admin`)
 - update Triton or S3 connection for that instance (`member`/`admin`)
 - add Triton instances (`member`/`admin`)
 - delete Triton instances (`admin` only)
@@ -225,10 +225,13 @@ Current behavior:
 When S3 is configured and enabled for an instance, the S3 Browser supports:
 
 - browsing folders/files under repository prefix
+- creating folders (`member`/`admin`)
 - downloading files
+- deleting files and folders (`member`/`admin`)
 - opening editable files (`.py`, `.pbtxt`) (`member`/`admin`)
 - editing and saving `.py` and `.pbtxt` (`member`/`admin`)
 - uploading files (`member`/`admin`)
+- uploading folders with nested child files (`member`/`admin`)
 
 When saving `config.pbtxt`, backend validation is executed against the Triton
 model configuration parser for that Triton version.
@@ -236,12 +239,21 @@ model configuration parser for that Triton version.
 The same validation is used when saving `config.pbtxt` from the Inference or
 Profile page side panel.
 
+Folder upload preserves the selected folder structure below the current S3
+browser path. For example, uploading a local folder that contains
+`resnet/1/model.plan` while the browser is open at `/models` writes the object
+to `/models/resnet/1/model.plan`.
+
 See [Model Config Validation](model-config-validation.md) for details about
 Triton version mapping and protobuf parser generation.
 
+Deleting a file removes that S3 object. Deleting a folder removes all S3
+objects below that folder prefix. After a folder delete succeeds, the folder
+and its child paths are also removed from the S3 Browser tree.
+
 Current limitation:
 
-- rename, move, and delete actions are not available in the current release
+- rename and move actions are not available in the current release
 
 ## Add Deployment (Sidebar Entry)
 
@@ -249,8 +261,8 @@ Current limitation:
 It creates a self-deployed Triton workload on Kubernetes.
 
 Prerequisite: an S3-compatible object store and bucket must already exist. The
-bucket path used as the model repository must contain models in the directory
-structure expected by Triton Inference Server.
+bucket, or the optional repository prefix within it, must contain models in the
+directory structure expected by Triton Inference Server.
 
 The S3 settings entered during **Add Deployment** are written into the
 Kubernetes deployment and are consumed from inside the Triton pod as the model
@@ -269,7 +281,8 @@ pod.
 | --- | --- | --- | --- |
 | Deployment name | Yes | Base name for Kubernetes resources (deployment/service/secret) and, in external backend mode, namespace. | Keep stable and DNS-safe. |
 | Image | Yes | Triton server container image to run. | Pin explicit version tags in stage/prod. |
-| S3 URL | Yes | Triton model repository path passed to `--model-repository`. | Use valid S3-compatible repository path. |
+| S3 endpoint | Yes | Object-store endpoint, optionally followed by its bucket. | Do not include the repository prefix in this field. |
+| Repository prefix | Optional | Path to the model repository within the bucket. | Leave empty when models are stored at the bucket root. |
 | S3 CA certificate | Optional | PEM CA certificate for HTTPS S3 endpoints. | Provide for private/self-signed/internal CAs. |
 | Access key / Secret key / Region | Yes | Repository credentials and region. | Use least-privilege credentials. |
 | Model control mode | Yes | Triton behavior (`explicit` or `poll`). | Use mode based on model operation strategy. |

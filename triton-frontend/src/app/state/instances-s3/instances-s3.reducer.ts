@@ -11,6 +11,7 @@ import {
   s3FileUploadFailed,
   s3FileUploadRequested,
   s3FileUploadSucceeded,
+  s3FolderTreeRemoved,
   s3NavigateTo,
   s3PageDataLoadFailed,
   s3PageDataLoaded,
@@ -75,6 +76,15 @@ export const instancesS3Reducer = createReducer(
     pageLoading: false,
   })),
   on(s3EntriesLoadFailed, (state) => ({ ...state, pageLoading: false })),
+  on(s3FolderTreeRemoved, (state, { path }) => {
+    const folderPath = normalizePath(path);
+    return {
+      ...state,
+      knownFolderPaths: state.knownFolderPaths.filter(
+        (knownPath) => knownPath !== folderPath && !knownPath.startsWith(`${folderPath}/`),
+      ),
+    };
+  }),
   on(s3EditorOpenRequested, (state, { filePath, fileName }) => ({
     ...state,
     editorOpen: true,
@@ -114,3 +124,8 @@ export const instancesS3Feature = createFeature({
   name: INSTANCES_S3_FEATURE_KEY,
   reducer: instancesS3Reducer,
 });
+
+function normalizePath(path: string): string {
+  const clean = path.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
+  return clean ? `/${clean}` : "/";
+}
