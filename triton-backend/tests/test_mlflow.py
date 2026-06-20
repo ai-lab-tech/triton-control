@@ -136,3 +136,7 @@ class MlflowTests(unittest.TestCase):
         headers = {"location": "/#/experiments"}
         proxy._rewrite_location_header(headers, "http://mlflow-service.triton-control.svc.cluster.local:5000")
         self.assertEqual(headers["location"], "/api/mlflow/proxy/#/experiments")
+
+    def test_ProxyRequestSkipHeaders_StripsConditionalCacheHeaders(self) -> None:
+        self.assertIn("if-none-match", proxy._REQUEST_SKIP_HEADERS)
+        self.assertIn("if-modified-since", proxy._REQUEST_SKIP_HEADERS)

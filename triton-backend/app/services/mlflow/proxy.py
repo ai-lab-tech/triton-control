@@ -23,7 +23,16 @@ _HOP_BY_HOP_HEADERS = {
     "transfer-encoding",
     "upgrade",
 }
-_REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {"host", "content-length", "accept-encoding", "cookie"}
+_REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
+    "host",
+    "content-length",
+    "accept-encoding",
+    "cookie",
+    # Prevent Kubernetes service proxy from turning browser cache validation
+    # requests into ApiException(304) errors.
+    "if-none-match",
+    "if-modified-since",
+}
 _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
     "content-length",
     "content-encoding",
