@@ -10,7 +10,8 @@
         <div>
           <div class="page-title">Create MLflow</div>
           <div class="page-subtitle">
-            Create a singleton MLflow server managed by Triton Control and embedded via backend proxy.
+            Create a singleton MLflow server managed by Triton Control and embedded via backend
+            proxy.
           </div>
         </div>
       </div>
@@ -38,7 +39,13 @@
           </mat-form-field>
         </div>
         <div class="actions">
-          <button mat-flat-button color="primary" type="button" (click)="install()" [disabled]="!canInstall()">
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            (click)="install()"
+            [disabled]="!canInstall()"
+          >
             <span class="material-icons">rocket_launch</span>
             {{ installing() ? "Creating..." : "Create MLflow" }}
           </button>
@@ -53,10 +60,14 @@
           <div class="workspace-subtitle">
             Status: <code>{{ current.status }}</code>
             @if (current.installation?.namespace) {
-              <span class="metadata-divider">Namespace: <code>{{ current.installation?.namespace }}</code></span>
+              <span class="metadata-divider"
+                >Namespace: <code>{{ current.installation?.namespace }}</code></span
+              >
             }
             @if (current.installation?.service_name) {
-              <span class="metadata-divider">Service: <code>{{ current.installation?.service_name }}</code></span>
+              <span class="metadata-divider"
+                >Service: <code>{{ current.installation?.service_name }}</code></span
+              >
             }
           </div>
         </div>
@@ -99,7 +110,10 @@
             <span class="material-icons state-icon">insights</span>
             <div class="state-title">MLflow is not ready yet</div>
             <div class="state-message">
-              {{ current.status_message || "Refresh in a few seconds until the MLflow pod is running." }}
+              {{
+                current.status_message ||
+                  "Refresh in a few seconds until the MLflow pod is running."
+              }}
             </div>
           </div>
         }

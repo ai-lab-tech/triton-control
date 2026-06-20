@@ -143,7 +143,9 @@ export class MlflowPageComponent implements OnDestroy {
         image: this.image.trim(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
       };
-      await firstValueFrom(this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload));
+      await firstValueFrom(
+        this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload),
+      );
       await this.load();
       this.setMessage("MLflow installation started.", "success");
     } catch (error) {
@@ -159,7 +161,9 @@ export class MlflowPageComponent implements OnDestroy {
       return;
     }
     const namespace = current.installation?.namespace || "mlflow";
-    const confirmed = window.confirm(`Uninstall MLflow and delete resources in namespace "${namespace}"?`);
+    const confirmed = window.confirm(
+      `Uninstall MLflow and delete resources in namespace "${namespace}"?`,
+    );
     if (!confirmed) {
       return;
     }
@@ -168,7 +172,9 @@ export class MlflowPageComponent implements OnDestroy {
     this.setMessage("Uninstalling MLflow.", "info");
     try {
       const response = await firstValueFrom(
-        this.http.delete<{ status: string; message: string; namespace: string }>(`${this.basePath}/api/mlflow`),
+        this.http.delete<{ status: string; message: string; namespace: string }>(
+          `${this.basePath}/api/mlflow`,
+        ),
       );
       this.status.set({
         installed: false,

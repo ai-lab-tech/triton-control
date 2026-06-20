@@ -99,7 +99,10 @@ export class S3CredentialsDialogComponent {
         secret_access_key: this.secretAccessKey.trim(),
       };
       await firstValueFrom(
-        this.http.post<WorkflowS3CredentialDTO>(`${this.basePath}/api/workflows/s3-credentials`, payload),
+        this.http.post<WorkflowS3CredentialDTO>(
+          `${this.basePath}/api/workflows/s3-credentials`,
+          payload,
+        ),
       );
       this.message.set("Workflow S3 credential created.");
       this.resetForm();
