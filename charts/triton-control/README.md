@@ -201,6 +201,12 @@ helm upgrade --install ... --namespace <namespace>
 Controller workflow defaults enforce the ServiceAccount and configured
 non-root/container security contexts.
 
+Workflow pods explicitly mount the `argo-service-account` token. The Argo
+executor requires this token to create and patch `workflowtaskresults`; setting
+`automountServiceAccountToken: false` on these pods would prevent workflows
+from reporting completion. The workflow ServiceAccount is therefore limited by
+the namespace-scoped workflow Role instead of disabling its token.
+
 Optional aggregate ClusterRoles and ClusterWorkflowTemplates are disabled.
 Argo CRDs remain cluster-scoped because Kubernetes custom resource definitions
 cannot be namespace-scoped.

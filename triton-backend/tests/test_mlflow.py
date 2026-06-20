@@ -62,6 +62,32 @@ class MlflowTests(unittest.TestCase):
         self.assertEqual(deployment["spec"]["template"]["spec"]["imagePullSecrets"], [{"name": "mlflow-pull-secret"}])
         self.assertEqual(service["metadata"]["name"], "mlflow-service")
 
+    def test_Manifests_MlflowPod_UsesRestrictedSecurityContext(self) -> None:
+        manifests = k8s._manifests(self._request(), "mlflow", "mlflow", "mlflow-service")
+
+        deployment = next(manifest for manifest in manifests if manifest["kind"] == "Deployment")
+        pod_spec = deployment["spec"]["template"]["spec"]
+        container = pod_spec["containers"][0]
+
+        self.assertFalse(pod_spec["automountServiceAccountToken"])
+        self.assertEqual(
+            pod_spec["securityContext"],
+            {
+                "runAsNonRoot": True,
+                "runAsUser": 10001,
+                "runAsGroup": 10001,
+                "fsGroup": 10001,
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
+        )
+        self.assertEqual(
+            container["securityContext"],
+            {
+                "allowPrivilegeEscalation": False,
+                "capabilities": {"drop": ["ALL"]},
+            },
+        )
+
     def test_ApiStatus_ViewerIsRejected(self) -> None:
         with self.assertRaises(HTTPException) as raised:
             mlflow_api.get_mlflow_status(session=SimpleNamespace(), claims={"role": "viewer"})

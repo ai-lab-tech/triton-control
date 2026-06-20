@@ -153,6 +153,11 @@ argoWorkflows:
         type: RuntimeDefault
     workflowDefaults:
       spec:
+        # Workflow pods need their ServiceAccount token so the Argo executor
+        # can create/patch workflowtaskresults. Keep this explicit instead of
+        # relying on Kubernetes' default automount behavior.
+        podSpecPatch: |
+          automountServiceAccountToken: true
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000

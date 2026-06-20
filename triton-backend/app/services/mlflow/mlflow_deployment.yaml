@@ -27,10 +27,23 @@ spec:
         app: mlflow
         deployment: {deployment_name}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
 {image_pull_secret_reference}      containers:
         - name: mlflow
           image: {image}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           command:
             - /bin/sh
             - -c
