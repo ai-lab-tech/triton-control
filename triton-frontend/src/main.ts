@@ -1,6 +1,6 @@
 import "zone.js";
 import "@angular/compiler";
-import { provideZoneChangeDetection } from "@angular/core";
+import { ErrorHandler, provideZoneChangeDetection } from "@angular/core";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { MatSnackBarModule } from "@angular/material/snack-bar";
 import { importProvidersFrom } from "@angular/core";
@@ -14,6 +14,7 @@ import { provideState, provideStore } from "@ngrx/store";
 import { AppComponent } from "./app/app.component";
 import { APP_ROUTES } from "./app/app.routes";
 import { authInterceptor } from "./app/shared/auth/auth.interceptor";
+import { FrontendErrorHandler } from "./app/shared/frontend-error.handler";
 import { BASE_PATH, Configuration } from "./app/api/generated/index";
 import { environment } from "./environments/environment";
 import { InstancesInferEffects } from "./app/state/instances-infer/instances-infer.effects";
@@ -70,5 +71,6 @@ bootstrapApplication(AppComponent, {
     ]),
     { provide: BASE_PATH, useValue: runtimeBasePath },
     { provide: Configuration, useFactory: () => new Configuration({ withCredentials: true }) },
+    { provide: ErrorHandler, useClass: FrontendErrorHandler },
   ],
 }).catch((err: unknown) => console.error(err));

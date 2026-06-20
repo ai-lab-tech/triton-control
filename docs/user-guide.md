@@ -36,6 +36,7 @@ Main sidebar entries:
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
+- Error Logs (admin only)
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
 pages for Inference, Profile, and S3 Browser.
@@ -47,6 +48,29 @@ user. It shows summary cards, a table of Triton instances, and active alerts.
 
 For non-admin users, alerts are limited to their assigned instances. Admins see
 alerts across the full fleet.
+
+## Error Logs (Admin Only)
+
+The **Error Logs** page shows recent frontend and backend application errors.
+Administrators can filter the list by source and select an event to inspect its
+details.
+
+Frontend events are reported only while a user is signed in. They include:
+
+- unhandled Angular or JavaScript runtime errors
+- backend API responses with HTTP status `500` or higher
+- available context such as the message, stack or response detail, page or API
+  path, HTTP method and status, user, and browser user agent
+
+The frontend does not report handled component errors, HTTP `4xx` responses,
+plain `console.error()` calls, or errors that occur before sign-in. Error
+reporting is best effort; if the reporting request itself fails, it is not
+reported again.
+
+Backend events include unhandled request exceptions and log records at
+`ERROR` or `CRITICAL` level from application loggers. Sensitive lines containing
+common credential markers are redacted, and long values are truncated before
+storage.
 
 ## Triton Instances
 

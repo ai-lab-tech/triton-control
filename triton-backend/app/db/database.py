@@ -79,6 +79,7 @@ def init_db() -> None:
 
     from app.db.entities import (  # Import models to register them
         DashboardAlertEntity,
+        ErrorEventEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
