@@ -3,7 +3,7 @@
   height: 100%;
 }
 
-.workflows-page {
+.mlflow-page {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 24px);
@@ -11,7 +11,7 @@
   gap: 12px;
 }
 
-.workflows-toolbar {
+.mlflow-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,13 +34,51 @@
   color: var(--text-muted, #718096);
 }
 
-.workflows-toolbar button {
-  flex: 0 0 auto;
-}
-
-.workflows-toolbar .material-icons {
+.mlflow-toolbar .material-icons {
   margin-right: 6px;
   font-size: 18px;
+}
+
+.install-card,
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.section-subtitle {
+  color: var(--text-muted, #718096);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.status-meta {
+  color: var(--text-muted, #718096);
+}
+
+.resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.danger {
+  border-color: rgba(220, 38, 38, 0.45);
 }
 
 .frame-shell {
@@ -80,16 +118,15 @@
 }
 
 .state-card {
-  flex: 1;
   flex-direction: column;
-  padding: 36px;
+  padding: 24px;
   text-align: center;
 }
 
 .state-icon {
-  font-size: 48px;
-  width: 48px;
-  height: 48px;
+  font-size: 42px;
+  width: 42px;
+  height: 42px;
 }
 
 .state-title {
@@ -97,28 +134,40 @@
   font-weight: 700;
 }
 
-.state-message,
-.state-meta {
+.state-message {
   max-width: 680px;
   color: var(--text-muted, #718096);
 }
 
-.spin {
-  animation: workflows-spin 1s linear infinite;
+.message {
+  color: #4a5568;
+  font-size: 13px;
 }
 
-@keyframes workflows-spin {
+.message.success {
+  color: #166534;
+}
+
+.message.error {
+  color: #b91c1c;
+}
+
+.spin {
+  animation: mlflow-spin 1s linear infinite;
+}
+
+@keyframes mlflow-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (max-width: 720px) {
-  .workflows-page {
+  .mlflow-page {
     height: calc(100vh - 16px);
   }
 
-  .workflows-toolbar {
+  .mlflow-toolbar {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -127,5 +176,4 @@
     width: 100%;
     justify-content: flex-end;
   }
-
 }

@@ -93,6 +93,12 @@ export class ShellComponent {
         path: "/workflows",
         disabledReason: kubernetesActionDisabledReason,
       },
+      {
+        label: "MLflow",
+        icon: "insights",
+        path: "/mlflow",
+        disabledReason: kubernetesActionDisabledReason,
+      },
     ];
     return items;
   });

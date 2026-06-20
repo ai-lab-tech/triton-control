@@ -4,6 +4,7 @@ import { firstValueFrom } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
+import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { MatIconModule } from "@angular/material/icon";
 
 import {
@@ -14,16 +15,18 @@ import {
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import { AuthService } from "../../shared/auth/auth.service";
 import { ChromeService } from "../../shared/chrome.service";
+import { S3CredentialsDialogComponent } from "./s3-credentials-dialog/s3-credentials-dialog.component";
 
 @Component({
   selector: "app-workflows-page",
   standalone: true,
-  imports: [MatButtonModule, MatCardModule, MatIconModule],
+  imports: [MatButtonModule, MatCardModule, MatDialogModule, MatIconModule],
   templateUrl: "./workflows-page.component.html",
   styleUrl: "./workflows-page.component.scss",
 })
 export class WorkflowsPageComponent implements OnDestroy {
   private readonly workflowsApi = inject(WorkflowsService);
+  private readonly dialog = inject(MatDialog);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly auth = inject(AuthService);
   private readonly chrome = inject(ChromeService);
@@ -93,5 +96,13 @@ export class WorkflowsPageComponent implements OnDestroy {
         `${this.basePath}${normalized}${separator}_tc_reload=${this.reloadNonce}`,
       ),
     );
+  }
+
+  openCredentialsDialog(): void {
+    this.dialog.open(S3CredentialsDialogComponent, {
+      width: "900px",
+      maxWidth: "95vw",
+      panelClass: "custom-dialog",
+    });
   }
 }

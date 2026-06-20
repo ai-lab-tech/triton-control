@@ -28,6 +28,12 @@ from app.schemas.instance import (
     UpdateInstanceS3Request,
     UpdateTritonInstanceRequest,
 )
+from app.schemas.mlflow import (
+    InstallMlflowRequest,
+    MlflowDeleteResponse,
+    MlflowInstallResponse,
+    MlflowStatusResponse,
+)
 from app.schemas.oidc import OidcSettingsDTO, UpdateOidcSettingsRequest
 from app.schemas.perf_analyzer import (
     InstallPerfAnalyzerRequest,
@@ -61,7 +67,12 @@ from app.schemas.user import (
     UserDTO,
     validate_password_policy,
 )
-from app.schemas.workflows import ArgoWorkflowsStatusResponse
+from app.schemas.workflows import (
+    ArgoWorkflowsStatusResponse,
+    CreateWorkflowS3CredentialRequest,
+    WorkflowS3CredentialDTO,
+    WorkflowS3CredentialDeleteResponse,
+)
 
 __all__ = [
     "ArgoWorkflowsStatusResponse",
@@ -72,6 +83,7 @@ __all__ = [
     "CodeServerDeploymentNavigationRequest",
     "CodeServerDeploymentNavigationResponse",
     "CreateCodeServerRequest",
+    "CreateWorkflowS3CredentialRequest",
     "CreateDeploymentRequest",
     "CreateTritonInstanceRequest",
     "CreateUserRequest",
@@ -80,10 +92,14 @@ __all__ = [
     "DeploymentResponse",
     "InstanceS3ConfigDTO",
     "InstanceLogsResponse",
+    "InstallMlflowRequest",
     "InstallPerfAnalyzerRequest",
     "LoginRequest",
     "LoginResponse",
     "ModelRepositoryActionResponse",
+    "MlflowDeleteResponse",
+    "MlflowInstallResponse",
+    "MlflowStatusResponse",
     "NormalizedEmail",
     "OidcSettingsDTO",
     "PASSWORD_MAX_LENGTH",
@@ -110,5 +126,7 @@ __all__ = [
     "UpdateUserInstancesRequest",
     "UpdateUserRoleRequest",
     "UserDTO",
+    "WorkflowS3CredentialDTO",
+    "WorkflowS3CredentialDeleteResponse",
     "validate_password_policy",
 ]

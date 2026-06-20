@@ -6,10 +6,16 @@
         Global Argo Workflows server managed by the Triton Control Helm release.
       </div>
     </div>
-    <button mat-stroked-button type="button" (click)="reload()">
-      <span class="material-icons">refresh</span>
-      Refresh
-    </button>
+    <div class="toolbar-actions">
+      <button mat-flat-button color="primary" type="button" (click)="openCredentialsDialog()">
+        <span class="material-icons">vpn_key</span>
+        Configure S3 Secrets
+      </button>
+      <button mat-stroked-button type="button" (click)="reload()">
+        <span class="material-icons">refresh</span>
+        Refresh
+      </button>
+    </div>
   </header>
 
   @if (loading()) {

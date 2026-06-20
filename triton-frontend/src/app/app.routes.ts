@@ -14,6 +14,7 @@ import { UsersPageComponent } from "./pages/users/users-page.component";
 import { SettingsPageComponent } from "./pages/settings/settings-page.component";
 import { LoginPageComponent } from "./pages/login/login-page.component";
 import { WorkflowsPageComponent } from "./pages/workflows/workflows-page.component";
+import { MlflowPageComponent } from "./pages/mlflow/mlflow-page.component";
 
 export const APP_ROUTES: Routes = [
   { path: "signin", component: LoginPageComponent },
@@ -29,6 +30,7 @@ export const APP_ROUTES: Routes = [
       { path: "deployments/new", component: NewDeploymentPageComponent },
       { path: "perf-analyzers", component: NewPerfAnalyzerPageComponent },
       { path: "workflows", component: WorkflowsPageComponent },
+      { path: "mlflow", component: MlflowPageComponent },
       { path: "instances/:id", component: InstanceDetailPageComponent },
       {
         path: "instances/:id/models/:modelName/versions/:version/infer",
