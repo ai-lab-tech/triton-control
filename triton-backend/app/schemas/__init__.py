@@ -17,6 +17,7 @@ from app.schemas.development import (
     CodeServerDTO,
     CreateCodeServerRequest,
 )
+from app.schemas.error_log import ErrorEventDTO, FrontendErrorEventRequest
 from app.schemas.instance import (
     CreateTritonInstanceRequest,
     InstanceLogsResponse,
@@ -45,6 +46,7 @@ from app.schemas.perf_analyzer import (
     RunPerfAnalyzerRequest,
 )
 from app.schemas.s3 import (
+    S3DeleteResponse,
     S3EntryDTO,
     S3FileContentResponse,
     S3FileWriteResponse,
@@ -90,6 +92,8 @@ __all__ = [
     "DashboardAlertDTO",
     "DeploymentDeleteResponse",
     "DeploymentResponse",
+    "ErrorEventDTO",
+    "FrontendErrorEventRequest",
     "InstanceS3ConfigDTO",
     "InstanceLogsResponse",
     "InstallMlflowRequest",
@@ -114,6 +118,7 @@ __all__ = [
     "RunPerfAnalyzerRequest",
     "ROLE_ALIASES",
     "S3EntryDTO",
+    "S3DeleteResponse",
     "S3FileContentResponse",
     "S3FileWriteResponse",
     "S3ListResponse",

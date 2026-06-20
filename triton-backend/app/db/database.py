@@ -81,6 +81,7 @@ def init_db() -> None:
         CodeServerEntity,
         DashboardAlertEntity,
         MlflowEntity,
+        ErrorEventEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,

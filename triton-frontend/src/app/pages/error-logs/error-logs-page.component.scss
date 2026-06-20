@@ -1,0 +1,100 @@
+.error-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.card {
+  padding: 1.5rem;
+}
+
+.logs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+  gap: 1.4rem;
+}
+
+.logs-table {
+  width: 100%;
+}
+
+.log-row {
+  cursor: pointer;
+}
+
+.log-row.selected,
+.log-row:hover {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.path-cell,
+.message-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.error-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.metadata {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+}
+
+.metadata div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.metadata dt {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  max-height: 520px;
+  overflow: auto;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .logs-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -24,6 +24,7 @@ from app.core.security import get_claims
 from app.db.database import get_session
 from app.schemas import (
     InstanceS3ConfigDTO,
+    S3DeleteResponse,
     S3FileContentResponse,
     S3FileWriteResponse,
     S3ListResponse,
@@ -131,3 +132,14 @@ def put_instance_s3_content(
         content,
         content_type,
     )
+
+
+@router.delete("/{instance_id}/s3/content", response_model=S3DeleteResponse)
+@translate_app_errors
+def delete_instance_s3_content(
+    instance_id: int,
+    path: S3Path,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> S3DeleteResponse:
+    return s3_service.delete_instance_s3_content(session, claims, instance_id, path)

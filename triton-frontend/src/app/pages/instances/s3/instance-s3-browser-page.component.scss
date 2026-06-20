@@ -118,10 +118,19 @@
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  flex-wrap: wrap;
 }
 
 .search {
   width: 220px;
+}
+
+.folder-name-field {
+  width: 190px;
+}
+
+.new-folder-btn {
+  white-space: nowrap;
 }
 
 .upload-btn {
@@ -176,7 +185,7 @@
 .browser-head,
 .browser-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px 100px 84px;
+  grid-template-columns: minmax(0, 1fr) 160px 100px 148px;
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
@@ -248,7 +257,36 @@
 
 .cell.actions {
   justify-content: flex-end;
-  gap: 0.2rem;
+  gap: 0.35rem;
+  min-width: 148px;
+}
+
+.row-action {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #475569;
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.row-action:hover {
+  color: #0f172a;
+  background: rgba(100, 116, 139, 0.16);
+}
+
+.row-action .material-icons {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.delete-action {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.delete-action:hover {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.16);
 }
 
 .editor-backdrop {
@@ -324,11 +362,19 @@
 
   .browser-head,
   .browser-row {
-    grid-template-columns: minmax(0, 1fr) 120px 80px 64px;
+    grid-template-columns: minmax(0, 1fr) 108px 72px 124px;
+    gap: 0.65rem;
   }
 
   .cell.actions {
     justify-content: flex-end;
+    min-width: 124px;
+    gap: 0.25rem;
+  }
+
+  .row-action {
+    width: 32px;
+    height: 32px;
   }
 
   .browser-toolbar {

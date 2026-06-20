@@ -3,6 +3,7 @@ import { inject } from "@angular/core";
 import { Router } from "@angular/router";
 import { catchError, throwError } from "rxjs";
 import { BASE_PATH } from "../../api/generated/index";
+import { ErrorLogReporterService } from "../error-log-reporter.service";
 import { AuthService } from "./auth.service";
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
@@ -14,6 +15,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   const auth = inject(AuthService);
+  const reporter = inject(ErrorLogReporterService);
   const router = inject(Router);
   const token = auth.getAccessToken();
   const isAuthLoginLikeRequest =
@@ -21,6 +23,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     req.url.endsWith("/api/auth/self-register") ||
     req.url.endsWith("/api/auth/bootstrap/register");
   const isAuthLogoutRequest = req.url.endsWith("/logout");
+  const isErrorLogRequest = req.url.includes("/api/admin/error-logs");
 
   let cloned = req.clone({ withCredentials: true });
   if (token && !cloned.headers.has("Authorization")) {
@@ -45,6 +48,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             queryParams: router.url && router.url !== "/" ? { returnUrl: router.url } : undefined,
           });
         }
+      }
+      if (error instanceof HttpErrorResponse && error.status >= 500 && !isErrorLogRequest) {
+        reporter.reportHttpError(error, cloned.method, cloned.url);
       }
       return throwError(() => error);
     }),

@@ -70,6 +70,44 @@
                 <input matInput [(ngModel)]="query" placeholder="Filter files" />
               </mat-form-field>
               @if (canWriteInstances()) {
+                @if (creatingFolder) {
+                  <mat-form-field appearance="outline" class="folder-name-field">
+                    <mat-label>Folder name</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="newFolderName"
+                      (keyup.enter)="createFolder()"
+                      (keyup.escape)="cancelCreateFolder()"
+                    />
+                  </mat-form-field>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    aria-label="Create folder"
+                    (click)="createFolder()"
+                  >
+                    <span class="material-icons">check</span>
+                  </button>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    aria-label="Cancel folder creation"
+                    (click)="cancelCreateFolder()"
+                  >
+                    <span class="material-icons">close</span>
+                  </button>
+                } @else {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="new-folder-btn"
+                    (click)="startCreateFolder()"
+                    [disabled]="uploadBusy()"
+                  >
+                    <span class="material-icons">create_new_folder</span>
+                    <span>New Folder</span>
+                  </button>
+                }
                 <label
                   class="upload-btn"
                   [class.uploading]="uploadBusy()"
@@ -81,7 +119,28 @@
                     <span>{{ uploadStatusLabel() }}</span>
                   } @else {
                     <span class="material-icons">upload</span>
-                    <span>Upload</span>
+                    <span>Upload File</span>
+                  }
+                </label>
+                <label
+                  class="upload-btn folder-upload-btn"
+                  [class.uploading]="uploadBusy()"
+                  [attr.aria-busy]="uploadBusy()"
+                >
+                  <input
+                    type="file"
+                    multiple
+                    webkitdirectory
+                    directory
+                    (change)="onUploadFolder($event)"
+                    [disabled]="uploadBusy()"
+                  />
+                  @if (uploadBusy()) {
+                    <span class="material-icons upload-spin" aria-hidden="true">sync</span>
+                    <span>{{ uploadStatusLabel() }}</span>
+                  } @else {
+                    <span class="material-icons">drive_folder_upload</span>
+                    <span>Upload Folder</span>
                   }
                 </label>
               }
@@ -112,6 +171,7 @@
                     <button
                       mat-icon-button
                       type="button"
+                      class="row-action"
                       [attr.aria-label]="'Download ' + entry.name"
                       (click)="download(entry); $event.stopPropagation()"
                     >
@@ -122,10 +182,22 @@
                     <button
                       mat-icon-button
                       type="button"
+                      class="row-action"
                       [attr.aria-label]="'Edit ' + entry.name"
                       (click)="startEdit(entry); $event.stopPropagation()"
                     >
                       <span class="material-icons">edit</span>
+                    </button>
+                  }
+                  @if (canWriteInstances()) {
+                    <button
+                      mat-icon-button
+                      type="button"
+                      class="row-action delete-action"
+                      [attr.aria-label]="'Delete ' + entry.name"
+                      (click)="deleteEntry(entry); $event.stopPropagation()"
+                    >
+                      <span class="material-icons">delete</span>
                     </button>
                   }
                 </div>

@@ -15,6 +15,7 @@ import {
   s3FileUploadFailed,
   s3FileUploadRequested,
   s3FileUploadSucceeded,
+  s3FolderTreeRemoved,
 } from "./instances-s3.actions";
 
 describe("instancesS3Reducer", () => {
@@ -86,6 +87,18 @@ describe("instancesS3Reducer", () => {
       s3EntriesLoadFailed({ message: "error" }),
     );
     expect(state.pageLoading).toBeFalse();
+  });
+
+  it("S3FolderTreeRemoved_KnownFolderPaths_RemovesFolderAndChildPaths", () => {
+    const state = instancesS3Reducer(
+      {
+        ...initialInstancesS3State,
+        knownFolderPaths: ["/", "/models", "/models/resnet", "/models/resnet/1", "/models/bert"],
+      },
+      s3FolderTreeRemoved({ path: "/models/resnet/" }),
+    );
+
+    expect(state.knownFolderPaths).toEqual(["/", "/models", "/models/bert"]);
   });
 
   it("S3EditorOpenRequested_DefaultState_SetsEditorOpenAndLoading", () => {

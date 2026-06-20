@@ -50,6 +50,7 @@ export class NewDeploymentPageComponent {
   ingressHost = "";
   ingressClassName = "";
   s3Url = "";
+  s3Prefix = "";
   s3AccessKey = "";
   s3SecretKey = "";
   s3Region = "us-east-1";
@@ -161,7 +162,7 @@ export class NewDeploymentPageComponent {
       image: this.image.trim(),
       ingress_host: this.ingressHost.trim() || undefined,
       ingress_class_name: this.ingressClassName.trim() || undefined,
-      s3_url: this.normalizeS3Url(this.s3Url),
+      s3_url: this.buildS3RepositoryUrl(this.s3Url, this.s3Prefix),
       s3_access_key: this.s3AccessKey.trim(),
       s3_secret_key: this.s3SecretKey,
       s3_region: this.s3Region.trim() || "us-east-1",
@@ -231,6 +232,12 @@ export class NewDeploymentPageComponent {
       return `s3://${raw}`;
     }
     return raw;
+  }
+
+  private buildS3RepositoryUrl(endpoint: string, prefix: string): string {
+    const normalizedEndpoint = this.normalizeS3Url(endpoint).replace(/\/+$/, "");
+    const normalizedPrefix = prefix.trim().replace(/^\/+|\/+$/g, "");
+    return normalizedPrefix ? `${normalizedEndpoint}/${normalizedPrefix}` : normalizedEndpoint;
   }
 
   private requirementsPackageCount(): number {
