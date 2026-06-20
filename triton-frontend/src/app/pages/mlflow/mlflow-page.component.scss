@@ -11,17 +11,10 @@
   gap: 12px;
 }
 
-.mlflow-toolbar {
+.header-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .page-title {
@@ -34,13 +27,15 @@
   color: var(--text-muted, #718096);
 }
 
-.mlflow-toolbar .material-icons {
-  margin-right: 6px;
-  font-size: 18px;
+.create-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.install-card,
-.status-card {
+.create-card {
+  width: 100%;
+  max-width: 1100px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -61,16 +56,6 @@
   gap: 12px;
 }
 
-.status-meta {
-  color: var(--text-muted, #718096);
-}
-
-.resources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .actions {
   display: flex;
   align-items: center;
@@ -83,12 +68,82 @@
 
 .frame-shell {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 12px;
   background: #fff;
+}
+
+.workspace-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 50px;
+  padding: 0.35rem 0.65rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.workspace-heading {
+  min-width: 0;
+}
+
+.workspace-title {
+  color: #0f172a;
+  font-weight: 850;
+  font-size: 0.98rem;
+}
+
+.workspace-subtitle {
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metadata-divider::before {
+  content: "·";
+  margin: 0 0.45rem;
+  color: #94a3b8;
+}
+
+.workspace-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.workspace-toolbar-actions .material-icons {
+  font-size: 1rem;
+  margin-right: 0.22rem;
+}
+
+.workspace-toolbar-actions button {
+  min-height: 30px;
+  padding: 0 0.6rem;
+  font-size: 0.82rem;
+}
+
+.workspace-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .frame-shell iframe {
@@ -118,6 +173,7 @@
 }
 
 .state-card {
+  flex: 1 1 auto;
   flex-direction: column;
   padding: 24px;
   text-align: center;
@@ -167,13 +223,17 @@
     height: calc(100vh - 16px);
   }
 
-  .mlflow-toolbar {
+  .workspace-toolbar {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .toolbar-actions {
+  .workspace-toolbar-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .workspace-subtitle {
+    white-space: normal;
   }
 }

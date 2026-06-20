@@ -1,28 +1,21 @@
 <div class="mlflow-page">
-  <header class="mlflow-toolbar">
-    <div>
-      <div class="page-title">MLflow</div>
-      <div class="page-subtitle">
-        Singleton MLflow server managed by Triton Control and embedded via backend proxy.
-      </div>
-    </div>
-    <div class="toolbar-actions">
-      <button mat-stroked-button type="button" (click)="reload()">
-        <span class="material-icons">refresh</span>
-        Refresh
-      </button>
-    </div>
-  </header>
-
   @if (loading()) {
     <div class="state-panel" role="status">
       <span class="material-icons spin">progress_activity</span>
       <span>Checking MLflow status…</span>
     </div>
-  } @else {
-    @if (!status()?.installed) {
-      <mat-card class="install-card">
-        <div class="section-title">Install MLflow</div>
+  } @else if (!status()?.installed) {
+    <div class="create-view">
+      <div class="header-row">
+        <div>
+          <div class="page-title">Create MLflow</div>
+          <div class="page-subtitle">
+            Create a singleton MLflow server managed by Triton Control and embedded via backend proxy.
+          </div>
+        </div>
+      </div>
+      <mat-card class="create-card">
+        <div class="section-title">Installation</div>
         <div class="section-subtitle">
           Only one MLflow installation is managed per Triton Control deployment.
         </div>
@@ -47,31 +40,31 @@
         <div class="actions">
           <button mat-flat-button color="primary" type="button" (click)="install()" [disabled]="!canInstall()">
             <span class="material-icons">rocket_launch</span>
-            {{ installing() ? "Installing..." : "Install MLflow" }}
+            {{ installing() ? "Creating..." : "Create MLflow" }}
           </button>
         </div>
       </mat-card>
-    } @else if (status(); as current) {
-      <mat-card class="status-card">
-        <div class="section-title">Installed MLflow</div>
-        <div class="section-subtitle">{{ current.status_message || "MLflow installation exists." }}</div>
-        <div class="status-meta">
-          Status: <code>{{ current.status }}</code>
-          @if (current.installation?.namespace) {
-            · Namespace: <code>{{ current.installation?.namespace }}</code>
-          }
-          @if (current.installation?.service_name) {
-            · Service: <code>{{ current.installation?.service_name }}</code>
-          }
-        </div>
-        @if (current.installation?.applied_resources?.length) {
-          <div class="resources">
-            @for (resource of current.installation?.applied_resources || []; track resource) {
-              <code>{{ resource }}</code>
+    </div>
+  } @else if (status(); as current) {
+    <section class="workspace-shell">
+      <div class="workspace-toolbar">
+        <div class="workspace-heading">
+          <div class="workspace-title">MLflow</div>
+          <div class="workspace-subtitle">
+            Status: <code>{{ current.status }}</code>
+            @if (current.installation?.namespace) {
+              <span class="metadata-divider">Namespace: <code>{{ current.installation?.namespace }}</code></span>
+            }
+            @if (current.installation?.service_name) {
+              <span class="metadata-divider">Service: <code>{{ current.installation?.service_name }}</code></span>
             }
           </div>
-        }
-        <div class="actions">
+        </div>
+        <div class="workspace-toolbar-actions">
+          <button mat-stroked-button type="button" (click)="reload()">
+            <span class="material-icons">refresh</span>
+            Refresh
+          </button>
           <button
             mat-stroked-button
             type="button"
@@ -83,33 +76,35 @@
             {{ uninstalling() ? "Uninstalling..." : "Uninstall" }}
           </button>
         </div>
-      </mat-card>
+      </div>
 
-      @if (current.ready && frameUrl()) {
-        <section class="frame-shell">
-          @if (frameLoading()) {
-            <div class="frame-loading" role="status">
-              <span class="material-icons spin">progress_activity</span>
-              <span>Loading MLflow…</span>
+      <div class="workspace-body">
+        @if (current.ready && frameUrl()) {
+          <section class="frame-shell">
+            @if (frameLoading()) {
+              <div class="frame-loading" role="status">
+                <span class="material-icons spin">progress_activity</span>
+                <span>Loading MLflow…</span>
+              </div>
+            }
+            <iframe
+              title="MLflow"
+              [src]="frameUrl()"
+              (load)="onFrameLoaded()"
+              allow="clipboard-read; clipboard-write"
+            ></iframe>
+          </section>
+        } @else {
+          <div class="state-card">
+            <span class="material-icons state-icon">insights</span>
+            <div class="state-title">MLflow is not ready yet</div>
+            <div class="state-message">
+              {{ current.status_message || "Refresh in a few seconds until the MLflow pod is running." }}
             </div>
-          }
-          <iframe
-            title="MLflow"
-            [src]="frameUrl()"
-            (load)="onFrameLoaded()"
-            allow="clipboard-read; clipboard-write"
-          ></iframe>
-        </section>
-      } @else {
-        <mat-card class="state-card">
-          <span class="material-icons state-icon">insights</span>
-          <div class="state-title">MLflow is not ready yet</div>
-          <div class="state-message">
-            {{ current.status_message || "Refresh in a few seconds until the MLflow pod is running." }}
           </div>
-        </mat-card>
-      }
-    }
+        }
+      </div>
+    </section>
   }
 
   @if (message()) {
