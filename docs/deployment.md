@@ -194,8 +194,8 @@ The default integration:
 - configures `/api/workflows/proxy/` as the Argo UI base path
 
 The Argo Server runs plain HTTP inside the cluster. TLS remains the
-responsibility of the Triton Control ingress and the planned authenticated
-backend proxy.
+responsibility of the Triton Control ingress. Browser access passes through the
+authenticated Triton Control backend proxy.
 
 The configured public Argo system images do not cover private images referenced
 by Workflow YAML. Such images still require an image pull Secret in the Triton
@@ -203,7 +203,9 @@ Control release namespace. Keep credentials outside Workflow YAML and inject a
 server-managed `spec.imagePullSecrets` reference.
 
 See the [Helm chart README](../charts/triton-control/README.md#optional-argo-workflows)
-for image sources and existing-installation behavior.
+for image sources and existing-installation behavior, and
+[Argo Workflows](argo-workflows.md) for runtime, security, and credential
+details.
 
 ### Self-Deployed Triton And Perf Analyzer Namespace Behavior
 

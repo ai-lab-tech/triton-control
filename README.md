@@ -19,6 +19,7 @@ Core capabilities include:
 - model inference workflows with model configuration inspection
 - S3-backed model repository integration with an integrated S3 Browser
 - Perf Analyzer workflows when Triton Control runs in Kubernetes
+- embedded Argo Workflows UI and API through an authenticated backend proxy
 
 ## Repository Layout
 
@@ -114,6 +115,7 @@ The Helm chart deploys:
 
 - one combined app image with Nginx, Angular, and FastAPI
 - one optional PostgreSQL Deployment
+- one optional Argo Workflows installation
 - one Service for frontend and backend ports
 - optional Ingress routes
 

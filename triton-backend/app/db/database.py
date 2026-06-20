@@ -80,8 +80,8 @@ def init_db() -> None:
     from app.db.entities import (  # Import models to register them
         CodeServerEntity,
         DashboardAlertEntity,
-        MlflowEntity,
         ErrorEventEntity,
+        MlflowEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,

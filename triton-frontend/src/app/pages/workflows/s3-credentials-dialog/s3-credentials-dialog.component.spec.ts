@@ -56,6 +56,9 @@ describe("S3CredentialsDialogComponent", () => {
     await flushMicrotasks();
 
     expect(component.credentials().length).toBe(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain("Access Key ID:");
+    expect(fixture.nativeElement.textContent).toContain("AKIA123");
   });
 
   it("creates a credential and reloads list", async () => {

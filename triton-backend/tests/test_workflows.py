@@ -10,7 +10,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.api import workflows_api
-from app.services.workflows import config, proxy, status
+from app.services.workflows import config, credentials, proxy, status
 
 
 class WorkflowsTests(unittest.TestCase):
@@ -140,6 +140,61 @@ class WorkflowsTests(unittest.TestCase):
 
         mocked.assert_called_once_with(payload, session, {"role": "member"})
         self.assertEqual(result, expected)
+
+    def test_CreateWorkflowS3Credential_StoresSecretOnlyInKubernetes(self) -> None:
+        payload = workflows_api.CreateWorkflowS3CredentialRequest(
+            name="finance-prod",
+            access_key_id="AKIA123",
+            secret_access_key="SECRET123",
+        )
+        created_at = datetime(2026, 1, 1)
+        row = SimpleNamespace(
+            id=2,
+            name="finance-prod",
+            namespace="triton-control",
+            secret_name="workflow-s3-finance-prod-abc123",
+            access_key_id="AKIA123",
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        session = SimpleNamespace()
+        user = SimpleNamespace(id=7)
+
+        with patch("app.services.workflows.credentials.require_user_entity", return_value=user), patch(
+            "app.services.workflows.credentials._workflow_namespace",
+            return_value="triton-control",
+        ), patch(
+            "app.services.workflows.credentials._secret_name",
+            return_value="workflow-s3-finance-prod-abc123",
+        ), patch(
+            "app.services.workflows.credentials.workflow_s3_credentials.find_by_name",
+            return_value=None,
+        ), patch(
+            "app.services.workflows.credentials.workflow_s3_credentials.find_by_secret_name",
+            return_value=None,
+        ), patch(
+            "app.services.workflows.credentials._secret_exists",
+            return_value=False,
+        ), patch(
+            "app.services.workflows.credentials._apply_secret",
+        ) as apply_secret, patch(
+            "app.services.workflows.credentials.workflow_s3_credentials.create",
+            return_value=row,
+        ) as create:
+            result = credentials.create_credential(payload, session, {"role": "member"})
+
+        apply_secret.assert_called_once_with(
+            "triton-control",
+            "workflow-s3-finance-prod-abc123",
+            "AKIA123",
+            "SECRET123",
+        )
+        stored_values = create.call_args.kwargs
+        self.assertEqual(stored_values["access_key_id"], "AKIA123")
+        self.assertNotIn("secret_access_key", stored_values)
+        self.assertNotIn("secret_access_key_hash", stored_values)
+        self.assertNotIn("secret_access_key_enc", stored_values)
+        self.assertEqual(result.access_key_id, "AKIA123")
 
     def test_DeleteWorkflowS3Credential_MemberDelegates(self) -> None:
         expected = workflows_api.WorkflowS3CredentialDeleteResponse(

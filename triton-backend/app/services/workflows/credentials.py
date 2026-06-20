@@ -8,15 +8,14 @@ from datetime import datetime
 
 from sqlmodel import Session
 
-from app.core.crypto import encrypt_secret, hash_secret
 from app.core.identity import require_user_entity
 from app.db.entities import WorkflowS3CredentialEntity
 from app.exceptions import BadGatewayError, ConflictError, NotFoundError
 from app.repositories import workflow_s3_credentials
 from app.schemas import (
     CreateWorkflowS3CredentialRequest,
-    WorkflowS3CredentialDTO,
     WorkflowS3CredentialDeleteResponse,
+    WorkflowS3CredentialDTO,
 )
 from app.services.kubernetes_client import api_client, in_cluster_namespace
 from app.services.workflows.config import get_config
@@ -53,8 +52,6 @@ def create_credential(
             namespace=namespace,
             secret_name=secret_name,
             access_key_id=request.access_key_id,
-            secret_access_key_hash=hash_secret(request.secret_access_key),
-            secret_access_key_enc=encrypt_secret(request.secret_access_key),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -127,7 +124,9 @@ def _apply_secret(namespace: str, secret_name: str, access_key_id: str, secret_a
         core.create_namespaced_secret(namespace=namespace, body=body)
     except ApiException as exc:
         if exc.status == 409:
-            raise ConflictError(f"Kubernetes secret '{secret_name}' already exists in namespace '{namespace}'.") from exc
+            raise ConflictError(
+                f"Kubernetes secret '{secret_name}' already exists in namespace '{namespace}'."
+            ) from exc
         raise BadGatewayError(_k8s_error(exc)) from exc
     except Exception as exc:
         raise BadGatewayError(f"Failed to create workflow credential secret: {exc}") from exc

@@ -207,7 +207,7 @@ class CodeServerEntity(SQLModel, table=True):
 
 
 class WorkflowS3CredentialEntity(SQLModel, table=True):
-    """Persisted S3 credentials that map to Kubernetes secrets for Argo workflows."""
+    """Metadata index for S3 credentials stored in Kubernetes Secrets."""
 
     __tablename__ = "workflow_s3_credentials"
     __table_args__ = (
@@ -228,8 +228,6 @@ class WorkflowS3CredentialEntity(SQLModel, table=True):
     namespace: str
     secret_name: str
     access_key_id: str
-    secret_access_key_hash: str
-    secret_access_key_enc: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
