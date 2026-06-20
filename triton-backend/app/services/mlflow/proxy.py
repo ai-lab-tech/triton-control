@@ -125,6 +125,18 @@ def _kubernetes_proxy_http_sync(
         "name": f"{service_name}:http",
         "path": encoded_path,
     }
+    # The kubernetes client serializes the body via json.dumps(), so raw bytes must be
+    # decoded to a Python object first. For JSON bodies (the common case) we parse them;
+    # for non-JSON we fall back to a plain string so call_api can still forward them.
+    import json as _json
+
+    api_body: object = None
+    if body:
+        try:
+            api_body = _json.loads(body)
+        except (_json.JSONDecodeError, UnicodeDecodeError):
+            api_body = body.decode("utf-8", errors="replace")
+
     try:
         upstream, status_code, response_headers = api.call_api(
             resource_path,
@@ -132,7 +144,7 @@ def _kubernetes_proxy_http_sync(
             path_params=path_params,
             query_params=query_params,
             header_params=headers,
-            body=body if body else None,
+            body=api_body,
             response_type="file",
             auth_settings=["BearerToken"],
             _return_http_data_only=False,
