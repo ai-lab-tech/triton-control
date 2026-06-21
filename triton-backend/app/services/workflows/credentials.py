@@ -133,8 +133,8 @@ def _apply_secret(namespace: str, secret_name: str, access_key_id: str, secret_a
 
 
 def _delete_secret(namespace: str, secret_name: str) -> None:
-    from kubernetes import client  # type: ignore[import-untyped]
-    from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
 
     core = client.CoreV1Api(api_client())
     try:
@@ -147,8 +147,8 @@ def _delete_secret(namespace: str, secret_name: str) -> None:
 
 
 def _secret_exists(namespace: str, secret_name: str) -> bool:
-    from kubernetes import client  # type: ignore[import-untyped]
-    from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
 
     core = client.CoreV1Api(api_client())
     try:

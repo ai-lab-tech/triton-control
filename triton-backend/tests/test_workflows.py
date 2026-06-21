@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 from fastapi import HTTPException
-from kubernetes.client.rest import ApiException
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import workflows_api
 from app.exceptions import BadGatewayError, ConflictError, NotFoundError

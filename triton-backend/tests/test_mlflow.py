@@ -7,7 +7,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import httpx
 from fastapi import HTTPException
-from kubernetes.client.rest import ApiException
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import mlflow_api
 from app.db.entities import MlflowEntity
@@ -81,11 +81,16 @@ class MlflowTests(unittest.TestCase):
 
     def test_InstallMlflow_ApplyFails_CleansUpDatabaseRecord(self) -> None:
         saved: list[MlflowEntity] = []
+
+        def save_entity(_session: object, entity: MlflowEntity) -> MlflowEntity:
+            saved.append(entity)
+            return entity
+
         with (
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
             patch(
                 "app.services.mlflow.installer.mlflow.save",
-                side_effect=lambda _session, entity: saved.append(entity) or entity,
+                side_effect=save_entity,
             ),
             patch(
                 "app.services.mlflow.installer.k8s.apply_installation_resources",
