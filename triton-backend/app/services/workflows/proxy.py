@@ -20,6 +20,7 @@ from app.services.workflows.config import get_config
 
 logger = logging.getLogger(__name__)
 
+_PROXY_TIMEOUT_SECONDS = 1800
 _HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -51,13 +52,13 @@ async def proxy_http(path: str, request: Request) -> StreamingResponse:
     if not config.enabled or not config.server_url:
         raise BadGatewayError("Argo Workflows is not configured")
 
-    client = httpx.AsyncClient(follow_redirects=False, timeout=None, trust_env=False)
+    client = httpx.AsyncClient(
+        follow_redirects=False,
+        timeout=_PROXY_TIMEOUT_SECONDS,
+        trust_env=False,
+    )
     target = _http_url(config.server_url, path, list(request.query_params.multi_items()))
-    headers = {
-        key: value
-        for key, value in request.headers.items()
-        if key.lower() not in _REQUEST_SKIP_HEADERS
-    }
+    headers = {key: value for key, value in request.headers.items() if key.lower() not in _REQUEST_SKIP_HEADERS}
     headers["x-forwarded-prefix"] = config.base_path.rstrip("/")
     try:
         upstream_request = client.build_request(
@@ -72,9 +73,7 @@ async def proxy_http(path: str, request: Request) -> StreamingResponse:
         raise BadGatewayError(f"Argo Workflows proxy request failed: {exc}") from exc
 
     response_headers = {
-        key: value
-        for key, value in upstream.headers.items()
-        if key.lower() not in _RESPONSE_SKIP_HEADERS
+        key: value for key, value in upstream.headers.items() if key.lower() not in _RESPONSE_SKIP_HEADERS
     }
     location = response_headers.get("location")
     if location and location.startswith("/"):
