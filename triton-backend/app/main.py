@@ -41,8 +41,8 @@ from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
 from app.api.instance_api import router as instance_router
-from app.api.model_api import router as model_router
 from app.api.mlflow_api import router as mlflow_router
+from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.s3_api import router as s3_router

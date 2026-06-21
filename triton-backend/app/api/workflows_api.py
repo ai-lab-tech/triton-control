@@ -12,8 +12,8 @@ from app.db.database import get_session
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
     CreateWorkflowS3CredentialRequest,
-    WorkflowS3CredentialDTO,
     WorkflowS3CredentialDeleteResponse,
+    WorkflowS3CredentialDTO,
 )
 from app.services.workflows import credentials, proxy, status
 

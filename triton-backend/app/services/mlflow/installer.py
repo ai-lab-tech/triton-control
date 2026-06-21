@@ -17,7 +17,8 @@ from app.schemas import (
     MlflowStatusResponse,
 )
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
-from app.services.mlflow import config, kubernetes as k8s
+from app.services.mlflow import config
+from app.services.mlflow import kubernetes as k8s
 
 _install_lock = Lock()
 _MLFLOW_NAMESPACE = "triton-control"

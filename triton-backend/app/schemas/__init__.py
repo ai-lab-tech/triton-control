@@ -72,8 +72,8 @@ from app.schemas.user import (
 from app.schemas.workflows import (
     ArgoWorkflowsStatusResponse,
     CreateWorkflowS3CredentialRequest,
-    WorkflowS3CredentialDTO,
     WorkflowS3CredentialDeleteResponse,
+    WorkflowS3CredentialDTO,
 )
 
 __all__ = [
