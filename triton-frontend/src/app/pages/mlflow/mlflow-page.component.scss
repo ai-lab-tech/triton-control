@@ -8,58 +8,219 @@
   flex-direction: column;
   height: calc(100vh - 24px);
   min-height: 520px;
-  gap: 12px;
+  gap: 1.8rem;
 }
 
 .header-row {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-}
-
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .page-subtitle {
-  margin-top: 4px;
+  margin: 0.2rem 0 0;
   color: var(--text-muted, #718096);
 }
 
 .create-view {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 1.8rem;
 }
 
 .create-card {
-  width: 100%;
+  display: grid;
+  gap: 1.4rem;
+  padding: 1.6rem;
   max-width: 1100px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.section {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 1.4rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .section-title {
-  font-size: 18px;
   font-weight: 700;
+  font-size: 1.05rem;
 }
 
 .section-subtitle {
-  color: var(--text-muted, #718096);
+  margin-top: 0.2rem;
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.form-row.wide {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.field-hint {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+.dockerconfigjson-editor {
+  display: block;
+  height: 240px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.advanced-section {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.advanced-head {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.advanced-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.advanced-title-row .material-icons {
+  font-size: 1.1rem;
+  color: #0f766e;
+}
+
+.advanced-title {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+}
+
+.advanced-subtitle {
+  font-size: 0.84rem;
+  color: #64748b;
+}
+
+.optional-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  .mat-expansion-panel {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: var(--radius-md) !important;
+    box-shadow: none !important;
+  }
+
+  .mat-expansion-panel-body {
+    padding-top: 1rem;
+  }
+
+  mat-panel-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  mat-panel-title .material-icons {
+    font-size: 1rem;
+    color: #0f766e;
+  }
+
+  mat-panel-description {
+    color: #64748b;
+    font-size: 0.85rem;
+  }
+}
+
+:host ::ng-deep .optional-sections .mat-expansion-panel-header {
+  min-height: 62px;
+  padding: 0 1rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 1));
+}
+
+:host ::ng-deep .optional-sections .mat-expansion-panel-header.mat-expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+:host ::ng-deep .optional-sections .mat-expansion-panel-header-description {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-left: auto;
+  color: #64748b;
+}
+
+.panel-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.08rem 0.62rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #dbe3ef;
+  color: #475569;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.panel-status-chip[data-tone="ok"] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.panel-status-chip[data-tone="error"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.panel-status-detail {
+  font-size: 0.9rem;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 0.8rem;
 }
 
 .danger {
@@ -221,6 +382,19 @@
 @media (max-width: 720px) {
   .mlflow-page {
     height: calc(100vh - 16px);
+  }
+
+  .create-card {
+    padding: 1.2rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    justify-content: stretch;
+    flex-direction: column-reverse;
   }
 
   .workspace-toolbar {

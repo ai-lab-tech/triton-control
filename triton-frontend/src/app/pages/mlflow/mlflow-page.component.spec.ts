@@ -1,5 +1,6 @@
 import { TestBed } from "@angular/core/testing";
 import { HttpClientTestingModule, HttpTestingController } from "@angular/common/http/testing";
+import { provideRouter } from "@angular/router";
 
 import { BASE_PATH } from "../../api/generated/index";
 import { AuthService } from "../../shared/auth/auth.service";
@@ -19,6 +20,7 @@ describe("MlflowPageComponent", () => {
     await TestBed.configureTestingModule({
       imports: [MlflowPageComponent, HttpClientTestingModule],
       providers: [
+        provideRouter([]),
         { provide: AuthService, useValue: auth },
         { provide: ChromeService, useValue: chrome },
         { provide: BASE_PATH, useValue: "" },

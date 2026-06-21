@@ -348,9 +348,11 @@ Triton Control supports a shared Perf Analyzer installation for profile runs.
 
 Namespace behavior:
 
-- backend in Kubernetes: self-deployed Triton and Perf Analyzer are created in
-  the same namespace as Triton Control
-- backend outside Kubernetes: namespace handling remains name-based
+- Perf Analyzer is created in the same namespace as Triton Control
+- in Kubernetes, this is the namespace of the running Triton Control pod
+- outside Kubernetes, the namespace defaults to `triton-control` and can be
+  overridden with `TRITON_CONTROL_NAMESPACE`, `KUBERNETES_NAMESPACE`, or
+  `POD_NAMESPACE`
 
 Current scope:
 

@@ -219,9 +219,10 @@ Namespace selection depends on where Triton Control backend is running:
     as the running Triton Control pod.
 - Running **outside Kubernetes** (for example local dev with
   `KUBERNETES_KUBECONFIG_PATH`):
-  - Existing behavior stays unchanged:
-    - Triton deployment namespace defaults to the deployment name.
-    - Perf Analyzer namespace defaults to the installation name.
+  - Triton deployment namespace defaults to the deployment name.
+  - Perf Analyzer defaults to the shared `triton-control` namespace. Override
+    it with `TRITON_CONTROL_NAMESPACE`, `KUBERNETES_NAMESPACE`, or
+    `POD_NAMESPACE`.
 
 Runtime detection is automatic and based on in-cluster Kubernetes environment
 signals (service host/port and ServiceAccount files), not only on UI settings.
