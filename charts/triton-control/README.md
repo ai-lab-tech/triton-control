@@ -129,6 +129,9 @@ By default, the chart creates namespace-scoped RBAC (least privilege):
 - `rbac.clusterWide=false`
 - `rbac.manageNamespaces=false`
 
+The namespace-scoped Role includes PVC permissions because the embedded MLflow
+installer applies and removes its `mlflow-data` PersistentVolumeClaim.
+
 Enable cluster-wide RBAC only when needed:
 
 ```yaml
