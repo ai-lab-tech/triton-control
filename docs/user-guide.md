@@ -256,6 +256,27 @@ Current limitation:
 
 - rename and move actions are not available in the current release
 
+## MLflow
+
+The **MLflow** sidebar entry provides a singleton MLflow tracking server managed
+by Triton Control. Members and admins can install it in Kubernetes, use its UI
+through the authenticated backend proxy, refresh its readiness state, and
+uninstall it.
+
+Installation settings include the Kubernetes resource name, MLflow image, and
+optional `.dockerconfigjson` credentials for a private image registry. The
+managed workload uses a 10 GiB `ReadWriteOnce` PersistentVolumeClaim named from
+the installation (for the default name, `mlflow-data`). MLflow stores its SQLite
+tracking database and local artifacts on this volume.
+
+The Triton Control service account therefore requires namespace-scoped create,
+update, patch, and delete permissions for PersistentVolumeClaims. The Helm chart
+provides these permissions when `rbac.create=true`.
+
+Uninstalling the managed MLflow instance deletes its Deployment, Service,
+image-pull Secret, and PersistentVolumeClaim. Export or retain required tracking
+data before uninstalling.
+
 ## Add Deployment (Sidebar Entry)
 
 **Add Deployment** is a standalone navigation entry, not an instance detail tab.

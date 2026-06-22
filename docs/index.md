@@ -19,6 +19,8 @@ Core capabilities:
 - model inference workflows with model configuration inspection
 - S3-backed model repository integration with an integrated S3 Browser
 - Perf Analyzer workflows when Triton Control runs in Kubernetes
+- Kubernetes-managed MLflow tracking with persistent storage and an embedded,
+  authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
 
 The same application can also run with Docker Compose or Podman Compose for
@@ -30,7 +32,7 @@ local evaluation, and with separate Python/npm processes for development.
 
 Product:
 
-- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, and Add Instance.
+- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and Add Instance.
 - [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
 - [Development Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
 - [Argo Workflows](argo-workflows.md): installation, authenticated proxy, Kubernetes layout, pod security, RBAC, and Workflow credentials.
