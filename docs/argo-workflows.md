@@ -100,4 +100,4 @@ Backend variables are documented in [Configuration](configuration.md):
 Deployment details and Helm values are available in:
 
 - [Deployment](deployment.md#optional-argo-workflows-dependency)
-- [Helm chart README](../charts/triton-control/README.md#optional-argo-workflows)
+- [Helm chart README](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#optional-argo-workflows)
