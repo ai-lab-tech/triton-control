@@ -18,7 +18,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   {{- end }}
   - apiGroups: [""]
-    resources: ["secrets", "services", "pods", "configmaps"]
+    resources: ["secrets", "services", "pods", "configmaps", "persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["services/proxy"]

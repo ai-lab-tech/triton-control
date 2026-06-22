@@ -1,0 +1,81 @@
+{image_pull_secret_manifest}apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {data_pvc_name}
+  namespace: {namespace}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {deployment_name}
+  namespace: {namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+      deployment: {deployment_name}
+  template:
+    metadata:
+      labels:
+        app: mlflow
+        deployment: {deployment_name}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+{image_pull_secret_reference}      containers:
+        - name: mlflow
+          image: {image}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - >
+              mkdir -p /mlflow-data/artifacts &&
+              exec mlflow server
+              --host 0.0.0.0
+              --port 5000
+              --backend-store-uri sqlite:////mlflow-data/mlflow.db
+              --default-artifact-root /mlflow-data/artifacts
+          ports:
+            - name: http
+              containerPort: 5000
+          volumeMounts:
+            - name: data
+              mountPath: /mlflow-data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {data_pvc_name}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {service_name}
+  namespace: {namespace}
+spec:
+  selector:
+    app: mlflow
+    deployment: {deployment_name}
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000

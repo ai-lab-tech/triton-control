@@ -1,0 +1,130 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.workflows-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 24px);
+  min-height: 520px;
+  gap: 12px;
+}
+
+.workflows-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.page-subtitle {
+  margin-top: 4px;
+  color: var(--text-muted, #718096);
+}
+
+.workflows-toolbar button {
+  flex: 0 0 auto;
+}
+
+.workflows-toolbar .material-icons {
+  margin-right: 6px;
+  font-size: 18px;
+}
+
+.frame-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.frame-shell iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.frame-loading,
+.state-panel,
+.state-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.frame-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.state-panel {
+  flex: 1;
+}
+
+.state-card {
+  flex: 1;
+  flex-direction: column;
+  padding: 36px;
+  text-align: center;
+}
+
+.state-icon {
+  font-size: 48px;
+  width: 48px;
+  height: 48px;
+}
+
+.state-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.state-message,
+.state-meta {
+  max-width: 680px;
+  color: var(--text-muted, #718096);
+}
+
+.spin {
+  animation: workflows-spin 1s linear infinite;
+}
+
+@keyframes workflows-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .workflows-page {
+    height: calc(100vh - 16px);
+  }
+
+  .workflows-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

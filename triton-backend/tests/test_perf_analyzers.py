@@ -33,10 +33,26 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             response = installer.install_perf_analyzer(self._request(), SimpleNamespace())
 
         apply_resources.assert_called_once()
-        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "perf-analyzer")
-        self.assertEqual(response.namespace, "perf-analyzer")
+        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "triton-control")
+        self.assertEqual(response.namespace, "triton-control")
         self.assertEqual(response.deployment_name, "perf-analyzer")
         self.assertEqual(response.applied_resources, ["Deployment/perf-analyzer"])
+
+    def test_InstallPerfAnalyzer_InCluster_UsesControlNamespace(self) -> None:
+        with patch("app.services.perf_analyzer.installer.is_running_in_cluster", return_value=True), patch(
+            "app.services.perf_analyzer.installer.in_cluster_namespace",
+            return_value="triton-control",
+        ), patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=None), patch(
+            "app.services.perf_analyzer.installer.k8s.apply_installation_resources",
+            return_value=["Deployment/perf-analyzer"],
+        ) as apply_resources, patch(
+            "app.services.perf_analyzer.installer.perf_analyzer.save",
+            side_effect=lambda _session, entity: entity,
+        ):
+            response = installer.install_perf_analyzer(self._request(), SimpleNamespace())
+
+        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "triton-control")
+        self.assertEqual(response.namespace, "triton-control")
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         dockerconfigjson = '{"auths":{"registry.example":{"auth":"token"}}}'
@@ -118,6 +134,26 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         delete_namespace.assert_called_once_with("perf")
         delete_record.assert_called_once()
         self.assertEqual(response.status, "deleted")
+
+    def test_UninstallPerfAnalyzer_ControlNamespace_DeletesOnlyResources(self) -> None:
+        entity = SimpleNamespace(namespace="triton-control", deployment_name="perf-analyzer")
+
+        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=entity), patch(
+            "app.services.perf_analyzer.installer.perf_analyzer.save",
+            side_effect=lambda _session, saved_entity: saved_entity,
+        ), patch(
+            "app.services.perf_analyzer.installer.k8s.delete_installation_resources",
+            return_value="Deployment/perf-analyzer",
+        ) as delete_resources, patch(
+            "app.services.perf_analyzer.installer.k8s.delete_namespace",
+        ) as delete_namespace, patch(
+            "app.services.perf_analyzer.installer.perf_analyzer.delete",
+        ):
+            response = installer.uninstall_perf_analyzer(SimpleNamespace())
+
+        delete_resources.assert_called_once_with("triton-control", "perf-analyzer")
+        delete_namespace.assert_not_called()
+        self.assertEqual(response.namespace, "triton-control")
 
     def test_RunPerfAnalyzer_InstalledPod_ExecutesModelCommand(self) -> None:
         request = RunPerfAnalyzerRequest(

@@ -48,6 +48,8 @@ npm run -s generate:api
 
 - `/dashboard`
 - `/instances`
+- `/development`
+- `/workflows` - embedded global Argo Workflows UI through Triton Control
 - `/users`
 - `/settings`
 

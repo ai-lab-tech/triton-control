@@ -87,6 +87,18 @@ export class ShellComponent {
         path: "/perf-analyzers",
         disabledReason: kubernetesActionDisabledReason,
       },
+      {
+        label: "Workflows",
+        icon: "account_tree",
+        path: "/workflows",
+        disabledReason: kubernetesActionDisabledReason,
+      },
+      {
+        label: "MLflow",
+        icon: "insights",
+        path: "/mlflow",
+        disabledReason: kubernetesActionDisabledReason,
+      },
     ];
     return items;
   });
