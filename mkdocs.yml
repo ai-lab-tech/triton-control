@@ -1,6 +1,6 @@
 site_name: Triton Control
 site_description: Documentation for the Triton Control frontend, backend, and deployment workflows.
-repo_url: https://github.com/
+repo_url: https://github.com/ai-lab-tech/triton-control
 theme:
   name: material
   logo: assets/images/triton-control-icon.svg

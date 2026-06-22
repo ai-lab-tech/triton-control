@@ -202,7 +202,7 @@ by Workflow YAML. Such images still require an image pull Secret in the Triton
 Control release namespace. Keep credentials outside Workflow YAML and inject a
 server-managed `spec.imagePullSecrets` reference.
 
-See the [Helm chart README](../charts/triton-control/README.md#optional-argo-workflows)
+See the [Helm chart README](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#optional-argo-workflows)
 for image sources and existing-installation behavior, and
 [Argo Workflows](argo-workflows.md) for runtime, security, and credential
 details.
