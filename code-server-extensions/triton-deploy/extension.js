@@ -87,6 +87,7 @@ async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const s3x = vscode.workspace.getConfiguration("s3x");
   const detectedModelName = detectModelName(sourceFolder);
+  const detectedBackend = detectModelBackend(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
   if (!modelName) {
     return null;
@@ -109,6 +110,7 @@ async function initialFormValues(sourceFolder) {
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
     modelControlMode: "explicit",
+    repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
   };
@@ -130,6 +132,17 @@ function detectModelName(sourceFolder) {
     return "";
   }
   return path.basename(path.dirname(configPath));
+}
+
+function detectModelBackend(sourceFolder) {
+  const configPath = findConfigPbtxt(sourceFolder);
+  if (!configPath) return "";
+  try {
+    const config = fs.readFileSync(configPath, "utf8");
+    return config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase() || "";
+  } catch {
+    return "";
+  }
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -269,6 +282,9 @@ async function saveS3xSettingsIfAvailable(values, forcePathStyle, target) {
 
 function normalizeForm(form) {
   const endpoint = String(form.endpoint || "").trim().replace(/\/+$/, "");
+  const repositorySyncMode = ["init", "sidecar"].includes(form.repositorySyncMode)
+    ? form.repositorySyncMode
+    : "direct";
   return {
     sourceFolder: String(form.sourceFolder || ""),
     deploymentName: String(form.deploymentName || "").trim(),
@@ -281,7 +297,9 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
-    modelControlMode: form.modelControlMode === "poll" ? "poll" : "explicit",
+    modelControlMode:
+      repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
+    repositorySyncMode,
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
   };
@@ -523,6 +541,7 @@ function deploymentPayload(form) {
     s3_secret_key: form.secretAccessKey,
     s3_region: form.region,
     model_control_mode: form.modelControlMode,
+    repository_sync_mode: form.repositorySyncMode,
     repository_poll_secs: form.repositoryPollSecs > 0 ? form.repositoryPollSecs : 15,
     allow_metrics: true,
   };
@@ -612,6 +631,7 @@ function renderHtml(webview, nonce, initial) {
     <label>S3 access key<input name="accessKeyId" required></label>
     <label>S3 secret key<input name="secretAccessKey" type="password" required></label>
     <label>Model control<select name="modelControlMode"><option value="explicit">explicit</option><option value="poll">poll</option></select></label>
+    <label>Repository access<select name="repositorySyncMode"><option value="direct">native Triton S3</option><option value="sidecar">vLLM sidecar (development/stage)</option><option value="init">vLLM init container (production)</option></select></label>
     <label>Repository poll seconds<input name="repositoryPollSecs" type="number" min="1"></label>
     <label>Model name<input name="modelName" placeholder="from config.pbtxt or manual input"></label>
     <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
@@ -635,9 +655,19 @@ function renderHtml(webview, nonce, initial) {
       else input.value = value ?? '';
     }
     updateDestinationPath();
+    updateModelControlModes();
 
     form.addEventListener('input', updateDestinationPath);
     form.addEventListener('change', updateDestinationPath);
+    form.elements.repositorySyncMode.addEventListener('change', updateModelControlModes);
+
+    function updateModelControlModes() {
+      const initMode = form.elements.repositorySyncMode.value === 'init';
+      const pollOption = Array.from(form.elements.modelControlMode.options)
+        .find((option) => option.value === 'poll');
+      if (pollOption) pollOption.disabled = initMode;
+      if (initMode) form.elements.modelControlMode.value = 'explicit';
+    }
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();

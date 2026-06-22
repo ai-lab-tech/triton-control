@@ -16,6 +16,23 @@
       </div>
       <div class="form-grid split">
         <div class="form-row">
+          <label class="field-label" for="deployment-repository-sync-mode"
+            >Model repository access
+            <span class="field-hint">Local sync modes are required only for vLLM</span>
+          </label>
+          <mat-form-field appearance="outline">
+            <mat-select
+              id="deployment-repository-sync-mode"
+              [(ngModel)]="repositorySyncMode"
+              (selectionChange)="repositorySyncModeChanged()"
+            >
+              <mat-option value="direct">Native Triton S3</mat-option>
+              <mat-option value="init">vLLM init container</mat-option>
+              <mat-option value="sidecar">vLLM polling sidecar</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+        <div class="form-row">
           <label class="field-label" for="deployment-name">Deployment name</label>
           <mat-form-field appearance="outline">
             <input
@@ -145,7 +162,7 @@
           <mat-form-field appearance="outline">
             <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
               <mat-option value="explicit">Explicit</mat-option>
-              <mat-option value="poll">Poll</mat-option>
+              <mat-option value="poll" [disabled]="repositorySyncMode === 'init'">Poll</mat-option>
             </mat-select>
           </mat-form-field>
         </div>
@@ -171,7 +188,7 @@
               id="deployment-repository-poll-secs"
               matInput
               [(ngModel)]="repositoryPollSecs"
-              [disabled]="modelControlMode !== 'poll'"
+              [disabled]="modelControlMode !== 'poll' && repositorySyncMode !== 'sidecar'"
               type="number"
               min="1"
               step="1"

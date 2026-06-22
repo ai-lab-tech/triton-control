@@ -264,9 +264,19 @@ Prerequisite: an S3-compatible object store and bucket must already exist. The
 bucket, or the optional repository prefix within it, must contain models in the
 directory structure expected by Triton Inference Server.
 
+In vLLM sync modes, Triton's repository path must always be the directory above
+the model folder. For example, version files under `modela/1` are published as
+`/models/modela/1`, while Triton receives `--model-repository=/models`. When a
+vLLM S3 URL points directly at a single folder containing `config.pbtxt`, the
+sync worker adds the model-name directory automatically.
+
 The S3 settings entered during **Add Deployment** are written into the
-Kubernetes deployment and are consumed from inside the Triton pod as the model
-repository connection. After the deployment is created, Triton Control cannot
+Kubernetes deployment. Standard Triton backends use Triton's native S3 model
+repository directly. For vLLM, select an init-container or sidecar sync: it
+downloads into a shared `emptyDir`, and Triton reads the stable `/models` path.
+Relative `model` and `tokenizer` values in vLLM `model.json` files are changed
+to absolute paths under that directory. After the deployment is created,
+Triton Control cannot
 change that in-pod S3 repository connection in place. To change it, delete the
 self-deployed Triton instance and create a new deployment with the new S3
 settings.
@@ -285,9 +295,10 @@ pod.
 | Repository prefix | Optional | Path to the model repository within the bucket. | Leave empty when models are stored at the bucket root. |
 | S3 CA certificate | Optional | PEM CA certificate for HTTPS S3 endpoints. | Provide for private/self-signed/internal CAs. |
 | Access key / Secret key / Region | Yes | Repository credentials and region. | Use least-privilege credentials. |
+| Model repository access | Yes | `direct` retains native Triton S3 behavior. vLLM `init` downloads once and requires explicit control; vLLM `sidecar` repeats differential syncs and supports explicit or poll control. | Use direct for non-vLLM backends, vLLM init for stage/production, and vLLM sidecar for repositories that change while Triton runs. |
 | Model control mode | Yes | Triton behavior (`explicit` or `poll`). | Use mode based on model operation strategy. |
 | Startup model | Optional (`explicit`) | Model loaded at startup (`*` if empty). | Control startup footprint when needed. |
-| Poll interval | Optional (`poll`) | Polling interval in seconds. | Tune for change rate and API load. |
+| Poll interval | Optional (`poll` or sidecar sync) | Triton repository and sidecar S3 sync interval in seconds. | Tune for change rate and API load. |
 | Ingress host/class | Optional | Expose deployment through ingress. | Use for external cluster access. |
 | `.dockerconfigjson` | Optional | Private registry pull credentials. | Required for private images. |
 | `requirements.txt` | Optional | Extra Python packages installed before Triton start. | Prefer dev/stage; bake into image for production. |

@@ -80,6 +80,17 @@ describe("NewDeploymentPageComponent", () => {
     expect(canDeploy).toBeFalse();
   });
 
+  it("RepositorySyncModeChanged_InitMode_ForcesExplicitControl", () => {
+    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const component = fixture.componentInstance;
+    component.repositorySyncMode = "init";
+    component.modelControlMode = "poll";
+
+    component.repositorySyncModeChanged();
+
+    expect(component.modelControlMode).toBe("explicit");
+  });
+
   it("Deploy_RequirementsProvided_SendsRequirementsTxt", async () => {
     // Arrange
     const fixture = TestBed.createComponent(NewDeploymentPageComponent);
@@ -120,6 +131,7 @@ describe("NewDeploymentPageComponent", () => {
         dockerconfigjson: '{"auths":{"registry.example":{"auth":"token"}}}',
         ingress_host: "triton.example.local",
         model_control_mode: "explicit",
+        repository_sync_mode: "direct",
         repository_poll_secs: 9,
         model_name: "simple_identity",
         allow_metrics: true,

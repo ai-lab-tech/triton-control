@@ -327,6 +327,13 @@ class DeploymentServiceTests(unittest.TestCase):
         start_script = container["args"][0]
         self.assertIn("exec tritonserver", start_script)
         self.assertIn("--model-repository=s3://http://minio:9000/triton-models", start_script)
+        self.assertNotIn(
+            "s3-model-sync",
+            [
+                container["name"]
+                for container in applied[1]["spec"]["template"]["spec"].get("initContainers", [])
+            ],
+        )
         self.assertIn("--model-control-mode=explicit", start_script)
         self.assertIn("--allow-metrics=true", start_script)
         self.assertIn("'--load-model=*'", start_script)
@@ -362,6 +369,28 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("--model-control-mode=explicit", start_script)
         self.assertIn("--allow-metrics=false", start_script)
         self.assertIn("--load-model=simple_identity", start_script)
+
+    def test_Manifests_VllmInitSync_UsesStableLocalRepository(self) -> None:
+        request = self._request().model_copy(update={"repository_sync_mode": "init"})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-minio",
+            "triton-minio",
+            "triton-minio-service",
+            "triton-minio-s3-credentials",
+            "triton-image",
+        )
+
+        pod_spec = manifests[1]["spec"]["template"]["spec"]
+        self.assertIn("--model-repository=/models", pod_spec["containers"][0]["args"][0])
+        sync = pod_spec["initContainers"][-1]
+        self.assertEqual(sync["name"], "s3-model-sync")
+        self.assertIn("aws s3 sync", sync["args"][0])
+        sync_env = {item["name"]: item.get("value") for item in sync["env"]}
+        self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
+        self.assertIn("publish_root=/models/$model_name", sync["args"][0])
+        self.assertIn("model.json", sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
         # Arrange
@@ -467,7 +496,12 @@ class DeploymentServiceTests(unittest.TestCase):
     def test_Manifests_PollMode_AddsRepositoryPollSeconds(self) -> None:
         # Arrange
         request = self._request().model_copy(
-            update={"model_control_mode": "poll", "repository_poll_secs": 9, "model_name": "ignored"},
+            update={
+                "model_control_mode": "poll",
+                "repository_sync_mode": "sidecar",
+                "repository_poll_secs": 9,
+                "model_name": "ignored",
+            },
         )
 
         # Act
@@ -485,6 +519,69 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("--model-control-mode=poll", start_script)
         self.assertIn("--repository-poll-secs=9", start_script)
         self.assertNotIn("--load-model=", start_script)
+
+    def test_CreateDeploymentRequest_InitSyncWithPollMode_IsRejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "init repository sync supports only explicit"):
+            CreateDeploymentRequest(
+                deployment_name="triton-minio",
+                image="custom/triton:dev",
+                s3_url="s3://bucket",
+                s3_access_key="access",
+                s3_secret_key="secret",
+                repository_sync_mode="init",
+                model_control_mode="poll",
+            )
+
+    def test_Manifests_SidecarSync_WaitsForFirstSyncAndPollsS3(self) -> None:
+        request = self._request().model_copy(
+            update={
+                "repository_sync_mode": "sidecar",
+                "repository_poll_secs": 9,
+                "model_control_mode": "explicit",
+            }
+        )
+
+        manifests = k8s._manifests(
+            request,
+            "triton-minio",
+            "triton-minio",
+            "triton-minio-service",
+            "triton-minio-s3-credentials",
+            "triton-image",
+        )
+
+        pod_spec = manifests[1]["spec"]["template"]["spec"]
+        self.assertEqual(
+            [container["name"] for container in pod_spec["containers"]],
+            ["triton", "s3-model-sync"],
+        )
+        self.assertIn(".s3-sync-ready", pod_spec["containers"][0]["args"][0])
+        sync_script = pod_spec["containers"][1]["args"][0]
+        self.assertIn("while sleep 9", sync_script)
+        self.assertIn("--delete", sync_script)
+        self.assertIn("/models/", sync_script)
+        self.assertIn("--model-control-mode=explicit", pod_spec["containers"][0]["args"][0])
+
+    def test_AwsS3Source_CustomEndpoint_SeparatesEndpointAndBucketPath(self) -> None:
+        self.assertEqual(
+            k8s._aws_s3_source("s3://https://minio.example:9443/bucket/prefix"),
+            ("s3://bucket/prefix", "https://minio.example:9443"),
+        )
+
+    def test_RepositorySyncImage_ChartEnvironment_IsDefaultAndRequestCanOverride(self) -> None:
+        request = self._request()
+        with patch.dict(
+            "os.environ",
+            {"TRITON_DEPLOY_S3_SYNC_IMAGE": "registry.example/s3-sync:prod"},
+        ):
+            self.assertEqual(k8s._repository_sync_image(request), "registry.example/s3-sync:prod")
+            overridden = request.model_copy(
+                update={"repository_sync_image": "registry.example/s3-sync:request"}
+            )
+            self.assertEqual(
+                k8s._repository_sync_image(overridden),
+                "registry.example/s3-sync:request",
+            )
 
     def test_Manifests_RequirementsProvided_InstallsPackagesBeforeTritonStart(self) -> None:
         # Arrange

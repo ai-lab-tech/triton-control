@@ -9,14 +9,25 @@ existing `POST /api/deployments` endpoint.
 1. Right-click a Triton model folder or model repository root in code-server.
 2. Run `Triton Control: Deploy Model Repository`.
 3. The extension detects the model name from `config.pbtxt`. If no model name is
-   found, it asks for one.
+   found, it asks for one. It also detects `backend: "vllm"`.
 4. Confirm S3 and deployment settings. The deployment name is filled from the
    model name.
 5. The extension uploads files below `bucket/prefix/deployment-name`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
 
+Repository access defaults are backend-specific:
+
+- non-vLLM configurations select native Triton S3 (`direct`) and create no sync
+  container;
+- vLLM configurations select the polling sidecar for the development workflow;
+- the form can switch vLLM to init-container mode for stage/production.
+
 Triton expects the model repository root to contain one folder per model:
+
+The deployed Triton repository argument always points one directory above the
+model folder. For example, `modela/1/model.json` is materialized below
+`/models/modela/1`, and Triton uses `/models` as its repository root.
 
 ```text
 repository-root/

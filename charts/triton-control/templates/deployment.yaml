@@ -53,6 +53,8 @@ spec:
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
           env:
+            - name: TRITON_DEPLOY_S3_SYNC_IMAGE
+              value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

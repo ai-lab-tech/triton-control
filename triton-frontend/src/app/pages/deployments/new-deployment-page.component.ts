@@ -56,6 +56,7 @@ export class NewDeploymentPageComponent {
   s3Region = "us-east-1";
   s3CaCertificate = "";
   modelControlMode: "explicit" | "poll" = "explicit";
+  repositorySyncMode: "direct" | "init" | "sidecar" = "direct";
   repositoryPollSecs = 15;
   modelName = "";
 
@@ -148,6 +149,12 @@ export class NewDeploymentPageComponent {
     return value.startsWith("https://") || value.startsWith("s3://https://");
   }
 
+  repositorySyncModeChanged(): void {
+    if (this.repositorySyncMode === "init") {
+      this.modelControlMode = "explicit";
+    }
+  }
+
   async deploy(): Promise<void> {
     if (!this.canDeploy()) {
       this.setMessage("Required deployment fields are missing.", "error");
@@ -167,8 +174,9 @@ export class NewDeploymentPageComponent {
       s3_secret_key: this.s3SecretKey,
       s3_region: this.s3Region.trim() || "us-east-1",
       dockerconfigjson: this.dockerconfigjson().trim() || undefined,
-      model_control_mode: this.modelControlMode,
+      model_control_mode: this.repositorySyncMode === "init" ? "explicit" : this.modelControlMode,
       repository_poll_secs: this.repositoryPollSecs,
+      repository_sync_mode: this.repositorySyncMode,
       model_name:
         this.modelControlMode === "explicit" ? this.modelName.trim() || undefined : undefined,
       allow_metrics: true,
