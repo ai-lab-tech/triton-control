@@ -83,8 +83,7 @@ async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket
         return
     except Exception:
         logger.exception("Development WebSocket proxy failed")
-        if websocket.client_state.name != "DISCONNECTED":
-            await websocket.close(code=1011)
+        await _close_websocket(websocket, code=1011)
     finally:
         if upstream is not None:
             await upstream.close()
@@ -306,8 +305,30 @@ async def _upstream_to_browser(websocket: WebSocket, upstream: websockets.Client
                 await websocket.send_bytes(message)
             else:
                 await websocket.send_text(message)
-    except websockets.ConnectionClosed:
+    except (WebSocketDisconnect, websockets.ConnectionClosed):
         return
+    except RuntimeError as exc:
+        if _is_closed_websocket_send_error(exc):
+            return
+        raise
+
+
+async def _close_websocket(websocket: WebSocket, *, code: int) -> None:
+    if websocket.client_state.name == "DISCONNECTED":
+        return
+    try:
+        await websocket.close(code=code)
+    except RuntimeError as exc:
+        if not _is_closed_websocket_send_error(exc):
+            raise
+
+
+def _is_closed_websocket_send_error(exc: RuntimeError) -> bool:
+    message = str(exc)
+    return (
+        "Unexpected ASGI message 'websocket.send'" in message
+        or "Unexpected ASGI message 'websocket.close'" in message
+    )
 
 
 def _api_error(exc: Exception) -> str:
