@@ -10,6 +10,10 @@ Defines the following database tables:
                           persists the OIDC provider configuration.
   ``code_servers``       (``CodeServerEntity``)       — per-user Kubernetes
                           Development workspaces.
+  ``workflow_s3_credentials`` (``WorkflowS3CredentialEntity``) — Argo workflow
+                          S3 credentials mirrored to Kubernetes secrets.
+  ``mlflow``             (``MlflowEntity``)          — singleton MLflow
+                          installation managed by Triton Control.
   ``dashboard_alerts``   (``DashboardAlertEntity``)  — ephemeral health-alert
                           snapshots rebuilt on every health-refresh cycle.
 """
@@ -156,6 +160,23 @@ class PerfAnalyzerRunEntity(SQLModel, table=True):
     executed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
+class MlflowEntity(SQLModel, table=True):
+    """Database model for the singleton MLflow installation."""
+
+    __tablename__ = "mlflow"
+
+    id: Optional[int] = Field(default=1, primary_key=True)
+    namespace: str
+    deployment_name: str
+    service_name: str
+    image: str
+    applied_resources: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    status: str = Field(default="creating")
+    status_message: str = Field(default="")
+    last_transition_at: datetime = Field(default_factory=datetime.utcnow)
+    installed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class CodeServerEntity(SQLModel, table=True):
     """Database model for a user's Kubernetes Development workspace."""
 
@@ -181,6 +202,32 @@ class CodeServerEntity(SQLModel, table=True):
     status: str = Field(default="creating")
     status_message: str = Field(default="")
     applied_resources: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkflowS3CredentialEntity(SQLModel, table=True):
+    """Metadata index for S3 credentials stored in Kubernetes Secrets."""
+
+    __tablename__ = "workflow_s3_credentials"
+    __table_args__ = (
+        UniqueConstraint(
+            "name",
+            name="uq_workflow_s3_credential_name",
+        ),
+        UniqueConstraint(
+            "namespace",
+            "secret_name",
+            name="uq_workflow_s3_credential_secret",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_by_user_id: int = Field(foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    namespace: str
+    secret_name: str
+    access_key_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

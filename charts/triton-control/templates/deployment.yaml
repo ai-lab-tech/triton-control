@@ -63,6 +63,16 @@ spec:
                   name: {{ include "triton-control.postgresqlSecretName" . }}
                   key: database-url
             {{- end }}
+            - name: ARGO_WORKFLOWS_ENABLED
+              value: {{ .Values.argoWorkflows.enabled | quote }}
+            - name: ARGO_WORKFLOWS_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: ARGO_WORKFLOWS_SERVICE_NAME
+              value: {{ default "argo-workflows-server" .Values.argoIntegration.serviceName | quote }}
+            - name: ARGO_WORKFLOWS_SERVER_URL
+              value: {{ default (printf "http://argo-workflows-server.%s.svc.cluster.local:%v" .Release.Namespace .Values.argoWorkflows.server.servicePort) .Values.argoIntegration.serverUrl | quote }}
+            - name: ARGO_WORKFLOWS_BASE_PATH
+              value: {{ .Values.argoIntegration.basePath | quote }}
           envFrom:
             {{- if .Values.app.existingSecret }}
             - secretRef:

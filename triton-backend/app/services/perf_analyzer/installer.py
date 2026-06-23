@@ -7,6 +7,7 @@ manifest application to the Kubernetes integration.
 """
 
 import json
+import os
 from datetime import datetime
 from threading import Lock
 from typing import Any
@@ -32,6 +33,7 @@ from app.services.perf_analyzer import kubernetes as k8s
 
 _run_lock = Lock()
 _install_lock = Lock()
+_DEFAULT_NAMESPACE = "triton-control"
 
 
 def get_perf_analyzer_status(session: Session) -> PerfAnalyzerStatusResponse:
@@ -93,8 +95,7 @@ def install_perf_analyzer(request: InstallPerfAnalyzerRequest, session: Session)
         if perf_analyzer.get(session) is not None:
             raise ConflictError("Perf Analyzer is already installed")
         name = request.installation_name
-        control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
-        namespace = control_ns or name
+        namespace = _perf_analyzer_namespace()
         entity = perf_analyzer.save(
             session,
             PerfAnalyzerEntity(
@@ -137,13 +138,26 @@ def uninstall_perf_analyzer(session: Session) -> PerfAnalyzerDeleteResponse:
     entity.status_message = "Deleting Perf Analyzer resources."
     entity.last_transition_at = datetime.utcnow()
     perf_analyzer.save(session, entity)
-    control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
-    if control_ns and namespace == control_ns:
+    if namespace == _perf_analyzer_namespace():
         message = k8s.delete_installation_resources(namespace, entity.deployment_name)
     else:
         message = k8s.delete_namespace(namespace)
     perf_analyzer.delete(session, entity)
     return PerfAnalyzerDeleteResponse(status="deleted", message=message, namespace=namespace)
+
+
+def _perf_analyzer_namespace() -> str:
+    """Return the shared Triton Control namespace for Perf Analyzer."""
+    control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
+    if control_ns:
+        return control_ns
+    configured = (
+        os.getenv("TRITON_CONTROL_NAMESPACE")
+        or os.getenv("KUBERNETES_NAMESPACE")
+        or os.getenv("POD_NAMESPACE")
+        or ""
+    ).strip()
+    return configured or _DEFAULT_NAMESPACE
 
 
 def run_perf_analyzer(

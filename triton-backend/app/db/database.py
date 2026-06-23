@@ -78,19 +78,23 @@ def init_db() -> None:
     from sqlmodel import SQLModel
 
     from app.db.entities import (  # Import models to register them
+        CodeServerEntity,
         DashboardAlertEntity,
         ErrorEventEntity,
+        MlflowEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
         TritonInstanceEntity,
         UserEntity,
+        WorkflowS3CredentialEntity,
     )
 
     SQLModel.metadata.create_all(engine)
     _migrate_triton_instances_table()
     _migrate_oidc_config_table()
     _migrate_perf_analyzer_table()
+    _migrate_mlflow_table()
 
 
 def _migrate_oidc_config_table() -> None:
@@ -342,6 +346,35 @@ def _migrate_perf_analyzer_table() -> None:
             text(
                 """
                 ALTER TABLE IF EXISTS perf_analyzer
+                ADD COLUMN IF NOT EXISTS last_transition_at TIMESTAMP NOT NULL DEFAULT NOW()
+                """
+            )
+        )
+
+
+def _migrate_mlflow_table() -> None:
+    """Apply lightweight schema migration for mlflow singleton table."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
+                ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'creating'
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
+                ADD COLUMN IF NOT EXISTS status_message TEXT NOT NULL DEFAULT ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
                 ADD COLUMN IF NOT EXISTS last_transition_at TIMESTAMP NOT NULL DEFAULT NOW()
                 """
             )

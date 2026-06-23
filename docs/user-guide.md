@@ -35,6 +35,7 @@ Main sidebar entries:
 - Development (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
+- Workflows (when Kubernetes actions and Argo Workflows are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
 - Error Logs (admin only)
 
@@ -255,6 +256,27 @@ Current limitation:
 
 - rename and move actions are not available in the current release
 
+## MLflow
+
+The **MLflow** sidebar entry provides a singleton MLflow tracking server managed
+by Triton Control. Members and admins can install it in Kubernetes, use its UI
+through the authenticated backend proxy, refresh its readiness state, and
+uninstall it.
+
+Installation settings include the Kubernetes resource name, MLflow image, and
+optional `.dockerconfigjson` credentials for a private image registry. The
+managed workload uses a 10 GiB `ReadWriteOnce` PersistentVolumeClaim named from
+the installation (for the default name, `mlflow-data`). MLflow stores its SQLite
+tracking database and local artifacts on this volume.
+
+The Triton Control service account therefore requires namespace-scoped create,
+update, patch, and delete permissions for PersistentVolumeClaims. The Helm chart
+provides these permissions when `rbac.create=true`.
+
+Uninstalling the managed MLflow instance deletes its Deployment, Service,
+image-pull Secret, and PersistentVolumeClaim. Export or retain required tracking
+data before uninstalling.
+
 ## Add Deployment (Sidebar Entry)
 
 **Add Deployment** is a standalone navigation entry, not an instance detail tab.
@@ -347,9 +369,11 @@ Triton Control supports a shared Perf Analyzer installation for profile runs.
 
 Namespace behavior:
 
-- backend in Kubernetes: self-deployed Triton and Perf Analyzer are created in
-  the same namespace as Triton Control
-- backend outside Kubernetes: namespace handling remains name-based
+- Perf Analyzer is created in the same namespace as Triton Control
+- in Kubernetes, this is the namespace of the running Triton Control pod
+- outside Kubernetes, the namespace defaults to `triton-control` and can be
+  overridden with `TRITON_CONTROL_NAMESPACE`, `KUBERNETES_NAMESPACE`, or
+  `POD_NAMESPACE`
 
 Current scope:
 
@@ -371,6 +395,27 @@ fixed template; use the Docker config JSON required by your registry:
   }
 }
 ```
+
+## Workflows (Sidebar Entry)
+
+**Workflows** embeds the single global Argo Workflows server installed by the
+Triton Control Helm release. The browser connects only to Triton Control:
+
+```text
+/api/workflows/proxy/
+```
+
+The backend authenticates member/admin access and proxies Argo UI, API,
+streaming, and WebSocket traffic to the internal Argo Server `ClusterIP`
+Service. The Argo Service is not exposed directly to the browser.
+
+When `argoWorkflows.enabled=false`, the page shows that the feature is disabled.
+When enabled but the Argo Server is unavailable, it displays the readiness
+error instead of loading the iframe.
+
+Workflows run in the same Kubernetes namespace as Triton Control. Images
+referenced by uploaded Workflow YAML are separate from the public Argo system
+images. Private Workflow images require a pull Secret in that namespace.
 
 ## Add Instance (Sidebar Action)
 
