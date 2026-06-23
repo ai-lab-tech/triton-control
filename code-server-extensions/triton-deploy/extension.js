@@ -113,8 +113,13 @@ async function initialFormValues(sourceFolder) {
     repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
+    profileId: "",
+    profileName: "",
+    cpu: "2",
+    memory: "4Gi",
+    gpuCount: "1",
   };
-  return promptForMissingS3Settings(initial);
+  return initial;
 }
 
 function detectModelName(sourceFolder) {
@@ -185,68 +190,6 @@ function toKubernetesName(value) {
     .replace(/-$/g, "") || "triton-model";
 }
 
-async function promptForMissingS3Settings(initial) {
-  const prompts = [
-    {
-      key: "endpoint",
-      label: "S3 endpoint",
-      placeHolder: "https://s3.example.com",
-      password: false,
-    },
-    {
-      key: "bucket",
-      label: "S3 bucket",
-      placeHolder: "model-repository",
-      password: false,
-    },
-    {
-      key: "accessKeyId",
-      label: "S3 access key",
-      placeHolder: "access-key-id",
-      password: false,
-    },
-    {
-      key: "secretAccessKey",
-      label: "S3 secret key",
-      placeHolder: "",
-      password: true,
-    },
-  ];
-  const next = { ...initial };
-  let changed = false;
-  for (const prompt of prompts) {
-    if (String(next[prompt.key] || "").trim()) {
-      continue;
-    }
-    const value = await vscode.window.showInputBox({
-      title: "Triton Control Deploy",
-      prompt: `${prompt.label} is required to upload the model repository.`,
-      placeHolder: prompt.placeHolder,
-      password: prompt.password,
-      ignoreFocusOut: true,
-      validateInput: (input) => {
-        const trimmed = input.trim();
-        if (!trimmed) {
-          return `${prompt.label} is required.`;
-        }
-        if (prompt.key === "endpoint" && !/^https?:\/\//i.test(trimmed)) {
-          return "Endpoint must start with http:// or https://.";
-        }
-        return undefined;
-      },
-    });
-    if (value === undefined) {
-      return null;
-    }
-    next[prompt.key] = prompt.key === "secretAccessKey" ? value : value.trim();
-    changed = true;
-  }
-  if (changed) {
-    await saveS3Settings(next);
-  }
-  return next;
-}
-
 async function saveS3Settings(values) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const target = vscode.ConfigurationTarget.Global;
@@ -287,6 +230,8 @@ function normalizeForm(form) {
     : "direct";
   return {
     sourceFolder: String(form.sourceFolder || ""),
+    profileId: String(form.profileId || "").trim(),
+    profileName: String(form.profileName || "").trim(),
     deploymentName: String(form.deploymentName || "").trim(),
     image: String(form.image || "").trim(),
     endpoint,
@@ -302,6 +247,9 @@ function normalizeForm(form) {
     repositorySyncMode,
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
+    cpu: String(form.cpu || "").trim(),
+    memory: String(form.memory || "").trim(),
+    gpuCount: String(form.gpuCount || "").trim(),
   };
 }
 
@@ -330,7 +278,7 @@ function requiresPathStyle(endpoint) {
 
 function validateForm(form) {
   const required = [
-    ["Deployment name", form.deploymentName],
+    ["Model repository path", form.deploymentName],
     ["Triton image", form.image],
     ["S3 endpoint", form.endpoint],
     ["S3 bucket", form.bucket],
@@ -349,6 +297,9 @@ function validateForm(form) {
   }
   if (!/^https?:\/\//i.test(form.endpoint)) {
     throw new Error("S3 endpoint must start with http:// or https://.");
+  }
+  if (form.gpuCount && (!/^\d+$/.test(form.gpuCount) || Number(form.gpuCount) < 0)) {
+    throw new Error("GPU count must be a non-negative whole number.");
   }
 }
 
@@ -551,6 +502,15 @@ function deploymentPayload(form) {
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
   }
+  if (form.cpu) {
+    payload.cpu = form.cpu;
+  }
+  if (form.memory) {
+    payload.memory = form.memory;
+  }
+  if (form.gpuCount && Number(form.gpuCount) > 0) {
+    payload.gpu_count = Number(form.gpuCount);
+  }
   return payload;
 }
 
@@ -602,8 +562,12 @@ function renderHtml(webview, nonce, initial) {
     label { display: grid; gap: 5px; font-size: 12px; color: var(--vscode-descriptionForeground); }
     input, select, textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 8px; }
     .wide { grid-column: 1 / -1; }
+    .hidden { display: none; }
     .checks { display: flex; gap: 18px; align-items: center; }
     .checks label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+    details { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); }
+    summary { cursor: pointer; padding: 9px 10px; color: var(--vscode-foreground); }
+    .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 10px 10px; }
     button { width: max-content; border: 0; background: var(--vscode-button-background); color: var(--vscode-button-foreground); padding: 9px 14px; cursor: pointer; }
     button:disabled { opacity: 0.55; cursor: default; }
     .status { margin-top: 18px; white-space: pre-wrap; color: var(--vscode-descriptionForeground); }
@@ -612,32 +576,51 @@ function renderHtml(webview, nonce, initial) {
     .preview { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); padding: 10px; color: var(--vscode-descriptionForeground); }
     .preview strong { display: block; margin-bottom: 5px; color: var(--vscode-foreground); }
     .preview code { color: var(--vscode-textLink-foreground); word-break: break-all; }
+    @media (max-width: 720px) {
+      form, .details-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <h2>Deploy Triton Model Repository</h2>
   <form id="deploy-form">
     <label class="wide">Source folder<input name="sourceFolder" readonly></label>
-    <label>Deployment name<input name="deploymentName" required></label>
+    <label>Model Repository Path<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
-    <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com" required></label>
-    <label>S3 bucket<input name="bucket" required></label>
-    <label>S3 repository parent prefix<input name="prefix"></label>
+    <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
+    <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
-      <strong>S3 destination</strong>
-      <code id="destination-path">s3://bucket/deployment-name</code>
+      <strong>Serving repository</strong>
+      <code id="destination-path">s3://bucket/model-repository-path</code>
     </div>
-    <label>S3 region<input name="region" required></label>
-    <label>S3 access key<input name="accessKeyId" required></label>
-    <label>S3 secret key<input name="secretAccessKey" type="password" required></label>
-    <label>Model control<select name="modelControlMode"><option value="explicit">explicit</option><option value="poll">poll</option></select></label>
-    <label>Repository access<select name="repositorySyncMode"><option value="direct">native Triton S3</option><option value="sidecar">vLLM sidecar (development/stage)</option><option value="init">vLLM init container (production)</option></select></label>
-    <label>Repository poll seconds<input name="repositoryPollSecs" type="number" min="1"></label>
+    <select class="hidden" name="modelControlMode"><option value="explicit">explicit</option></select>
+    <select class="hidden" name="repositorySyncMode"><option value="direct">direct</option><option value="sidecar">sidecar</option></select>
+    <input class="hidden" name="repositoryPollSecs" type="number" min="1">
     <label>Model name<input name="modelName" placeholder="from config.pbtxt or manual input"></label>
-    <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-    <div class="wide checks">
-      <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
-    </div>
+    <details class="wide">
+      <summary>Manual S3 settings</summary>
+      <div class="details-grid">
+        <label>S3 profile name<input name="profileName" placeholder="team-minio"></label>
+        <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com"></label>
+        <label>S3 bucket<input name="bucket"></label>
+        <label>S3 region<input name="region"></label>
+        <label>S3 access key<input name="accessKeyId"></label>
+        <label>S3 secret key<input name="secretAccessKey" type="password"></label>
+        <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+        <div class="wide checks">
+          <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
+        </div>
+        <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Resources</summary>
+      <div class="details-grid">
+        <label>CPU<input name="cpu"></label>
+        <label>RAM<input name="memory"></label>
+        <label>GPU count<input name="gpuCount" type="number" min="0" step="1"></label>
+      </div>
+    </details>
     <div class="wide"><button id="submit" type="submit">Upload and Deploy</button></div>
   </form>
   <div id="status" class="status"></div>
@@ -647,6 +630,8 @@ function renderHtml(webview, nonce, initial) {
     const form = document.getElementById('deploy-form');
     const statusEl = document.getElementById('status');
     const submit = document.getElementById('submit');
+    const saveProfile = document.getElementById('save-profile');
+    let profiles = [];
 
     for (const [key, value] of Object.entries(initial)) {
       const input = form.elements[key];
@@ -655,19 +640,16 @@ function renderHtml(webview, nonce, initial) {
       else input.value = value ?? '';
     }
     updateDestinationPath();
-    updateModelControlModes();
+    loadS3Profiles();
 
     form.addEventListener('input', updateDestinationPath);
     form.addEventListener('change', updateDestinationPath);
-    form.elements.repositorySyncMode.addEventListener('change', updateModelControlModes);
-
-    function updateModelControlModes() {
-      const initMode = form.elements.repositorySyncMode.value === 'init';
-      const pollOption = Array.from(form.elements.modelControlMode.options)
-        .find((option) => option.value === 'poll');
-      if (pollOption) pollOption.disabled = initMode;
-      if (initMode) form.elements.modelControlMode.value = 'explicit';
-    }
+    form.elements.profileId.addEventListener('change', () => {
+      const selected = profiles.find((profile) => String(profile.id) === form.elements.profileId.value);
+      if (selected) applyS3Profile(selected);
+      updateDestinationPath();
+    });
+    saveProfile.addEventListener('click', saveCurrentS3Profile);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -730,6 +712,77 @@ function renderHtml(webview, nonce, initial) {
       } catch {}
     }
 
+    async function loadS3Profiles() {
+      try {
+        const response = await fetch('/api/s3-profiles', { credentials: 'include' });
+        if (!response.ok) return;
+        profiles = await response.json();
+        const select = form.elements.profileId;
+        select.innerHTML = '<option value="">Manual S3 settings</option>';
+        for (const profile of profiles) {
+          const option = document.createElement('option');
+          option.value = String(profile.id);
+          option.textContent = profile.name;
+          select.appendChild(option);
+        }
+        if (profiles.length) {
+          select.value = String(profiles[0].id);
+          applyS3Profile(profiles[0]);
+        }
+      } catch {}
+    }
+
+    function applyS3Profile(profile) {
+      form.elements.profileName.value = profile.name || '';
+      form.elements.endpoint.value = profile.endpoint || '';
+      form.elements.bucket.value = profile.bucket || '';
+      form.elements.prefix.value = profile.prefix || '';
+      form.elements.region.value = profile.region || 'us-east-1';
+      form.elements.accessKeyId.value = profile.access_key || '';
+      form.elements.secretAccessKey.value = profile.secret_key || '';
+      form.elements.forcePathStyle.checked = profile.force_path_style !== false;
+      form.elements.s3CaCertificate.value = profile.ca_certificate || '';
+    }
+
+    async function saveCurrentS3Profile() {
+      const data = readForm();
+      const payload = {
+        name: data.profileName,
+        endpoint: data.endpoint,
+        bucket: data.bucket,
+        region: data.region || 'us-east-1',
+        access_key: data.accessKeyId,
+        secret_key: data.secretAccessKey,
+        prefix: data.prefix || '',
+        force_path_style: !!data.forcePathStyle,
+        ca_certificate: data.s3CaCertificate || '',
+      };
+      if (!payload.name) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'S3 profile name is required.';
+        return;
+      }
+      try {
+        const response = await fetch('/api/s3-profiles', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.detail || 'Failed to save S3 profile.');
+        }
+        statusEl.className = 'status success';
+        statusEl.textContent = 'S3 profile saved.';
+        await loadS3Profiles();
+        form.elements.profileId.value = String(body.id);
+      } catch (error) {
+        statusEl.className = 'status error';
+        statusEl.textContent = error.message || String(error);
+      }
+    }
+
     function readForm() {
       const data = {};
       for (const element of Array.from(form.elements)) {
@@ -743,7 +796,7 @@ function renderHtml(webview, nonce, initial) {
       const destination = document.getElementById('destination-path');
       const data = readForm();
       const bucket = cleanS3Path(data.bucket || 'bucket');
-      const target = cleanS3Path([data.prefix, data.deploymentName || 'deployment-name'].filter(Boolean).join('/'));
+      const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
       destination.textContent = ['s3:/' + '/' + bucket, target].filter(Boolean).join('/');
     }
 

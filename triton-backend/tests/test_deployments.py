@@ -390,7 +390,11 @@ class DeploymentServiceTests(unittest.TestCase):
         sync_env = {item["name"]: item.get("value") for item in sync["env"]}
         self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
         self.assertIn("publish_root=/models/$model_name", sync["args"][0])
+        self.assertIn("cp -R /staging/.", sync["args"][0])
+        self.assertNotIn("cp -au", sync["args"][0])
         self.assertIn("model.json", sync["args"][0])
+        self.assertIn('escaped_dir=$(printf "%s\\n" "$dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
+        self.assertIn("${escaped_dir}/", sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
         # Arrange
@@ -561,6 +565,26 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("--delete", sync_script)
         self.assertIn("/models/", sync_script)
         self.assertIn("--model-control-mode=explicit", pod_spec["containers"][0]["args"][0])
+
+    def test_Manifests_TritonContainer_SetsUserAndTorchCacheEnvironment(self) -> None:
+        request = self._request().model_copy(update={"repository_sync_mode": "sidecar"})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-minio",
+            "triton-minio",
+            "triton-minio-service",
+            "triton-minio-s3-credentials",
+            "triton-image",
+        )
+
+        triton_container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+        env = {item["name"]: item.get("value") for item in triton_container["env"]}
+        self.assertEqual(env["LOGNAME"], "triton")
+        self.assertEqual(env["USER"], "triton")
+        self.assertEqual(env["HOME"], "/tmp")
+        self.assertEqual(env["XDG_CACHE_HOME"], "/tmp/.cache")
+        self.assertEqual(env["TORCHINDUCTOR_CACHE_DIR"], "/tmp/torchinductor")
 
     def test_AwsS3Source_CustomEndpoint_SeparatesEndpointAndBucketPath(self) -> None:
         self.assertEqual(

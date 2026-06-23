@@ -57,6 +57,16 @@ spec:
                   key: AWS_SECRET_ACCESS_KEY
             - name: AWS_DEFAULT_REGION
               value: {s3_region}
+            - name: LOGNAME
+              value: triton
+            - name: USER
+              value: triton
+            - name: HOME
+              value: /tmp
+            - name: XDG_CACHE_HOME
+              value: /tmp/.cache
+            - name: TORCHINDUCTOR_CACHE_DIR
+              value: /tmp/torchinductor
             # Current Triton versions read the standard CA bundle path directly.
             # Keep AWS_CA_BUNDLE for compatibility with future S3 client behavior.
             - name: AWS_CA_BUNDLE

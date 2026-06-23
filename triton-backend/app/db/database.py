@@ -83,6 +83,7 @@ def init_db() -> None:
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
+        S3ProfileEntity,
         TritonInstanceEntity,
         UserEntity,
     )
@@ -91,6 +92,7 @@ def init_db() -> None:
     _migrate_triton_instances_table()
     _migrate_oidc_config_table()
     _migrate_perf_analyzer_table()
+    _migrate_s3_profiles_table()
 
 
 def _migrate_oidc_config_table() -> None:
@@ -343,6 +345,34 @@ def _migrate_perf_analyzer_table() -> None:
                 """
                 ALTER TABLE IF EXISTS perf_analyzer
                 ADD COLUMN IF NOT EXISTS last_transition_at TIMESTAMP NOT NULL DEFAULT NOW()
+                """
+            )
+        )
+
+
+def _migrate_s3_profiles_table() -> None:
+    """Apply lightweight schema migration for s3_profiles."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS s3_profiles (
+                    id SERIAL PRIMARY KEY,
+                    owner_user_id INTEGER NOT NULL REFERENCES users(id),
+                    name VARCHAR NOT NULL,
+                    endpoint VARCHAR NOT NULL,
+                    bucket VARCHAR NOT NULL,
+                    region VARCHAR NOT NULL DEFAULT 'us-east-1',
+                    access_key VARCHAR NOT NULL,
+                    secret_key_hash VARCHAR NOT NULL DEFAULT '',
+                    secret_key_enc VARCHAR NOT NULL DEFAULT '',
+                    prefix VARCHAR NOT NULL DEFAULT '',
+                    force_path_style BOOLEAN NOT NULL DEFAULT TRUE,
+                    ca_certificate TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_s3_profile_owner_name UNIQUE (owner_user_id, name)
+                )
                 """
             )
         )

@@ -297,8 +297,24 @@ vLLM S3 repository modes:
 - Both vLLM modes mount the repository at `/models`, keep model versions under
   `/models/<model-name>/<version>`, and rewrite relative vLLM `model.json`
   `model`/`tokenizer` values to absolute paths.
+- vLLM requires a CUDA device in normal Triton deployments. Set GPU count to at
+  least `1`; the code-server deploy extension defaults this for detected vLLM
+  repositories.
+- The sync worker copies downloaded files without preserving source ownership
+  or timestamps, so it can run as Triton Control's non-root workload user.
 - Configure the worker image with Helm value
   `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use this image.
+
+S3 deployment profiles:
+
+- Members and admins can create reusable S3 profiles from the application
+  account menu.
+- Profiles are user-owned and store endpoint, bucket, prefix, region,
+  path-style mode, optional CA certificate, access key, and encrypted secret
+  key.
+- The code-server deploy extension reads these profiles through
+  `/api/s3-profiles` and uses the selected profile for repository upload and
+  deployment creation.
 
 ```json
 {

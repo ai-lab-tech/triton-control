@@ -185,6 +185,34 @@ class CodeServerEntity(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class S3ProfileEntity(SQLModel, table=True):
+    """Reusable S3 credentials owned by one user."""
+
+    __tablename__ = "s3_profiles"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "name",
+            name="uq_s3_profile_owner_name",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_user_id: int = Field(foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    endpoint: str
+    bucket: str
+    region: str = Field(default="us-east-1")
+    access_key: str
+    secret_key_hash: str = Field(default="")
+    secret_key_enc: str = Field(default="")
+    prefix: str = Field(default="")
+    force_path_style: bool = Field(default=True)
+    ca_certificate: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class DashboardAlertEntity(SQLModel, table=True):
     """Persisted dashboard alert snapshot computed by backend background jobs."""
 

@@ -68,7 +68,7 @@ enter a new value to replace it.
 | `TLS_CERT_FILE` | If direct backend HTTPS is enabled | `./tls/cert.pem` | Uvicorn TLS certificate path. |
 | `JWT_SECRET` | Yes | `change-me-jwt` | Signing secret for local auth JWTs. Use a strong random value in production. |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | No | `60` | Lifetime of local email/password JWT access tokens in minutes. |
-| `S3_SECRET_ENCRYPTION_KEY` | Yes | `change-me-s3` | Fernet key used to encrypt stored S3 secret keys. |
+| `S3_SECRET_ENCRYPTION_KEY` | Yes | `change-me-s3` | Fernet key used to encrypt stored S3 secret keys for instance S3 settings and reusable S3 deployment profiles. |
 | `CORS_ORIGINS` | No | local Angular dev origins | Comma-separated list of allowed frontend origins. |
 
 Set `OIDC_ISSUER` to the exact issuer URL published by your OIDC provider. Do

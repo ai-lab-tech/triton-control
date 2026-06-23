@@ -1,3 +1,5 @@
+import { provideHttpClient } from "@angular/common/http";
+import { provideHttpClientTesting, HttpTestingController } from "@angular/common/http/testing";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter, Router } from "@angular/router";
 import { of } from "rxjs";
@@ -11,6 +13,8 @@ describe("NewDeploymentPageComponent", () => {
       imports: [NewDeploymentPageComponent],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         {
           provide: DeploymentsService,
           useValue: jasmine.createSpyObj<DeploymentsService>("DeploymentsService", [
@@ -21,9 +25,19 @@ describe("NewDeploymentPageComponent", () => {
     }).compileComponents();
   });
 
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  function createComponent(profiles: unknown[] = []) {
+    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    TestBed.inject(HttpTestingController).expectOne("/api/s3-profiles").flush(profiles);
+    return fixture;
+  }
+
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
 
     // Act
     const component = fixture.componentInstance;
@@ -34,7 +48,7 @@ describe("NewDeploymentPageComponent", () => {
 
   it("CanDeploy_MissingRepositoryUrl_ReturnsFalse", () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     component.s3Url = "";
 
@@ -47,7 +61,7 @@ describe("NewDeploymentPageComponent", () => {
 
   it("CanDeploy_BaseImageAndRepositoryUrlProvided_ReturnsTrue", () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
@@ -65,7 +79,7 @@ describe("NewDeploymentPageComponent", () => {
 
   it("CanDeploy_ImageMissing_ReturnsFalse", () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
@@ -81,19 +95,32 @@ describe("NewDeploymentPageComponent", () => {
   });
 
   it("RepositorySyncModeChanged_InitMode_ForcesExplicitControl", () => {
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     component.repositorySyncMode = "init";
     component.modelControlMode = "poll";
+    component.gpuCount = 0;
 
     component.repositorySyncModeChanged();
 
     expect(component.modelControlMode).toBe("explicit");
+    expect(component.gpuCount).toBe(1);
+  });
+
+  it("RepositorySyncModeChanged_SidecarMode_DefaultsGpuCountForVllm", () => {
+    const fixture = createComponent();
+    const component = fixture.componentInstance;
+    component.repositorySyncMode = "sidecar";
+    component.gpuCount = 0;
+
+    component.repositorySyncModeChanged();
+
+    expect(component.gpuCount).toBe(1);
   });
 
   it("Deploy_RequirementsProvided_SendsRequirementsTxt", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     const router = TestBed.inject(Router);
@@ -145,7 +172,7 @@ describe("NewDeploymentPageComponent", () => {
 
   it("Deploy_ResourceRequestsProvided_SendsMatchingLimits", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
@@ -184,7 +211,7 @@ describe("NewDeploymentPageComponent", () => {
 
   it("Deploy_RepositoryPrefixProvided_AppendsNormalizedPrefixToS3Url", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(NewDeploymentPageComponent);
+    const fixture = createComponent();
     const component = fixture.componentInstance;
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
@@ -206,6 +233,52 @@ describe("NewDeploymentPageComponent", () => {
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         s3_url: "s3://https://object-store.example.com/triton-models/team/model-repository",
+      }),
+    );
+  });
+
+  it("S3ProfileChanged_ProfileSelected_PopulatesDeploymentS3Fields", async () => {
+    // Arrange
+    const fixture = createComponent([
+      {
+        id: 12,
+        name: "team-minio",
+        endpoint: "https://object-store.example.com",
+        bucket: "triton-models",
+        region: "eu-central-1",
+        access_key: "profile-access",
+        secret_key: "profile-secret",
+        prefix: "serving/opt-125m",
+        force_path_style: true,
+        ca_certificate: "-----BEGIN CERTIFICATE-----",
+      },
+    ]);
+    const component = fixture.componentInstance;
+    const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
+    deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
+      of({ instance_id: 7 }) as unknown as ReturnType<
+        DeploymentsService["createDeploymentApiDeploymentsPost"]
+      >,
+    );
+    component.deploymentName = "opt-125m";
+    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    await fixture.whenStable();
+
+    // Act
+    component.selectedS3ProfileId = "12";
+    component.s3ProfileChanged();
+    await component.deploy();
+
+    // Assert
+    expect(component.s3Destination()).toBe(
+      "s3://https://object-store.example.com/triton-models/serving/opt-125m",
+    );
+    expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        s3_url: "s3://https://object-store.example.com/triton-models/serving/opt-125m",
+        s3_access_key: "profile-access",
+        s3_secret_key: "profile-secret",
+        s3_region: "eu-central-1",
       }),
     );
   });

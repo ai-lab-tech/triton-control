@@ -99,11 +99,27 @@ These files survive pod restarts while the PVC remains available. New
 workspaces receive the Python extension when its marketplace installation
 succeeds and the bundled **Triton Control Deploy** extension.
 
-## Optional: Install S3/R2 Explorer
+## S3 Profiles and Optional S3/R2 Explorer
+
+The **Triton Control Deploy** extension works best with an S3 profile. Members
+and admins can create profiles from the Triton Control account menu under
+**S3 Profiles**. The extension loads those profiles and shows them in an
+`S3 profile` dropdown.
+
+Use profiles for shared or repeated deployment settings. Each profile stores
+the endpoint, bucket, optional prefix, region, access key, encrypted secret
+key, path-style mode, and optional CA certificate.
+
+Manual S3 settings are still available inside the extension in a collapsed
+section. Use them for one-off deployments or to save a new profile from inside
+code-server.
+
+### Optional: Install S3/R2 Explorer
 
 S3/R2 Explorer is optional and is not installed automatically when a
 Development workspace is created. The **Triton Control Deploy** extension works
-without it and prompts for missing S3 values itself.
+without it because S3 profiles and manual settings are handled by Triton
+Control.
 
 To add S3/R2 Explorer:
 
@@ -117,8 +133,8 @@ The installed extension is stored under
 `/workspace/.triton-control/code-server-extensions` and therefore survives
 workspace pod restarts while the PVC is retained.
 
-When S3/R2 Explorer is installed and configured, the **Triton Control Deploy**
-extension reuses these code-server settings:
+When S3/R2 Explorer is installed and configured, its settings can still be used
+as defaults for manual extension fields:
 
 | Setting | Used for |
 | --- | --- |
@@ -127,9 +143,6 @@ extension reuses these code-server settings:
 | `s3x.accessKeyId` | Access key |
 | `s3x.secretAccessKey` | Secret key |
 | `s3x.forcePathStyle` | Path-style request mode |
-
-Missing values are requested interactively and saved in the persistent
-code-server settings. Bucket and prefix remain choices for each deployment.
 
 Use path-style access for compatible object stores that address objects as
 `https://s3.example.com/bucket/key`. Disable it only when the object store uses
@@ -147,9 +160,10 @@ S3-compatible storage and creates a self-deployed Triton instance.
 1. Create or edit a Triton model repository under `/workspace`.
 2. Right-click the repository root or a single model folder.
 3. Run **Triton Control: Deploy Model Repository**.
-4. Confirm the object-store endpoint, bucket, optional prefix, credentials,
-   Triton image, model control mode, and optional S3 CA certificate.
-5. After deployment, Triton Control opens the new instance and its deployment
+4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
+5. Confirm the Triton image, model control mode, repository access mode, and
+   optional resources.
+6. After deployment, Triton Control opens the new instance and its deployment
    logs.
 
 A repository should follow Triton's model layout:

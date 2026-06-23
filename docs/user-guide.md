@@ -36,6 +36,7 @@ Main sidebar entries:
 - Add Deployment (when Kubernetes actions are available)
 - Perf Analyzer (when Kubernetes actions are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
+- S3 Profiles (account menu, `member`/`admin`): reusable S3 deployment credentials.
 - Error Logs (admin only)
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
@@ -255,6 +256,31 @@ Current limitation:
 
 - rename and move actions are not available in the current release
 
+## S3 Profiles
+
+Members and admins can manage reusable S3 deployment profiles from the account
+menu. A profile stores:
+
+- profile name
+- endpoint
+- bucket
+- optional repository parent prefix
+- region
+- access key and encrypted secret key
+- path-style mode
+- optional CA certificate
+
+Profiles are owned by the signed-in user. They are intended for deployment
+workflows, especially the code-server **Triton Control Deploy** extension, so
+users do not need to re-enter S3 credentials for every deploy. The extension
+shows the saved profiles in a dropdown and keeps manual S3 fields available in
+a collapsed optional section.
+
+The stored profile values are used to upload the selected model repository from
+the code-server workspace and to create the Triton deployment. The resulting
+deployment still receives its own Kubernetes Secret for the in-pod S3
+repository connection.
+
 ## Add Deployment (Sidebar Entry)
 
 **Add Deployment** is a standalone navigation entry, not an instance detail tab.
@@ -302,7 +328,7 @@ pod.
 | Ingress host/class | Optional | Expose deployment through ingress. | Use for external cluster access. |
 | `.dockerconfigjson` | Optional | Private registry pull credentials. | Required for private images. |
 | `requirements.txt` | Optional | Extra Python packages installed before Triton start. | Prefer dev/stage; bake into image for production. |
-| Resources (GPU/CPU/Memory) | Optional | Kubernetes resource requests. CPU and memory limits are set to the same values as the requests. | Strongly recommended in stage/prod. |
+| Resources (GPU/CPU/Memory) | Optional | Kubernetes GPU limit and CPU/memory resource settings. | Set GPU count to at least `1` for vLLM; the Add Deployment form defaults this when a vLLM sync mode is selected. |
 
 For private container registries, paste Docker registry authentication JSON into
 the image pull secret field (`.dockerconfigjson`). The following JSON is only

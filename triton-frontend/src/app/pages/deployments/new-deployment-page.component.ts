@@ -1,4 +1,5 @@
 import { Component, inject, signal } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 
@@ -14,6 +15,19 @@ import { firstValueFrom } from "rxjs";
 
 import { CreateDeploymentRequest, DeploymentsService } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+
+type S3Profile = {
+  id: number;
+  name: string;
+  endpoint: string;
+  bucket: string;
+  region: string;
+  access_key: string;
+  secret_key: string;
+  prefix: string;
+  force_path_style: boolean;
+  ca_certificate: string;
+};
 
 @Component({
   selector: "app-new-deployment-page",
@@ -44,17 +58,21 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 export class NewDeploymentPageComponent {
   private readonly router = inject(Router);
   private readonly deploymentsApi = inject(DeploymentsService);
+  private readonly http = inject(HttpClient);
 
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
   ingressHost = "";
   ingressClassName = "";
+  selectedS3ProfileId = "";
   s3Url = "";
+  s3Bucket = "";
   s3Prefix = "";
   s3AccessKey = "";
   s3SecretKey = "";
   s3Region = "us-east-1";
   s3CaCertificate = "";
+  backend: "triton" | "vllm" = "triton";
   modelControlMode: "explicit" | "poll" = "explicit";
   repositorySyncMode: "direct" | "init" | "sidecar" = "direct";
   repositoryPollSecs = 15;
@@ -65,6 +83,8 @@ export class NewDeploymentPageComponent {
   memory = "";
   readonly dockerconfigjson = signal("");
   readonly requirementsTxt = signal("");
+  readonly s3Profiles = signal<S3Profile[]>([]);
+  readonly s3ProfilesLoading = signal(false);
   readonly requirementsEditorOptions = {
     theme: "vs-dark",
     language: "plaintext",
@@ -85,6 +105,10 @@ export class NewDeploymentPageComponent {
   readonly deploying = signal(false);
   readonly message = this._message.asReadonly();
   readonly messageTone = this._messageTone.asReadonly();
+
+  constructor() {
+    void this.loadS3Profiles();
+  }
 
   ingressStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
     const hasHost = this.ingressHost.trim().length > 0;
@@ -149,10 +173,41 @@ export class NewDeploymentPageComponent {
     return value.startsWith("https://") || value.startsWith("s3://https://");
   }
 
-  repositorySyncModeChanged(): void {
-    if (this.repositorySyncMode === "init") {
-      this.modelControlMode = "explicit";
+  s3Destination(): string {
+    return this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix);
+  }
+
+  backendChanged(): void {
+    this.modelControlMode = "explicit";
+    this.repositorySyncMode = this.backend === "vllm" ? "sidecar" : "direct";
+    if (this.backend === "vllm" && !this.gpuCount) {
+      this.gpuCount = 1;
     }
+  }
+
+  async loadS3Profiles(): Promise<void> {
+    this.s3ProfilesLoading.set(true);
+    try {
+      this.s3Profiles.set(await firstValueFrom(this.http.get<S3Profile[]>("/api/s3-profiles")));
+    } catch {
+      this.s3Profiles.set([]);
+    } finally {
+      this.s3ProfilesLoading.set(false);
+    }
+  }
+
+  s3ProfileChanged(): void {
+    const profile = this.s3Profiles().find((item) => String(item.id) === this.selectedS3ProfileId);
+    if (!profile) {
+      return;
+    }
+    this.s3Url = profile.endpoint;
+    this.s3Bucket = profile.bucket;
+    this.s3Prefix = profile.prefix || "";
+    this.s3Region = profile.region || "us-east-1";
+    this.s3AccessKey = profile.access_key;
+    this.s3SecretKey = profile.secret_key;
+    this.s3CaCertificate = profile.ca_certificate || "";
   }
 
   async deploy(): Promise<void> {
@@ -169,16 +224,16 @@ export class NewDeploymentPageComponent {
       image: this.image.trim(),
       ingress_host: this.ingressHost.trim() || undefined,
       ingress_class_name: this.ingressClassName.trim() || undefined,
-      s3_url: this.buildS3RepositoryUrl(this.s3Url, this.s3Prefix),
+      s3_url: this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix),
       s3_access_key: this.s3AccessKey.trim(),
       s3_secret_key: this.s3SecretKey,
       s3_region: this.s3Region.trim() || "us-east-1",
       dockerconfigjson: this.dockerconfigjson().trim() || undefined,
-      model_control_mode: this.repositorySyncMode === "init" ? "explicit" : this.modelControlMode,
+      model_control_mode: "explicit",
       repository_poll_secs: this.repositoryPollSecs,
-      repository_sync_mode: this.repositorySyncMode,
+      repository_sync_mode: this.backend === "vllm" ? "sidecar" : "direct",
       model_name:
-        this.modelControlMode === "explicit" ? this.modelName.trim() || undefined : undefined,
+        this.modelName.trim() || undefined,
       allow_metrics: true,
       requirements_txt: this.requirementsTxt().trim() || undefined,
       gpu_count: this.gpuCount ?? undefined,
@@ -242,10 +297,15 @@ export class NewDeploymentPageComponent {
     return raw;
   }
 
-  private buildS3RepositoryUrl(endpoint: string, prefix: string): string {
+  private buildS3RepositoryUrl(endpoint: string, bucket: string, prefix: string): string {
+    if (!endpoint.trim()) {
+      return "";
+    }
     const normalizedEndpoint = this.normalizeS3Url(endpoint).replace(/\/+$/, "");
+    const normalizedBucket = bucket.trim().replace(/^\/+|\/+$/g, "");
     const normalizedPrefix = prefix.trim().replace(/^\/+|\/+$/g, "");
-    return normalizedPrefix ? `${normalizedEndpoint}/${normalizedPrefix}` : normalizedEndpoint;
+    const path = [normalizedBucket, normalizedPrefix].filter(Boolean).join("/");
+    return path ? `${normalizedEndpoint}/${path}` : normalizedEndpoint;
   }
 
   private requirementsPackageCount(): number {

@@ -61,8 +61,8 @@
       <div>
         <div class="section-title">Model repository (S3)</div>
         <div class="section-subtitle">
-          S3 endpoint, optional bucket, optional repository prefix, and credentials. Credentials are
-          stored in a Kubernetes Secret.
+          Select a saved S3 profile, then set the repository prefix Triton should serve. Credentials
+          are stored in a Kubernetes Secret.
         </div>
       </div>
       <div class="form-grid split">
@@ -79,22 +79,28 @@
           </div>
         </div>
         <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
+          <label class="field-label" for="deployment-s3-profile">S3 profile</label>
           <mat-form-field appearance="outline">
-            <input
-              id="deployment-s3-url"
-              matInput
-              [(ngModel)]="s3Url"
-              placeholder="https://object-store.example.com/triton-models"
-            />
+            <mat-select
+              id="deployment-s3-profile"
+              [(ngModel)]="selectedS3ProfileId"
+              (selectionChange)="s3ProfileChanged()"
+            >
+              <mat-option value="">Manual S3 settings</mat-option>
+              @for (profile of s3Profiles(); track profile.id) {
+                <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+              }
+            </mat-select>
             <mat-hint>
-              Enter only the endpoint, optionally followed by its bucket. For example
-              <code>https://object-store.example.com/triton-models</code>.
+              Use a profile from the account menu, or leave manual and expand S3 settings below.
             </mat-hint>
           </mat-form-field>
         </div>
         <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-prefix">Repository prefix (optional)</label>
+          <label class="field-label" for="deployment-s3-prefix"
+            >Repository prefix
+            <span class="field-hint">This is the path Triton serves inside the bucket</span>
+          </label>
           <mat-form-field appearance="outline">
             <input
               id="deployment-s3-prefix"
@@ -103,34 +109,70 @@
               placeholder="team/model-repository"
             />
             <mat-hint>
-              Optional path within the bucket. Do not include it in the S3 endpoint above.
+              Optional path below the profile bucket. For code-server uploads this should point at
+              the uploaded deployment repository.
             </mat-hint>
           </mat-form-field>
         </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-access-key">Access key</label>
-          <mat-form-field appearance="outline">
-            <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
-          </mat-form-field>
+        <div class="form-row wide s3-destination">
+          <span class="material-icons" aria-hidden="true">folder_open</span>
+          <div>
+            <div class="destination-title">Serving repository</div>
+            <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
+          </div>
         </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-s3-secret-key"
-              matInput
-              [(ngModel)]="s3SecretKey"
-              type="password"
-              autocomplete="new-password"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-region">Region</label>
-          <mat-form-field appearance="outline">
-            <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
-          </mat-form-field>
-        </div>
+        <mat-expansion-panel class="form-row wide compact-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">storage</span>
+              <span>Manual S3 settings</span>
+            </mat-panel-title>
+            <mat-panel-description>Optional when a profile is selected</mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-grid split">
+            <div class="form-row">
+              <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-s3-url"
+                  matInput
+                  [(ngModel)]="s3Url"
+                  placeholder="https://object-store.example.com"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-s3-bucket">Bucket</label>
+              <mat-form-field appearance="outline">
+                <input id="deployment-s3-bucket" matInput [(ngModel)]="s3Bucket" />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-s3-access-key">Access key</label>
+              <mat-form-field appearance="outline">
+                <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-s3-secret-key"
+                  matInput
+                  [(ngModel)]="s3SecretKey"
+                  type="password"
+                  autocomplete="new-password"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-s3-region">Region</label>
+              <mat-form-field appearance="outline">
+                <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
+              </mat-form-field>
+            </div>
+          </div>
+        </mat-expansion-panel>
         @if (usesHttpsS3()) {
           <div class="form-row wide">
             <label class="field-label" for="deployment-s3-ca-certificate">S3 CA certificate</label>
