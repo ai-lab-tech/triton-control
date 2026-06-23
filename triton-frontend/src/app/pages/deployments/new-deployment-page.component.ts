@@ -173,6 +173,10 @@ export class NewDeploymentPageComponent {
     return value.startsWith("https://") || value.startsWith("s3://https://");
   }
 
+  usesManualS3Settings(): boolean {
+    return !this.selectedS3ProfileId;
+  }
+
   s3Destination(): string {
     return this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix);
   }

@@ -16,19 +16,15 @@
       </div>
       <div class="form-grid split">
         <div class="form-row">
-          <label class="field-label" for="deployment-repository-sync-mode"
-            >Model repository access
-            <span class="field-hint">Local sync modes are required only for vLLM</span>
-          </label>
+          <label class="field-label" for="deployment-backend">Backend</label>
           <mat-form-field appearance="outline">
             <mat-select
-              id="deployment-repository-sync-mode"
-              [(ngModel)]="repositorySyncMode"
-              (selectionChange)="repositorySyncModeChanged()"
+              id="deployment-backend"
+              [(ngModel)]="backend"
+              (selectionChange)="backendChanged()"
             >
-              <mat-option value="direct">Native Triton S3</mat-option>
-              <mat-option value="init">vLLM init container</mat-option>
-              <mat-option value="sidecar">vLLM polling sidecar</mat-option>
+              <mat-option value="triton">Triton</mat-option>
+              <mat-option value="vllm">vLLM</mat-option>
             </mat-select>
           </mat-form-field>
         </div>
@@ -173,7 +169,7 @@
             </div>
           </div>
         </mat-expansion-panel>
-        @if (usesHttpsS3()) {
+        @if (usesManualS3Settings() && usesHttpsS3()) {
           <div class="form-row wide">
             <label class="field-label" for="deployment-s3-ca-certificate">S3 CA certificate</label>
             <mat-form-field appearance="outline">
@@ -195,19 +191,10 @@
 
     <div class="section">
       <div>
-        <div class="section-title">Triton arguments</div>
-        <div class="section-subtitle">Startup arguments passed to the Triton server container.</div>
+        <div class="section-title">Model loading</div>
+        <div class="section-subtitle">Optional startup model name.</div>
       </div>
       <div class="form-grid split">
-        <div class="form-row">
-          <label class="field-label" for="deployment-model-control-mode">Model control mode</label>
-          <mat-form-field appearance="outline">
-            <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
-              <mat-option value="explicit">Explicit</mat-option>
-              <mat-option value="poll" [disabled]="repositorySyncMode === 'init'">Poll</mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
         <div class="form-row">
           <label class="field-label" for="deployment-model-name"
             >Startup model
@@ -218,23 +205,7 @@
               id="deployment-model-name"
               matInput
               [(ngModel)]="modelName"
-              [disabled]="modelControlMode !== 'explicit'"
               placeholder="e.g. ensemble (empty = all)"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-repository-poll-secs">Poll interval</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-repository-poll-secs"
-              matInput
-              [(ngModel)]="repositoryPollSecs"
-              [disabled]="modelControlMode !== 'poll' && repositorySyncMode !== 'sidecar'"
-              type="number"
-              min="1"
-              step="1"
-              placeholder="15"
             />
           </mat-form-field>
         </div>

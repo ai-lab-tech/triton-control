@@ -94,28 +94,29 @@ describe("NewDeploymentPageComponent", () => {
     expect(canDeploy).toBeFalse();
   });
 
-  it("RepositorySyncModeChanged_InitMode_ForcesExplicitControl", () => {
+  it("BackendChanged_VllmBackend_UsesSidecarAndDefaultsGpuCount", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
-    component.repositorySyncMode = "init";
+    component.backend = "vllm";
     component.modelControlMode = "poll";
     component.gpuCount = 0;
 
-    component.repositorySyncModeChanged();
+    component.backendChanged();
 
     expect(component.modelControlMode).toBe("explicit");
+    expect(component.repositorySyncMode).toBe("sidecar");
     expect(component.gpuCount).toBe(1);
   });
 
-  it("RepositorySyncModeChanged_SidecarMode_DefaultsGpuCountForVllm", () => {
+  it("BackendChanged_TritonBackend_UsesDirectS3", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.backend = "triton";
     component.repositorySyncMode = "sidecar";
-    component.gpuCount = 0;
 
-    component.repositorySyncModeChanged();
+    component.backendChanged();
 
-    expect(component.gpuCount).toBe(1);
+    expect(component.repositorySyncMode).toBe("direct");
   });
 
   it("Deploy_RequirementsProvided_SendsRequirementsTxt", async () => {
@@ -281,5 +282,30 @@ describe("NewDeploymentPageComponent", () => {
         s3_region: "eu-central-1",
       }),
     );
+  });
+
+  it("UsesManualS3Settings_ProfileSelected_ReturnsFalse", async () => {
+    const fixture = createComponent([
+      {
+        id: 12,
+        name: "team-minio",
+        endpoint: "https://object-store.example.com",
+        bucket: "triton-models",
+        region: "eu-central-1",
+        access_key: "profile-access",
+        secret_key: "profile-secret",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "-----BEGIN CERTIFICATE-----",
+      },
+    ]);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+
+    component.selectedS3ProfileId = "12";
+    component.s3ProfileChanged();
+
+    expect(component.usesManualS3Settings()).toBeFalse();
+    expect(component.usesHttpsS3()).toBeTrue();
   });
 });
