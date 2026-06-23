@@ -20,6 +20,112 @@
   margin: 0 auto;
 }
 
+.instances-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.6rem;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.instances-section-head,
+.instance-row,
+.instance-name-row {
+  display: flex;
+  align-items: center;
+}
+
+.instances-section-head,
+.instance-row {
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.instances-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.instance-row {
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: var(--radius-md);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.instance-summary {
+  min-width: 0;
+}
+
+.instance-name-row {
+  gap: 0.55rem;
+}
+
+.instance-status {
+  padding: 0.15rem 0.48rem;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.instance-status[data-status="healthy"] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.instance-status[data-status="warning"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.instance-url,
+.profile-target,
+.instances-empty,
+.instances-hint {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.instance-url {
+  margin-top: 0.18rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.profile-target.unavailable {
+  color: #b45309;
+}
+
+.profile-action {
+  flex: 0 0 auto;
+}
+
+.profile-action.disabled {
+  pointer-events: none;
+  opacity: 0.48;
+}
+
+.instances-empty {
+  padding: 1rem;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.instances-hint {
+  color: #b45309;
+}
+
 .section {
   display: grid;
   gap: 1rem;
@@ -301,7 +407,8 @@
 }
 
 @media (max-width: 800px) {
-  .perf-analyzer-card {
+  .perf-analyzer-card,
+  .instances-card {
     padding: 1.2rem;
   }
 
@@ -316,5 +423,15 @@
   .actions {
     justify-content: stretch;
     flex-direction: column-reverse;
+  }
+
+  .instances-section-head,
+  .instance-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-action {
+    width: 100%;
   }
 }

@@ -1,8 +1,9 @@
 import { Component, DestroyRef, OnInit, inject, signal } from "@angular/core";
-import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 
+import { Store } from "@ngrx/store";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
 import { MatExpansionModule } from "@angular/material/expansion";
@@ -17,7 +18,13 @@ import {
   PerfAnalyzerInstallResponse,
   PerfAnalyzersService,
 } from "../../api/generated/index";
+import { type Instance, type InstanceRepositoryModel } from "../instances/instances.data";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+import { instancesListRefreshRequested } from "../../state/instances-list/instances-list.actions";
+import {
+  selectInstances,
+  selectInstancesListLoading,
+} from "../../state/instances-list/instances-list.selectors";
 
 @Component({
   selector: "app-new-perf-analyzer-page",
@@ -47,6 +54,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 export class NewPerfAnalyzerPageComponent implements OnInit {
   private readonly perfAnalyzersApi = inject(PerfAnalyzersService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly store = inject(Store);
 
   installationName = "perf-analyzer";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3-sdk";
@@ -68,6 +76,10 @@ export class NewPerfAnalyzerPageComponent implements OnInit {
   readonly installationState = signal("not_installed");
   readonly installationReady = signal(false);
   readonly installationStatusMessage = signal("");
+  readonly instances = toSignal(this.store.select(selectInstances), { initialValue: [] });
+  readonly instancesLoading = toSignal(this.store.select(selectInstancesListLoading), {
+    initialValue: false,
+  });
   readonly message = this._message.asReadonly();
   readonly messageTone = this._messageTone.asReadonly();
 
@@ -90,6 +102,7 @@ export class NewPerfAnalyzerPageComponent implements OnInit {
 
   ngOnInit(): void {
     void this.loadStatus();
+    this.store.dispatch(instancesListRefreshRequested());
     interval(5000)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -167,6 +180,23 @@ export class NewPerfAnalyzerPageComponent implements OnInit {
       this.image.trim().length > 0 &&
       !this.installing() &&
       !this.installation()
+    );
+  }
+
+  refreshInstances(): void {
+    this.store.dispatch(instancesListRefreshRequested());
+  }
+
+  profileTarget(instance: Instance): InstanceRepositoryModel | null {
+    return (
+      instance.repositoryModels.find((model) => {
+        const state = model.state.trim().toUpperCase();
+        return (
+          model.name.trim().length > 0 &&
+          model.version.trim().length > 0 &&
+          (state === "READY" || state === "ACTIVE")
+        );
+      }) ?? null
     );
   }
 
