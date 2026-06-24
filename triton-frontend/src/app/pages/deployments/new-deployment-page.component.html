@@ -179,23 +179,9 @@
     <div class="section">
       <div>
         <div class="section-title">Model loading</div>
-        <div class="section-subtitle">Optional startup model name.</div>
+        <div class="section-subtitle">Models load automatically from the selected repository.</div>
       </div>
       <div class="form-grid split">
-        <div class="form-row">
-          <label class="field-label" for="deployment-model-name"
-            >Startup model
-            <span class="field-hint">Leave empty to load all models</span>
-          </label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-model-name"
-              matInput
-              [(ngModel)]="modelName"
-              placeholder="e.g. ensemble (empty = all)"
-            />
-          </mat-form-field>
-        </div>
         <div class="form-row wide backend-toggle">
           <mat-checkbox
             id="deployment-backend-vllm"
@@ -263,6 +249,22 @@
               </mat-form-field>
             </div>
           </div>
+          @if (modelControlMode === "explicit") {
+            <div class="form-row wide">
+              <label class="field-label" for="deployment-model-name"
+                >Startup model
+                <span class="field-hint">Leave empty to load all models</span>
+              </label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-model-name"
+                  matInput
+                  [(ngModel)]="modelName"
+                  placeholder="e.g. ensemble (empty = all)"
+                />
+              </mat-form-field>
+            </div>
+          }
         </mat-expansion-panel>
 
         <mat-expansion-panel>
