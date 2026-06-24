@@ -39,11 +39,13 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
   const metadata = (dto.server_metadata ?? null) as Record<string, unknown> | null;
   const deployment = dto as TritonInstanceDTO & Record<string, unknown>;
   const deploymentLog = stringField(deployment["deployment_log"]);
-  const deploymentImage = stringField(deployment["deployment_image"])
-    || stringField(metadata?.["image"])
-    || deploymentLogField(deploymentLog, "Image");
-  const deploymentRepository = stringField(deployment["deployment_repository"])
-    || deploymentLogField(deploymentLog, "Model repository");
+  const deploymentImage =
+    stringField(deployment["deployment_image"]) ||
+    stringField(metadata?.["image"]) ||
+    deploymentLogField(deploymentLog, "Image");
+  const deploymentRepository =
+    stringField(deployment["deployment_repository"]) ||
+    deploymentLogField(deploymentLog, "Model repository");
 
   return {
     id: String(dto.id),
@@ -69,7 +71,12 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
     deploymentSecretName: stringField(deployment["deployment_secret_name"]),
     deploymentImage,
     deploymentRepository,
-    deploymentBackend: resolveDeploymentBackend(deployment, metadata, deploymentLog, deploymentImage),
+    deploymentBackend: resolveDeploymentBackend(
+      deployment,
+      metadata,
+      deploymentLog,
+      deploymentImage,
+    ),
     deploymentLog,
     isSelfDeployed: !!deployment["is_self_deployed"],
     podStatuses: Array.isArray(deployment["pod_statuses"])
@@ -128,9 +135,9 @@ function resolveDeploymentBackend(
   image: string,
 ): string {
   const explicitBackend =
-    stringField(deployment["deployment_backend"])
-    || stringField(metadata?.["backend"])
-    || stringField(metadata?.["model_backend"]);
+    stringField(deployment["deployment_backend"]) ||
+    stringField(metadata?.["backend"]) ||
+    stringField(metadata?.["model_backend"]);
   if (explicitBackend) {
     return explicitBackend.toLowerCase() === "vllm" ? "vLLM" : explicitBackend;
   }

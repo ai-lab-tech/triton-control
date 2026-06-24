@@ -65,7 +65,9 @@ export class NewDeploymentPageComponent {
   private readonly router = inject(Router);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly http = inject(HttpClient);
-  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
+    .trim()
+    .replace(/\/$/, "");
 
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
@@ -172,7 +174,11 @@ export class NewDeploymentPageComponent {
       return { label: "Configured", tone: "ok", detail: "GPU enabled" };
     }
     if (cpu === DEFAULT_CPU && memory === DEFAULT_MEMORY) {
-      return { label: "Defaults active", tone: "ok", detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY}` };
+      return {
+        label: "Defaults active",
+        tone: "ok",
+        detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY}`,
+      };
     }
     if (hasCpu || hasMemory) {
       return { label: "Configured", tone: "ok", detail: "Custom CPU/memory set" };
@@ -219,7 +225,9 @@ export class NewDeploymentPageComponent {
   async loadS3Profiles(): Promise<void> {
     this.s3ProfilesLoading.set(true);
     try {
-      this.s3Profiles.set(await firstValueFrom(this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles"))));
+      this.s3Profiles.set(
+        await firstValueFrom(this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles"))),
+      );
     } catch {
       this.s3Profiles.set([]);
     } finally {
@@ -262,8 +270,7 @@ export class NewDeploymentPageComponent {
       model_control_mode: this.modelControlMode,
       repository_poll_secs: this.repositoryPollSecs,
       repository_sync_mode: this.backend === "vllm" ? "sidecar" : "direct",
-      model_name:
-        this.modelName.trim() || undefined,
+      model_name: this.modelName.trim() || undefined,
       allow_metrics: true,
       requirements_txt: this.requirementsTxt().trim() || undefined,
       gpu_count: this.gpuCount ?? undefined,

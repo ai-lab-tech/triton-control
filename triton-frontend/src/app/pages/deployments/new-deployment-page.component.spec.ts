@@ -32,7 +32,9 @@ describe("NewDeploymentPageComponent", () => {
 
   function createComponent(profiles: unknown[] = []) {
     const fixture = TestBed.createComponent(NewDeploymentPageComponent);
-    TestBed.inject(HttpTestingController).expectOne("http://localhost:8000/api/s3-profiles").flush(profiles);
+    TestBed.inject(HttpTestingController)
+      .expectOne("http://localhost:8000/api/s3-profiles")
+      .flush(profiles);
     return fixture;
   }
 

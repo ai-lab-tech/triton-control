@@ -28,7 +28,12 @@
         <div class="form-row">
           <label class="field-label" for="s3-profile-name">Profile name</label>
           <mat-form-field appearance="outline">
-            <input id="s3-profile-name" matInput [(ngModel)]="draft.name" placeholder="team-minio" />
+            <input
+              id="s3-profile-name"
+              matInput
+              [(ngModel)]="draft.name"
+              placeholder="team-minio"
+            />
           </mat-form-field>
         </div>
         <div class="form-row">
@@ -75,7 +80,9 @@
         <div class="toggle-row">
           <div>
             <div class="toggle-title">Path-style S3</div>
-            <div class="toggle-sub">Use path-style bucket URLs for MinIO and S3-compatible endpoints.</div>
+            <div class="toggle-sub">
+              Use path-style bucket URLs for MinIO and S3-compatible endpoints.
+            </div>
           </div>
           <label class="switch">
             <input type="checkbox" [(ngModel)]="draft.force_path_style" />
@@ -102,18 +109,33 @@
       </div>
 
       <div class="actions">
-        <button mat-flat-button color="primary" type="button" (click)="saveProfile()" [disabled]="saving()">
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="saveProfile()"
+          [disabled]="saving()"
+        >
           <span class="material-icons">save</span>
           Save
         </button>
-        <button mat-stroked-button type="button" (click)="deleteProfile()" [disabled]="!selectedId || saving()">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="deleteProfile()"
+          [disabled]="!selectedId || saving()"
+        >
           <span class="material-icons">delete</span>
           Delete
         </button>
       </div>
 
       @if (message()) {
-        <div class="message" [class.success]="messageTone() === 'success'" [class.error]="messageTone() === 'error'">
+        <div
+          class="message"
+          [class.success]="messageTone() === 'success'"
+          [class.error]="messageTone() === 'error'"
+        >
           {{ message() }}
         </div>
       }

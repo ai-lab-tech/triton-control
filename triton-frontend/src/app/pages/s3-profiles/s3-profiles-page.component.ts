@@ -45,7 +45,9 @@ type S3Profile = {
 export class S3ProfilesPageComponent {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthStore);
-  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
+    .trim()
+    .replace(/\/$/, "");
 
   readonly profiles = signal<S3Profile[]>([]);
   readonly loading = signal(false);
@@ -72,7 +74,9 @@ export class S3ProfilesPageComponent {
     if (!this.canManage()) return;
     this.loading.set(true);
     try {
-      const profiles = await firstValueFrom(this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles")));
+      const profiles = await firstValueFrom(
+        this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles")),
+      );
       this.profiles.set(profiles);
       if (profiles.length && !this.selectedId) {
         this.selectProfile(String(profiles[0].id));
