@@ -16,19 +16,6 @@
       </div>
       <div class="form-grid split">
         <div class="form-row">
-          <label class="field-label" for="deployment-backend">Backend</label>
-          <mat-form-field appearance="outline">
-            <mat-select
-              id="deployment-backend"
-              [(ngModel)]="backend"
-              (selectionChange)="backendChanged()"
-            >
-              <mat-option value="triton">Triton</mat-option>
-              <mat-option value="vllm">vLLM</mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
-        <div class="form-row">
           <label class="field-label" for="deployment-name">Deployment name</label>
           <mat-form-field appearance="outline">
             <input
@@ -209,6 +196,16 @@
             />
           </mat-form-field>
         </div>
+        <div class="form-row wide backend-toggle">
+          <mat-checkbox
+            id="deployment-backend-vllm"
+            [ngModel]="backend === 'vllm'"
+            (ngModelChange)="setVllmBackend($event)"
+          >
+            Use vLLM backend
+          </mat-checkbox>
+          <div class="field-hint">Leave unchecked for the standard Triton backend.</div>
+        </div>
       </div>
     </div>
 
@@ -223,6 +220,51 @@
         </div>
       </div>
       <mat-accordion class="optional-sections">
+        <mat-expansion-panel>
+          @let modelControlPanel = modelControlStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">sync</span>
+              <span>Model control</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="modelControlPanel.tone">{{
+                modelControlPanel.label
+              }}</span>
+              <span class="panel-status-detail">{{ modelControlPanel.detail }}</span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-grid split">
+            <div class="form-row">
+              <label class="field-label" for="deployment-model-control-mode">Mode</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
+                  <mat-option value="poll">Poll</mat-option>
+                  <mat-option value="explicit">Explicit</mat-option>
+                </mat-select>
+                <mat-hint>Poll is the default for automatic repository refresh.</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="deployment-repository-poll-secs"
+                >Polling interval</label
+              >
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-repository-poll-secs"
+                  matInput
+                  type="number"
+                  min="1"
+                  step="1"
+                  [(ngModel)]="repositoryPollSecs"
+                  placeholder="15"
+                />
+                <mat-hint>Seconds between repository checks.</mat-hint>
+              </mat-form-field>
+            </div>
+          </div>
+        </mat-expansion-panel>
+
         <mat-expansion-panel>
           @let ingressPanel = ingressStatus();
           <mat-expansion-panel-header>

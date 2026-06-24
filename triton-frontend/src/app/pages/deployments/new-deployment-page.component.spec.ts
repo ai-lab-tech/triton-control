@@ -95,7 +95,7 @@ describe("NewDeploymentPageComponent", () => {
     expect(canDeploy).toBeFalse();
   });
 
-  it("BackendChanged_VllmBackend_UsesSidecarAndDefaultsGpuCount", () => {
+  it("BackendChanged_VllmBackend_UsesSidecarAndKeepsPollMode", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
     component.backend = "vllm";
@@ -104,7 +104,7 @@ describe("NewDeploymentPageComponent", () => {
 
     component.backendChanged();
 
-    expect(component.modelControlMode).toBe("explicit");
+    expect(component.modelControlMode).toBe("poll");
     expect(component.repositorySyncMode).toBe("sidecar");
     expect(component.gpuCount).toBe(1);
   });
@@ -145,7 +145,6 @@ describe("NewDeploymentPageComponent", () => {
     component.ingressHost = "triton.example.local";
     component.s3AccessKey = "minioadmin";
     component.s3SecretKey = "secret";
-    component.modelControlMode = "explicit";
     component.repositoryPollSecs = 9;
     component.modelName = "simple_identity";
     component.dockerconfigjson.set('{"auths":{"registry.example":{"auth":"token"}}}');
@@ -159,7 +158,7 @@ describe("NewDeploymentPageComponent", () => {
       jasmine.objectContaining({
         dockerconfigjson: '{"auths":{"registry.example":{"auth":"token"}}}',
         ingress_host: "triton.example.local",
-        model_control_mode: "explicit",
+        model_control_mode: "poll",
         repository_sync_mode: "direct",
         repository_poll_secs: 9,
         model_name: "simple_identity",

@@ -5,6 +5,7 @@ import { Router, RouterLink } from "@angular/router";
 
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
+import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
@@ -29,6 +30,10 @@ type S3Profile = {
   ca_certificate: string;
 };
 
+const DEFAULT_CPU = "4";
+const DEFAULT_MEMORY = "10Gi";
+const DEFAULT_GPU_COUNT = 0;
+
 @Component({
   selector: "app-new-deployment-page",
   standalone: true,
@@ -36,6 +41,7 @@ type S3Profile = {
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatCheckboxModule,
     MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
@@ -74,14 +80,14 @@ export class NewDeploymentPageComponent {
   s3Region = "us-east-1";
   s3CaCertificate = "";
   backend: "triton" | "vllm" = "triton";
-  modelControlMode: "explicit" | "poll" = "explicit";
+  modelControlMode: "explicit" | "poll" = "poll";
   repositorySyncMode: "direct" | "init" | "sidecar" = "direct";
   repositoryPollSecs = 15;
   modelName = "";
 
-  gpuCount: number | null = 0;
-  cpu = "";
-  memory = "";
+  gpuCount: number | null = DEFAULT_GPU_COUNT;
+  cpu = DEFAULT_CPU;
+  memory = DEFAULT_MEMORY;
   readonly dockerconfigjson = signal("");
   readonly requirementsTxt = signal("");
   readonly s3Profiles = signal<S3Profile[]>([]);
@@ -158,15 +164,31 @@ export class NewDeploymentPageComponent {
     if (gpu < 0) {
       return { label: "Invalid", tone: "error", detail: "GPU count cannot be negative" };
     }
-    const hasCpu = this.cpu.trim().length > 0;
-    const hasMemory = this.memory.trim().length > 0;
+    const cpu = this.cpu.trim();
+    const memory = this.memory.trim();
+    const hasCpu = cpu.length > 0;
+    const hasMemory = memory.length > 0;
     if (gpu > 0) {
       return { label: "Configured", tone: "ok", detail: "GPU enabled" };
+    }
+    if (cpu === DEFAULT_CPU && memory === DEFAULT_MEMORY) {
+      return { label: "Defaults active", tone: "ok", detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY}` };
     }
     if (hasCpu || hasMemory) {
       return { label: "Configured", tone: "ok", detail: "Custom CPU/memory set" };
     }
     return { label: "Not configured", tone: "neutral", detail: "Default resource settings" };
+  }
+
+  modelControlStatus(): { label: string; tone: "neutral" | "ok"; detail: string } {
+    if (this.modelControlMode === "poll") {
+      return {
+        label: "Poll",
+        tone: "ok",
+        detail: `Refresh every ${this.repositoryPollSecs || 15}s`,
+      };
+    }
+    return { label: "Explicit", tone: "neutral", detail: "Manual model loading" };
   }
 
   usesHttpsS3(): boolean {
@@ -183,11 +205,15 @@ export class NewDeploymentPageComponent {
   }
 
   backendChanged(): void {
-    this.modelControlMode = "explicit";
     this.repositorySyncMode = this.backend === "vllm" ? "sidecar" : "direct";
     if (this.backend === "vllm" && !this.gpuCount) {
       this.gpuCount = 1;
     }
+  }
+
+  setVllmBackend(enabled: boolean): void {
+    this.backend = enabled ? "vllm" : "triton";
+    this.backendChanged();
   }
 
   async loadS3Profiles(): Promise<void> {
@@ -234,7 +260,7 @@ export class NewDeploymentPageComponent {
       s3_secret_key: this.s3SecretKey,
       s3_region: this.s3Region.trim() || "us-east-1",
       dockerconfigjson: this.dockerconfigjson().trim() || undefined,
-      model_control_mode: "explicit",
+      model_control_mode: this.modelControlMode,
       repository_poll_secs: this.repositoryPollSecs,
       repository_sync_mode: this.backend === "vllm" ? "sidecar" : "direct",
       model_name:

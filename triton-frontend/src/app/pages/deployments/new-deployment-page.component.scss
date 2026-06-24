@@ -79,6 +79,18 @@
   overflow-wrap: anywhere;
 }
 
+.backend-toggle {
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+
+.backend-toggle .mat-mdc-checkbox {
+  --mat-checkbox-state-layer-size: 0px;
+}
+
 .ingress-help {
   gap: 0.35rem;
   margin-top: -0.25rem;
