@@ -389,8 +389,9 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("aws s3 sync", sync["args"][0])
         sync_env = {item["name"]: item.get("value") for item in sync["env"]}
         self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
-        self.assertIn("publish_root=/models/$model_name", sync["args"][0])
-        self.assertIn("cp -R /staging/.", sync["args"][0])
+        self.assertIn('mkdir -p "/models/.s3-sync-next/$model_name"', sync["args"][0])
+        self.assertIn('cp -R "$source_dir/." "/models/.s3-sync-next/$model_name/"', sync["args"][0])
+        self.assertIn("cp -R /models/.s3-sync-next/. /models/", sync["args"][0])
         self.assertNotIn("cp -au", sync["args"][0])
         self.assertIn("model.json", sync["args"][0])
         self.assertIn('escaped_dir=$(printf "%s\\n" "$dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
