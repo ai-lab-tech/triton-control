@@ -317,6 +317,21 @@
   gap: 0.65rem;
 }
 
+.deployment-card {
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.deployment-card .kv {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: center;
+}
+
+.deployment-card .kv-value {
+  width: 100%;
+}
+
 .access-summary {
   display: flex;
   align-items: baseline;

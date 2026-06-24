@@ -109,6 +109,7 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
+    detectedBackend: backendLabel(detectedBackend),
     modelControlMode: "explicit",
     repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
@@ -148,6 +149,14 @@ function detectModelBackend(sourceFolder) {
   } catch {
     return "";
   }
+}
+
+function backendLabel(value) {
+  const backend = String(value || "").trim().toLowerCase();
+  if (backend === "vllm") {
+    return "vLLM";
+  }
+  return backend || "Triton";
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -242,6 +251,7 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
+    detectedBackend: String(form.detectedBackend || "triton").trim().toLowerCase() || "triton",
     modelControlMode:
       repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
     repositorySyncMode,
@@ -587,6 +597,7 @@ function renderHtml(webview, nonce, initial) {
     <label class="wide">Source folder<input name="sourceFolder" readonly></label>
     <label>Model Repository Path<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
+    <label>Detected backend<input name="detectedBackend" readonly></label>
     <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
@@ -703,7 +714,7 @@ function renderHtml(webview, nonce, initial) {
 
     async function notifyDeploymentNavigation(instanceId) {
       try {
-        await fetch('/api/code-servers/deployment-navigation', {
+        await fetch('/api/development/deployment-navigation', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -736,7 +747,6 @@ function renderHtml(webview, nonce, initial) {
       form.elements.profileName.value = profile.name || '';
       form.elements.endpoint.value = profile.endpoint || '';
       form.elements.bucket.value = profile.bucket || '';
-      form.elements.prefix.value = profile.prefix || '';
       form.elements.region.value = profile.region || 'us-east-1';
       form.elements.accessKeyId.value = profile.access_key || '';
       form.elements.secretAccessKey.value = profile.secret_key || '';
@@ -795,9 +805,11 @@ function renderHtml(webview, nonce, initial) {
     function updateDestinationPath() {
       const destination = document.getElementById('destination-path');
       const data = readForm();
+      const endpoint = String(data.endpoint || '').trim().replace(/^s3:\\/\\//i, '').replace(/\\/+$/g, '');
       const bucket = cleanS3Path(data.bucket || 'bucket');
       const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
-      destination.textContent = ['s3:/' + '/' + bucket, target].filter(Boolean).join('/');
+      const root = endpoint ? 's3://' + endpoint + '/' + bucket : 's3://' + bucket;
+      destination.textContent = [root, target].filter(Boolean).join('/');
     }
 
     function cleanS3Path(value) {

@@ -32,6 +32,9 @@ export type Instance = {
   deploymentName: string;
   deploymentServiceName: string;
   deploymentSecretName: string;
+  deploymentImage: string;
+  deploymentRepository: string;
+  deploymentBackend: string;
   deploymentLog: string;
   isSelfDeployed: boolean;
   podStatuses: string[];
