@@ -1,11 +1,14 @@
+import { TritonInstanceDTO } from "../api/generated/index";
 import { dtoToInstance, isSelfDeployedStarting, resolveStatus } from "./instances.utils";
 
 describe("instances utils", () => {
   it("DtoToInstance_DeploymentLogContainsRuntimeFields_MapsDeploymentMetadata", () => {
-    const mapped = dtoToInstance({
+    const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 42,
       name: "opt125m",
       url: "http://opt125m",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
       health_live: true,
       health_ready: true,
       deployment_log: [
@@ -14,7 +17,8 @@ describe("instances utils", () => {
         "Model repository: s3://https://host.minikube.internal:9000/triton-models/opt125m",
       ].join("\n"),
       is_self_deployed: true,
-    } as any);
+    };
+    const mapped = dtoToInstance(dto);
 
     expect(mapped.deploymentImage).toBe("nvcr.io/nvidia/tritonserver:25.02-vllm-python-py3");
     expect(mapped.deploymentRepository).toBe(
@@ -24,17 +28,20 @@ describe("instances utils", () => {
   });
 
   it("DtoToInstance_ExplicitDeploymentFieldsPresent_PrefersExplicitFields", () => {
-    const mapped = dtoToInstance({
+    const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 43,
       name: "manual",
       url: "http://manual",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
       health_live: false,
       health_ready: false,
       deployment_image: "custom-image",
       deployment_repository: "s3://bucket/repository",
       deployment_backend: "python",
       deployment_log: "Image: stale-image\nModel repository: s3://stale",
-    } as any);
+    };
+    const mapped = dtoToInstance(dto);
 
     expect(mapped.deploymentImage).toBe("custom-image");
     expect(mapped.deploymentRepository).toBe("s3://bucket/repository");
@@ -42,17 +49,20 @@ describe("instances utils", () => {
   });
 
   it("DtoToInstance_MetadataImageAndBackendPresent_UsesMetadataFallbacks", () => {
-    const mapped = dtoToInstance({
+    const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 44,
       name: "metadata",
       url: "http://metadata",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
       health_live: true,
       health_ready: false,
       server_metadata: {
         image: "metadata-image",
         backend: "vllm",
       },
-    } as any);
+    };
+    const mapped = dtoToInstance(dto);
 
     expect(mapped.deploymentImage).toBe("metadata-image");
     expect(mapped.deploymentBackend).toBe("vLLM");

@@ -288,7 +288,7 @@ function requiresPathStyle(endpoint) {
 
 function validateForm(form) {
   const required = [
-    ["Model repository path", form.deploymentName],
+    ["Deployment name", form.deploymentName],
     ["Triton image", form.image],
     ["S3 endpoint", form.endpoint],
     ["S3 bucket", form.bucket],
@@ -595,13 +595,13 @@ function renderHtml(webview, nonce, initial) {
   <h2>Deploy Triton Model Repository</h2>
   <form id="deploy-form">
     <label class="wide">Source folder<input name="sourceFolder" readonly></label>
-    <label>Model Repository Path<input name="deploymentName" required></label>
+    <label>Deployment name<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
     <label>Detected backend<input name="detectedBackend" readonly></label>
     <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
-      <strong>Serving repository</strong>
+      <strong>S3 upload target</strong>
       <code id="destination-path">s3://bucket/model-repository-path</code>
     </div>
     <select class="hidden" name="modelControlMode"><option value="explicit">explicit</option></select>

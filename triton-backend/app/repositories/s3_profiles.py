@@ -15,7 +15,7 @@ def list_for_owner(session: Session, owner_user_id: int) -> list[S3ProfileEntity
         .where(S3ProfileEntity.owner_user_id == owner_user_id)
         .order_by(S3ProfileEntity.name)
     )
-    return list(session.exec(query).all())  # type: ignore[attr-defined]
+    return list(session.exec(query).all())
 
 
 def find_for_owner(session: Session, owner_user_id: int, profile_id: int) -> S3ProfileEntity | None:
