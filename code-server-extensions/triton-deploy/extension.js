@@ -110,7 +110,7 @@ async function initialFormValues(sourceFolder) {
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
     detectedBackend: backendLabel(detectedBackend),
-    modelControlMode: "explicit",
+    modelControlMode: "poll",
     repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
@@ -598,16 +598,22 @@ function renderHtml(webview, nonce, initial) {
     <label>Deployment name<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
     <label>Detected backend<input name="detectedBackend" readonly></label>
+    <label>Model control<input name="modelControlLabel" readonly></label>
     <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
       <strong>S3 upload target</strong>
       <code id="destination-path">s3://bucket/model-repository-path</code>
     </div>
-    <select class="hidden" name="modelControlMode"><option value="explicit">explicit</option></select>
     <select class="hidden" name="repositorySyncMode"><option value="direct">direct</option><option value="sidecar">sidecar</option></select>
-    <input class="hidden" name="repositoryPollSecs" type="number" min="1">
     <label>Model name<input name="modelName" placeholder="from config.pbtxt or manual input"></label>
+    <details class="wide">
+      <summary>Model control</summary>
+      <div class="details-grid">
+        <label>Load mode<select name="modelControlMode"><option value="poll">Poll repository</option><option value="explicit">Explicit startup model</option></select></label>
+        <label>Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
+      </div>
+    </details>
     <details class="wide">
       <summary>Manual S3 settings</summary>
       <div class="details-grid">
@@ -651,14 +657,15 @@ function renderHtml(webview, nonce, initial) {
       else input.value = value ?? '';
     }
     updateDestinationPath();
+    updateModelControlLabel();
     loadS3Profiles();
 
-    form.addEventListener('input', updateDestinationPath);
-    form.addEventListener('change', updateDestinationPath);
+    form.addEventListener('input', updateFormPreviews);
+    form.addEventListener('change', updateFormPreviews);
     form.elements.profileId.addEventListener('change', () => {
       const selected = profiles.find((profile) => String(profile.id) === form.elements.profileId.value);
       if (selected) applyS3Profile(selected);
-      updateDestinationPath();
+      updateFormPreviews();
     });
     saveProfile.addEventListener('click', saveCurrentS3Profile);
 
@@ -810,6 +817,17 @@ function renderHtml(webview, nonce, initial) {
       const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
       const root = endpoint ? 's3://' + endpoint + '/' + bucket : 's3://' + bucket;
       destination.textContent = [root, target].filter(Boolean).join('/');
+    }
+
+    function updateModelControlLabel() {
+      const mode = form.elements.modelControlMode.value === 'explicit' ? 'explicit' : 'poll';
+      form.elements.modelControlLabel.value = mode === 'poll' ? 'Poll repository' : 'Explicit startup model';
+      form.elements.repositoryPollSecs.disabled = mode === 'explicit';
+    }
+
+    function updateFormPreviews() {
+      updateDestinationPath();
+      updateModelControlLabel();
     }
 
     function cleanS3Path(value) {
