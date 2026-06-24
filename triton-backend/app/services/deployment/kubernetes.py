@@ -234,11 +234,52 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
         for pod in v1.list_namespaced_pod(namespace=namespace, label_selector=selector).items:
             name = getattr(getattr(pod, "metadata", None), "name", "")
             if name:
-                log = v1.read_namespaced_pod_log(name=name, namespace=namespace, tail_lines=300)
-                chunks.append(f"--- pod/{name} ---\n{log}")
+                containers = getattr(getattr(pod, "spec", None), "containers", None) or []
+                container_names = [
+                    getattr(container, "name", "")
+                    for container in containers
+                    if getattr(container, "name", "")
+                ] or [None]
+                for container_name in container_names:
+                    label = f"pod/{name}"
+                    if container_name:
+                        label = f"{label} container/{container_name}"
+                    log = v1.read_namespaced_pod_log(
+                        name=name,
+                        namespace=namespace,
+                        container=container_name,
+                        tail_lines=300,
+                    )
+                    chunks.append(f"--- {label} ---\n{log}")
+                    if container_name == "triton":
+                        previous = _read_previous_pod_log(
+                            v1, namespace=namespace, name=name, container=container_name
+                        )
+                        if previous:
+                            chunks.append(f"--- {label} previous ---\n{previous}")
         return "\n\n".join(chunks).strip()
     except ApiException as exc:
         raise BadGatewayError(_api_error(exc)) from exc
+
+
+def _read_previous_pod_log(v1: Any, *, namespace: str, name: str, container: str) -> str:
+    from kubernetes.client.rest import ApiException
+
+    try:
+        return (
+            v1.read_namespaced_pod_log(
+                name=name,
+                namespace=namespace,
+                container=container,
+                previous=True,
+                tail_lines=300,
+            )
+            or ""
+        )
+    except ApiException as exc:
+        if exc.status in {400, 404}:
+            return ""
+        raise
 
 
 def _client() -> Any:
@@ -491,24 +532,33 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         + (" --endpoint-url \"$S3_ENDPOINT\"" if endpoint else "")
     )
     publish_command = (
-        "publish_root=/models\n"
-        "if [ -f /staging/config.pbtxt ]; then\n"
+        "rm -rf /models/.s3-sync-next\n"
+        "mkdir -p /models/.s3-sync-next\n"
+        "publish_model() {\n"
+        "  source_dir=\"$1\"\n"
+        "  fallback_name=\"$2\"\n"
         "  model_name=$(sed -n -E 's/^[[:space:]]*name[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\\1/p' "
-        "/staging/config.pbtxt | head -n 1)\n"
-        "  [ -n \"$model_name\" ] || model_name=$(basename \"${S3_SOURCE%/}\")\n"
+        "\"$source_dir/config.pbtxt\" | head -n 1)\n"
+        "  [ -n \"$model_name\" ] || model_name=\"$fallback_name\"\n"
         "  case \"$model_name\" in ''|'.'|'..'|*/*) echo 'Invalid Triton model name' >&2; exit 1;; esac\n"
-        "  publish_root=/models/$model_name\n"
-        "  mkdir -p \"$publish_root\"\n"
-        "  find /models -mindepth 1 -maxdepth 1 ! -name \"$model_name\" "
-        "! -name .s3-sync-ready -exec rm -rf -- {} +\n"
-        "fi\n"
-        "cp -R /staging/. \"$publish_root/\"\n"
-        "find \"$publish_root\" -type f ! -name .s3-sync-ready -exec sh -c '\n"
-        "  for file do\n"
-        "    relative=${file#${0}/}\n"
-        "    [ -f \"/staging/$relative\" ] || rm -f \"$file\"\n"
+        "  mkdir -p \"/models/.s3-sync-next/$model_name\"\n"
+        "  cp -R \"$source_dir/.\" \"/models/.s3-sync-next/$model_name/\"\n"
+        "}\n"
+        "if [ -f /staging/config.pbtxt ]; then\n"
+        "  publish_model /staging \"$(basename \"${S3_SOURCE%/}\")\"\n"
+        "else\n"
+        "  found_model=0\n"
+        "  for source_dir in /staging/*; do\n"
+        "    [ -d \"$source_dir\" ] || continue\n"
+        "    [ -f \"$source_dir/config.pbtxt\" ] || continue\n"
+        "    found_model=1\n"
+        "    publish_model \"$source_dir\" \"$(basename \"$source_dir\")\"\n"
         "  done\n"
-        "' \"$publish_root\" {} +\n"
+        "  [ \"$found_model\" -eq 1 ] || cp -R /staging/. /models/.s3-sync-next/\n"
+        "fi\n"
+        "find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready ! -name .s3-sync-next -exec rm -rf -- {} +\n"
+        "cp -R /models/.s3-sync-next/. /models/\n"
+        "rm -rf /models/.s3-sync-next\n"
         "find /models -depth -type d -empty -delete"
     )
     # vLLM reads these as host paths. Triton's native S3 repository otherwise
