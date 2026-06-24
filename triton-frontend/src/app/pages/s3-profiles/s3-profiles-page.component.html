@@ -49,12 +49,6 @@
           </mat-form-field>
         </div>
         <div class="form-row">
-          <label class="field-label" for="s3-profile-prefix">Repository parent prefix</label>
-          <mat-form-field appearance="outline">
-            <input id="s3-profile-prefix" matInput [(ngModel)]="draft.prefix" />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
           <label class="field-label" for="s3-profile-region">Region</label>
           <mat-form-field appearance="outline">
             <input id="s3-profile-region" matInput [(ngModel)]="draft.region" />
@@ -88,18 +82,23 @@
             <span class="slider"></span>
           </label>
         </div>
-        <div class="form-row wide">
-          <label class="field-label" for="s3-profile-ca">CA certificate</label>
-          <mat-form-field appearance="outline">
-            <textarea
-              id="s3-profile-ca"
-              matInput
-              rows="5"
-              [(ngModel)]="draft.ca_certificate"
-              placeholder="-----BEGIN CERTIFICATE-----"
-            ></textarea>
-          </mat-form-field>
-        </div>
+        @if (usesHttpsS3()) {
+          <div class="form-row wide">
+            <label class="field-label" for="s3-profile-ca">CA certificate</label>
+            <mat-form-field appearance="outline">
+              <textarea
+                id="s3-profile-ca"
+                matInput
+                rows="5"
+                [(ngModel)]="draft.ca_certificate"
+                placeholder="-----BEGIN CERTIFICATE-----"
+              ></textarea>
+              <mat-hint>
+                Optional. Only needed for private, self-signed, or internal CA chains.
+              </mat-hint>
+            </mat-form-field>
+          </div>
+        }
       </div>
 
       <div class="actions">

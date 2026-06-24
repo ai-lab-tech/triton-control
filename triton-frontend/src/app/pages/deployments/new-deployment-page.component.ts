@@ -234,7 +234,6 @@ export class NewDeploymentPageComponent {
     }
     this.s3Url = profile.endpoint;
     this.s3Bucket = profile.bucket;
-    this.s3Prefix = profile.prefix || "";
     this.s3Region = profile.region || "us-east-1";
     this.s3AccessKey = profile.access_key;
     this.s3SecretKey = profile.secret_key;
@@ -273,7 +272,7 @@ export class NewDeploymentPageComponent {
       memory: this.memory.trim() || undefined,
       memory_limit: this.memory.trim() || undefined,
     };
-    const caCertificate = this.s3CaCertificate.trim();
+    const caCertificate = this.usesHttpsS3() ? this.s3CaCertificate.trim() : "";
     if (caCertificate) {
       // Keep runtime payload compatible if generated TS models lag behind backend schema.
       (payload as unknown as Record<string, unknown>)["s3_ca_certificate"] = caCertificate;

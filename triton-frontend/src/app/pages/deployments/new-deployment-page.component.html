@@ -75,7 +75,7 @@
               }
             </mat-select>
             <mat-hint>
-              Use a profile from the account menu, or leave manual and expand S3 settings below.
+              Use a profile from the account menu, or choose manual to enter connection settings.
             </mat-hint>
           </mat-form-field>
         </div>
@@ -104,74 +104,78 @@
             <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
           </div>
         </div>
-        <mat-expansion-panel class="form-row wide compact-panel">
-          <mat-expansion-panel-header>
-            <mat-panel-title>
-              <span class="material-icons">storage</span>
-              <span>Manual S3 settings</span>
-            </mat-panel-title>
-            <mat-panel-description>Optional when a profile is selected</mat-panel-description>
-          </mat-expansion-panel-header>
-          <div class="form-grid split">
-            <div class="form-row">
-              <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="deployment-s3-url"
-                  matInput
-                  [(ngModel)]="s3Url"
-                  placeholder="https://object-store.example.com"
-                />
-              </mat-form-field>
+        @if (usesManualS3Settings()) {
+          <mat-expansion-panel class="form-row wide compact-panel">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <span class="material-icons">storage</span>
+                <span>Manual S3 settings</span>
+              </mat-panel-title>
+              <mat-panel-description>Connection settings for this deployment</mat-panel-description>
+            </mat-expansion-panel-header>
+            <div class="form-grid split">
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-s3-url"
+                    matInput
+                    [(ngModel)]="s3Url"
+                    placeholder="https://object-store.example.com"
+                  />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-bucket">Bucket</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-bucket" matInput [(ngModel)]="s3Bucket" />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-access-key">Access key</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-s3-secret-key"
+                    matInput
+                    [(ngModel)]="s3SecretKey"
+                    type="password"
+                    autocomplete="new-password"
+                  />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-region">Region</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
+                </mat-form-field>
+              </div>
+              @if (usesHttpsS3()) {
+                <div class="form-row wide">
+                  <label class="field-label" for="deployment-s3-ca-certificate"
+                    >S3 CA certificate</label
+                  >
+                  <mat-form-field appearance="outline">
+                    <textarea
+                      id="deployment-s3-ca-certificate"
+                      matInput
+                      rows="5"
+                      [(ngModel)]="s3CaCertificate"
+                      placeholder="-----BEGIN CERTIFICATE-----"
+                    ></textarea>
+                    <mat-hint>
+                      Optional. Provide only for private, self-signed, or internal CA chains.
+                    </mat-hint>
+                  </mat-form-field>
+                </div>
+              }
             </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-s3-bucket">Bucket</label>
-              <mat-form-field appearance="outline">
-                <input id="deployment-s3-bucket" matInput [(ngModel)]="s3Bucket" />
-              </mat-form-field>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-s3-access-key">Access key</label>
-              <mat-form-field appearance="outline">
-                <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
-              </mat-form-field>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="deployment-s3-secret-key"
-                  matInput
-                  [(ngModel)]="s3SecretKey"
-                  type="password"
-                  autocomplete="new-password"
-                />
-              </mat-form-field>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-s3-region">Region</label>
-              <mat-form-field appearance="outline">
-                <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
-              </mat-form-field>
-            </div>
-          </div>
-        </mat-expansion-panel>
-        @if (usesManualS3Settings() && usesHttpsS3()) {
-          <div class="form-row wide">
-            <label class="field-label" for="deployment-s3-ca-certificate">S3 CA certificate</label>
-            <mat-form-field appearance="outline">
-              <textarea
-                id="deployment-s3-ca-certificate"
-                matInput
-                rows="5"
-                [(ngModel)]="s3CaCertificate"
-                placeholder="-----BEGIN CERTIFICATE-----"
-              ></textarea>
-              <mat-hint>
-                Optional. Provide only for private, self-signed, or internal CA chains.
-              </mat-hint>
-            </mat-form-field>
-          </div>
+          </mat-expansion-panel>
         }
       </div>
     </div>
@@ -231,23 +235,25 @@
                 <mat-hint>Poll is the default for automatic repository refresh.</mat-hint>
               </mat-form-field>
             </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-repository-poll-secs"
-                >Polling interval</label
-              >
-              <mat-form-field appearance="outline">
-                <input
-                  id="deployment-repository-poll-secs"
-                  matInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  [(ngModel)]="repositoryPollSecs"
-                  placeholder="15"
-                />
-                <mat-hint>Seconds between repository checks.</mat-hint>
-              </mat-form-field>
-            </div>
+            @if (modelControlMode === "poll") {
+              <div class="form-row">
+                <label class="field-label" for="deployment-repository-poll-secs"
+                  >Polling interval</label
+                >
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-repository-poll-secs"
+                    matInput
+                    type="number"
+                    min="1"
+                    step="1"
+                    [(ngModel)]="repositoryPollSecs"
+                    placeholder="15"
+                  />
+                  <mat-hint>Seconds between repository checks.</mat-hint>
+                </mat-form-field>
+              </div>
+            }
           </div>
           @if (modelControlMode === "explicit") {
             <div class="form-row wide">

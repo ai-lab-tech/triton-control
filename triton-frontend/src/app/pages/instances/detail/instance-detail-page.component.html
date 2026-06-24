@@ -655,7 +655,7 @@
               <span class="slider"></span>
             </label>
           </div>
-          @if (s3VerifySsl) {
+          @if (shouldShowS3CaCertificate()) {
             <div class="form-row s3-certificate-row">
               <label class="field-label" for="s3-ca-certificate">Certificate</label>
               <mat-form-field appearance="outline">

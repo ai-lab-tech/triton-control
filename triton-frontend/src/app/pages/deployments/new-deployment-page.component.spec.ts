@@ -238,7 +238,7 @@ describe("NewDeploymentPageComponent", () => {
     );
   });
 
-  it("S3ProfileChanged_ProfileSelected_PopulatesDeploymentS3Fields", async () => {
+  it("S3ProfileChanged_ProfileSelected_PopulatesConnectionFieldsOnly", async () => {
     // Arrange
     const fixture = createComponent([
       {
@@ -249,7 +249,7 @@ describe("NewDeploymentPageComponent", () => {
         region: "eu-central-1",
         access_key: "profile-access",
         secret_key: "profile-secret",
-        prefix: "serving/opt-125m",
+        prefix: "legacy/profile-prefix",
         force_path_style: true,
         ca_certificate: "-----BEGIN CERTIFICATE-----",
       },
@@ -263,6 +263,7 @@ describe("NewDeploymentPageComponent", () => {
     );
     component.deploymentName = "opt-125m";
     component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.s3Prefix = "serving/opt-125m";
     await fixture.whenStable();
 
     // Act

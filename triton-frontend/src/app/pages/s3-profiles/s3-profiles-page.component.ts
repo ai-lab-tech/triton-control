@@ -64,6 +64,10 @@ export class S3ProfilesPageComponent {
     return this.auth.canWriteInstances();
   }
 
+  usesHttpsS3(): boolean {
+    return this.isHttpsEndpoint(this.draft.endpoint);
+  }
+
   async loadProfiles(): Promise<void> {
     if (!this.canManage()) return;
     this.loading.set(true);
@@ -101,9 +105,9 @@ export class S3ProfilesPageComponent {
       region: this.draft.region.trim() || "us-east-1",
       access_key: this.draft.access_key.trim(),
       secret_key: this.draft.secret_key,
-      prefix: this.draft.prefix.trim(),
+      prefix: "",
       force_path_style: this.draft.force_path_style,
-      ca_certificate: this.draft.ca_certificate.trim(),
+      ca_certificate: this.usesHttpsS3() ? this.draft.ca_certificate.trim() : "",
     };
     try {
       const saved = this.selectedId
@@ -159,5 +163,9 @@ export class S3ProfilesPageComponent {
 
   private apiUrl(path: string): string {
     return `${this.basePath}${path}`;
+  }
+
+  private isHttpsEndpoint(value: string): boolean {
+    return value.trim().toLowerCase().startsWith("https://");
   }
 }
