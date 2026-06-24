@@ -1,5 +1,6 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16
     container_name: triton-backend-postgres
     entrypoint:

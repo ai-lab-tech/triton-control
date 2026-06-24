@@ -13,7 +13,7 @@ import { MatSelectModule } from "@angular/material/select";
 import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 import { firstValueFrom } from "rxjs";
 
-import { CreateDeploymentRequest, DeploymentsService } from "../../api/generated/index";
+import { BASE_PATH, CreateDeploymentRequest, DeploymentsService } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
 type S3Profile = {
@@ -59,6 +59,7 @@ export class NewDeploymentPageComponent {
   private readonly router = inject(Router);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly http = inject(HttpClient);
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
 
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:25.02-py3";
@@ -192,7 +193,7 @@ export class NewDeploymentPageComponent {
   async loadS3Profiles(): Promise<void> {
     this.s3ProfilesLoading.set(true);
     try {
-      this.s3Profiles.set(await firstValueFrom(this.http.get<S3Profile[]>("/api/s3-profiles")));
+      this.s3Profiles.set(await firstValueFrom(this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles"))));
     } catch {
       this.s3Profiles.set([]);
     } finally {
@@ -285,6 +286,10 @@ export class NewDeploymentPageComponent {
   private setMessage(message: string, tone: "info" | "success" | "error"): void {
     this._message.set(message);
     this._messageTone.set(tone);
+  }
+
+  private apiUrl(path: string): string {
+    return `${this.basePath}${path}`;
   }
 
   private normalizeS3Url(value: string): string {

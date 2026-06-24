@@ -10,6 +10,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 
+import { BASE_PATH } from "../../api/generated/index";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
@@ -44,6 +45,7 @@ type S3Profile = {
 export class S3ProfilesPageComponent {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthStore);
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
 
   readonly profiles = signal<S3Profile[]>([]);
   readonly loading = signal(false);
@@ -66,7 +68,7 @@ export class S3ProfilesPageComponent {
     if (!this.canManage()) return;
     this.loading.set(true);
     try {
-      const profiles = await firstValueFrom(this.http.get<S3Profile[]>("/api/s3-profiles"));
+      const profiles = await firstValueFrom(this.http.get<S3Profile[]>(this.apiUrl("/api/s3-profiles")));
       this.profiles.set(profiles);
       if (profiles.length && !this.selectedId) {
         this.selectProfile(String(profiles[0].id));
@@ -105,8 +107,10 @@ export class S3ProfilesPageComponent {
     };
     try {
       const saved = this.selectedId
-        ? await firstValueFrom(this.http.put<S3Profile>(`/api/s3-profiles/${this.selectedId}`, payload))
-        : await firstValueFrom(this.http.post<S3Profile>("/api/s3-profiles", payload));
+        ? await firstValueFrom(
+            this.http.put<S3Profile>(this.apiUrl(`/api/s3-profiles/${this.selectedId}`), payload),
+          )
+        : await firstValueFrom(this.http.post<S3Profile>(this.apiUrl("/api/s3-profiles"), payload));
       this.setMessage("S3 profile saved.", "success");
       this.selectedId = String(saved.id);
       await this.loadProfiles();
@@ -122,7 +126,7 @@ export class S3ProfilesPageComponent {
     if (!this.canManage() || !this.selectedId || this.saving()) return;
     this.saving.set(true);
     try {
-      await firstValueFrom(this.http.delete(`/api/s3-profiles/${this.selectedId}`));
+      await firstValueFrom(this.http.delete(this.apiUrl(`/api/s3-profiles/${this.selectedId}`)));
       this.setMessage("S3 profile deleted.", "success");
       this.newProfile();
       await this.loadProfiles();
@@ -151,5 +155,9 @@ export class S3ProfilesPageComponent {
   private setMessage(message: string, tone: "success" | "error" | "info"): void {
     this.message.set(message);
     this.messageTone.set(tone);
+  }
+
+  private apiUrl(path: string): string {
+    return `${this.basePath}${path}`;
   }
 }

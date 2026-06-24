@@ -4,7 +4,7 @@ import { TestBed } from "@angular/core/testing";
 import { provideRouter, Router } from "@angular/router";
 import { of } from "rxjs";
 
-import { DeploymentsService } from "../../api/generated/index";
+import { BASE_PATH, DeploymentsService } from "../../api/generated/index";
 import { NewDeploymentPageComponent } from "./new-deployment-page.component";
 
 describe("NewDeploymentPageComponent", () => {
@@ -21,6 +21,7 @@ describe("NewDeploymentPageComponent", () => {
             "createDeploymentApiDeploymentsPost",
           ]),
         },
+        { provide: BASE_PATH, useValue: "http://localhost:8000" },
       ],
     }).compileComponents();
   });
@@ -31,7 +32,7 @@ describe("NewDeploymentPageComponent", () => {
 
   function createComponent(profiles: unknown[] = []) {
     const fixture = TestBed.createComponent(NewDeploymentPageComponent);
-    TestBed.inject(HttpTestingController).expectOne("/api/s3-profiles").flush(profiles);
+    TestBed.inject(HttpTestingController).expectOne("http://localhost:8000/api/s3-profiles").flush(profiles);
     return fixture;
   }
 
