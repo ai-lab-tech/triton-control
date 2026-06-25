@@ -32,6 +32,7 @@ type MlflowStatusResponse = {
   ready: boolean;
   status_message: string;
   base_path: string;
+  service_url: string;
   installation: MlflowInstallResponse | null;
 };
 
@@ -152,6 +153,13 @@ export class MlflowPageComponent implements OnDestroy {
     }
   }
 
+  copyServiceUrl(): void {
+    const url = this.status()?.service_url?.trim();
+    if (url && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(url);
+    }
+  }
+
   pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "error"; detail: string } {
     const raw = this.dockerconfigjson.trim();
     if (!raw) {
@@ -230,6 +238,7 @@ export class MlflowPageComponent implements OnDestroy {
         ready: false,
         status_message: "",
         base_path: "/api/mlflow/proxy/",
+        service_url: "",
         installation: null,
       });
       this.frameUrl.set(null);

@@ -46,6 +46,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
         ready=ready,
         status_message=message or entity.status_message,
         base_path=config.base_path(),
+        service_url=k8s.service_url(entity.namespace, entity.service_name),
         installation=_to_dto(entity),
     )
 

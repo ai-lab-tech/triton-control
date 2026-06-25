@@ -96,6 +96,13 @@ export class WorkflowsPageComponent implements OnDestroy {
     }
   }
 
+  copyServiceUrl(): void {
+    const url = (this.status()?.service_url as string | undefined)?.trim();
+    if (url && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(url);
+    }
+  }
+
   private openFrame(path: string): void {
     this.reloadNonce += 1;
     const normalized = path.startsWith("/") ? path : `/${path}`;

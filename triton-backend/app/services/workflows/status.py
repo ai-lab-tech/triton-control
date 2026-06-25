@@ -19,6 +19,7 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             namespace=config.namespace,
             service_name=config.service_name,
             base_path=config.base_path,
+            service_url=config.server_url,
         )
     if not config.server_url:
         return ArgoWorkflowsStatusResponse(
@@ -29,6 +30,7 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             namespace=config.namespace,
             service_name=config.service_name,
             base_path=config.base_path,
+            service_url=config.server_url,
         )
     try:
         response = httpx.get(config.server_url + "/", timeout=5, follow_redirects=False, trust_env=False)
@@ -46,6 +48,7 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             namespace=config.namespace,
             service_name=config.service_name,
             base_path=config.base_path,
+            service_url=config.server_url,
         )
     except httpx.HTTPError as exc:
         return ArgoWorkflowsStatusResponse(
@@ -56,4 +59,5 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             namespace=config.namespace,
             service_name=config.service_name,
             base_path=config.base_path,
+            service_url=config.server_url,
         )

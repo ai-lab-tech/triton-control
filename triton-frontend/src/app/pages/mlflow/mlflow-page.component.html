@@ -130,6 +130,19 @@
           </div>
         </div>
         <div class="workspace-toolbar-actions">
+          @if (current.service_url) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="service-url"
+              aria-label="Copy MLflow in-cluster service URL"
+              [title]="current.service_url"
+              (click)="copyServiceUrl()"
+            >
+              <span class="material-icons">content_copy</span>
+              {{ current.service_url }}
+            </button>
+          }
           @if (current.ready && frameRawUrl()) {
             <button
               mat-stroked-button

@@ -2739,6 +2739,11 @@
           "base_path": {
             "type": "string",
             "title": "Base Path"
+          },
+          "service_url": {
+            "type": "string",
+            "title": "Service Url",
+            "default": ""
           }
         },
         "type": "object",
@@ -3985,6 +3990,11 @@
             "type": "string",
             "title": "Base Path",
             "default": "/api/mlflow/proxy/"
+          },
+          "service_url": {
+            "type": "string",
+            "title": "Service Url",
+            "default": ""
           },
           "installation": {
             "anyOf": [

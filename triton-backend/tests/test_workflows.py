@@ -62,6 +62,7 @@ class WorkflowsTests(unittest.TestCase):
 
         self.assertTrue(result.ready)
         self.assertEqual(result.status, "ready")
+        self.assertEqual(result.service_url, "http://argo:2746")
 
     def test_Status_Unreachable_ReturnsUnavailable(self) -> None:
         with (

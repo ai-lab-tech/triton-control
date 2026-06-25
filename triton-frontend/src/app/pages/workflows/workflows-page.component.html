@@ -11,6 +11,19 @@
         <span class="material-icons">vpn_key</span>
         Configure S3 Secrets
       </button>
+      @if (status()?.service_url; as serviceUrl) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="service-url"
+          aria-label="Copy Argo in-cluster service URL"
+          [title]="serviceUrl"
+          (click)="copyServiceUrl()"
+        >
+          <span class="material-icons">content_copy</span>
+          {{ serviceUrl }}
+        </button>
+      }
       @if (frameRawUrl()) {
         <button
           mat-stroked-button
