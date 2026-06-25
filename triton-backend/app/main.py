@@ -46,6 +46,7 @@ from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.s3_api import router as s3_router
+from app.api.s3_profile_api import router as s3_profile_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
@@ -182,6 +183,7 @@ app.include_router(mlflow_router)
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_router, dependencies=[Depends(get_claims)])
+app.include_router(s3_profile_router, dependencies=[Depends(get_claims)])
 app.include_router(workflows_router)
 
 

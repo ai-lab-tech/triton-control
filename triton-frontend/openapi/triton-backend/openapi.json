@@ -2485,6 +2485,186 @@
         }
       }
     },
+    "/api/s3-profiles": {
+      "get": {
+        "tags": [
+          "s3-profiles"
+        ],
+        "summary": "List S3 Profiles",
+        "operationId": "list_s3_profiles_api_s3_profiles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/S3ProfileDTO"
+                  },
+                  "type": "array",
+                  "title": "Response List S3 Profiles Api S3 Profiles Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "s3-profiles"
+        ],
+        "summary": "Create S3 Profile",
+        "operationId": "create_s3_profile_api_s3_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateS3ProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ProfileDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/s3-profiles/{profile_id}": {
+      "put": {
+        "tags": [
+          "s3-profiles"
+        ],
+        "summary": "Update S3 Profile",
+        "operationId": "update_s3_profile_api_s3_profiles__profile_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateS3ProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ProfileDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "s3-profiles"
+        ],
+        "summary": "Delete S3 Profile",
+        "operationId": "delete_s3_profile_api_s3_profiles__profile_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete S3 Profile Api S3 Profiles  Profile Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows": {
       "get": {
         "tags": [
@@ -3125,6 +3305,27 @@
             "title": "Repository Poll Secs",
             "default": 15
           },
+          "repository_sync_mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "init",
+              "sidecar"
+            ],
+            "title": "Repository Sync Mode",
+            "default": "direct"
+          },
+          "repository_sync_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Sync Image"
+          },
           "model_name": {
             "anyOf": [
               {
@@ -3218,6 +3419,59 @@
         ],
         "title": "CreateDeploymentRequest",
         "description": "Request body for ``POST /api/deployments``."
+      },
+      "CreateS3ProfileRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region",
+            "default": "us-east-1"
+          },
+          "access_key": {
+            "type": "string",
+            "title": "Access Key"
+          },
+          "secret_key": {
+            "type": "string",
+            "title": "Secret Key"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix",
+            "default": ""
+          },
+          "force_path_style": {
+            "type": "boolean",
+            "title": "Force Path Style",
+            "default": true
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "endpoint",
+          "bucket",
+          "access_key",
+          "secret_key"
+        ],
+        "title": "CreateS3ProfileRequest"
       },
       "CreateTritonInstanceRequest": {
         "properties": {
@@ -4473,6 +4727,64 @@
         ],
         "title": "S3ListResponse"
       },
+      "S3ProfileDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region",
+            "default": "us-east-1"
+          },
+          "access_key": {
+            "type": "string",
+            "title": "Access Key"
+          },
+          "secret_key": {
+            "type": "string",
+            "title": "Secret Key"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix",
+            "default": ""
+          },
+          "force_path_style": {
+            "type": "boolean",
+            "title": "Force Path Style",
+            "default": true
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpoint",
+          "bucket",
+          "access_key",
+          "secret_key"
+        ],
+        "title": "S3ProfileDTO"
+      },
       "SelfRegisterRequest": {
         "properties": {
           "email": {
@@ -4944,6 +5256,111 @@
           "api_base_url"
         ],
         "title": "UpdateOidcSettingsRequest"
+      },
+      "UpdateS3ProfileRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "access_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Key"
+          },
+          "secret_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Key"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "force_path_style": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Path Style"
+          },
+          "ca_certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ca Certificate"
+          }
+        },
+        "type": "object",
+        "title": "UpdateS3ProfileRequest"
       },
       "UpdateTritonInstanceRequest": {
         "properties": {

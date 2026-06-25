@@ -46,11 +46,14 @@ from app.schemas.perf_analyzer import (
     RunPerfAnalyzerRequest,
 )
 from app.schemas.s3 import (
+    CreateS3ProfileRequest,
     S3DeleteResponse,
     S3EntryDTO,
     S3FileContentResponse,
     S3FileWriteResponse,
     S3ListResponse,
+    S3ProfileDTO,
+    UpdateS3ProfileRequest,
 )
 from app.schemas.user import (
     PASSWORD_MAX_LENGTH,
@@ -87,6 +90,7 @@ __all__ = [
     "CreateCodeServerRequest",
     "CreateWorkflowS3CredentialRequest",
     "CreateDeploymentRequest",
+    "CreateS3ProfileRequest",
     "CreateTritonInstanceRequest",
     "CreateUserRequest",
     "DashboardAlertDTO",
@@ -122,10 +126,12 @@ __all__ = [
     "S3FileContentResponse",
     "S3FileWriteResponse",
     "S3ListResponse",
+    "S3ProfileDTO",
     "SelfRegisterRequest",
     "TritonInstanceDTO",
     "TritonRepositoryModelDTO",
     "UpdateInstanceS3Request",
+    "UpdateS3ProfileRequest",
     "UpdateTritonInstanceRequest",
     "UpdateOidcSettingsRequest",
     "UpdateUserInstancesRequest",

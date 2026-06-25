@@ -14,6 +14,7 @@ import { UsersPageComponent } from "./pages/users/users-page.component";
 import { SettingsPageComponent } from "./pages/settings/settings-page.component";
 import { ErrorLogsPageComponent } from "./pages/error-logs/error-logs-page.component";
 import { LoginPageComponent } from "./pages/login/login-page.component";
+import { S3ProfilesPageComponent } from "./pages/s3-profiles/s3-profiles-page.component";
 import { WorkflowsPageComponent } from "./pages/workflows/workflows-page.component";
 import { MlflowPageComponent } from "./pages/mlflow/mlflow-page.component";
 
@@ -42,6 +43,7 @@ export const APP_ROUTES: Routes = [
         component: InstanceModelProfilePageComponent,
       },
       { path: "instances/:id/s3", component: InstanceS3BrowserPageComponent },
+      { path: "s3-profiles", component: S3ProfilesPageComponent },
       { path: "users", component: UsersPageComponent, canActivate: [adminGuard] },
       { path: "settings", component: SettingsPageComponent, canActivate: [adminGuard] },
       { path: "error-logs", component: ErrorLogsPageComponent, canActivate: [adminGuard] },

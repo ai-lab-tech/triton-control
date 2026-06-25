@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, OnInit, signal } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, of } from "rxjs";
 
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
@@ -48,9 +48,15 @@ export class InstanceModelInferPageComponent implements OnInit {
   private readonly instancesApi = inject(InstancesService);
   private readonly store = inject(Store);
 
-  readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id") ?? "");
-  readonly modelName = computed(() => this.route.snapshot.paramMap.get("modelName") ?? "");
-  readonly version = computed(() => this.route.snapshot.paramMap.get("version") ?? "");
+  private readonly routeParamMap = toSignal(
+    this.route.paramMap ?? of(this.route.snapshot.paramMap),
+    {
+      initialValue: this.route.snapshot.paramMap,
+    },
+  );
+  readonly instanceId = computed(() => this.routeParamMap().get("id") ?? "");
+  readonly modelName = computed(() => this.routeParamMap().get("modelName") ?? "");
+  readonly version = computed(() => this.routeParamMap().get("version") ?? "");
   readonly hasValidRoute = computed(() => {
     const id = this.instanceId().trim();
     return (
@@ -62,6 +68,7 @@ export class InstanceModelInferPageComponent implements OnInit {
   instanceUrl = "";
   resolvingInstance = false;
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
+  readonly usesGenerateEndpoint = signal(false);
   private readonly resolveError = signal("");
   readonly submitting = toSignal(this.store.select(selectInferSubmitting), { initialValue: false });
   readonly processingResponse = toSignal(this.store.select(selectInferProcessingResponse), {
@@ -79,7 +86,11 @@ export class InstanceModelInferPageComponent implements OnInit {
   });
   readonly inferenceMetricRows = computed(() => this.inferenceMetrics()?.models ?? []);
   readonly displayError = computed(() => this.resolveError() || this.inferError());
+  private readonly canPersistResult = signal(false);
   private readonly persistResult = effect(() => {
+    if (!this.canPersistResult()) {
+      return;
+    }
     const responseJson = this.responseJson();
     if (!responseJson) {
       return;
@@ -106,12 +117,24 @@ export class InstanceModelInferPageComponent implements OnInit {
       return "";
     }
 
+    if (this.usesGenerateEndpoint()) {
+      return `${baseUrl}/v2/models/${modelName}/generate`;
+    }
+
     return `${baseUrl}/v2/models/${modelName}/versions/${version}/infer`;
   });
   private readonly inferBodyDefault = `{
   "inputs": []
 }`;
+  private readonly generateBodyDefault = `{
+  "text_input": "What is Triton Inference Server?",
+  "parameters": {
+    "stream": false,
+    "temperature": 0
+  }
+}`;
   private _editorContent = this.inferBodyDefault;
+  private initializedRouteKey = "";
 
   get editorContent(): string {
     return this._editorContent;
@@ -134,21 +157,25 @@ export class InstanceModelInferPageComponent implements OnInit {
     return `triton-infer-result:${this.instanceId()}:${this.modelName()}:${this.version()}`;
   }
 
-  constructor() {}
+  constructor() {
+    effect(() => {
+      const routeKey = this.inferResultStorageKey();
+      if (!this.hasValidRoute() || this.initializedRouteKey === routeKey) {
+        return;
+      }
+      this.initializedRouteKey = routeKey;
+      this.loadRouteState();
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     if (!this.hasValidRoute()) {
       return;
     }
 
-    try {
-      const saved = localStorage.getItem(this.inferBodyStorageKey());
-      if (saved) {
-        this._editorContent = saved;
-      }
-      this.loadSavedInferResult();
-    } catch {
-      // storage unavailable — ignore
+    if (this.initializedRouteKey !== this.inferResultStorageKey()) {
+      this.initializedRouteKey = this.inferResultStorageKey();
+      this.loadRouteState();
     }
 
     const navState = (history.state ?? {}) as { instanceName?: unknown; instanceUrl?: unknown };
@@ -162,6 +189,21 @@ export class InstanceModelInferPageComponent implements OnInit {
     }
 
     await this.resolveInstance();
+  }
+
+  private loadRouteState(): void {
+    this.canPersistResult.set(false);
+    this.clearInferResult();
+
+    try {
+      const saved = localStorage.getItem(this.inferBodyStorageKey());
+      this._editorContent = saved || this.inferBodyDefault;
+      this.loadSavedInferResult();
+    } catch {
+      this._editorContent = this.inferBodyDefault;
+    }
+
+    this.canPersistResult.set(true);
   }
 
   async sendInference(): Promise<void> {
@@ -292,6 +334,16 @@ export class InstanceModelInferPageComponent implements OnInit {
     );
   }
 
+  private clearInferResult(): void {
+    this.store.dispatch(
+      inferResultHydrated({
+        responseJson: "",
+        requestLatencyMs: null,
+        inferenceMetrics: null,
+      }),
+    );
+  }
+
   private saveInferResult(
     responseJson: string,
     requestLatencyMs: number | null,
@@ -327,10 +379,34 @@ export class InstanceModelInferPageComponent implements OnInit {
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl = instance?.url ?? this.instanceUrl;
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
+      const usesGenerate = this.usesGenerateEndpointBackend(instance);
+      this.usesGenerateEndpoint.set(usesGenerate);
+      if (usesGenerate && this.editorContent.trim() === this.inferBodyDefault.trim()) {
+        this._editorContent = this.generateBodyDefault;
+      }
     } catch {
       this.resolveError.set("Failed to load instance details.");
     } finally {
       this.resolvingInstance = false;
     }
+  }
+
+  private usesGenerateEndpointBackend(instance: TritonInstanceDTO | null | undefined): boolean {
+    if (!instance) {
+      return false;
+    }
+    const metadata = instance.server_metadata as Record<string, unknown> | null | undefined;
+    const values: string[] = [];
+    if (metadata && typeof metadata === "object") {
+      values.push(...Object.values(metadata).map((value) => String(value ?? "")));
+    }
+    values.push(instance.deployment_log ?? "");
+    for (const model of instance.repository_models ?? []) {
+      values.push(String(model.name ?? ""), String(model.reason ?? ""), String(model.state ?? ""));
+    }
+    const haystack = values.join("\n").toLowerCase();
+    return ["vllm", "tensorrtllm", "tensorrt_llm", "trtllm"].some((token) =>
+      haystack.includes(token),
+    );
   }
 }

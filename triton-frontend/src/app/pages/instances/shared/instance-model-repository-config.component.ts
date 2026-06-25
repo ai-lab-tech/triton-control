@@ -38,6 +38,7 @@ export class InstanceModelRepositoryConfigComponent {
   readonly content = signal("");
   readonly error = signal("");
   readonly savedMessage = signal("");
+  readonly loadedConfigPath = signal("");
   readonly canWriteInstances = this.auth.canWriteInstances;
   readonly title = computed(() => (this.hasS3Config() ? "config.pbtxt" : "Live API Config"));
   readonly editorLanguage = computed(() => (this.hasS3Config() ? "proto" : "json"));
@@ -48,10 +49,22 @@ export class InstanceModelRepositoryConfigComponent {
   );
 
   readonly relativePath = computed(() => {
+    const loadedPath = this.loadedConfigPath();
+    if (loadedPath) {
+      return loadedPath;
+    }
+    return this.configPathCandidates()[0] ?? "";
+  });
+  readonly configPathCandidates = computed(() => {
     const modelName = this.modelName()
       .replace(/^\/+|\/+$/g, "")
       .trim();
-    return modelName ? `${modelName}/config.pbtxt` : "";
+    if (!modelName) {
+      return [];
+    }
+
+    const modelConfigPath = `${modelName}/config.pbtxt`;
+    return [modelConfigPath, "config.pbtxt"];
   });
   readonly effectivePath = computed(() => {
     if (!this.hasS3Config()) {
@@ -61,8 +74,11 @@ export class InstanceModelRepositoryConfigComponent {
     if (!relative) {
       return "";
     }
-    const prefix = this.s3Text("prefix").replace(/^\/+|\/+$/g, "");
-    return prefix ? `${prefix}/${relative}` : relative;
+    const prefix = this.collapseRepeatedTrailingSegment(
+      this.s3Text("prefix").replace(/^\/+|\/+$/g, ""),
+      this.modelName(),
+    );
+    return this.joinDisplayPath(prefix, relative);
   });
   readonly hasS3Config = computed(
     () =>
@@ -134,12 +150,7 @@ export class InstanceModelRepositoryConfigComponent {
     this.savedMessage.set("");
     try {
       if (this.hasS3Config()) {
-        const response = (await firstValueFrom(
-          this.instancesApi.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet(
-            this.instanceId(),
-            this.relativePath(),
-          ),
-        )) as S3FileContentResponse;
+        const response = await this.loadS3ConfigContent();
         this.content.set(response?.content ?? "");
       } else {
         const config = await firstValueFrom(
@@ -159,6 +170,26 @@ export class InstanceModelRepositoryConfigComponent {
     }
   }
 
+  private async loadS3ConfigContent(): Promise<S3FileContentResponse> {
+    const candidates = [...this.configPathCandidates()];
+    let lastError: unknown = null;
+    for (const path of candidates) {
+      try {
+        const response = (await firstValueFrom(
+          this.instancesApi.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet(
+            this.instanceId(),
+            path,
+          ),
+        )) as S3FileContentResponse;
+        this.loadedConfigPath.set(path);
+        return response;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("config.pbtxt not found");
+  }
+
   private s3Text(key: keyof InstanceS3ConfigLike): string {
     const value = this.s3()?.[key];
     return typeof value === "string" ? value.trim() : "";
@@ -166,5 +197,52 @@ export class InstanceModelRepositoryConfigComponent {
 
   private s3Boolean(key: keyof InstanceS3ConfigLike): boolean {
     return this.s3()?.[key] === true;
+  }
+
+  private joinDisplayPath(prefix: string, relative: string): string {
+    const cleanPrefix = prefix.replace(/^\/+|\/+$/g, "");
+    const cleanRelative = relative.replace(/^\/+|\/+$/g, "");
+    if (!cleanPrefix) {
+      return cleanRelative;
+    }
+    const firstRelativeSegment = cleanRelative.split("/").filter(Boolean)[0] ?? "";
+    if (firstRelativeSegment && this.pathEndsWithSegment(cleanPrefix, firstRelativeSegment)) {
+      const rest = cleanRelative.split("/").filter(Boolean).slice(1).join("/");
+      return rest ? `${cleanPrefix}/${rest}` : cleanPrefix;
+    }
+    return cleanRelative ? `${cleanPrefix}/${cleanRelative}` : cleanPrefix;
+  }
+
+  private pathEndsWithSegment(path: string, segment: string): boolean {
+    const last = path
+      .replace(/^\/+|\/+$/g, "")
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    return this.normalizePathSegment(last) === this.normalizePathSegment(segment);
+  }
+
+  private normalizePathSegment(value: string | undefined): string {
+    try {
+      return decodeURIComponent(value ?? "")
+        .trim()
+        .toLowerCase();
+    } catch {
+      return (value ?? "").trim().toLowerCase();
+    }
+  }
+
+  private collapseRepeatedTrailingSegment(path: string, segment: string): string {
+    const parts = path.split("/").filter(Boolean);
+    const normalizedSegment = this.normalizePathSegment(segment);
+    while (
+      parts.length >= 2 &&
+      normalizedSegment &&
+      this.normalizePathSegment(parts.at(-1)) === normalizedSegment &&
+      this.normalizePathSegment(parts.at(-2)) === normalizedSegment
+    ) {
+      parts.pop();
+    }
+    return parts.join("/");
   }
 }

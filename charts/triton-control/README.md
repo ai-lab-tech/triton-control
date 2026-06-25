@@ -84,6 +84,11 @@ app:
     JWT_SECRET: "replace-me"
     S3_SECRET_ENCRYPTION_KEY: "replace-me"
 
+tritonDeployments:
+  # Used only by vLLM init/sidecar repository modes. Standard Triton S3
+  # deployments do not create this container.
+  s3SyncImage: registry.example.com/amazon/aws-cli:2.22.35
+
 postgresql:
   enabled: true
   auth:

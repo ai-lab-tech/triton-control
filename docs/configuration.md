@@ -50,6 +50,7 @@ enter a new value to replace it.
 | `ARGO_WORKFLOWS_NAMESPACE` | No | Helm release namespace | Namespace containing Triton Control, Argo components, and user Workflows. |
 | `ARGO_WORKFLOWS_SERVICE_NAME` | No | Helm-derived | Argo Server Service name shown in status responses. |
 | `ARGO_WORKFLOWS_BASE_PATH` | No | `/api/workflows/proxy/` | Browser-facing proxy path; must match Argo Server `baseHref`. |
+| `TRITON_DEPLOY_S3_SYNC_IMAGE` | No | `amazon/aws-cli:2.22.35` | Default image for vLLM S3 repository init containers and sidecars created by Add Deployment. For a host-run backend, set it in `triton-backend/.env` or the backend process environment. Helm sets it from `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use it. |
 | `OIDC_CONFIG_SOURCE` | No | `db` | Selects OIDC source: `db` for application-managed settings, `env` for environment-managed settings. |
 | `OIDC_ENABLED` | No | `true` in `.env.example`, `false` in Compose/Helm defaults | Enables OIDC login when OIDC settings are valid. |
 | `OIDC_ISSUER` | In `env` mode | `https://identity.example.com/realms/triton` | OIDC issuer URL published by your identity provider. |
@@ -72,7 +73,7 @@ enter a new value to replace it.
 | `TLS_CERT_FILE` | If direct backend HTTPS is enabled | `./tls/cert.pem` | Uvicorn TLS certificate path. |
 | `JWT_SECRET` | Yes | `change-me-jwt` | Signing secret for local auth JWTs. Use a strong random value in production. |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | No | `60` | Lifetime of local email/password JWT access tokens in minutes. |
-| `S3_SECRET_ENCRYPTION_KEY` | Yes | `change-me-s3` | Fernet key used to encrypt stored S3 secret keys. |
+| `S3_SECRET_ENCRYPTION_KEY` | Yes | `change-me-s3` | Fernet key used to encrypt stored S3 secret keys for instance S3 settings and reusable S3 deployment profiles. |
 | `CORS_ORIGINS` | No | local Angular dev origins | Comma-separated list of allowed frontend origins. |
 
 Set `OIDC_ISSUER` to the exact issuer URL published by your OIDC provider. Do

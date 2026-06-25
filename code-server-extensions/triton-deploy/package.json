@@ -11,7 +11,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:tritonControl.deployModelRepository"
+    "onCommand:tritonControl.deployModelRepository",
+    "onCommand:tritonControl.uploadModelRepositorySimple"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -19,6 +20,10 @@
       {
         "command": "tritonControl.deployModelRepository",
         "title": "Triton Control: Deploy Model Repository"
+      },
+      {
+        "command": "tritonControl.uploadModelRepositorySimple",
+        "title": "Triton Control: Upload Model Repository (Simple Wizard)"
       }
     ],
     "menus": {
@@ -27,6 +32,11 @@
           "command": "tritonControl.deployModelRepository",
           "when": "explorerResourceIsFolder",
           "group": "navigation@90"
+        },
+        {
+          "command": "tritonControl.uploadModelRepositorySimple",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@91"
         }
       ]
     },
