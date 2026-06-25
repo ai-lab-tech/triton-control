@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from "@angular/core/testing";
-import { ActivatedRoute } from "@angular/router";
-import { of, throwError } from "rxjs";
+import { ActivatedRoute, convertToParamMap, ParamMap } from "@angular/router";
+import { BehaviorSubject, of, throwError } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { InstancesService } from "../../../api/generated/index";
 import { InstanceModelInferPageComponent } from "./instance-model-infer-page.component";
@@ -21,10 +21,16 @@ import {
 describe("InstanceModelInferPageComponent", () => {
   let instancesApiMock: jasmine.SpyObj<InstancesService>;
   let mockStore: MockStore;
+  let routeParamMap$: BehaviorSubject<ParamMap>;
 
   beforeEach(async () => {
     localStorage.removeItem("triton-infer-body:7:model-a:1");
     localStorage.removeItem("triton-infer-result:7:model-a:1");
+    localStorage.removeItem("triton-infer-body:7:model-b:1");
+    localStorage.removeItem("triton-infer-result:7:model-b:1");
+    routeParamMap$ = new BehaviorSubject(
+      convertToParamMap({ id: "7", modelName: "model-a", version: "1" }),
+    );
 
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "getInstanceApiInstancesInstanceIdGet",
@@ -54,17 +60,9 @@ describe("InstanceModelInferPageComponent", () => {
         {
           provide: ActivatedRoute,
           useValue: {
+            paramMap: routeParamMap$.asObservable(),
             snapshot: {
-              paramMap: {
-                get: (key: string) =>
-                  key === "id"
-                    ? "7"
-                    : key === "modelName"
-                      ? "model-a"
-                      : key === "version"
-                        ? "1"
-                        : null,
-              },
+              paramMap: routeParamMap$.value,
             },
           },
         },
@@ -153,6 +151,55 @@ describe("InstanceModelInferPageComponent", () => {
       inferResultHydrated({
         responseJson: '{"outputs":[]}',
         requestLatencyMs: 12.5,
+        inferenceMetrics: { available: true, error: null, models: [] },
+      }),
+    );
+  });
+
+  it("NgOnInit_NoSavedResult_ClearsPreviousInferResult", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+    spyOn(mockStore, "dispatch");
+
+    // Act
+    await component.ngOnInit();
+
+    // Assert
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      inferResultHydrated({
+        responseJson: "",
+        requestLatencyMs: null,
+        inferenceMetrics: null,
+      }),
+    );
+  });
+
+  it("RouteParamMap_ModelChanges_LoadsSavedResultForNewModel", async () => {
+    // Arrange
+    localStorage.setItem(
+      "triton-infer-result:7:model-b:1",
+      JSON.stringify({
+        responseJson: '{"outputs":["model-b"]}',
+        requestLatencyMs: 21,
+        inferenceMetrics: { available: true, error: null, models: [] },
+      }),
+    );
+    spyOn(mockStore, "dispatch");
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+    await component.ngOnInit();
+
+    // Act
+    routeParamMap$.next(convertToParamMap({ id: "7", modelName: "model-b", version: "1" }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      inferResultHydrated({
+        responseJson: '{"outputs":["model-b"]}',
+        requestLatencyMs: 21,
         inferenceMetrics: { available: true, error: null, models: [] },
       }),
     );
