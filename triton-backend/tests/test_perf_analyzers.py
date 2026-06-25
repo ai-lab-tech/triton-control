@@ -72,6 +72,14 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3-sdk")
         self.assertEqual(container["command"], ["/bin/bash", "-c"])
         self.assertIn("sleep infinity", container["args"][0])
+        self.assertEqual(
+            container["volumeMounts"],
+            [{"name": "tmp", "mountPath": "/tmp"}, {"name": "dshm", "mountPath": "/dev/shm"}],
+        )
+        self.assertEqual(
+            deployment["spec"]["template"]["spec"]["volumes"],
+            [{"name": "tmp", "emptyDir": {}}, {"name": "dshm", "emptyDir": {"medium": "Memory"}}],
+        )
 
     def test_ApplyInstallationResources_AppliesManifestObjects(self) -> None:
         applied: list[dict[str, Any]] = []
