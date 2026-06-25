@@ -63,337 +63,339 @@
                 "schema": {
                   "additionalProperties": {
                     "type": "boolean"
-                "/api/s3-profiles": {
-                  "get": {
-                    "tags": [
-                      "s3-profiles"
-                    ],
-                    "summary": "List S3 Profiles",
-                    "operationId": "list_s3_profiles_api_s3_profiles_get",
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "items": {
-                                "$ref": "#/components/schemas/S3ProfileDTO"
-                              },
-                              "type": "array",
-                              "title": "Response List S3 Profiles Api S3 Profiles Get"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ]
                   },
-                  "post": {
-                    "tags": [
-                      "s3-profiles"
-                    ],
-                    "summary": "Create S3 Profile",
-                    "operationId": "create_s3_profile_api_s3_profiles_post",
-                    "requestBody": {
-                      "content": {
-                        "application/json": {
-                          "schema": {
-                            "$ref": "#/components/schemas/CreateS3ProfileRequest"
-                          }
-                        }
-                      },
-                      "required": true
-                    },
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/S3ProfileDTO"
-                            }
-                          }
-                        }
-                      },
-                      "422": {
-                        "description": "Validation Error",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/HTTPValidationError"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ]
-                  }
-                },
-                "/api/s3-profiles/{profile_id}": {
-                  "put": {
-                    "tags": [
-                      "s3-profiles"
-                    ],
-                    "summary": "Update S3 Profile",
-                    "operationId": "update_s3_profile_api_s3_profiles__profile_id__put",
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ],
-                    "parameters": [
-                      {
-                        "name": "profile_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                          "type": "integer",
-                          "title": "Profile Id"
-                        }
-                      }
-                    ],
-                    "requestBody": {
-                      "required": true,
-                      "content": {
-                        "application/json": {
-                          "schema": {
-                            "$ref": "#/components/schemas/UpdateS3ProfileRequest"
-                          }
-                        }
-                      }
-                    },
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/S3ProfileDTO"
-                            }
-                          }
-                        }
-                      },
-                      "422": {
-                        "description": "Validation Error",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/HTTPValidationError"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "delete": {
-                    "tags": [
-                      "s3-profiles"
-                    ],
-                    "summary": "Delete S3 Profile",
-                    "operationId": "delete_s3_profile_api_s3_profiles__profile_id__delete",
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ],
-                    "parameters": [
-                      {
-                        "name": "profile_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                          "type": "integer",
-                          "title": "Profile Id"
-                        }
-                      }
-                    ],
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "type": "string"
-                              },
-                              "title": "Response Delete S3 Profile Api S3 Profiles  Profile Id  Delete"
-                            }
-                          }
-                        }
-                      },
-                      "422": {
-                        "description": "Validation Error",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/HTTPValidationError"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                "/api/workflows": {
-                  "get": {
-                    "tags": [
-                      "workflows"
-                    ],
-                    "summary": "Get Argo Workflows Status",
-                    "description": "Return readiness for the global Helm-managed Argo Workflows server.",
-                    "operationId": "get_argo_workflows_status_api_workflows_get",
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/ArgoWorkflowsStatusResponse"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ]
-                  }
-                },
-                "/api/workflows/s3-credentials": {
-                  "get": {
-                    "tags": [
-                      "workflows"
-                    ],
-                    "summary": "List Workflow S3 Credentials",
-                    "description": "List workflow S3 credentials managed by Triton Control.",
-                    "operationId": "list_workflow_s3_credentials_api_workflows_s3_credentials_get",
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "items": {
-                                "$ref": "#/components/schemas/WorkflowS3CredentialDTO"
-                              },
-                              "type": "array",
-                              "title": "Response List Workflow S3 Credentials Api Workflows S3 Credentials Get"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ]
-                  },
-                  "post": {
-                    "tags": [
-                      "workflows"
-                    ],
-                    "summary": "Create Workflow S3 Credential",
-                    "description": "Create a workflow S3 credential and mirror it as a Kubernetes secret.",
-                    "operationId": "create_workflow_s3_credential_api_workflows_s3_credentials_post",
-                    "requestBody": {
-                      "content": {
-                        "application/json": {
-                          "schema": {
-                            "$ref": "#/components/schemas/CreateWorkflowS3CredentialRequest"
-                          }
-                        }
-                      },
-                      "required": true
-                    },
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/WorkflowS3CredentialDTO"
-                            }
-                          }
-                        }
-                      },
-                      "422": {
-                        "description": "Validation Error",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/HTTPValidationError"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ]
-                  }
-                },
-                "/api/workflows/s3-credentials/{credential_id}": {
-                  "delete": {
-                    "tags": [
-                      "workflows"
-                    ],
-                    "summary": "Delete Workflow S3 Credential",
-                    "description": "Delete a workflow S3 credential and its mirrored Kubernetes secret.",
-                    "operationId": "delete_workflow_s3_credential_api_workflows_s3_credentials__credential_id__delete",
-                    "security": [
-                      {
-                        "HTTPBearer": []
-                      }
-                    ],
-                    "parameters": [
-                      {
-                        "name": "credential_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                          "type": "integer",
-                          "title": "Credential Id"
-                        }
-                      }
-                    ],
-                    "responses": {
-                      "200": {
-                        "description": "Successful Response",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/WorkflowS3CredentialDeleteResponse"
-                            }
-                          }
-                        }
-                      },
-                      "422": {
-                        "description": "Validation Error",
-                        "content": {
-                          "application/json": {
-                            "schema": {
-                              "$ref": "#/components/schemas/HTTPValidationError"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
+                  "type": "object",
+                  "title": "Response Logout Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whoami": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Whoami",
+        "operationId": "whoami_api_whoami_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Whoami Api Whoami Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/options": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Auth Options Endpoint",
+        "operationId": "auth_options_endpoint_api_auth_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Auth Options Endpoint Api Auth Options Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/bootstrap-status": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Bootstrap Status Endpoint",
+        "operationId": "bootstrap_status_endpoint_api_auth_bootstrap_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/bootstrap/register": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Bootstrap Register Endpoint",
+        "operationId": "bootstrap_register_endpoint_api_auth_bootstrap_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/settings/preflight/callback": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Oidc Preflight Callback",
+        "operationId": "oidc_preflight_callback_api_auth_settings_preflight_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Oidc Preflight Callback Api Auth Settings Preflight Callback Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/self-register": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Self Register Endpoint",
+        "operationId": "self_register_endpoint_api_auth_self_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelfRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Login Endpoint",
+        "operationId": "login_endpoint_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/settings": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Oidc Settings Endpoint",
+        "operationId": "get_oidc_settings_endpoint_api_auth_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcSettingsDTO"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Put Oidc Settings Endpoint",
+        "operationId": "put_oidc_settings_endpoint_api_auth_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Put Oidc Settings Endpoint Api Auth Settings Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/settings/preflight/start": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Start Oidc Preflight Endpoint",
+        "operationId": "start_oidc_preflight_endpoint_api_auth_settings_preflight_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOidcSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Start Oidc Preflight Endpoint Api Auth Settings Preflight Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/auth/register": {
