@@ -544,8 +544,10 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         + (" --endpoint-url \"$S3_ENDPOINT\"" if endpoint else "")
     )
     publish_command = (
-        "rm -rf /models/.s3-sync-next\n"
-        "mkdir -p /models/.s3-sync-next\n"
+        "REPOSITORY_NEXT=/tmp/.s3-sync-next\n"
+        "REPOSITORY_CURRENT=/tmp/.s3-sync-current\n"
+        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\"\n"
+        "mkdir -p \"$REPOSITORY_NEXT\"\n"
         "publish_model() {\n"
         "  source_dir=\"$1\"\n"
         "  fallback_name=\"$2\"\n"
@@ -553,8 +555,8 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "\"$source_dir/config.pbtxt\" | head -n 1)\n"
         "  [ -n \"$model_name\" ] || model_name=\"$fallback_name\"\n"
         "  case \"$model_name\" in ''|'.'|'..'|*/*) echo 'Invalid Triton model name' >&2; exit 1;; esac\n"
-        "  mkdir -p \"/models/.s3-sync-next/$model_name\"\n"
-        "  cp -R \"$source_dir/.\" \"/models/.s3-sync-next/$model_name/\"\n"
+        "  mkdir -p \"$REPOSITORY_NEXT/$model_name\"\n"
+        "  cp -R \"$source_dir/.\" \"$REPOSITORY_NEXT/$model_name/\"\n"
         "}\n"
         "if [ -f /staging/config.pbtxt ]; then\n"
         "  publish_model /staging \"$(basename \"${S3_SOURCE%/}\")\"\n"
@@ -566,26 +568,40 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "    found_model=1\n"
         "    publish_model \"$source_dir\" \"$(basename \"$source_dir\")\"\n"
         "  done\n"
-        "  [ \"$found_model\" -eq 1 ] || cp -R /staging/. /models/.s3-sync-next/\n"
+        "  [ \"$found_model\" -eq 1 ] || cp -R /staging/. \"$REPOSITORY_NEXT/\"\n"
         "fi\n"
-        "find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready ! -name .s3-sync-next -exec rm -rf -- {} +\n"
-        "cp -R /models/.s3-sync-next/. /models/\n"
-        "rm -rf /models/.s3-sync-next\n"
-        "find /models -depth -type d -empty -delete"
+        "find \"$REPOSITORY_NEXT\" -depth -type d -empty -delete"
     )
     # vLLM reads these as host paths. Triton's native S3 repository otherwise
     # downloads into an opaque namespace, making relative values invalid.
     rewrite_command = (
-        "find /models -type f -name model.json -exec sh -c '\n"
+        "find \"$REPOSITORY_NEXT\" -type f -name model.json -exec sh -c '\n"
         "  for file do\n"
         "    dir=$(dirname \"$file\")\n"
-        "    escaped_dir=$(printf \"%s\\n\" \"$dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
+        "    final_dir=/models${dir#/tmp/.s3-sync-next}\n"
+        "    escaped_dir=$(printf \"%s\\n\" \"$final_dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
         "    sed -i -E \"s#(\\\"(model|tokenizer)\\\"[[:space:]]*:[[:space:]]*\\\")"
         "([^/][^\\\"]*)\\\"#\\1${escaped_dir}/\\3\\\"#g\" \"$file\"\n"
         "  done\n"
         "' sh {} +"
     )
-    once = f"{sync_command}\n{publish_command}\n{rewrite_command}\ntouch /models/.s3-sync-ready"
+    compare_and_publish_command = (
+        "mkdir -p \"$REPOSITORY_CURRENT\"\n"
+        "find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready "
+        "-exec cp -R -- {} \"$REPOSITORY_CURRENT/\" \\;\n"
+        "if diff -qr \"$REPOSITORY_CURRENT\" \"$REPOSITORY_NEXT\" >/dev/null 2>&1; then\n"
+        "  echo 'S3 model repository unchanged; keeping current /models content.'\n"
+        "else\n"
+        "  find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready -exec rm -rf -- {} +\n"
+        "  cp -R \"$REPOSITORY_NEXT/.\" /models/\n"
+        "  find /models -depth -type d -empty -delete\n"
+        "fi\n"
+        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\""
+    )
+    once = (
+        f"{sync_command}\n{publish_command}\n{rewrite_command}\n"
+        f"{compare_and_publish_command}\ntouch /models/.s3-sync-ready"
+    )
     script = "set -eu\n" + once
     if request.repository_sync_mode == "sidecar":
         script += f"\nwhile sleep {request.repository_poll_secs}; do\n{once}\ndone"

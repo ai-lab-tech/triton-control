@@ -389,12 +389,14 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("aws s3 sync", sync["args"][0])
         sync_env = {item["name"]: item.get("value") for item in sync["env"]}
         self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
-        self.assertIn('mkdir -p "/models/.s3-sync-next/$model_name"', sync["args"][0])
-        self.assertIn('cp -R "$source_dir/." "/models/.s3-sync-next/$model_name/"', sync["args"][0])
-        self.assertIn("cp -R /models/.s3-sync-next/. /models/", sync["args"][0])
+        self.assertIn("REPOSITORY_NEXT=/tmp/.s3-sync-next", sync["args"][0])
+        self.assertIn('mkdir -p "$REPOSITORY_NEXT/$model_name"', sync["args"][0])
+        self.assertIn('cp -R "$source_dir/." "$REPOSITORY_NEXT/$model_name/"', sync["args"][0])
+        self.assertIn('cp -R "$REPOSITORY_NEXT/." /models/', sync["args"][0])
         self.assertNotIn("cp -au", sync["args"][0])
         self.assertIn("model.json", sync["args"][0])
-        self.assertIn('escaped_dir=$(printf "%s\\n" "$dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
+        self.assertIn("final_dir=/models${dir#/tmp/.s3-sync-next}", sync["args"][0])
+        self.assertIn('escaped_dir=$(printf "%s\\n" "$final_dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
         self.assertIn("${escaped_dir}/", sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
@@ -565,6 +567,9 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("while sleep 9", sync_script)
         self.assertIn("--delete", sync_script)
         self.assertIn("/models/", sync_script)
+        self.assertIn('diff -qr "$REPOSITORY_CURRENT" "$REPOSITORY_NEXT"', sync_script)
+        self.assertIn("S3 model repository unchanged", sync_script)
+        self.assertNotIn("/models/.s3-sync-next", sync_script)
         self.assertIn("--model-control-mode=explicit", pod_spec["containers"][0]["args"][0])
 
     def test_Manifests_TritonContainer_SetsUserAndTorchCacheEnvironment(self) -> None:
