@@ -161,8 +161,8 @@ S3-compatible storage and creates a self-deployed Triton instance.
 2. Right-click the repository root or a single model folder.
 3. Run **Triton Control: Deploy Model Repository**.
 4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
-5. Confirm the Triton image, model control mode, repository access mode, and
-   optional resources.
+5. Confirm the Triton image, detected backend summary, S3 upload target, model
+   control mode, and optional resources.
 6. After deployment, Triton Control opens the new instance and its deployment
    logs.
 
@@ -176,10 +176,19 @@ repository-root/
       model.py
 ```
 
-The extension reads the model name from `config.pbtxt` and prompts when the
-name is missing. Selecting a single model folder uploads it below the chosen
-deployment prefix while keeping the deployment's `s3_url` at the parent
-repository prefix.
+The extension reads the model name and backend from `config.pbtxt`. If no model
+name is present, it prompts for one. If no backend is declared, the detected
+backend summary shows `No backend in config.pbtxt`; otherwise it shows the
+configured backend, for example `vLLM model backend`.
+
+Selecting a single model folder uploads it below the chosen repository prefix
+while keeping the deployment's `s3_url` at the parent repository prefix. The
+form shows an **S3 upload target** preview before deploy. Manual S3 deployments
+show the same final path as **Target path** at the end of the manual S3 section.
+
+Model control is displayed as a summary and configured in the collapsed
+**Model control** section. **Polling mode** shows the poll interval field;
+**Explicit mode** hides it and uses the startup model behavior.
 
 The resulting deployment behaves like one created through **Add Deployment**.
 Its in-pod S3 repository connection is fixed at deployment time. Changing that

@@ -8,17 +8,19 @@ existing `POST /api/deployments` endpoint.
 
 1. Right-click a Triton model folder or model repository root in code-server.
 2. Run `Triton Control: Deploy Model Repository`.
-3. The extension detects the model name from `config.pbtxt`. If no model name is
-   found, it asks for one. It also detects `backend: "vllm"`.
-4. Select an S3 profile or expand manual S3 settings. The **Model Repository
-   Path** is filled from the model name and can be edited before upload.
+3. The extension detects the model name and `backend` value from `config.pbtxt`.
+   If no model name is found, it asks for one. When no backend is declared, the
+   form shows `No backend in config.pbtxt`.
+4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
+   is an optional parent path; the upload target preview shows the final
+   `s3://...` path before deploy.
 5. The extension uploads files below `bucket/prefix/model-repository-path`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
 
-Repository access is selected automatically. Normal Triton models use S3
-directly. vLLM models use the sync worker internally so local paths in
-`model.json` work without extra user input.
+Repository access is selected automatically. Models without `backend: "vllm"`
+use Triton's native S3 model repository directly. vLLM models use the sync
+worker internally so local paths in `model.json` work without extra user input.
 
 Triton expects the model repository root to contain one folder per model:
 
@@ -71,6 +73,11 @@ The selected profile is used both for uploading the chosen repository from
 code-server and for creating the Triton deployment. The deployment receives its
 own Kubernetes Secret for the in-pod S3 repository connection.
 
+When a profile is selected, manual S3 connection fields remain collapsed. For
+manual S3 deployments, enter the endpoint, bucket, credentials, optional
+repository prefix, and confirm the **Target path** preview at the end of the
+manual section.
+
 ## Manual S3 Settings
 
 Manual S3 settings remain available in a collapsed section for one-off
@@ -108,6 +115,19 @@ provider requires virtual-host bucket URLs.
 For Triton deployments using HTTPS S3 endpoints, paste the optional S3 CA
 certificate into the S3 profile or manual deploy form. It is passed to Triton
 Control as `s3_ca_certificate` so the Triton pod trusts the object store.
+
+## Detected Backend and Model Control
+
+The deploy form shows detected backend and model control as summary values, not
+editable inputs. Backend is read from `config.pbtxt`:
+
+- `backend: "vllm"` is shown as `vLLM model backend`.
+- Other backend values are shown as `<backend> model backend`.
+- Missing backend is shown as `No backend in config.pbtxt`.
+
+Model control uses **Polling mode** by default. **Poll interval seconds** is
+shown only in polling mode. Switch to **Explicit mode** when the deployment
+should load only the configured startup model.
 
 ## Resources
 

@@ -324,17 +324,16 @@ Image pull secrets:
 - The `auth` value is the base64 encoding of `username:token` or
   `username:password`.
 
-vLLM S3 repository modes:
+vLLM S3 repository handling:
 
-- `direct` is the default and preserves Triton's native S3 behavior for all
-  non-vLLM backends. It creates no repository init container or sidecar.
-- `init` is for vLLM stage/production deployments. It downloads the repository
-  before Triton starts and supports explicit model control only.
-- `sidecar` is for vLLM repositories that change while Triton runs. It supports
-  explicit and poll model control.
-- Both vLLM modes mount the repository at `/models`, keep model versions under
-  `/models/<model-name>/<version>`, and rewrite relative vLLM `model.json`
-  `model`/`tokenizer` values to absolute paths.
+- Deployments without the vLLM backend use Triton's native S3 behavior directly.
+  They create no repository init container or sidecar.
+- Deployments with the vLLM backend use the sync worker path so Triton reads a
+  stable local `/models` repository. Polling mode keeps the repository refreshed
+  while Triton runs; explicit mode uses the configured startup model behavior.
+- The sync path keeps model versions under `/models/<model-name>/<version>` and
+  rewrites relative vLLM `model.json` `model`/`tokenizer` values to absolute
+  paths.
 - vLLM requires a CUDA device in normal Triton deployments. Set GPU count to at
   least `1`; the code-server deploy extension defaults this for detected vLLM
   repositories.
