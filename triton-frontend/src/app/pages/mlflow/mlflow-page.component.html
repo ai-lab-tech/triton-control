@@ -130,6 +130,18 @@
           </div>
         </div>
         <div class="workspace-toolbar-actions">
+          @if (current.ready && frameRawUrl()) {
+            <button
+              mat-stroked-button
+              type="button"
+              aria-label="Open MLflow in a new tab"
+              title="Open MLflow in a new tab"
+              (click)="openInNewTab()"
+            >
+              <span class="material-icons">open_in_new</span>
+              Open in new tab
+            </button>
+          }
           <button mat-stroked-button type="button" (click)="reload()">
             <span class="material-icons">refresh</span>
             Refresh

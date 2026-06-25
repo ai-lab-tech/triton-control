@@ -80,6 +80,32 @@ describe("DevelopmentPageComponent", () => {
     expect(codeServersApi.listCodeServersApiDevelopmentGet).toHaveBeenCalled();
   });
 
+  it("OpenInNewTab_ReadyWorkspace_OpensProxiedUrlInNewTab", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const component = fixture.componentInstance;
+    const openSpy = spyOn(window, "open").and.returnValue(null);
+
+    // Act
+    component.openInNewTab(readyWorkspace as any);
+
+    // Assert
+    expect(openSpy).toHaveBeenCalledWith("/api/development/3/proxy/", "_blank", "noopener");
+  });
+
+  it("OpenInNewTab_WorkspaceNotReady_DoesNotOpen", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const component = fixture.componentInstance;
+    const openSpy = spyOn(window, "open").and.returnValue(null);
+
+    // Act
+    component.openInNewTab(creatingWorkspace as any);
+
+    // Assert
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
   it("Create_SelectedThemeProvided_SendsThemeAndStartsPolling", async () => {
     // Arrange
     const fixture = TestBed.createComponent(DevelopmentPageComponent);

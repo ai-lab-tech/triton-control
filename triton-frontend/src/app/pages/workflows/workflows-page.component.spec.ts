@@ -100,6 +100,18 @@ describe("WorkflowsPageComponent", () => {
     );
   });
 
+  it("opens the proxied workflows server in a new tab", async () => {
+    const fixture = TestBed.createComponent(WorkflowsPageComponent);
+    const component = fixture.componentInstance;
+    await flushMicrotasks();
+
+    const openSpy = spyOn(window, "open").and.returnValue(null);
+    component.openInNewTab();
+
+    expect(component.frameRawUrl()).toBe("/api/workflows/proxy/");
+    expect(openSpy).toHaveBeenCalledWith("/api/workflows/proxy/", "_blank", "noopener");
+  });
+
   it("restores the top bar on destroy", () => {
     const fixture = TestBed.createComponent(WorkflowsPageComponent);
     fixture.destroy();

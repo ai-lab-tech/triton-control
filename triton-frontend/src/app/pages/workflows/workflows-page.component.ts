@@ -38,6 +38,7 @@ export class WorkflowsPageComponent implements OnDestroy {
   readonly frameLoading = signal(false);
   readonly status = signal<ArgoWorkflowsStatusResponse | null>(null);
   readonly frameUrl = signal<SafeResourceUrl | null>(null);
+  readonly frameRawUrl = signal<string | null>(null);
   readonly message = signal("");
   private reloadNonce = 0;
 
@@ -63,10 +64,12 @@ export class WorkflowsPageComponent implements OnDestroy {
         this.openFrame(String(status.base_path));
       } else {
         this.frameUrl.set(null);
+        this.frameRawUrl.set(null);
       }
     } catch (error) {
       this.status.set(null);
       this.frameUrl.set(null);
+      this.frameRawUrl.set(null);
       this.message.set(mapApiErrorMessage(error, "Failed to load Argo Workflows status."));
     } finally {
       this.loading.set(false);
@@ -86,11 +89,19 @@ export class WorkflowsPageComponent implements OnDestroy {
     this.frameLoading.set(false);
   }
 
+  openInNewTab(): void {
+    const url = this.frameRawUrl();
+    if (url) {
+      window.open(url, "_blank", "noopener");
+    }
+  }
+
   private openFrame(path: string): void {
     this.reloadNonce += 1;
     const normalized = path.startsWith("/") ? path : `/${path}`;
     const separator = normalized.includes("?") ? "&" : "?";
     this.frameLoading.set(true);
+    this.frameRawUrl.set(`${this.basePath}${normalized}`);
     this.frameUrl.set(
       this.sanitizer.bypassSecurityTrustResourceUrl(
         `${this.basePath}${normalized}${separator}_tc_reload=${this.reloadNonce}`,

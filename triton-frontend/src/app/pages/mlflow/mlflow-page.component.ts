@@ -92,6 +92,7 @@ export class MlflowPageComponent implements OnDestroy {
   readonly frameLoading = signal(false);
   readonly status = signal<MlflowStatusResponse | null>(null);
   readonly frameUrl = signal<SafeResourceUrl | null>(null);
+  readonly frameRawUrl = signal<string | null>(null);
   readonly message = signal("");
   readonly messageTone = signal<"info" | "success" | "error">("info");
   private reloadNonce = 0;
@@ -117,11 +118,13 @@ export class MlflowPageComponent implements OnDestroy {
         this.openFrame(status.base_path || "/api/mlflow/proxy/");
       } else {
         this.frameUrl.set(null);
+        this.frameRawUrl.set(null);
         this.frameLoading.set(false);
       }
     } catch (error) {
       this.status.set(null);
       this.frameUrl.set(null);
+      this.frameRawUrl.set(null);
       this.frameLoading.set(false);
       this.setMessage(mapApiErrorMessage(error, "Failed to load MLflow status."), "error");
     } finally {
@@ -140,6 +143,13 @@ export class MlflowPageComponent implements OnDestroy {
 
   onFrameLoaded(): void {
     this.frameLoading.set(false);
+  }
+
+  openInNewTab(): void {
+    const url = this.frameRawUrl();
+    if (url) {
+      window.open(url, "_blank", "noopener");
+    }
   }
 
   pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "error"; detail: string } {
@@ -223,6 +233,7 @@ export class MlflowPageComponent implements OnDestroy {
         installation: null,
       });
       this.frameUrl.set(null);
+      this.frameRawUrl.set(null);
       this.frameLoading.set(false);
       this.setMessage(response.message, "success");
     } catch (error) {
@@ -237,6 +248,7 @@ export class MlflowPageComponent implements OnDestroy {
     const normalized = path.startsWith("/") ? path : `/${path}`;
     const separator = normalized.includes("?") ? "&" : "?";
     this.frameLoading.set(true);
+    this.frameRawUrl.set(`${this.basePath}${normalized}`);
     this.frameUrl.set(
       this.sanitizer.bypassSecurityTrustResourceUrl(
         `${this.basePath}${normalized}${separator}_tc_reload=${this.reloadNonce}`,
