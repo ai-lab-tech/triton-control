@@ -835,6 +835,43 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(deleted_instances, [instance])
         self.assertEqual(response.status, "deleted")
 
+    def test_ReadDeploymentLogs_FailedPodDoesNotHideRunningPodLogs(self) -> None:
+        # Arrange
+        failed_pod = SimpleNamespace(
+            metadata=SimpleNamespace(name="opt125m-failed"),
+            status=SimpleNamespace(
+                phase="Failed",
+                reason="UnexpectedAdmissionError",
+                message="Pod was rejected: no healthy GPU devices present",
+            ),
+            spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
+        )
+        running_pod = SimpleNamespace(
+            metadata=SimpleNamespace(name="opt125m-running"),
+            status=SimpleNamespace(phase="Running"),
+            spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
+        )
+        core_api = SimpleNamespace(
+            list_namespaced_pod=lambda namespace, label_selector: SimpleNamespace(
+                items=[failed_pod, running_pod],
+            ),
+            read_namespaced_pod_log=lambda name, namespace, container, tail_lines, previous=False: (
+                "running triton log" if not previous else ""
+            ),
+        )
+
+        # Act
+        with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
+            "kubernetes.client.CoreV1Api",
+            return_value=core_api,
+        ):
+            logs = k8s.read_deployment_logs("opt125m", "opt125m")
+
+        # Assert
+        self.assertIn("UnexpectedAdmissionError", logs)
+        self.assertIn("Pod was rejected", logs)
+        self.assertIn("running triton log", logs)
+
     def test_ResolveServiceUrls_IngressStatus_ReturnsExternalAddress(self) -> None:
         # Arrange
         ingress = SimpleNamespace(

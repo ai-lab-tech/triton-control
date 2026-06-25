@@ -234,6 +234,14 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
         for pod in v1.list_namespaced_pod(namespace=namespace, label_selector=selector).items:
             name = getattr(getattr(pod, "metadata", None), "name", "")
             if name:
+                status = getattr(pod, "status", None)
+                phase = getattr(status, "phase", "") or ""
+                reason = getattr(status, "reason", "") or ""
+                message = getattr(status, "message", "") or ""
+                if phase in {"Failed", "Succeeded"}:
+                    detail = "\n".join(part for part in [f"{phase}: {reason}".strip(), message] if part)
+                    chunks.append(f"--- pod/{name} status ---\n{detail or phase}")
+                    continue
                 containers = getattr(getattr(pod, "spec", None), "containers", None) or []
                 container_names = [
                     getattr(container, "name", "")
@@ -244,13 +252,17 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
                     label = f"pod/{name}"
                     if container_name:
                         label = f"{label} container/{container_name}"
-                    log = v1.read_namespaced_pod_log(
-                        name=name,
-                        namespace=namespace,
-                        container=container_name,
-                        tail_lines=300,
-                    )
-                    chunks.append(f"--- {label} ---\n{log}")
+                    try:
+                        log = v1.read_namespaced_pod_log(
+                            name=name,
+                            namespace=namespace,
+                            container=container_name,
+                            tail_lines=300,
+                        )
+                        chunks.append(f"--- {label} ---\n{log}")
+                    except ApiException as exc:
+                        chunks.append(f"--- {label} unavailable ---\n{_api_error(exc)}")
+                        continue
                     if container_name == "triton":
                         previous = _read_previous_pod_log(
                             v1, namespace=namespace, name=name, container=container_name
