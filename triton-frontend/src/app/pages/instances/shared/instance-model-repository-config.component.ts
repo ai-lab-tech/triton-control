@@ -64,12 +64,7 @@ export class InstanceModelRepositoryConfigComponent {
     }
 
     const modelConfigPath = `${modelName}/config.pbtxt`;
-    const prefixName = this.s3Text("prefix")
-      .replace(/^\/+|\/+$/g, "")
-      .split("/")
-      .filter(Boolean)
-      .pop();
-    if (prefixName && prefixName === modelName) {
+    if (this.pathEndsWithSegment(this.s3Text("prefix"), modelName)) {
       return ["config.pbtxt", modelConfigPath];
     }
     return [modelConfigPath, "config.pbtxt"];
@@ -83,7 +78,7 @@ export class InstanceModelRepositoryConfigComponent {
       return "";
     }
     const prefix = this.s3Text("prefix").replace(/^\/+|\/+$/g, "");
-    return prefix ? `${prefix}/${relative}` : relative;
+    return this.joinDisplayPath(prefix, relative);
   });
   readonly hasS3Config = computed(
     () =>
@@ -202,5 +197,38 @@ export class InstanceModelRepositoryConfigComponent {
 
   private s3Boolean(key: keyof InstanceS3ConfigLike): boolean {
     return this.s3()?.[key] === true;
+  }
+
+  private joinDisplayPath(prefix: string, relative: string): string {
+    const cleanPrefix = prefix.replace(/^\/+|\/+$/g, "");
+    const cleanRelative = relative.replace(/^\/+|\/+$/g, "");
+    if (!cleanPrefix) {
+      return cleanRelative;
+    }
+    const firstRelativeSegment = cleanRelative.split("/").filter(Boolean)[0] ?? "";
+    if (firstRelativeSegment && this.pathEndsWithSegment(cleanPrefix, firstRelativeSegment)) {
+      const rest = cleanRelative.split("/").filter(Boolean).slice(1).join("/");
+      return rest ? `${cleanPrefix}/${rest}` : cleanPrefix;
+    }
+    return cleanRelative ? `${cleanPrefix}/${cleanRelative}` : cleanPrefix;
+  }
+
+  private pathEndsWithSegment(path: string, segment: string): boolean {
+    const last = path
+      .replace(/^\/+|\/+$/g, "")
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    return this.normalizePathSegment(last) === this.normalizePathSegment(segment);
+  }
+
+  private normalizePathSegment(value: string | undefined): string {
+    try {
+      return decodeURIComponent(value ?? "")
+        .trim()
+        .toLowerCase();
+    } catch {
+      return (value ?? "").trim().toLowerCase();
+    }
   }
 }
