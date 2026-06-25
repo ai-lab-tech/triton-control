@@ -123,28 +123,28 @@ export class NewDeploymentPageComponent {
     const hasHost = this.ingressHost.trim().length > 0;
     const hasClass = this.ingressClassName.trim().length > 0;
     if (!hasHost && !hasClass) {
-      return { label: "Not configured", tone: "neutral", detail: "No ingress host/class set" };
+      return { label: "Off", tone: "neutral", detail: "No host/class" };
     }
     if (hasHost && hasClass) {
-      return { label: "Configured", tone: "ok", detail: "Host and class configured" };
+      return { label: "On", tone: "ok", detail: "Host and class set" };
     }
-    return { label: "Warning", tone: "warn", detail: "Set both ingress host and class" };
+    return { label: "Check", tone: "warn", detail: "Set host and class" };
   }
 
   pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
     const raw = this.dockerconfigjson().trim();
     if (!raw) {
-      return { label: "Not configured", tone: "neutral", detail: "No pull secret provided" };
+      return { label: "Off", tone: "neutral", detail: "No pull secret" };
     }
     try {
       const parsed = JSON.parse(raw) as { auths?: Record<string, unknown> };
       const auths = parsed && typeof parsed === "object" ? parsed.auths : undefined;
       if (auths && typeof auths === "object" && Object.keys(auths).length > 0) {
-        return { label: "Configured", tone: "ok", detail: "Registry auth configured" };
+        return { label: "On", tone: "ok", detail: "Registry auth set" };
       }
-      return { label: "Invalid", tone: "error", detail: "Missing auths entries" };
+      return { label: "Error", tone: "error", detail: "Missing auths" };
     } catch {
-      return { label: "Invalid", tone: "error", detail: "Invalid JSON format" };
+      return { label: "Error", tone: "error", detail: "Invalid JSON" };
     }
   }
 
@@ -155,10 +155,10 @@ export class NewDeploymentPageComponent {
   } {
     const count = this.requirementsPackageCount();
     if (count <= 0) {
-      return { label: "Not configured", tone: "neutral", detail: "No packages configured" };
+      return { label: "Off", tone: "neutral", detail: "No packages" };
     }
-    const packageLabel = count === 1 ? "package" : "packages";
-    return { label: "Configured", tone: "ok", detail: `${count} ${packageLabel} configured` };
+    const packageLabel = count === 1 ? "Package" : "Packages";
+    return { label: "On", tone: "ok", detail: `${count} ${packageLabel}` };
   }
 
   resourcesStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
@@ -171,19 +171,19 @@ export class NewDeploymentPageComponent {
     const hasCpu = cpu.length > 0;
     const hasMemory = memory.length > 0;
     if (gpu > 0) {
-      return { label: "Configured", tone: "ok", detail: "GPU enabled" };
+      return { label: "On", tone: "ok", detail: "GPU enabled" };
     }
     if (cpu === DEFAULT_CPU && memory === DEFAULT_MEMORY) {
       return {
-        label: "Defaults active",
+        label: "Default",
         tone: "ok",
         detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY}`,
       };
     }
     if (hasCpu || hasMemory) {
-      return { label: "Configured", tone: "ok", detail: "Custom CPU/memory set" };
+      return { label: "On", tone: "ok", detail: "CPU/memory set" };
     }
-    return { label: "Not configured", tone: "neutral", detail: "Default resource settings" };
+    return { label: "Off", tone: "neutral", detail: "Default resources" };
   }
 
   modelControlStatus(): { label: string; tone: "neutral" | "ok"; detail: string } {
@@ -191,10 +191,10 @@ export class NewDeploymentPageComponent {
       return {
         label: "Poll",
         tone: "ok",
-        detail: `Refresh every ${this.repositoryPollSecs || 15}s`,
+        detail: `Every ${this.repositoryPollSecs || 15}s`,
       };
     }
-    return { label: "Explicit", tone: "neutral", detail: "Manual model loading" };
+    return { label: "Explicit", tone: "neutral", detail: "Manual loading" };
   }
 
   usesHttpsS3(): boolean {
@@ -250,7 +250,7 @@ export class NewDeploymentPageComponent {
 
   async deploy(): Promise<void> {
     if (!this.canDeploy()) {
-      this.setMessage("Required deployment fields are missing.", "error");
+      this.setMessage("Required fields are missing.", "error");
       return;
     }
 

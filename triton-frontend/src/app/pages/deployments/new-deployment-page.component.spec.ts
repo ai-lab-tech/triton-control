@@ -212,7 +212,7 @@ describe("NewDeploymentPageComponent", () => {
     );
   });
 
-  it("Deploy_RepositoryPrefixProvided_AppendsNormalizedPrefixToS3Url", async () => {
+  it("Deploy_ManualS3Settings_AppendsNormalizedPrefixToS3Url", async () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
@@ -233,6 +233,9 @@ describe("NewDeploymentPageComponent", () => {
     await component.deploy();
 
     // Assert
+    expect(component.s3Destination()).toBe(
+      "s3://https://object-store.example.com/triton-models/team/model-repository",
+    );
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         s3_url: "s3://https://object-store.example.com/triton-models/team/model-repository",
