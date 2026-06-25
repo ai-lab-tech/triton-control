@@ -126,6 +126,49 @@ avoid local hosts-file drift:
 http://triton11-test.192.168.49.2.sslip.io
 ```
 
+## code-server Plugin Window Does Not Open
+
+If the Development workspace loads but the **Triton Control Deploy** plugin
+window stays blank or the browser console shows this error:
+
+```text
+'crypto.subtle' is not available so webviews will not work
+```
+
+then code-server is running in a browser context that is not secure. VS Code
+webviews need a secure context. These origins work:
+
+```text
+https://triton-control.example.com
+http://localhost:<port>
+```
+
+These origins do not work for webviews:
+
+```text
+http://triton-control.test
+http://<minikube-ip>
+```
+
+Use one of these fixes:
+
+- expose Triton Control through an HTTPS ingress with a trusted certificate
+- or port-forward the Triton Control service and open it through localhost:
+
+```bash
+kubectl -n triton-control port-forward svc/triton-control 8080:8080
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+The `api/auth/me` `401 Unauthorized` message during page load is normally only
+the frontend checking whether a user is already signed in. It is not the
+code-server webview failure.
+
 ## Metrics URL Missing `/metrics`
 
 The backend automatically appends `/metrics` when the configured metrics URL has

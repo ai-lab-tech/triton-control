@@ -76,6 +76,12 @@ authenticated backend proxy:
 Both HTTP and WebSocket traffic pass through this proxy. The code-server
 Service is therefore not exposed directly to the browser.
 
+code-server webviews, including the bundled **Triton Control Deploy**
+extension, require a browser secure context. Use HTTPS for non-localhost
+hosts. Plain `http://triton-control.test` can load the workspace, but plugin
+webviews may fail because browser crypto APIs are unavailable. For local
+testing, `http://localhost:<port>` via `kubectl port-forward` also works.
+
 Use **Refresh** to read the latest pod status. Use **Delete** to remove the
 managed StatefulSet, Service, Secrets, ConfigMap, and any legacy ingress.
 

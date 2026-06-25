@@ -5,6 +5,8 @@ const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
 
+let insecureWebviewWarningShown = false;
+
 function activate(context) {
   const disposable = vscode.commands.registerCommand(
     "tritonControl.deployModelRepository",
@@ -17,6 +19,7 @@ function activate(context) {
       if (!initial) {
         return;
       }
+      await warnIfInsecureWebviewContext();
       openDeployPanel(context, initial);
     },
   );
@@ -81,6 +84,34 @@ function openDeployPanel(context, initial) {
     undefined,
     context.subscriptions,
   );
+}
+
+async function warnIfInsecureWebviewContext() {
+  if (insecureWebviewWarningShown) {
+    return;
+  }
+  let external;
+  try {
+    external = await vscode.env.asExternalUri(vscode.Uri.parse("http://127.0.0.1:8080/"));
+  } catch {
+    return;
+  }
+  if (external.scheme !== "http" || isLocalhostAuthority(external.authority)) {
+    return;
+  }
+  insecureWebviewWarningShown = true;
+  vscode.window.showWarningMessage(
+    "Triton Control Deploy opens in a code-server webview. Webviews require HTTPS or localhost; plain HTTP hosts can show a blank plugin window.",
+    "OK",
+  );
+}
+
+function isLocalhostAuthority(authority) {
+  const value = String(authority || "").toLowerCase();
+  const host = value.startsWith("[")
+    ? value.slice(1, value.indexOf("]"))
+    : value.split(":")[0];
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 async function initialFormValues(sourceFolder) {
