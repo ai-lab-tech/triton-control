@@ -151,12 +151,19 @@ async def infer_model(
     source = "stats" if use_stats else "metrics"
     stats_before = await triton_service.collect_inference_stats_snapshot() if use_stats else None
     try:
-        triton_response = await triton_service.infer_model_raw(
-            model_name,
-            version,
-            payload_bytes,
-            content_type,
-        )
+        if _uses_generate_endpoint_backend(instance):
+            triton_response = await triton_service.generate_model_raw(
+                model_name,
+                payload_bytes,
+                content_type,
+            )
+        else:
+            triton_response = await triton_service.infer_model_raw(
+                model_name,
+                version,
+                payload_bytes,
+                content_type,
+            )
         if use_stats:
             stats_after = await triton_service.collect_inference_stats_snapshot()
             inference_metrics = triton_service.inference_metrics_delta(stats_before or {}, stats_after)
@@ -213,6 +220,21 @@ async def infer_model(
 def _encode_metrics_header(metrics: dict[str, Any]) -> str:
     payload = json.dumps(metrics, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return base64.urlsafe_b64encode(payload).decode("ascii")
+
+
+def _uses_generate_endpoint_backend(instance: Any) -> bool:
+    parts: list[str] = []
+    metadata = getattr(instance, "server_metadata", None)
+    if isinstance(metadata, dict):
+        parts.extend(str(value) for value in metadata.values() if value is not None)
+    for model in getattr(instance, "repository_models", None) or []:
+        if isinstance(model, dict):
+            parts.extend(str(value) for value in model.values() if value is not None)
+    deployment_log = getattr(instance, "deployment_log", None)
+    if deployment_log:
+        parts.append(str(deployment_log))
+    haystack = " ".join(parts).lower()
+    return any(token in haystack for token in ("vllm", "tensorrtllm", "tensorrt_llm", "trtllm"))
 
 
 def _is_metrics_snapshot_available(snapshot: dict[str, Any] | None) -> bool:

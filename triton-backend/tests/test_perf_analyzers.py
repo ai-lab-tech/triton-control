@@ -413,6 +413,50 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
 
+    def test_RunCommand_VllmDeployment_UsesGrpcAsyncStreaming(self) -> None:
+        request = RunPerfAnalyzerRequest(
+            instance_id=3,
+            model_name="opt125m",
+            model_version="1",
+            concurrency_range="1",
+        )
+        instance = SimpleNamespace(
+            url="http://opt125m-service.triton-control.svc.cluster.local:18000",
+            is_self_deployed=True,
+            deployment_service_name="opt125m-service",
+            deployment_namespace="triton-control",
+            deployment_log="Image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3",
+        )
+
+        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+
+        self.assertEqual(command[command.index("-u") + 1], "opt125m-service.triton-control.svc.cluster.local:18001")
+        self.assertEqual(command[command.index("-i") + 1], "grpc")
+        self.assertIn("--async", command)
+        self.assertIn("--streaming", command)
+
+    def test_RunCommand_TensorRtLlmDeployment_DoesNotAssumeDecoupledMode(self) -> None:
+        request = RunPerfAnalyzerRequest(
+            instance_id=4,
+            model_name="tensorrt_llm",
+            model_version="1",
+            concurrency_range="1",
+        )
+        instance = SimpleNamespace(
+            url="http://trtllm-service.triton-control.svc.cluster.local:18000",
+            is_self_deployed=True,
+            deployment_service_name="trtllm-service",
+            deployment_namespace="triton-control",
+            deployment_log="Image: nvcr.io/nvidia/tritonserver:25.12-trtllm-python-py3",
+        )
+
+        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+
+        self.assertEqual(command[command.index("-u") + 1], "trtllm-service.triton-control.svc.cluster.local:18000")
+        self.assertEqual(command[command.index("-i") + 1], "HTTP")
+        self.assertNotIn("--async", command)
+        self.assertNotIn("--streaming", command)
+
     def test_DirectPerfInputArgument_ModeAndPath_ReturnsDirectArgument(self) -> None:
         self.assertEqual(installer._direct_perf_input_argument("zero"), "zero")
         self.assertEqual(installer._direct_perf_input_argument("random"), "random")

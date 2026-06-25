@@ -62,6 +62,7 @@ export class InstanceModelInferPageComponent implements OnInit {
   instanceUrl = "";
   resolvingInstance = false;
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
+  readonly usesGenerateEndpoint = signal(false);
   private readonly resolveError = signal("");
   readonly submitting = toSignal(this.store.select(selectInferSubmitting), { initialValue: false });
   readonly processingResponse = toSignal(this.store.select(selectInferProcessingResponse), {
@@ -106,10 +107,21 @@ export class InstanceModelInferPageComponent implements OnInit {
       return "";
     }
 
+    if (this.usesGenerateEndpoint()) {
+      return `${baseUrl}/v2/models/${modelName}/generate`;
+    }
+
     return `${baseUrl}/v2/models/${modelName}/versions/${version}/infer`;
   });
   private readonly inferBodyDefault = `{
   "inputs": []
+}`;
+  private readonly generateBodyDefault = `{
+  "text_input": "What is Triton Inference Server?",
+  "parameters": {
+    "stream": false,
+    "temperature": 0
+  }
 }`;
   private _editorContent = this.inferBodyDefault;
 
@@ -327,10 +339,34 @@ export class InstanceModelInferPageComponent implements OnInit {
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl = instance?.url ?? this.instanceUrl;
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
+      const usesGenerate = this.usesGenerateEndpointBackend(instance);
+      this.usesGenerateEndpoint.set(usesGenerate);
+      if (usesGenerate && this.editorContent.trim() === this.inferBodyDefault.trim()) {
+        this._editorContent = this.generateBodyDefault;
+      }
     } catch {
       this.resolveError.set("Failed to load instance details.");
     } finally {
       this.resolvingInstance = false;
     }
+  }
+
+  private usesGenerateEndpointBackend(instance: TritonInstanceDTO | null | undefined): boolean {
+    if (!instance) {
+      return false;
+    }
+    const metadata = instance.server_metadata as Record<string, unknown> | null | undefined;
+    const values: string[] = [];
+    if (metadata && typeof metadata === "object") {
+      values.push(...Object.values(metadata).map((value) => String(value ?? "")));
+    }
+    values.push(instance.deployment_log ?? "");
+    for (const model of instance.repository_models ?? []) {
+      values.push(String(model.name ?? ""), String(model.reason ?? ""), String(model.state ?? ""));
+    }
+    const haystack = values.join("\n").toLowerCase();
+    return ["vllm", "tensorrtllm", "tensorrt_llm", "trtllm"].some((token) =>
+      haystack.includes(token),
+    );
   }
 }

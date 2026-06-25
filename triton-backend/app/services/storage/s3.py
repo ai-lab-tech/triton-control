@@ -140,6 +140,24 @@ def _clean_optional(value: str | None) -> str | None:
     return value or None
 
 
+def _clean_s3_key_part(value: str | None) -> str:
+    return str(value or "").strip().strip("/")
+
+
+def _join_s3_key(*parts: str | None) -> str:
+    return "/".join(part for part in (_clean_s3_key_part(value) for value in parts) if part)
+
+
+def _s3_list_prefix(repository_prefix: str | None, relative_prefix: str | None) -> str:
+    key = _join_s3_key(repository_prefix, relative_prefix)
+    return f"{key}/" if key else ""
+
+
+def _display_s3_path(path: str | None) -> str:
+    cleaned = _clean_s3_key_part(path)
+    return f"/{cleaned}" if cleaned else "/"
+
+
 def list_instance_s3(
     session: Session,
     claims: dict[str, Any],
@@ -151,7 +169,9 @@ def list_instance_s3(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
-    effective_prefix = f"{instance.s3_prefix or ''}{prefix}".lstrip("/")
+    relative_prefix = _clean_s3_key_part(prefix)
+    effective_prefix = _s3_list_prefix(instance.s3_prefix, relative_prefix)
+    display_path = _display_s3_path(relative_prefix)
     try:
         response = client.list_objects_v2(
             Bucket=instance.s3_bucket,
@@ -166,31 +186,33 @@ def list_instance_s3(
     entries: list[S3EntryDTO] = []
     for common in response.get("CommonPrefixes", []) or []:
         folder_prefix = common.get("Prefix", "")
+        if effective_prefix and not folder_prefix.startswith(effective_prefix):
+            continue
         name = folder_prefix.rstrip("/").split("/")[-1]
         entries.append(
             S3EntryDTO(
                 name=name,
-                path=f"/{effective_prefix}".rstrip("/") or "/",
+                path=display_path,
                 type="folder",
             )
         )
 
     for item in response.get("Contents", []) or []:
         key = item.get("Key", "")
-        if key.endswith("/"):
+        if key.endswith("/") or key == effective_prefix.rstrip("/"):
             continue
         name = key.split("/")[-1]
         entries.append(
             S3EntryDTO(
                 name=name,
-                path=f"/{effective_prefix}".rstrip("/") or "/",
+                path=display_path,
                 type="file",
                 size=item.get("Size"),
                 modified=item.get("LastModified"),
             )
         )
 
-    return S3ListResponse(prefix=f"/{effective_prefix}".rstrip("/") or "/", entries=entries)
+    return S3ListResponse(prefix=display_path, entries=entries)
 
 
 def get_instance_s3_content(
@@ -219,7 +241,7 @@ def get_instance_s3_object_bytes(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
-    object_key = f"{instance.s3_prefix or ''}{path}".lstrip("/")
+    object_key = _join_s3_key(instance.s3_prefix, path)
 
     try:
         response = client.get_object(Bucket=instance.s3_bucket, Key=object_key)
@@ -250,7 +272,7 @@ def put_instance_s3_content(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
-    object_key = f"{instance.s3_prefix or ''}{path}".lstrip("/")
+    object_key = _join_s3_key(instance.s3_prefix, path)
 
     content_bytes = content.encode("utf-8") if isinstance(content, str) else content
 
@@ -293,7 +315,9 @@ def delete_instance_s3_content(
     bucket = instance.s3_bucket
     if not bucket:
         raise BadRequestError("S3 bucket is required")
-    object_key = f"{instance.s3_prefix or ''}{path}".lstrip("/")
+    object_key = _join_s3_key(instance.s3_prefix, path)
+    if path.endswith("/") and object_key:
+        object_key = f"{object_key}/"
 
     try:
         if path.endswith("/"):

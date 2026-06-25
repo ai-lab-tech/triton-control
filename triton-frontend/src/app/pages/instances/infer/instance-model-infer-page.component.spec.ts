@@ -110,6 +110,27 @@ describe("InstanceModelInferPageComponent", () => {
     expect(component.instanceS3()?.bucket).toBe("models");
   });
 
+  it("NgOnInit_TensorRtLlmInstance_UsesGenerateEndpoint", async () => {
+    // Arrange
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "trtllm",
+        url: "http://localhost:8000",
+        server_metadata: { backend: "tensorrt_llm" },
+        repository_models: [],
+      } as any),
+    );
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.ngOnInit();
+
+    // Assert
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/generate");
+    expect(component.editorContent).toContain('"text_input"');
+  });
+
   it("NgOnInit_SavedResultExists_HydratesInferResult", async () => {
     // Arrange
     localStorage.setItem(

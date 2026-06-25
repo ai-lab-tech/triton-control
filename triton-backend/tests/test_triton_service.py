@@ -465,6 +465,7 @@ nv_inference_request_duration_us{model="m",version="1"} 12000
                     headers={"content-type": "application/json"},
                 ),  # infer
                 FakeResponse(status_code=200, payload={"ok": True}),  # infer raw
+                FakeResponse(status_code=200, payload={"text_output": "ok"}),  # generate raw
             ],
         )
         service._get_client = lambda: client
@@ -475,16 +476,20 @@ nv_inference_request_duration_us{model="m",version="1"} 12000
         await service.unload_model("model a")
         infer_resp = await service.infer_model("model a", "1/2", {"x": 1})
         raw_resp = await service.infer_model_raw("model a", "1/2", b"{}", "application/json")
+        generate_resp = await service.generate_model_raw("model a", b'{"text_input":"hi"}', "application/json")
 
         # Assert
         self.assertEqual(cfg, {"cfg": 1})
         self.assertIn("/models/model%20a/versions/1%2F2/config", client.get_calls[0])
         self.assertEqual(infer_resp.status_code, 200)
         self.assertEqual(raw_resp.status_code, 200)
+        self.assertEqual(generate_resp.status_code, 200)
         self.assertIn("/repository/models/model%20a/load", client.post_calls[0][0])
         self.assertIn("/repository/models/model%20a/unload", client.post_calls[1][0])
         self.assertIn("/models/model%20a/versions/1%2F2/infer", client.post_calls[2][0])
         self.assertEqual(client.post_calls[3][1]["headers"]["content-type"], "application/json")
+        self.assertIn("/models/model%20a/generate", client.post_calls[4][0])
+        self.assertEqual(client.post_calls[4][1]["headers"]["content-type"], "application/json")
 
 
 if __name__ == "__main__":
