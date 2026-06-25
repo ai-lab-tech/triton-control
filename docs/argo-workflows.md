@@ -68,6 +68,59 @@ For a private Workflow image:
 2. Reference that Secret through `spec.imagePullSecrets`.
 3. Keep registry credentials out of Workflow YAML.
 
+## On-Premise / Artifactory Image Mirrors
+
+On-premise or air-gapped clusters can retarget every Argo **system** image at an
+internal artifactory instead of the public internet. Argo pulls four images,
+each configured under the `argoWorkflows` block in `values.yaml`:
+
+| Image | Values path | Default |
+| --- | --- | --- |
+| Workflow Controller | `controller.image.registry` / `.repository` | `quay.io` / `argoproj/workflow-controller` |
+| Workflow Executor (init + wait in every Workflow pod) | `executor.image.registry` / `.repository` | `quay.io` / `argoproj/argoexec` |
+| Argo Server (UI/API) | `server.image.registry` / `.repository` | `quay.io` / `argoproj/argocli` |
+| CRD install Job (`kubectl`) | `crds.upgradeJob.image.repository` | `registry.k8s.io/kubectl` |
+
+The resolved pull string is `<registry>/<repository>:<tag>`. For the three
+`argoproj` images, override only the `registry` host; the upstream repository
+paths stay the same. The CRD `kubectl` image bakes the host into its repository
+string, so override the whole `repository`.
+
+```yaml
+argoWorkflows:
+  enabled: true
+  images:
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - name: artifactory-pull-secret
+  controller:
+    image:
+      registry: artifactory.corp.example.com
+  executor:
+    image:
+      registry: artifactory.corp.example.com
+  server:
+    image:
+      registry: artifactory.corp.example.com
+  crds:
+    upgradeJob:
+      image:
+        repository: artifactory.corp.example.com/k8s-remote/kubectl
+        tag: v1.36.2
+```
+
+For an authenticated artifactory, pre-create a `kubernetes.io/dockerconfigjson`
+Secret in the release namespace and list it under `images.pullSecrets`; it
+applies to all four system images.
+
+The CRD `kubectl` image is only pulled when `crds.full` is `true` (the default),
+where a one-shot Job server-side applies the full Workflow CRD. To avoid that
+fourth image pull entirely, set `crds.full: false` to install minified CRDs
+through Helm directly — at the cost of the full OpenAPI validation schema.
+
+These settings cover Argo **system** images only. Images referenced by
+user-submitted Workflow YAML are handled separately (see above).
+
 ## S3 Credentials
 
 Members and administrators can manage Workflow S3 credentials through Triton

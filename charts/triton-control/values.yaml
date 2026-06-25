@@ -107,14 +107,35 @@ argoWorkflows:
   # Argo system images are pulled directly from their public registries.
   # These settings do not configure credentials for images referenced by
   # user-submitted Workflows.
+  #
+  # On-premise / air-gapped installs: retarget every Argo system image at an
+  # internal artifactory by overriding the per-component `image.registry`
+  # fields below (controller, executor, server) and `crds.upgradeJob.image`.
+  # Only the registry host changes; the upstream repository paths stay the
+  # same. For an authenticated artifactory, pre-create a
+  # `kubernetes.io/dockerconfigjson` Secret in the release namespace and list
+  # it under `images.pullSecrets`.
   images:
     pullPolicy: IfNotPresent
+    # Image pull Secrets applied to every Argo system image (controller,
+    # executor, server, and the CRD install Job). Reference an existing
+    # dockerconfigjson Secret for authenticated artifactory access.
     pullSecrets: []
+    # - name: artifactory-pull-secret
     tag: ""
 
   crds:
     install: true
     keep: true
+    # The full Workflow CRD is applied by a one-shot Job that runs a kubectl
+    # container. Its image defaults to the public registry.k8s.io. Override the
+    # repository (the registry host is baked into the repository string here)
+    # to pull from an internal artifactory. Set `full: false` to install
+    # minified CRDs without this Job and avoid the extra image pull entirely.
+    upgradeJob:
+      image:
+        repository: registry.k8s.io/kubectl
+        tag: v1.36.2
 
   # Do not create the optional aggregate ClusterRoles (view/edit/admin).
   # Triton Control runs Argo in a single namespace and does not need them.
@@ -139,6 +160,7 @@ argoWorkflows:
 
   controller:
     image:
+      # Override `registry` to pull from an internal artifactory mirror.
       registry: quay.io
       repository: argoproj/workflow-controller
       tag: ""
@@ -179,6 +201,7 @@ argoWorkflows:
 
   executor:
     image:
+      # Override `registry` to pull from an internal artifactory mirror.
       registry: quay.io
       repository: argoproj/argoexec
       tag: ""
@@ -207,6 +230,7 @@ argoWorkflows:
     authModes:
       - server
     image:
+      # Override `registry` to pull from an internal artifactory mirror.
       registry: quay.io
       repository: argoproj/argocli
       tag: ""
