@@ -201,9 +201,9 @@
             [ngModel]="backend === 'vllm'"
             (ngModelChange)="setVllmBackend($event)"
           >
-            Use vLLM backend
+            Enable vLLM model backend
           </mat-checkbox>
-          <div class="field-hint">Off = standard Triton.</div>
+          <div class="field-hint">Use when deploying vLLM models.</div>
         </div>
       </div>
     </div>

@@ -144,7 +144,7 @@ function resolveDeploymentBackend(
   if (/vllm/i.test([log, image].join("\n"))) {
     return "vLLM";
   }
-  return "Triton";
+  return "No backend in config.pbtxt";
 }
 
 function normalizePercent(value: unknown): number {

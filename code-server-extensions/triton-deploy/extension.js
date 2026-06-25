@@ -109,7 +109,8 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
-    detectedBackend: backendLabel(detectedBackend),
+    detectedBackend,
+    detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
     repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
@@ -154,9 +155,12 @@ function detectModelBackend(sourceFolder) {
 function backendLabel(value) {
   const backend = String(value || "").trim().toLowerCase();
   if (backend === "vllm") {
-    return "vLLM";
+    return "vLLM model backend";
   }
-  return backend || "Triton";
+  if (backend) {
+    return `${backend} model backend`;
+  }
+  return "No backend in config.pbtxt";
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -251,7 +255,7 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
-    detectedBackend: String(form.detectedBackend || "triton").trim().toLowerCase() || "triton",
+    detectedBackend: String(form.detectedBackend || "").trim().toLowerCase(),
     modelControlMode:
       repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
     repositorySyncMode,
@@ -575,6 +579,10 @@ function renderHtml(webview, nonce, initial) {
     .hidden { display: none; }
     .checks { display: flex; gap: 18px; align-items: center; }
     .checks label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .summary-card { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); padding: 10px; }
+    .summary-card span { display: block; margin-bottom: 5px; color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .summary-card strong { color: var(--vscode-foreground); font-size: 13px; }
     details { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); }
     summary { cursor: pointer; padding: 9px 10px; color: var(--vscode-foreground); }
     .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 10px 10px; }
@@ -587,7 +595,7 @@ function renderHtml(webview, nonce, initial) {
     .preview strong { display: block; margin-bottom: 5px; color: var(--vscode-foreground); }
     .preview code { color: var(--vscode-textLink-foreground); word-break: break-all; }
     @media (max-width: 720px) {
-      form, .details-grid { grid-template-columns: 1fr; }
+      form, .details-grid, .summary-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -597,8 +605,18 @@ function renderHtml(webview, nonce, initial) {
     <label class="wide">Source folder<input name="sourceFolder" readonly></label>
     <label>Deployment name<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
-    <label>Detected backend<input name="detectedBackend" readonly></label>
-    <label>Model control<input name="modelControlLabel" readonly></label>
+    <input class="hidden" name="detectedBackend">
+    <input class="hidden" name="detectedBackendLabel">
+    <div class="wide summary-grid">
+      <div class="summary-card">
+        <span>Detected backend</span>
+        <strong id="detected-backend-label">No backend in config.pbtxt</strong>
+      </div>
+      <div class="summary-card">
+        <span>Model control</span>
+        <strong id="model-control-label">Polling mode</strong>
+      </div>
+    </div>
     <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
@@ -610,8 +628,8 @@ function renderHtml(webview, nonce, initial) {
     <details class="wide">
       <summary>Model control</summary>
       <div class="details-grid">
-        <label>Load mode<select name="modelControlMode"><option value="poll">Poll repository</option><option value="explicit">Explicit startup model</option></select></label>
-        <label>Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
+        <label>Load mode<select name="modelControlMode"><option value="poll">Polling mode</option><option value="explicit">Explicit mode</option></select></label>
+        <label id="poll-interval-field">Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
       </div>
     </details>
     <details class="wide">
@@ -656,6 +674,7 @@ function renderHtml(webview, nonce, initial) {
       if (input.type === 'checkbox') input.checked = !!value;
       else input.value = value ?? '';
     }
+    updateDetectedBackendLabel();
     updateDestinationPath();
     updateModelControlLabel();
     loadS3Profiles();
@@ -821,8 +840,15 @@ function renderHtml(webview, nonce, initial) {
 
     function updateModelControlLabel() {
       const mode = form.elements.modelControlMode.value === 'explicit' ? 'explicit' : 'poll';
-      form.elements.modelControlLabel.value = mode === 'poll' ? 'Poll repository' : 'Explicit startup model';
+      document.getElementById('model-control-label').textContent =
+        mode === 'poll' ? 'Polling mode' : 'Explicit mode';
+      document.getElementById('poll-interval-field').classList.toggle('hidden', mode !== 'poll');
       form.elements.repositoryPollSecs.disabled = mode === 'explicit';
+    }
+
+    function updateDetectedBackendLabel() {
+      document.getElementById('detected-backend-label').textContent =
+        form.elements.detectedBackendLabel.value || 'No backend in config.pbtxt';
     }
 
     function updateFormPreviews() {

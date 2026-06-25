@@ -69,6 +69,22 @@ describe("instances utils", () => {
     expect(mapped.status).toBe("warning");
   });
 
+  it("DtoToInstance_BackendMissing_ReportsConfigBackendMissing", () => {
+    const dto: TritonInstanceDTO & Record<string, unknown> = {
+      id: 45,
+      name: "default-backend",
+      url: "http://default-backend",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
+      health_live: true,
+      health_ready: true,
+      deployment_image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+    };
+    const mapped = dtoToInstance(dto);
+
+    expect(mapped.deploymentBackend).toBe("No backend in config.pbtxt");
+  });
+
   it("ResolveStatus_HealthBooleans_MapHealthyWarningAndDown", () => {
     expect(resolveStatus({ health_live: true, health_ready: true })).toBe("healthy");
     expect(resolveStatus({ health_live: true, health_ready: false })).toBe("warning");

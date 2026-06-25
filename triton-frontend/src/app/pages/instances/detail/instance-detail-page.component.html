@@ -156,7 +156,9 @@
               <div class="panel-title">Deployment</div>
               <div class="kv">
                 <span class="kv-label">Backend</span>
-                <span class="kv-value">{{ instance.deploymentBackend || "Triton" }}</span>
+                <span class="kv-value">{{
+                  instance.deploymentBackend || "No backend in config.pbtxt"
+                }}</span>
               </div>
               <div class="kv">
                 <span class="kv-label">Image</span>
