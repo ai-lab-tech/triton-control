@@ -82,7 +82,8 @@ describe("InstanceModelRepositoryConfigComponent", () => {
 
   it("ToggleConfig_S3PrefixAlreadyModelFolder_LoadsConfigAtRepositoryRoot", async () => {
     // Arrange
-    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValues(
+      throwError(() => ({ status: 404, error: { detail: "not found" } })),
       of({ path: "/config.pbtxt", content: 'name: "opt125m"\nbackend: "vllm"\n' } as any),
     );
     const auth = TestBed.inject(AuthStore);
@@ -109,6 +110,9 @@ describe("InstanceModelRepositoryConfigComponent", () => {
     expect(component.effectivePath()).toBe("opt125m/config.pbtxt");
     expect(
       instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).toHaveBeenCalledWith("7", "opt125m/config.pbtxt");
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
     ).toHaveBeenCalledWith("7", "config.pbtxt");
     expect(
       instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut,
@@ -122,8 +126,7 @@ describe("InstanceModelRepositoryConfigComponent", () => {
 
   it("EffectivePath_LoadedModelPathAndMatchingPrefix_DoesNotDuplicateModelSegment", async () => {
     // Arrange
-    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValues(
-      throwError(() => ({ status: 404, error: { detail: "not found" } })),
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
       of({ path: "/opt125m/config.pbtxt", content: 'name: "opt125m"\nbackend: "vllm"\n' } as any),
     );
     const fixture = TestBed.createComponent(InstanceModelRepositoryConfigComponent);
@@ -144,6 +147,25 @@ describe("InstanceModelRepositoryConfigComponent", () => {
 
     // Assert
     expect(component.relativePath()).toBe("opt125m/config.pbtxt");
+    expect(component.effectivePath()).toBe("opt125m/config.pbtxt");
+  });
+
+  it("EffectivePath_DuplicatedPrefixFromRecord_CollapsesRepeatedModelSegment", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(InstanceModelRepositoryConfigComponent);
+    const component = fixture.componentInstance;
+    fixture.componentRef.setInput("instanceId", "7");
+    fixture.componentRef.setInput("modelName", "opt125m");
+    fixture.componentRef.setInput("version", "1");
+    fixture.componentRef.setInput("s3", {
+      enabled: true,
+      endpoint: "https://s3.local",
+      bucket: "models",
+      prefix: "opt125m/opt125m",
+    });
+    fixture.detectChanges();
+
+    // Assert
     expect(component.effectivePath()).toBe("opt125m/config.pbtxt");
   });
 

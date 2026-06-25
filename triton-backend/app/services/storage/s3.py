@@ -241,15 +241,25 @@ def get_instance_s3_object_bytes(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
+    bucket = instance.s3_bucket
+    if not bucket:
+        raise BadRequestError("S3 bucket is required")
     object_key = _join_s3_key(instance.s3_prefix, path)
 
     try:
-        response = client.get_object(Bucket=instance.s3_bucket, Key=object_key)
+        response = client.get_object(Bucket=bucket, Key=object_key)
     except ClientError as exc:
         error_code = (exc.response.get("Error") or {}).get("Code")
         if error_code in {"NoSuchKey", "404"}:
-            raise NotFoundError("S3 object not found") from exc
-        raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
+            fallback_key = _discover_config_pbtxt_key(client, bucket, instance.s3_prefix, path)
+            if not fallback_key:
+                raise NotFoundError("S3 object not found") from exc
+            try:
+                response = client.get_object(Bucket=bucket, Key=fallback_key)
+            except (BotoCoreError, ClientError) as fallback_exc:
+                raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(fallback_exc)})") from fallback_exc
+        else:
+            raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
     except BotoCoreError as exc:
         raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
 
@@ -272,6 +282,9 @@ def put_instance_s3_content(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
+    bucket = instance.s3_bucket
+    if not bucket:
+        raise BadRequestError("S3 bucket is required")
     object_key = _join_s3_key(instance.s3_prefix, path)
 
     content_bytes = content.encode("utf-8") if isinstance(content, str) else content
@@ -283,9 +296,10 @@ def put_instance_s3_content(
             raise UnsupportedMediaTypeError("config.pbtxt must be valid UTF-8 text") from exc
         triton_version = extract_triton_version(instance.server_metadata)
         validate_triton_config_pbtxt(content_bytes, triton_version)
+        object_key = _discover_config_pbtxt_key(client, bucket, instance.s3_prefix, path) or object_key
 
     put_args = {
-        "Bucket": instance.s3_bucket,
+        "Bucket": bucket,
         "Key": object_key,
         "Body": content_bytes,
     }
@@ -329,6 +343,68 @@ def delete_instance_s3_content(
         raise BadGatewayError(f"Failed to delete S3 object ({format_s3_error(exc)})") from exc
 
     return S3DeleteResponse(path=f"/{path}", deleted=deleted)
+
+
+def _discover_config_pbtxt_key(
+    client: Any,
+    bucket: str,
+    repository_prefix: str | None,
+    requested_path: str,
+) -> str | None:
+    if not requested_path.lower().endswith("config.pbtxt"):
+        return None
+
+    root_prefix = _s3_list_prefix(repository_prefix, "")
+    try:
+        response = client.list_objects_v2(Bucket=bucket, Prefix=root_prefix)
+    except (BotoCoreError, ClientError):
+        return None
+
+    requested = _clean_s3_key_part(requested_path)
+    requested_model = requested.split("/", 1)[0] if "/" in requested else ""
+    requested_model_norm = _normalize_model_path_segment(requested_model)
+    candidates: list[str] = []
+    for item in response.get("Contents", []) or []:
+        key = str(item.get("Key") or "")
+        if not key or key.endswith("/") or not key.lower().endswith("/config.pbtxt"):
+            continue
+        if root_prefix and not key.startswith(root_prefix):
+            continue
+        candidates.append(key)
+
+    if not candidates:
+        return None
+
+    if requested_model_norm:
+        matching = [
+            key
+            for key in candidates
+            if _normalize_model_path_segment(_relative_s3_model_folder(root_prefix, key)) == requested_model_norm
+        ]
+        if not matching:
+            return None
+        candidates = matching
+    elif len(candidates) > 1:
+        return None
+
+    def _score(key: str) -> tuple[int, int, str]:
+        relative = key[len(root_prefix) :] if root_prefix and key.startswith(root_prefix) else key
+        if relative == requested:
+            return (0, len(relative), relative)
+        if relative == "config.pbtxt":
+            return (2, len(relative), relative)
+        return (3, len(relative), relative)
+
+    return sorted(candidates, key=_score)[0]
+
+
+def _normalize_model_path_segment(value: str) -> str:
+    return value.strip().lower()
+
+
+def _relative_s3_model_folder(root_prefix: str, key: str) -> str:
+    relative = key[len(root_prefix) :] if root_prefix and key.startswith(root_prefix) else key
+    return relative.split("/", 1)[0] if "/" in relative else ""
 
 
 def _delete_s3_prefix(client: Any, bucket: str, prefix: str) -> int:

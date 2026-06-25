@@ -64,9 +64,6 @@ export class InstanceModelRepositoryConfigComponent {
     }
 
     const modelConfigPath = `${modelName}/config.pbtxt`;
-    if (this.pathEndsWithSegment(this.s3Text("prefix"), modelName)) {
-      return ["config.pbtxt", modelConfigPath];
-    }
     return [modelConfigPath, "config.pbtxt"];
   });
   readonly effectivePath = computed(() => {
@@ -77,7 +74,10 @@ export class InstanceModelRepositoryConfigComponent {
     if (!relative) {
       return "";
     }
-    const prefix = this.s3Text("prefix").replace(/^\/+|\/+$/g, "");
+    const prefix = this.collapseRepeatedTrailingSegment(
+      this.s3Text("prefix").replace(/^\/+|\/+$/g, ""),
+      this.modelName(),
+    );
     return this.joinDisplayPath(prefix, relative);
   });
   readonly hasS3Config = computed(
@@ -171,7 +171,7 @@ export class InstanceModelRepositoryConfigComponent {
   }
 
   private async loadS3ConfigContent(): Promise<S3FileContentResponse> {
-    const candidates = this.configPathCandidates();
+    const candidates = [...this.configPathCandidates()];
     let lastError: unknown = null;
     for (const path of candidates) {
       try {
@@ -230,5 +230,19 @@ export class InstanceModelRepositoryConfigComponent {
     } catch {
       return (value ?? "").trim().toLowerCase();
     }
+  }
+
+  private collapseRepeatedTrailingSegment(path: string, segment: string): string {
+    const parts = path.split("/").filter(Boolean);
+    const normalizedSegment = this.normalizePathSegment(segment);
+    while (
+      parts.length >= 2 &&
+      normalizedSegment &&
+      this.normalizePathSegment(parts.at(-1)) === normalizedSegment &&
+      this.normalizePathSegment(parts.at(-2)) === normalizedSegment
+    ) {
+      parts.pop();
+    }
+    return parts.join("/");
   }
 }

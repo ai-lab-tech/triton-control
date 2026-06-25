@@ -133,6 +133,30 @@ class _S3Client:
         self.delete_objects_calls.append(kwargs)
 
 
+class _S3ConfigDiscoveryClient(_S3Client):
+    config_key = "opt125m/opt125m/config.pbtxt"
+    extra_config_key: str | None = None
+
+    def list_objects_v2(self, **kwargs):
+        self.list_calls.append(kwargs)
+        contents = [
+            {"Key": "opt125m/opt125m/1/model.json", "Size": 12},
+            {"Key": self.config_key, "Size": 42},
+        ]
+        if self.extra_config_key:
+            contents.append({"Key": self.extra_config_key, "Size": 40})
+        return {
+            "Contents": contents,
+            "IsTruncated": False,
+        }
+
+    def get_object(self, **kwargs):
+        self.get_calls.append(kwargs)
+        if kwargs["Key"] != self.config_key:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"Body": _S3Body(b'name: "opt125m"\nbackend: "vllm"\n')}
+
+
 class _BodyRequest:
     def __init__(self, payload: bytes, headers=None):
         self._payload = payload
@@ -508,6 +532,73 @@ class ApiHelperTests(unittest.TestCase):
         self.assertEqual(client.list_calls[0]["Bucket"], "bucket")
         self.assertEqual(client.get_calls[0]["Key"], "repositories/opt125m/opt125m/config.pbtxt")
         self.assertEqual(content.content, "hello")
+
+    def test_InstanceS3Read_ConfigPbtxtMissingAtGuessedPath_DiscoversRepositoryFolder(self):
+        # Arrange
+        instance = self._instance()
+        instance.s3_prefix = "opt125m"
+        session = _FakeSession(get_map={1: instance})
+        client = _S3ConfigDiscoveryClient()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            content = get_instance_s3_content(
+                1,
+                path="config.pbtxt",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(content.content, 'name: "opt125m"\nbackend: "vllm"\n')
+        self.assertEqual(client.get_calls[0]["Key"], "opt125m/config.pbtxt")
+        self.assertEqual(client.list_calls[0]["Prefix"], "opt125m/")
+        self.assertEqual(client.get_calls[1]["Key"], "opt125m/opt125m/config.pbtxt")
+
+    def test_InstanceS3Read_ConfigPbtxtWithSimilarButDifferentFolderName_DoesNotFuzzyMatch(self):
+        # Arrange
+        instance = self._instance()
+        instance.s3_prefix = "opt125m"
+        session = _FakeSession(get_map={1: instance})
+        client = _S3ConfigDiscoveryClient()
+        client.config_key = "opt125m/opt-125m/config.pbtxt"
+        client.extra_config_key = "opt125m/other/config.pbtxt"
+
+        # Act / Assert
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            with self.assertRaises(HTTPException) as exc:
+                get_instance_s3_content(
+                    1,
+                    path="opt125m/config.pbtxt",
+                    session=session,
+                    claims={"role": "admin"},
+                )
+
+        self.assertEqual(exc.exception.status_code, 404)
+        self.assertEqual(len(client.get_calls), 1)
+
+    def test_InstanceS3Read_ConfigPbtxtWithoutModelHintAndMultipleModels_DoesNotGuess(self):
+        # Arrange
+        instance = self._instance()
+        instance.s3_prefix = "models"
+        session = _FakeSession(get_map={1: instance})
+        client = _S3ConfigDiscoveryClient()
+        client.config_key = "models/model-a/config.pbtxt"
+        client.extra_config_key = "models/model-b/config.pbtxt"
+
+        # Act / Assert
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            with self.assertRaises(HTTPException) as exc:
+                get_instance_s3_content(
+                    1,
+                    path="config.pbtxt",
+                    session=session,
+                    claims={"role": "admin"},
+                )
+
+        self.assertEqual(exc.exception.status_code, 404)
+        self.assertEqual(client.list_calls[0]["Prefix"], "models/")
+        self.assertEqual(len(client.get_calls), 1)
 
     def test_InstanceS3Read_SslVerificationFailure_ReturnsBadGatewayDetail(self):
         # Arrange
@@ -1098,6 +1189,39 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                 claims={"role": "viewer"},
             )
         self.assertEqual(exc.exception.status_code, 403)
+
+    async def test_PutInstanceS3Content_ConfigPbtxtMissingAtGuessedPath_UpdatesDiscoveredRepositoryConfig(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="opt125m",
+            model_names=["opt125m"],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="opt125m",
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3ConfigDiscoveryClient()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch("app.services.storage.s3.validate_triton_config_pbtxt", return_value=None):
+            result = put_instance_s3_content(
+                1,
+                path="config.pbtxt",
+                content=b'name: "opt125m"',
+                content_type="text/plain",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(result.path, "/config.pbtxt")
+        self.assertEqual(client.put_calls[0]["Key"], "opt125m/opt125m/config.pbtxt")
 
     async def test_PutInstanceS3Content_BinaryPayload_WritesRawBytes(self):
         # Arrange
