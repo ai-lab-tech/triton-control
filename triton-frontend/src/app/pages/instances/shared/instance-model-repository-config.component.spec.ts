@@ -80,6 +80,46 @@ describe("InstanceModelRepositoryConfigComponent", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("ToggleConfig_S3PrefixAlreadyModelFolder_LoadsConfigAtRepositoryRoot", async () => {
+    // Arrange
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      of({ path: "/config.pbtxt", content: 'name: "opt125m"\nbackend: "vllm"\n' } as any),
+    );
+    const auth = TestBed.inject(AuthStore);
+    auth.setAuthenticatedUser({ name: "Member", role: "member" });
+    const fixture = TestBed.createComponent(InstanceModelRepositoryConfigComponent);
+    const component = fixture.componentInstance;
+    fixture.componentRef.setInput("instanceId", "7");
+    fixture.componentRef.setInput("modelName", "opt125m");
+    fixture.componentRef.setInput("version", "1");
+    fixture.componentRef.setInput("s3", {
+      enabled: true,
+      endpoint: "https://s3.local",
+      bucket: "models",
+      prefix: "opt125m",
+    });
+    fixture.detectChanges();
+
+    // Act
+    await component.toggleConfig();
+    component.content.set('name: "opt125m"\nbackend: "vllm"\n');
+    await component.saveConfig();
+
+    // Assert
+    expect(component.effectivePath()).toBe("opt125m/config.pbtxt");
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).toHaveBeenCalledWith("7", "config.pbtxt");
+    expect(
+      instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut,
+    ).toHaveBeenCalledWith(
+      'name: "opt125m"\nbackend: "vllm"\n',
+      "config.pbtxt",
+      "7",
+      "text/plain; charset=utf-8",
+    );
+  });
+
   it("SaveConfig_S3ConfiguredAndMember_WritesConfigPbtxtToS3", async () => {
     // Arrange
     const auth = TestBed.inject(AuthStore);

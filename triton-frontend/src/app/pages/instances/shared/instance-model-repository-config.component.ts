@@ -38,6 +38,7 @@ export class InstanceModelRepositoryConfigComponent {
   readonly content = signal("");
   readonly error = signal("");
   readonly savedMessage = signal("");
+  readonly loadedConfigPath = signal("");
   readonly canWriteInstances = this.auth.canWriteInstances;
   readonly title = computed(() => (this.hasS3Config() ? "config.pbtxt" : "Live API Config"));
   readonly editorLanguage = computed(() => (this.hasS3Config() ? "proto" : "json"));
@@ -48,10 +49,30 @@ export class InstanceModelRepositoryConfigComponent {
   );
 
   readonly relativePath = computed(() => {
+    const loadedPath = this.loadedConfigPath();
+    if (loadedPath) {
+      return loadedPath;
+    }
+    return this.configPathCandidates()[0] ?? "";
+  });
+  readonly configPathCandidates = computed(() => {
     const modelName = this.modelName()
       .replace(/^\/+|\/+$/g, "")
       .trim();
-    return modelName ? `${modelName}/config.pbtxt` : "";
+    if (!modelName) {
+      return [];
+    }
+
+    const modelConfigPath = `${modelName}/config.pbtxt`;
+    const prefixName = this.s3Text("prefix")
+      .replace(/^\/+|\/+$/g, "")
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    if (prefixName && prefixName === modelName) {
+      return ["config.pbtxt", modelConfigPath];
+    }
+    return [modelConfigPath, "config.pbtxt"];
   });
   readonly effectivePath = computed(() => {
     if (!this.hasS3Config()) {
@@ -134,12 +155,7 @@ export class InstanceModelRepositoryConfigComponent {
     this.savedMessage.set("");
     try {
       if (this.hasS3Config()) {
-        const response = (await firstValueFrom(
-          this.instancesApi.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet(
-            this.instanceId(),
-            this.relativePath(),
-          ),
-        )) as S3FileContentResponse;
+        const response = await this.loadS3ConfigContent();
         this.content.set(response?.content ?? "");
       } else {
         const config = await firstValueFrom(
@@ -157,6 +173,26 @@ export class InstanceModelRepositoryConfigComponent {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async loadS3ConfigContent(): Promise<S3FileContentResponse> {
+    const candidates = this.configPathCandidates();
+    let lastError: unknown = null;
+    for (const path of candidates) {
+      try {
+        const response = (await firstValueFrom(
+          this.instancesApi.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet(
+            this.instanceId(),
+            path,
+          ),
+        )) as S3FileContentResponse;
+        this.loadedConfigPath.set(path);
+        return response;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("config.pbtxt not found");
   }
 
   private s3Text(key: keyof InstanceS3ConfigLike): string {
