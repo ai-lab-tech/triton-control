@@ -41,12 +41,14 @@ from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
 from app.api.instance_api import router as instance_router
+from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
 from app.api.user_api import router as user_router
+from app.api.workflows_api import router as workflows_router
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
@@ -177,10 +179,12 @@ app.include_router(error_log_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])
 app.include_router(code_server_router)
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])
+app.include_router(mlflow_router)
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_profile_router, dependencies=[Depends(get_claims)])
+app.include_router(workflows_router)
 
 
 @app.get("/api/auth/me")

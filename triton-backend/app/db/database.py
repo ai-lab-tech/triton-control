@@ -78,14 +78,17 @@ def init_db() -> None:
     from sqlmodel import SQLModel
 
     from app.db.entities import (  # Import models to register them
+        CodeServerEntity,
         DashboardAlertEntity,
         ErrorEventEntity,
+        MlflowEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
         S3ProfileEntity,
         TritonInstanceEntity,
         UserEntity,
+        WorkflowS3CredentialEntity,
     )
 
     SQLModel.metadata.create_all(engine)
@@ -93,6 +96,7 @@ def init_db() -> None:
     _migrate_oidc_config_table()
     _migrate_perf_analyzer_table()
     _migrate_s3_profiles_table()
+    _migrate_mlflow_table()
 
 
 def _migrate_oidc_config_table() -> None:
@@ -373,6 +377,35 @@ def _migrate_s3_profiles_table() -> None:
                     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     CONSTRAINT uq_s3_profile_owner_name UNIQUE (owner_user_id, name)
                 )
+                """
+            )
+        )
+
+
+def _migrate_mlflow_table() -> None:
+    """Apply lightweight schema migration for mlflow singleton table."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
+                ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'creating'
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
+                ADD COLUMN IF NOT EXISTS status_message TEXT NOT NULL DEFAULT ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS mlflow
+                ADD COLUMN IF NOT EXISTS last_transition_at TIMESTAMP NOT NULL DEFAULT NOW()
                 """
             )
         )

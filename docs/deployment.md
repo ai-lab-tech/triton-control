@@ -170,6 +170,43 @@ For GitOps-managed OIDC configuration, set `OIDC_CONFIG_SOURCE=env` and provide
 the OIDC values through Helm `app.env` plus Kubernetes Secrets. See
 [Configuration](configuration.md) for the full variable list and an example.
 
+### Optional Argo Workflows Dependency
+
+The Triton Control chart pins the official Argo Workflows chart as an optional
+dependency. It is disabled by default.
+
+Enable the global Argo Server and workflow controller with:
+
+```yaml
+argoWorkflows:
+  enabled: true
+```
+
+The default integration:
+
+- installs Argo Workflows `v4.0.6` through chart version `1.0.16`
+- pulls controller, executor, and server images directly from `quay.io`
+- runs Argo Server, controller, workflow RBAC, and Workflow pods in the Triton
+  Control Helm release namespace
+- creates `argo-service-account` in that namespace
+- enables Argo single-namespace mode
+- exposes Argo Server internally through a `ClusterIP` Service on port `2746`
+- configures `/api/workflows/proxy/` as the Argo UI base path
+
+The Argo Server runs plain HTTP inside the cluster. TLS remains the
+responsibility of the Triton Control ingress. Browser access passes through the
+authenticated Triton Control backend proxy.
+
+The configured public Argo system images do not cover private images referenced
+by Workflow YAML. Such images still require an image pull Secret in the Triton
+Control release namespace. Keep credentials outside Workflow YAML and inject a
+server-managed `spec.imagePullSecrets` reference.
+
+See the [Helm chart README](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#optional-argo-workflows)
+for image sources and existing-installation behavior, and
+[Argo Workflows](argo-workflows.md) for runtime, security, and credential
+details.
+
 ### Self-Deployed Triton And Perf Analyzer Namespace Behavior
 
 Triton Control supports creating self-managed Triton deployments and a singleton
@@ -182,9 +219,10 @@ Namespace selection depends on where Triton Control backend is running:
     as the running Triton Control pod.
 - Running **outside Kubernetes** (for example local dev with
   `KUBERNETES_KUBECONFIG_PATH`):
-  - Existing behavior stays unchanged:
-    - Triton deployment namespace defaults to the deployment name.
-    - Perf Analyzer namespace defaults to the installation name.
+  - Triton deployment namespace defaults to the deployment name.
+  - Perf Analyzer defaults to the shared `triton-control` namespace. Override
+    it with `TRITON_CONTROL_NAMESPACE`, `KUBERNETES_NAMESPACE`, or
+    `POD_NAMESPACE`.
 
 Runtime detection is automatic and based on in-cluster Kubernetes environment
 signals (service host/port and ServiceAccount files), not only on UI settings.

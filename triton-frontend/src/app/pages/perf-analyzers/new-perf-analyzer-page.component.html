@@ -182,4 +182,89 @@
       </div>
     }
   </mat-card>
+
+  <mat-card class="card instances-card">
+    <div class="instances-section-head">
+      <div>
+        <div class="section-title">Profile Triton instances</div>
+        <div class="section-subtitle">
+          Open the profile page for the first ready model reported by each instance.
+        </div>
+      </div>
+      <button mat-stroked-button type="button" (click)="refreshInstances()">
+        <span class="material-icons">refresh</span>
+        Refresh
+      </button>
+    </div>
+
+    @if (instancesLoading() && !instances().length) {
+      <div class="instances-empty" role="status">Loading Triton instances...</div>
+    } @else if (instances().length) {
+      <div class="instances-list">
+        @for (instance of instances(); track instance.id) {
+          @let target = profileTarget(instance);
+          <div class="instance-row">
+            <div class="instance-summary">
+              <div class="instance-name-row">
+                <strong>{{ instance.name }}</strong>
+                <span class="instance-status" [attr.data-status]="instance.status">
+                  {{ instance.status }}
+                </span>
+              </div>
+              <div class="instance-url">{{ instance.url }}</div>
+              @if (target) {
+                <div class="profile-target">
+                  Model <strong>{{ target.name }}</strong>
+                  <span>·</span>
+                  Version <strong>{{ target.version }}</strong>
+                </div>
+              } @else {
+                <div class="profile-target unavailable">No ready model version available.</div>
+              }
+            </div>
+
+            @if (target) {
+              <a
+                mat-flat-button
+                color="primary"
+                class="profile-action"
+                [routerLink]="[
+                  '/instances',
+                  instance.id,
+                  'models',
+                  target.name,
+                  'versions',
+                  target.version,
+                  'profile',
+                ]"
+                [state]="{ instanceName: instance.name, instanceUrl: instance.url }"
+                [class.disabled]="!installationReady()"
+                [attr.aria-disabled]="!installationReady()"
+                [attr.tabindex]="installationReady() ? 0 : -1"
+                (click)="!installationReady() && $event.preventDefault()"
+              >
+                <span class="material-icons">speed</span>
+                Profile
+              </a>
+            } @else {
+              <button mat-flat-button color="primary" class="profile-action" type="button" disabled>
+                <span class="material-icons">speed</span>
+                Profile
+              </button>
+            }
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="instances-empty">
+        No Triton instances are available. Add an instance before starting a profile.
+      </div>
+    }
+
+    @if (!installationReady()) {
+      <div class="instances-hint">
+        The Profile buttons become available when the Perf Analyzer pod is ready.
+      </div>
+    }
+  </mat-card>
 </div>

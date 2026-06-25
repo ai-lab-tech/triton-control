@@ -1,6 +1,12 @@
 apiVersion: v2
 name: triton-control
-description: Triton Control frontend and backend in one Kubernetes Pod.
+description: Triton Control frontend and backend with optional Argo Workflows.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+dependencies:
+  - name: argo-workflows
+    alias: argoWorkflows
+    version: 1.0.16
+    repository: https://argoproj.github.io/argo-helm
+    condition: argoWorkflows.enabled

@@ -119,7 +119,10 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions", container["args"][0])
         self.assertIn("PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json", container["args"][0])
         self.assertIn("PERSISTENT_EXTENSIONS=/workspace/.triton-control/code-server-extensions", container["args"][0])
-        self.assertIn("ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"", container["args"][0])
+        self.assertIn(
+            "ln -sf \"$PERSISTENT_SETTINGS\" \"$CODE_SERVER_RUNTIME/user-data/User/settings.json\"",
+            container["args"][0],
+        )
         self.assertIn("CODE_SERVER_EXTENSIONS=$PERSISTENT_EXTENSIONS", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
         self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
@@ -150,7 +153,10 @@ class CodeServerTests(unittest.TestCase):
             "30Gi",
         )
         self.assertEqual(service["spec"]["ports"][0]["port"], 8080)
-        self.assertEqual([manifest["kind"] for manifest in manifests], ["Secret", "ConfigMap", "StatefulSet", "Service"])
+        self.assertEqual(
+            [manifest["kind"] for manifest in manifests],
+            ["Secret", "ConfigMap", "StatefulSet", "Service"],
+        )
 
     def test_Manifests_UsesSelectedCodeServerTheme(self) -> None:
         request = self._request().model_copy(update={"theme": "Monokai"})
@@ -200,7 +206,7 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertNotIn("requests", resources)
         self.assertEqual(resources["limits"], {"nvidia.com/gpu": "1"})
-        
+
     def test_TritonDeployExtensionDir_ConfiguredParentDirectory_UsesChildExtension(self) -> None:
         configured = Path(__file__).resolve().parents[2] / "code-server-extensions"
 
@@ -746,10 +752,44 @@ class WebSocketProxyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(websocket.sent_text, ["hello"])
         self.assertEqual(websocket.sent_bytes, [b"world"])
 
+    async def test_UpstreamToBrowser_BrowserAlreadyClosed_ReturnsCleanly(self) -> None:
+        websocket = _FakeWebSocket(
+            receive_messages=[],
+            send_error=RuntimeError(
+                "Unexpected ASGI message 'websocket.send', after sending "
+                "'websocket.close' or response already completed."
+            ),
+        )
+        upstream = _FakeUpstream(messages=[b"late"])
+
+        await code_proxy._upstream_to_browser(websocket, upstream)
+
+        self.assertEqual(websocket.sent_bytes, [])
+
+    async def test_CloseWebsocket_AlreadyClosedByServer_ReturnsCleanly(self) -> None:
+        websocket = _FakeWebSocket(
+            receive_messages=[],
+            close_error=RuntimeError(
+                "Unexpected ASGI message 'websocket.close', after sending "
+                "'websocket.close' or response already completed."
+            ),
+        )
+
+        await code_proxy._close_websocket(websocket, code=1011)
+
+        self.assertFalse(websocket.closed)
+
 
 class _FakeWebSocket:
-    def __init__(self, receive_messages: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        receive_messages: list[dict[str, Any]],
+        send_error: RuntimeError | None = None,
+        close_error: RuntimeError | None = None,
+    ) -> None:
         self._receive_messages = receive_messages
+        self._send_error = send_error
+        self._close_error = close_error
         self.client_state = SimpleNamespace(name="CONNECTED")
         self.closed = False
         self.receive_cancelled = False
@@ -767,14 +807,20 @@ class _FakeWebSocket:
         raise AssertionError("unreachable")
 
     async def close(self, code: int = 1000) -> None:
+        if self._close_error:
+            raise self._close_error
         self.closed = True
         self.close_code = code
         self.client_state.name = "DISCONNECTED"
 
     async def send_text(self, message: str) -> None:
+        if self._send_error:
+            raise self._send_error
         self.sent_text.append(message)
 
     async def send_bytes(self, message: bytes) -> None:
+        if self._send_error:
+            raise self._send_error
         self.sent_bytes.append(message)
 
 
