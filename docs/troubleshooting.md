@@ -150,10 +150,23 @@ http://triton-control.test
 http://<minikube-ip>
 ```
 
+If the browser console shows a service worker certificate error instead:
+
+```text
+Could not register service worker ... An SSL certificate error occurred when fetching the script
+```
+
+then the browser reached Triton Control over HTTPS, but it does not trust the
+certificate. Opening the page through the browser warning is not enough for
+code-server webviews, because service workers require a trusted certificate.
+
 Use one of these fixes:
 
 - expose Triton Control through an HTTPS ingress with a trusted certificate
 - or port-forward the Triton Control service and open it through localhost:
+- or run `Triton Control: Upload Model Repository (Simple Wizard)` from
+  code-server. This native wizard does not use webviews. It uploads the
+  repository and prints the values to finish deployment in Add Deployment.
 
 ```bash
 kubectl -n triton-control port-forward svc/triton-control 8080:8080
@@ -163,6 +176,15 @@ Then open:
 
 ```text
 http://localhost:8080
+```
+
+When using `mkcert`, install or import the mkcert root CA into the same OS and
+browser profile that opens Triton Control. For example, if the certificate was
+created in WSL or a Linux VM but the browser runs on Windows, import this CA
+into Windows or the browser trust store:
+
+```bash
+cat "$(mkcert -CAROOT)/rootCA.pem"
 ```
 
 The `api/auth/me` `401 Unauthorized` message during page load is normally only

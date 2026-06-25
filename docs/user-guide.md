@@ -399,6 +399,12 @@ Users can create one persistent workspace, edit model repositories under
 `/workspace`, and deploy them through the bundled **Triton Control Deploy**
 extension.
 
+The deploy extension has a full webview form for trusted HTTPS or localhost.
+For plain HTTP or an untrusted local certificate, use
+**Triton Control: Upload Model Repository (Simple Wizard)** in code-server.
+The simple wizard avoids webviews, uploads the repository to S3, and shows the
+values needed to finish in **Add Deployment**.
+
 See [Development Workspaces](development-workspaces.md) for workspace fields,
 Kubernetes resources, persistence, proxy behavior, deployment steps, and API
 details.

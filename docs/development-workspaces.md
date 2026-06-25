@@ -77,10 +77,12 @@ Both HTTP and WebSocket traffic pass through this proxy. The code-server
 Service is therefore not exposed directly to the browser.
 
 code-server webviews, including the bundled **Triton Control Deploy**
-extension, require a browser secure context. Use HTTPS for non-localhost
-hosts. Plain `http://triton-control.test` can load the workspace, but plugin
-webviews may fail because browser crypto APIs are unavailable. For local
-testing, `http://localhost:<port>` via `kubectl port-forward` also works.
+extension, require a browser secure context. Use trusted HTTPS for
+non-localhost hosts. Plain `http://triton-control.test` can load the
+workspace, but plugin webviews may fail because browser crypto APIs are
+unavailable. HTTPS with an untrusted certificate can still fail when
+code-server registers its webview service worker. For local testing,
+`http://localhost:<port>` via `kubectl port-forward` also works.
 
 Use **Refresh** to read the latest pod status. Use **Delete** to remove the
 managed StatefulSet, Service, Secrets, ConfigMap, and any legacy ingress.
@@ -104,6 +106,10 @@ settings and user-installed extensions on that volume:
 These files survive pod restarts while the PVC remains available. New
 workspaces receive the Python extension when its marketplace installation
 succeeds and the bundled **Triton Control Deploy** extension.
+
+Triton Control starts code-server with Workspace Trust disabled. The managed
+`/workspace` folder is treated as the user's development area, so code-server
+does not prompt users to mark the folder as trusted on each new workspace.
 
 ## S3 Profiles and Optional S3/R2 Explorer
 
@@ -160,8 +166,20 @@ Triton deployment so its model repository client can trust the endpoint.
 
 ## Deploy a Model Repository
 
-The **Triton Control Deploy** extension uploads a model repository to
-S3-compatible storage and creates a self-deployed Triton instance.
+The **Triton Control Deploy** extension has two modes:
+
+- **Triton Control: Deploy Model Repository** opens the full webview form,
+  uploads the repository to S3-compatible storage, and creates a self-deployed
+  Triton instance.
+- **Triton Control: Upload Model Repository (Simple Wizard)** uses native
+  code-server prompts instead of a webview. Use it when Triton Control is
+  opened through plain HTTP or an untrusted local certificate. It uploads the
+  repository and prints the Add Deployment values in the output panel; finish
+  the deployment from Triton Control's **Add Deployment** page.
+
+The full webview mode requires trusted HTTPS or localhost because code-server
+webviews use browser APIs and service workers that do not work on insecure
+origins.
 
 1. Create or edit a Triton model repository under `/workspace`.
 2. Right-click the repository root or a single model folder.
@@ -169,8 +187,8 @@ S3-compatible storage and creates a self-deployed Triton instance.
 4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
 5. Confirm the Triton image, detected backend summary, S3 upload target, model
    control mode, and optional resources.
-6. After deployment, Triton Control opens the new instance and its deployment
-   logs.
+6. After full webview deployment, Triton Control opens the new instance and its
+   deployment logs.
 
 A repository should follow Triton's model layout:
 

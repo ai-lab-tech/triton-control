@@ -1,8 +1,8 @@
 # Triton Control Deploy Extension
 
 This code-server extension uploads a selected Triton model folder or Triton
-model repository root to S3-compatible storage, then calls Triton Control's
-existing `POST /api/deployments` endpoint.
+model repository root to S3-compatible storage. In the full webview flow it
+then calls Triton Control's existing `POST /api/deployments` endpoint.
 
 ## Flow
 
@@ -17,6 +17,12 @@ existing `POST /api/deployments` endpoint.
 5. The extension uploads files below `bucket/prefix/model-repository-path`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
+
+The full deploy form is a code-server webview. Browser webviews require trusted
+HTTPS or localhost. If Triton Control is opened through plain HTTP or an
+untrusted certificate, run `Triton Control: Upload Model Repository (Simple
+Wizard)` instead. The simple wizard uses native VS Code prompts, uploads the
+repository to S3, and prints the Add Deployment values in the output panel.
 
 Repository access is selected automatically. Models without `backend: "vllm"`
 use Triton's native S3 model repository directly. vLLM models use the sync

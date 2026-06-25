@@ -6,9 +6,13 @@ const path = require("path");
 const vscode = require("vscode");
 
 let insecureWebviewWarningShown = false;
+let outputChannel;
 
 function activate(context) {
-  const disposable = vscode.commands.registerCommand(
+  outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
+  context.subscriptions.push(outputChannel);
+
+  const webviewCommand = vscode.commands.registerCommand(
     "tritonControl.deployModelRepository",
     async (resource) => {
       const source = await resolveSourceFolder(resource);
@@ -19,11 +23,29 @@ function activate(context) {
       if (!initial) {
         return;
       }
-      await warnIfInsecureWebviewContext();
+      const useSimpleWizard = await shouldUseSimpleWizardForInsecureContext();
+      if (useSimpleWizard) {
+        await runSimpleUploadWizard(initial);
+        return;
+      }
       openDeployPanel(context, initial);
     },
   );
-  context.subscriptions.push(disposable);
+  const simpleCommand = vscode.commands.registerCommand(
+    "tritonControl.uploadModelRepositorySimple",
+    async (resource) => {
+      const source = await resolveSourceFolder(resource);
+      if (!source) {
+        return;
+      }
+      const initial = await initialFormValues(source);
+      if (!initial) {
+        return;
+      }
+      await runSimpleUploadWizard(initial);
+    },
+  );
+  context.subscriptions.push(webviewCommand, simpleCommand);
 }
 
 async function resolveSourceFolder(resource) {
@@ -86,24 +108,26 @@ function openDeployPanel(context, initial) {
   );
 }
 
-async function warnIfInsecureWebviewContext() {
+async function shouldUseSimpleWizardForInsecureContext() {
   if (insecureWebviewWarningShown) {
-    return;
+    return false;
   }
   let external;
   try {
     external = await vscode.env.asExternalUri(vscode.Uri.parse("http://127.0.0.1:8080/"));
   } catch {
-    return;
+    return false;
   }
   if (external.scheme !== "http" || isLocalhostAuthority(external.authority)) {
-    return;
+    return false;
   }
   insecureWebviewWarningShown = true;
-  vscode.window.showWarningMessage(
-    "Triton Control Deploy opens in a code-server webview. Webviews require HTTPS or localhost; plain HTTP hosts can show a blank plugin window.",
-    "OK",
+  const selection = await vscode.window.showWarningMessage(
+    "Triton Control Deploy opens in a code-server webview. Webviews require trusted HTTPS or localhost; plain HTTP or untrusted certificates can show a blank plugin window.",
+    "Simple Wizard",
+    "Open Webview",
   );
+  return selection === "Simple Wizard";
 }
 
 function isLocalhostAuthority(authority) {
@@ -112,6 +136,145 @@ function isLocalhostAuthority(authority) {
     ? value.slice(1, value.indexOf("]"))
     : value.split(":")[0];
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+async function runSimpleUploadWizard(initial) {
+  const form = await collectSimpleUploadForm(initial);
+  if (!form) {
+    return;
+  }
+  try {
+    validateForm(form);
+    await saveS3Settings(form);
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Uploading ${path.basename(form.sourceFolder)} to S3`,
+        cancellable: false,
+      },
+      async (progress) => {
+        await uploadRepository(form.sourceFolder, form, (text, increment) => {
+          progress.report({ message: text, increment });
+        });
+      },
+    );
+    showSimpleUploadResult(form);
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(messageText);
+  }
+}
+
+async function collectSimpleUploadForm(initial) {
+  const values = { ...initial };
+  const deploymentName = await promptValue("Deployment name", values.deploymentName, true);
+  if (!deploymentName) return null;
+  values.deploymentName = toKubernetesName(deploymentName);
+
+  const image = await promptValue("Triton image", values.image, true);
+  if (!image) return null;
+  values.image = image;
+
+  const endpoint = await promptValue("S3 endpoint", values.endpoint || "https://s3.example.com", true);
+  if (!endpoint) return null;
+  values.endpoint = endpoint.replace(/\/+$/, "");
+
+  const bucket = await promptValue("S3 bucket", values.bucket, true);
+  if (!bucket) return null;
+  values.bucket = bucket;
+
+  const prefix = await promptValue("Repository prefix", values.prefix, false);
+  if (prefix === undefined) return null;
+  values.prefix = cleanPrefix(prefix);
+
+  const region = await promptValue("S3 region", values.region || "us-east-1", true);
+  if (!region) return null;
+  values.region = region;
+
+  const accessKeyId = await promptValue("S3 access key", values.accessKeyId, true);
+  if (!accessKeyId) return null;
+  values.accessKeyId = accessKeyId;
+
+  const secretAccessKey = await promptValue("S3 secret key", values.secretAccessKey, true, true);
+  if (!secretAccessKey) return null;
+  values.secretAccessKey = secretAccessKey;
+
+  const modelName = await promptValue("Model name", values.modelName, true);
+  if (!modelName) return null;
+  values.modelName = modelName;
+
+  const forcePathStyle = await vscode.window.showQuickPick(
+    [
+      { label: "Path-style S3", value: true },
+      { label: "Virtual-host S3", value: false },
+    ],
+    {
+      title: "Triton Control Deploy",
+      placeHolder: "S3 addressing mode",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!forcePathStyle) return null;
+  values.forcePathStyle = forcePathStyle.value;
+
+  const modelControl = await vscode.window.showQuickPick(
+    [
+      { label: "Polling mode", value: "poll" },
+      { label: "Explicit mode", value: "explicit" },
+    ],
+    {
+      title: "Triton Control Deploy",
+      placeHolder: "Model control mode for Add Deployment",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!modelControl) return null;
+  values.modelControlMode = modelControl.value;
+  values.repositorySyncMode = values.detectedBackend === "vllm" ? "sidecar" : "direct";
+  values.repositoryPollSecs = 15;
+
+  return normalizeForm(values);
+}
+
+async function promptValue(prompt, value, required, password = false) {
+  const input = await vscode.window.showInputBox({
+    title: "Triton Control Deploy",
+    prompt,
+    value: value || "",
+    password,
+    ignoreFocusOut: true,
+    validateInput: (text) => required && !text.trim() ? `${prompt} is required.` : undefined,
+  });
+  return input === undefined ? undefined : input.trim();
+}
+
+function showSimpleUploadResult(form) {
+  const payload = deploymentPayload(form);
+  const displayPayload = {
+    ...payload,
+    s3_secret_key: payload.s3_secret_key ? "<redacted>" : "",
+  };
+  outputChannel.clear();
+  outputChannel.appendLine("Triton model repository upload complete.");
+  outputChannel.appendLine("");
+  outputChannel.appendLine("Use Add Deployment in Triton Control with these values:");
+  outputChannel.appendLine(`Deployment name: ${form.deploymentName}`);
+  outputChannel.appendLine(`Image: ${form.image}`);
+  outputChannel.appendLine(`Model repository: ${payload.s3_url}`);
+  outputChannel.appendLine(`S3 endpoint: ${form.endpoint}`);
+  outputChannel.appendLine(`S3 bucket: ${form.bucket}`);
+  outputChannel.appendLine(`Repository prefix: ${form.prefix}`);
+  outputChannel.appendLine(`Model name: ${form.modelName}`);
+  outputChannel.appendLine(`Model control: ${form.modelControlMode}`);
+  outputChannel.appendLine(`Repository sync: ${form.repositorySyncMode}`);
+  outputChannel.appendLine("S3 credentials: use the same access key and secret entered in the wizard.");
+  outputChannel.appendLine("");
+  outputChannel.appendLine("JSON payload reference with secret redacted:");
+  outputChannel.appendLine(JSON.stringify(displayPayload, null, 2));
+  outputChannel.show(true);
+  vscode.window.showInformationMessage(
+    "Repository uploaded. Finish the deployment from Triton Control Add Deployment using the shown S3 target.",
+  );
 }
 
 async function initialFormValues(sourceFolder) {
