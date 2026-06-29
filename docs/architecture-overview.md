@@ -31,6 +31,7 @@ graph LR
   s3store[(S3-Compatible Object Store)]
   oidcProvider[OIDC Provider]
   triton[Triton Inference Server]
+  vllmSync[vLLM Repository Sync\nInit container or sidecar]
 
   admin -->|HTTPS| spa
   spa -->|REST JSON| api
@@ -40,7 +41,9 @@ graph LR
   api -->|OIDC exchange| oidcProvider
   api -->|HTTP REST /v2| triton
 
-  triton -->|Model repository| s3store
+  triton -->|Native model repository, non-vLLM| s3store
+  s3store -->|Differential download, vLLM only| vllmSync
+  vllmSync -->|Stable local /models volume| triton
 ```
 
 ## Runtime Responsibilities
@@ -51,4 +54,8 @@ graph LR
 - PostgreSQL: users, roles, instance config, OIDC settings, and health state.
 - S3-compatible object store: model repository files consumed by Triton and
   managed via backend.
+- Repository access: non-vLLM deployments retain Triton's native S3 repository.
+  vLLM deployments use an explicitly selected init container or sidecar because
+  local paths in `model.json` must resolve against a stable absolute filesystem
+  path.
 - OIDC provider: optional external identity provider.

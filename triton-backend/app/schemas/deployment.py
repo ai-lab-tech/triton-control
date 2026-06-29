@@ -36,6 +36,8 @@ class CreateDeploymentRequest(SQLModel):
     ingress_class_name: Optional[str] = None
     model_control_mode: Literal["explicit", "poll"] = "explicit"
     repository_poll_secs: int = Field(default=15, gt=0)
+    repository_sync_mode: Literal["direct", "init", "sidecar"] = "direct"
+    repository_sync_image: Optional[str] = None
     model_name: Optional[str] = None
     allow_metrics: bool = True
     requirements_txt: Optional[str] = None
@@ -44,6 +46,12 @@ class CreateDeploymentRequest(SQLModel):
     cpu_limit: Optional[str] = None
     memory: Optional[str] = None
     memory_limit: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_repository_modes(self) -> CreateDeploymentRequest:
+        if self.repository_sync_mode == "init" and self.model_control_mode != "explicit":
+            raise ValueError("init repository sync supports only explicit model control mode")
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -65,7 +73,14 @@ class CreateDeploymentRequest(SQLModel):
         normalized["ingress_scheme"] = parsed.scheme
         return normalized
 
-    @field_validator("deployment_name", "s3_url", "s3_access_key", "s3_secret_key", "s3_region", "image")
+    @field_validator(
+        "deployment_name",
+        "s3_url",
+        "s3_access_key",
+        "s3_secret_key",
+        "s3_region",
+        "image",
+    )
     @classmethod
     def strip_required_text(cls, value: str) -> str:
         cleaned = (value or "").strip()
@@ -91,7 +106,7 @@ class CreateDeploymentRequest(SQLModel):
             raise ValueError("s3_url must start with s3:// (or use http:// / https:// endpoint form)")
         return normalized.rstrip()
 
-    @field_validator("model_name", "dockerconfigjson")
+    @field_validator("model_name", "dockerconfigjson", "repository_sync_image")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         cleaned = (value or "").strip()

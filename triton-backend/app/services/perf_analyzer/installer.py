@@ -235,6 +235,10 @@ def _run_command(
 ) -> list[str]:
     target = _perf_analyzer_target(instance, perf_analyzer_namespace=perf_analyzer_namespace)
     protocol = _perf_analyzer_protocol(instance, target=target)
+    decoupled = _requires_decoupled_perf_analyzer_mode(instance)
+    if decoupled:
+        target = _grpc_perf_analyzer_target(target)
+        protocol = "grpc"
     cmd = [
         "perf_analyzer",
         "-m",
@@ -254,6 +258,8 @@ def _run_command(
         "--measurement-request-count",
         str(request.measurement_request_count),
     ]
+    if decoupled:
+        cmd.extend(["--async", "--streaming"])
     if input_data_arg:
         cmd.extend(["--input-data", input_data_arg])
     return cmd
@@ -322,6 +328,35 @@ def _perf_analyzer_protocol(instance: Any, *, target: str) -> str:
     if scheme in {"grpc", "grpcs"}:
         return "gRPC"
     return "HTTP"
+
+
+def _requires_decoupled_perf_analyzer_mode(instance: Any) -> bool:
+    """Return true for vLLM-backed Triton deployments.
+
+    The Triton vLLM backend exposes decoupled models. Perf Analyzer requires
+    decoupled models to run with async streaming over gRPC.
+    """
+    parts: list[str] = []
+    for attr in ("deployment_log", "url"):
+        parts.append(str(getattr(instance, attr, "") or ""))
+    metadata = getattr(instance, "server_metadata", None)
+    if isinstance(metadata, dict):
+        parts.extend(str(value) for value in metadata.values())
+    for model in getattr(instance, "repository_models", None) or []:
+        if isinstance(model, dict):
+            parts.extend(str(value) for value in model.values())
+    return "vllm" in " ".join(parts).lower()
+
+
+def _grpc_perf_analyzer_target(target: str) -> str:
+    host, sep, port = target.rpartition(":")
+    if not sep:
+        return target
+    if port == "18000":
+        return f"{host}:18001"
+    if port == "8000":
+        return f"{host}:8001"
+    return target
 
 
 def _prepare_input_data_for_perf_analyzer(input_data: str | None) -> str | None:

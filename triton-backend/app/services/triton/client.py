@@ -631,3 +631,16 @@ class TritonService:
         )
         response.raise_for_status()
         return response
+
+    async def generate_model_raw(self, model_name: str, payload: bytes, content_type: str) -> httpx.Response:
+        """Send a generate request to a Triton text-generation model."""
+        encoded_model_name = quote(model_name, safe="")
+        url = f"{self.triton_url}/v2/models/{encoded_model_name}/generate"
+
+        response = await self._get_client().post(
+            url,
+            content=payload,
+            headers={"content-type": content_type or "application/json"},
+        )
+        response.raise_for_status()
+        return response

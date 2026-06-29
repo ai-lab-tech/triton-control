@@ -5,8 +5,14 @@ const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
 
+let insecureWebviewWarningShown = false;
+let outputChannel;
+
 function activate(context) {
-  const disposable = vscode.commands.registerCommand(
+  outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
+  context.subscriptions.push(outputChannel);
+
+  const webviewCommand = vscode.commands.registerCommand(
     "tritonControl.deployModelRepository",
     async (resource) => {
       const source = await resolveSourceFolder(resource);
@@ -17,10 +23,29 @@ function activate(context) {
       if (!initial) {
         return;
       }
+      const useSimpleWizard = await shouldUseSimpleWizardForInsecureContext();
+      if (useSimpleWizard) {
+        await runSimpleUploadWizard(initial);
+        return;
+      }
       openDeployPanel(context, initial);
     },
   );
-  context.subscriptions.push(disposable);
+  const simpleCommand = vscode.commands.registerCommand(
+    "tritonControl.uploadModelRepositorySimple",
+    async (resource) => {
+      const source = await resolveSourceFolder(resource);
+      if (!source) {
+        return;
+      }
+      const initial = await initialFormValues(source);
+      if (!initial) {
+        return;
+      }
+      await runSimpleUploadWizard(initial);
+    },
+  );
+  context.subscriptions.push(webviewCommand, simpleCommand);
 }
 
 async function resolveSourceFolder(resource) {
@@ -83,10 +108,180 @@ function openDeployPanel(context, initial) {
   );
 }
 
+async function shouldUseSimpleWizardForInsecureContext() {
+  if (insecureWebviewWarningShown) {
+    return false;
+  }
+  let external;
+  try {
+    external = await vscode.env.asExternalUri(vscode.Uri.parse("http://127.0.0.1:8080/"));
+  } catch {
+    return false;
+  }
+  if (external.scheme !== "http" || isLocalhostAuthority(external.authority)) {
+    return false;
+  }
+  insecureWebviewWarningShown = true;
+  const selection = await vscode.window.showWarningMessage(
+    "Triton Control Deploy opens in a code-server webview. Webviews require trusted HTTPS or localhost; plain HTTP or untrusted certificates can show a blank plugin window.",
+    "Simple Wizard",
+    "Open Webview",
+  );
+  return selection === "Simple Wizard";
+}
+
+function isLocalhostAuthority(authority) {
+  const value = String(authority || "").toLowerCase();
+  const host = value.startsWith("[")
+    ? value.slice(1, value.indexOf("]"))
+    : value.split(":")[0];
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+async function runSimpleUploadWizard(initial) {
+  const form = await collectSimpleUploadForm(initial);
+  if (!form) {
+    return;
+  }
+  try {
+    validateForm(form);
+    await saveS3Settings(form);
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Uploading ${path.basename(form.sourceFolder)} to S3`,
+        cancellable: false,
+      },
+      async (progress) => {
+        await uploadRepository(form.sourceFolder, form, (text, increment) => {
+          progress.report({ message: text, increment });
+        });
+      },
+    );
+    showSimpleUploadResult(form);
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(messageText);
+  }
+}
+
+async function collectSimpleUploadForm(initial) {
+  const values = { ...initial };
+  const deploymentName = await promptValue("Deployment name", values.deploymentName, true);
+  if (!deploymentName) return null;
+  values.deploymentName = toKubernetesName(deploymentName);
+
+  const image = await promptValue("Triton image", values.image, true);
+  if (!image) return null;
+  values.image = image;
+
+  const endpoint = await promptValue("S3 endpoint", values.endpoint || "https://s3.example.com", true);
+  if (!endpoint) return null;
+  values.endpoint = endpoint.replace(/\/+$/, "");
+
+  const bucket = await promptValue("S3 bucket", values.bucket, true);
+  if (!bucket) return null;
+  values.bucket = bucket;
+
+  const prefix = await promptValue("Repository prefix", values.prefix, false);
+  if (prefix === undefined) return null;
+  values.prefix = cleanPrefix(prefix);
+
+  const region = await promptValue("S3 region", values.region || "us-east-1", true);
+  if (!region) return null;
+  values.region = region;
+
+  const accessKeyId = await promptValue("S3 access key", values.accessKeyId, true);
+  if (!accessKeyId) return null;
+  values.accessKeyId = accessKeyId;
+
+  const secretAccessKey = await promptValue("S3 secret key", values.secretAccessKey, true, true);
+  if (!secretAccessKey) return null;
+  values.secretAccessKey = secretAccessKey;
+
+  const modelName = await promptValue("Model name", values.modelName, true);
+  if (!modelName) return null;
+  values.modelName = modelName;
+
+  const forcePathStyle = await vscode.window.showQuickPick(
+    [
+      { label: "Path-style S3", value: true },
+      { label: "Virtual-host S3", value: false },
+    ],
+    {
+      title: "Triton Control Deploy",
+      placeHolder: "S3 addressing mode",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!forcePathStyle) return null;
+  values.forcePathStyle = forcePathStyle.value;
+
+  const modelControl = await vscode.window.showQuickPick(
+    [
+      { label: "Polling mode", value: "poll" },
+      { label: "Explicit mode", value: "explicit" },
+    ],
+    {
+      title: "Triton Control Deploy",
+      placeHolder: "Model control mode for Add Deployment",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!modelControl) return null;
+  values.modelControlMode = modelControl.value;
+  values.repositorySyncMode = values.detectedBackend === "vllm" ? "sidecar" : "direct";
+  values.repositoryPollSecs = 15;
+
+  return normalizeForm(values);
+}
+
+async function promptValue(prompt, value, required, password = false) {
+  const input = await vscode.window.showInputBox({
+    title: "Triton Control Deploy",
+    prompt,
+    value: value || "",
+    password,
+    ignoreFocusOut: true,
+    validateInput: (text) => required && !text.trim() ? `${prompt} is required.` : undefined,
+  });
+  return input === undefined ? undefined : input.trim();
+}
+
+function showSimpleUploadResult(form) {
+  const payload = deploymentPayload(form);
+  const displayPayload = {
+    ...payload,
+    s3_secret_key: payload.s3_secret_key ? "<redacted>" : "",
+  };
+  outputChannel.clear();
+  outputChannel.appendLine("Triton model repository upload complete.");
+  outputChannel.appendLine("");
+  outputChannel.appendLine("Use Add Deployment in Triton Control with these values:");
+  outputChannel.appendLine(`Deployment name: ${form.deploymentName}`);
+  outputChannel.appendLine(`Image: ${form.image}`);
+  outputChannel.appendLine(`Model repository: ${payload.s3_url}`);
+  outputChannel.appendLine(`S3 endpoint: ${form.endpoint}`);
+  outputChannel.appendLine(`S3 bucket: ${form.bucket}`);
+  outputChannel.appendLine(`Repository prefix: ${form.prefix}`);
+  outputChannel.appendLine(`Model name: ${form.modelName}`);
+  outputChannel.appendLine(`Model control: ${form.modelControlMode}`);
+  outputChannel.appendLine(`Repository sync: ${form.repositorySyncMode}`);
+  outputChannel.appendLine("S3 credentials: use the same access key and secret entered in the wizard.");
+  outputChannel.appendLine("");
+  outputChannel.appendLine("JSON payload reference with secret redacted:");
+  outputChannel.appendLine(JSON.stringify(displayPayload, null, 2));
+  outputChannel.show(true);
+  vscode.window.showInformationMessage(
+    "Repository uploaded. Finish the deployment from Triton Control Add Deployment using the shown S3 target.",
+  );
+}
+
 async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const s3x = vscode.workspace.getConfiguration("s3x");
   const detectedModelName = detectModelName(sourceFolder);
+  const detectedBackend = detectModelBackend(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
   if (!modelName) {
     return null;
@@ -108,11 +303,19 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
-    modelControlMode: "explicit",
+    detectedBackend,
+    detectedBackendLabel: backendLabel(detectedBackend),
+    modelControlMode: "poll",
+    repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
+    profileId: "",
+    profileName: "",
+    cpu: "2",
+    memory: "4Gi",
+    gpuCount: "1",
   };
-  return promptForMissingS3Settings(initial);
+  return initial;
 }
 
 function detectModelName(sourceFolder) {
@@ -130,6 +333,28 @@ function detectModelName(sourceFolder) {
     return "";
   }
   return path.basename(path.dirname(configPath));
+}
+
+function detectModelBackend(sourceFolder) {
+  const configPath = findConfigPbtxt(sourceFolder);
+  if (!configPath) return "";
+  try {
+    const config = fs.readFileSync(configPath, "utf8");
+    return config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase() || "";
+  } catch {
+    return "";
+  }
+}
+
+function backendLabel(value) {
+  const backend = String(value || "").trim().toLowerCase();
+  if (backend === "vllm") {
+    return "vLLM model backend";
+  }
+  if (backend) {
+    return `${backend} model backend`;
+  }
+  return "No backend in config.pbtxt";
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -172,68 +397,6 @@ function toKubernetesName(value) {
     .replace(/-$/g, "") || "triton-model";
 }
 
-async function promptForMissingS3Settings(initial) {
-  const prompts = [
-    {
-      key: "endpoint",
-      label: "S3 endpoint",
-      placeHolder: "https://s3.example.com",
-      password: false,
-    },
-    {
-      key: "bucket",
-      label: "S3 bucket",
-      placeHolder: "model-repository",
-      password: false,
-    },
-    {
-      key: "accessKeyId",
-      label: "S3 access key",
-      placeHolder: "access-key-id",
-      password: false,
-    },
-    {
-      key: "secretAccessKey",
-      label: "S3 secret key",
-      placeHolder: "",
-      password: true,
-    },
-  ];
-  const next = { ...initial };
-  let changed = false;
-  for (const prompt of prompts) {
-    if (String(next[prompt.key] || "").trim()) {
-      continue;
-    }
-    const value = await vscode.window.showInputBox({
-      title: "Triton Control Deploy",
-      prompt: `${prompt.label} is required to upload the model repository.`,
-      placeHolder: prompt.placeHolder,
-      password: prompt.password,
-      ignoreFocusOut: true,
-      validateInput: (input) => {
-        const trimmed = input.trim();
-        if (!trimmed) {
-          return `${prompt.label} is required.`;
-        }
-        if (prompt.key === "endpoint" && !/^https?:\/\//i.test(trimmed)) {
-          return "Endpoint must start with http:// or https://.";
-        }
-        return undefined;
-      },
-    });
-    if (value === undefined) {
-      return null;
-    }
-    next[prompt.key] = prompt.key === "secretAccessKey" ? value : value.trim();
-    changed = true;
-  }
-  if (changed) {
-    await saveS3Settings(next);
-  }
-  return next;
-}
-
 async function saveS3Settings(values) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const target = vscode.ConfigurationTarget.Global;
@@ -269,8 +432,13 @@ async function saveS3xSettingsIfAvailable(values, forcePathStyle, target) {
 
 function normalizeForm(form) {
   const endpoint = String(form.endpoint || "").trim().replace(/\/+$/, "");
+  const repositorySyncMode = ["init", "sidecar"].includes(form.repositorySyncMode)
+    ? form.repositorySyncMode
+    : "direct";
   return {
     sourceFolder: String(form.sourceFolder || ""),
+    profileId: String(form.profileId || "").trim(),
+    profileName: String(form.profileName || "").trim(),
     deploymentName: String(form.deploymentName || "").trim(),
     image: String(form.image || "").trim(),
     endpoint,
@@ -281,9 +449,15 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
-    modelControlMode: form.modelControlMode === "poll" ? "poll" : "explicit",
+    detectedBackend: String(form.detectedBackend || "").trim().toLowerCase(),
+    modelControlMode:
+      repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
+    repositorySyncMode,
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
+    cpu: String(form.cpu || "").trim(),
+    memory: String(form.memory || "").trim(),
+    gpuCount: String(form.gpuCount || "").trim(),
   };
 }
 
@@ -331,6 +505,9 @@ function validateForm(form) {
   }
   if (!/^https?:\/\//i.test(form.endpoint)) {
     throw new Error("S3 endpoint must start with http:// or https://.");
+  }
+  if (form.gpuCount && (!/^\d+$/.test(form.gpuCount) || Number(form.gpuCount) < 0)) {
+    throw new Error("GPU count must be a non-negative whole number.");
   }
 }
 
@@ -523,6 +700,7 @@ function deploymentPayload(form) {
     s3_secret_key: form.secretAccessKey,
     s3_region: form.region,
     model_control_mode: form.modelControlMode,
+    repository_sync_mode: form.repositorySyncMode,
     repository_poll_secs: form.repositoryPollSecs > 0 ? form.repositoryPollSecs : 15,
     allow_metrics: true,
   };
@@ -531,6 +709,15 @@ function deploymentPayload(form) {
   }
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
+  }
+  if (form.cpu) {
+    payload.cpu = form.cpu;
+  }
+  if (form.memory) {
+    payload.memory = form.memory;
+  }
+  if (form.gpuCount && Number(form.gpuCount) > 0) {
+    payload.gpu_count = Number(form.gpuCount);
   }
   return payload;
 }
@@ -583,8 +770,16 @@ function renderHtml(webview, nonce, initial) {
     label { display: grid; gap: 5px; font-size: 12px; color: var(--vscode-descriptionForeground); }
     input, select, textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 8px; }
     .wide { grid-column: 1 / -1; }
+    .hidden { display: none; }
     .checks { display: flex; gap: 18px; align-items: center; }
     .checks label { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .summary-card { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); padding: 10px; }
+    .summary-card span { display: block; margin-bottom: 5px; color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .summary-card strong { color: var(--vscode-foreground); font-size: 13px; }
+    details { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); }
+    summary { cursor: pointer; padding: 9px 10px; color: var(--vscode-foreground); }
+    .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 10px 10px; }
     button { width: max-content; border: 0; background: var(--vscode-button-background); color: var(--vscode-button-foreground); padding: 9px 14px; cursor: pointer; }
     button:disabled { opacity: 0.55; cursor: default; }
     .status { margin-top: 18px; white-space: pre-wrap; color: var(--vscode-descriptionForeground); }
@@ -593,6 +788,9 @@ function renderHtml(webview, nonce, initial) {
     .preview { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); padding: 10px; color: var(--vscode-descriptionForeground); }
     .preview strong { display: block; margin-bottom: 5px; color: var(--vscode-foreground); }
     .preview code { color: var(--vscode-textLink-foreground); word-break: break-all; }
+    @media (max-width: 720px) {
+      form, .details-grid, .summary-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -601,23 +799,57 @@ function renderHtml(webview, nonce, initial) {
     <label class="wide">Source folder<input name="sourceFolder" readonly></label>
     <label>Deployment name<input name="deploymentName" required></label>
     <label>Triton image<input name="image" required></label>
-    <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com" required></label>
-    <label>S3 bucket<input name="bucket" required></label>
-    <label>S3 repository parent prefix<input name="prefix"></label>
+    <input class="hidden" name="detectedBackend">
+    <input class="hidden" name="detectedBackendLabel">
+    <div class="wide summary-grid">
+      <div class="summary-card">
+        <span>Detected backend</span>
+        <strong id="detected-backend-label">No backend in config.pbtxt</strong>
+      </div>
+      <div class="summary-card">
+        <span>Model control</span>
+        <strong id="model-control-label">Polling mode</strong>
+      </div>
+    </div>
+    <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
+    <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
-      <strong>S3 destination</strong>
-      <code id="destination-path">s3://bucket/deployment-name</code>
+      <strong>S3 upload target</strong>
+      <code id="destination-path">s3://bucket/model-repository-path</code>
     </div>
-    <label>S3 region<input name="region" required></label>
-    <label>S3 access key<input name="accessKeyId" required></label>
-    <label>S3 secret key<input name="secretAccessKey" type="password" required></label>
-    <label>Model control<select name="modelControlMode"><option value="explicit">explicit</option><option value="poll">poll</option></select></label>
-    <label>Repository poll seconds<input name="repositoryPollSecs" type="number" min="1"></label>
+    <select class="hidden" name="repositorySyncMode"><option value="direct">direct</option><option value="sidecar">sidecar</option></select>
     <label>Model name<input name="modelName" placeholder="from config.pbtxt or manual input"></label>
-    <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-    <div class="wide checks">
-      <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
-    </div>
+    <details class="wide">
+      <summary>Model control</summary>
+      <div class="details-grid">
+        <label>Load mode<select name="modelControlMode"><option value="poll">Polling mode</option><option value="explicit">Explicit mode</option></select></label>
+        <label id="poll-interval-field">Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Manual S3 settings</summary>
+      <div class="details-grid">
+        <label>S3 profile name<input name="profileName" placeholder="team-minio"></label>
+        <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com"></label>
+        <label>S3 bucket<input name="bucket"></label>
+        <label>S3 region<input name="region"></label>
+        <label>S3 access key<input name="accessKeyId"></label>
+        <label>S3 secret key<input name="secretAccessKey" type="password"></label>
+        <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+        <div class="wide checks">
+          <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
+        </div>
+        <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Resources</summary>
+      <div class="details-grid">
+        <label>CPU<input name="cpu"></label>
+        <label>RAM<input name="memory"></label>
+        <label>GPU count<input name="gpuCount" type="number" min="0" step="1"></label>
+      </div>
+    </details>
     <div class="wide"><button id="submit" type="submit">Upload and Deploy</button></div>
   </form>
   <div id="status" class="status"></div>
@@ -627,6 +859,8 @@ function renderHtml(webview, nonce, initial) {
     const form = document.getElementById('deploy-form');
     const statusEl = document.getElementById('status');
     const submit = document.getElementById('submit');
+    const saveProfile = document.getElementById('save-profile');
+    let profiles = [];
 
     for (const [key, value] of Object.entries(initial)) {
       const input = form.elements[key];
@@ -634,10 +868,19 @@ function renderHtml(webview, nonce, initial) {
       if (input.type === 'checkbox') input.checked = !!value;
       else input.value = value ?? '';
     }
+    updateDetectedBackendLabel();
     updateDestinationPath();
+    updateModelControlLabel();
+    loadS3Profiles();
 
-    form.addEventListener('input', updateDestinationPath);
-    form.addEventListener('change', updateDestinationPath);
+    form.addEventListener('input', updateFormPreviews);
+    form.addEventListener('change', updateFormPreviews);
+    form.elements.profileId.addEventListener('change', () => {
+      const selected = profiles.find((profile) => String(profile.id) === form.elements.profileId.value);
+      if (selected) applyS3Profile(selected);
+      updateFormPreviews();
+    });
+    saveProfile.addEventListener('click', saveCurrentS3Profile);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -691,13 +934,83 @@ function renderHtml(webview, nonce, initial) {
 
     async function notifyDeploymentNavigation(instanceId) {
       try {
-        await fetch('/api/code-servers/deployment-navigation', {
+        await fetch('/api/development/deployment-navigation', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ instance_id: instanceId }),
         });
       } catch {}
+    }
+
+    async function loadS3Profiles() {
+      try {
+        const response = await fetch('/api/s3-profiles', { credentials: 'include' });
+        if (!response.ok) return;
+        profiles = await response.json();
+        const select = form.elements.profileId;
+        select.innerHTML = '<option value="">Manual S3 settings</option>';
+        for (const profile of profiles) {
+          const option = document.createElement('option');
+          option.value = String(profile.id);
+          option.textContent = profile.name;
+          select.appendChild(option);
+        }
+        if (profiles.length) {
+          select.value = String(profiles[0].id);
+          applyS3Profile(profiles[0]);
+        }
+      } catch {}
+    }
+
+    function applyS3Profile(profile) {
+      form.elements.profileName.value = profile.name || '';
+      form.elements.endpoint.value = profile.endpoint || '';
+      form.elements.bucket.value = profile.bucket || '';
+      form.elements.region.value = profile.region || 'us-east-1';
+      form.elements.accessKeyId.value = profile.access_key || '';
+      form.elements.secretAccessKey.value = profile.secret_key || '';
+      form.elements.forcePathStyle.checked = profile.force_path_style !== false;
+      form.elements.s3CaCertificate.value = profile.ca_certificate || '';
+    }
+
+    async function saveCurrentS3Profile() {
+      const data = readForm();
+      const payload = {
+        name: data.profileName,
+        endpoint: data.endpoint,
+        bucket: data.bucket,
+        region: data.region || 'us-east-1',
+        access_key: data.accessKeyId,
+        secret_key: data.secretAccessKey,
+        prefix: data.prefix || '',
+        force_path_style: !!data.forcePathStyle,
+        ca_certificate: data.s3CaCertificate || '',
+      };
+      if (!payload.name) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'S3 profile name is required.';
+        return;
+      }
+      try {
+        const response = await fetch('/api/s3-profiles', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.detail || 'Failed to save S3 profile.');
+        }
+        statusEl.className = 'status success';
+        statusEl.textContent = 'S3 profile saved.';
+        await loadS3Profiles();
+        form.elements.profileId.value = String(body.id);
+      } catch (error) {
+        statusEl.className = 'status error';
+        statusEl.textContent = error.message || String(error);
+      }
     }
 
     function readForm() {
@@ -712,9 +1025,29 @@ function renderHtml(webview, nonce, initial) {
     function updateDestinationPath() {
       const destination = document.getElementById('destination-path');
       const data = readForm();
+      const endpoint = String(data.endpoint || '').trim().replace(/^s3:\\/\\//i, '').replace(/\\/+$/g, '');
       const bucket = cleanS3Path(data.bucket || 'bucket');
-      const target = cleanS3Path([data.prefix, data.deploymentName || 'deployment-name'].filter(Boolean).join('/'));
-      destination.textContent = ['s3:/' + '/' + bucket, target].filter(Boolean).join('/');
+      const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
+      const root = endpoint ? 's3://' + endpoint + '/' + bucket : 's3://' + bucket;
+      destination.textContent = [root, target].filter(Boolean).join('/');
+    }
+
+    function updateModelControlLabel() {
+      const mode = form.elements.modelControlMode.value === 'explicit' ? 'explicit' : 'poll';
+      document.getElementById('model-control-label').textContent =
+        mode === 'poll' ? 'Polling mode' : 'Explicit mode';
+      document.getElementById('poll-interval-field').classList.toggle('hidden', mode !== 'poll');
+      form.elements.repositoryPollSecs.disabled = mode === 'explicit';
+    }
+
+    function updateDetectedBackendLabel() {
+      document.getElementById('detected-backend-label').textContent =
+        form.elements.detectedBackendLabel.value || 'No backend in config.pbtxt';
+    }
+
+    function updateFormPreviews() {
+      updateDestinationPath();
+      updateModelControlLabel();
     }
 
     function cleanS3Path(value) {

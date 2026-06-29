@@ -231,6 +231,19 @@ signals (service host/port and ServiceAccount files), not only on UI settings.
 backend runs. For in-cluster production deployments, keep it unset and rely on
 ServiceAccount-based in-cluster Kubernetes client configuration.
 
+When the backend runs on a host with Kubernetes integration enabled, configure
+the vLLM sync worker image in `triton-backend/.env` (or the environment of the
+backend service):
+
+```dotenv
+TRITON_DEPLOY_S3_SYNC_IMAGE=registry.example.com/amazon/aws-cli:2.22.35
+```
+
+The host does not run this image. It places the configured image reference in
+the vLLM init-container or sidecar pod specification created through the
+Kubernetes API. Ensure cluster nodes can pull it and provide an image pull
+secret in Add Deployment when the registry is private.
+
 ## Ingress
 
 The chart can create Ingress resources, but the Ingress controller itself must
@@ -310,6 +323,35 @@ Image pull secrets:
 - The JSON below is only an example Docker config shape, not a fixed template.
 - The `auth` value is the base64 encoding of `username:token` or
   `username:password`.
+
+vLLM S3 repository handling:
+
+- Deployments without the vLLM backend use Triton's native S3 behavior directly.
+  They create no repository init container or sidecar.
+- Deployments with the vLLM backend use the sync worker path so Triton reads a
+  stable local `/models` repository. Polling mode keeps the repository refreshed
+  while Triton runs; explicit mode uses the configured startup model behavior.
+- The sync path keeps model versions under `/models/<model-name>/<version>` and
+  rewrites relative vLLM `model.json` `model`/`tokenizer` values to absolute
+  paths.
+- vLLM requires a CUDA device in normal Triton deployments. Set GPU count to at
+  least `1`; the code-server deploy extension defaults this for detected vLLM
+  repositories.
+- The sync worker copies downloaded files without preserving source ownership
+  or timestamps, so it can run as Triton Control's non-root workload user.
+- Configure the worker image with Helm value
+  `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use this image.
+
+S3 deployment profiles:
+
+- Members and admins can create reusable S3 profiles from the application
+  account menu.
+- Profiles are user-owned and store endpoint, bucket, prefix, region,
+  path-style mode, optional CA certificate, access key, and encrypted secret
+  key.
+- The code-server deploy extension reads these profiles through
+  `/api/s3-profiles` and uses the selected profile for repository upload and
+  deployment creation.
 
 ```json
 {

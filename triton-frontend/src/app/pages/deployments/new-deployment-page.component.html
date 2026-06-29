@@ -10,9 +10,7 @@
     <div class="section">
       <div>
         <div class="section-title">Deployment</div>
-        <div class="section-subtitle">
-          Name the Kubernetes deployment and the container image to run.
-        </div>
+        <div class="section-subtitle">Name and container image.</div>
       </div>
       <div class="form-grid split">
         <div class="form-row">
@@ -43,141 +41,169 @@
     <div class="section">
       <div>
         <div class="section-title">Model repository (S3)</div>
-        <div class="section-subtitle">
-          S3 endpoint, optional bucket, optional repository prefix, and credentials. Credentials are
-          stored in a Kubernetes Secret.
-        </div>
+        <div class="section-subtitle">S3 profile and path served by Triton.</div>
       </div>
       <div class="form-grid split">
         <div class="form-row wide s3-deployment-warning">
           <span class="material-icons" aria-hidden="true">info</span>
           <div>
-            <div class="warning-title">Deployment S3 settings are fixed after deploy</div>
+            <div class="warning-title">S3 settings are fixed after deploy</div>
             <div class="warning-text">
-              These S3 values are written into the Triton pod for the model repository. To change
-              that in-pod connection later, delete this deployment and create a new one. The S3
-              settings on the instance detail page are only for Triton Control's browser/editor
-              access.
+              These values are written into the Triton pod. To change the pod connection later,
+              recreate the deployment. Instance S3 settings are only for Triton Control's
+              browser/editor access.
             </div>
           </div>
         </div>
         <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
+          <label class="field-label" for="deployment-s3-profile">S3 profile</label>
           <mat-form-field appearance="outline">
-            <input
-              id="deployment-s3-url"
-              matInput
-              [(ngModel)]="s3Url"
-              placeholder="https://object-store.example.com/triton-models"
-            />
-            <mat-hint>
-              Enter only the endpoint, optionally followed by its bucket. For example
-              <code>https://object-store.example.com/triton-models</code>.
-            </mat-hint>
+            <mat-select
+              id="deployment-s3-profile"
+              [(ngModel)]="selectedS3ProfileId"
+              (selectionChange)="s3ProfileChanged()"
+            >
+              <mat-option value="">Manual S3 settings</mat-option>
+              @for (profile of s3Profiles(); track profile.id) {
+                <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+              }
+            </mat-select>
+            <mat-hint>Choose a profile or enter connection settings manually.</mat-hint>
           </mat-form-field>
         </div>
-        <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-prefix">Repository prefix (optional)</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-s3-prefix"
-              matInput
-              [(ngModel)]="s3Prefix"
-              placeholder="team/model-repository"
-            />
-            <mat-hint>
-              Optional path within the bucket. Do not include it in the S3 endpoint above.
-            </mat-hint>
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-access-key">Access key</label>
-          <mat-form-field appearance="outline">
-            <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-secret-key">Secret key</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-s3-secret-key"
-              matInput
-              [(ngModel)]="s3SecretKey"
-              type="password"
-              autocomplete="new-password"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-s3-region">Region</label>
-          <mat-form-field appearance="outline">
-            <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
-          </mat-form-field>
-        </div>
-        @if (usesHttpsS3()) {
+        @if (!usesManualS3Settings()) {
           <div class="form-row wide">
-            <label class="field-label" for="deployment-s3-ca-certificate">S3 CA certificate</label>
+            <label class="field-label" for="deployment-s3-prefix"
+              >Repository prefix
+              <span class="field-hint">Optional S3 path prefix inside the profile bucket</span>
+            </label>
             <mat-form-field appearance="outline">
-              <textarea
-                id="deployment-s3-ca-certificate"
+              <input
+                id="deployment-s3-prefix"
                 matInput
-                rows="5"
-                [(ngModel)]="s3CaCertificate"
-                placeholder="-----BEGIN CERTIFICATE-----"
-              ></textarea>
-              <mat-hint>
-                Optional. Provide only for private, self-signed, or internal CA chains.
-              </mat-hint>
+                [(ngModel)]="s3Prefix"
+                placeholder="team/model-repository"
+              />
             </mat-form-field>
           </div>
+          <div class="form-row wide s3-destination">
+            <span class="material-icons" aria-hidden="true">folder_open</span>
+            <div>
+              <div class="destination-title">Serving repository</div>
+              <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
+            </div>
+          </div>
+        }
+        @if (usesManualS3Settings()) {
+          <mat-expansion-panel class="form-row wide compact-panel">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <span class="material-icons">storage</span>
+                <span>Manual S3 settings</span>
+              </mat-panel-title>
+              <mat-panel-description>Connection for this deployment</mat-panel-description>
+            </mat-expansion-panel-header>
+            <div class="form-grid split">
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-s3-url"
+                    matInput
+                    [(ngModel)]="s3Url"
+                    placeholder="https://object-store.example.com"
+                  />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-bucket">Bucket</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-bucket" matInput [(ngModel)]="s3Bucket" />
+                </mat-form-field>
+              </div>
+              <div class="form-row wide">
+                <label class="field-label" for="deployment-manual-s3-prefix"
+                  >Repository prefix
+                  <span class="field-hint">Optional S3 path prefix inside the bucket</span>
+                </label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-manual-s3-prefix"
+                    matInput
+                    [(ngModel)]="s3Prefix"
+                    placeholder="team/model-repository"
+                  />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-access-key">Access Key</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-secret-key">Secret Key</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-s3-secret-key"
+                    matInput
+                    [(ngModel)]="s3SecretKey"
+                    type="password"
+                    autocomplete="new-password"
+                  />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="deployment-s3-region">Region</label>
+                <mat-form-field appearance="outline">
+                  <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
+                </mat-form-field>
+              </div>
+              @if (usesHttpsS3()) {
+                <div class="form-row wide">
+                  <label class="field-label" for="deployment-s3-ca-certificate"
+                    >S3 CA certificate</label
+                  >
+                  <mat-form-field appearance="outline">
+                    <textarea
+                      id="deployment-s3-ca-certificate"
+                      matInput
+                      rows="5"
+                      [(ngModel)]="s3CaCertificate"
+                      placeholder="-----BEGIN CERTIFICATE-----"
+                    ></textarea>
+                    <mat-hint> Optional, only for private or internal CA chains. </mat-hint>
+                  </mat-form-field>
+                </div>
+              }
+              <div class="form-row wide s3-destination">
+                <span class="material-icons" aria-hidden="true">folder_open</span>
+                <div>
+                  <div class="destination-title">Target path</div>
+                  <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
+                </div>
+              </div>
+            </div>
+          </mat-expansion-panel>
         }
       </div>
     </div>
 
     <div class="section">
       <div>
-        <div class="section-title">Triton arguments</div>
-        <div class="section-subtitle">Startup arguments passed to the Triton server container.</div>
+        <div class="section-title">Model loading</div>
+        <div class="section-subtitle">Models load from the selected repository.</div>
       </div>
       <div class="form-grid split">
-        <div class="form-row">
-          <label class="field-label" for="deployment-model-control-mode">Model control mode</label>
-          <mat-form-field appearance="outline">
-            <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
-              <mat-option value="explicit">Explicit</mat-option>
-              <mat-option value="poll">Poll</mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-model-name"
-            >Startup model
-            <span class="field-hint">Leave empty to load all models</span>
-          </label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-model-name"
-              matInput
-              [(ngModel)]="modelName"
-              [disabled]="modelControlMode !== 'explicit'"
-              placeholder="e.g. ensemble (empty = all)"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-repository-poll-secs">Poll interval</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-repository-poll-secs"
-              matInput
-              [(ngModel)]="repositoryPollSecs"
-              [disabled]="modelControlMode !== 'poll'"
-              type="number"
-              min="1"
-              step="1"
-              placeholder="15"
-            />
-          </mat-form-field>
+        <div class="form-row wide backend-toggle">
+          <mat-checkbox
+            id="deployment-backend-vllm"
+            [ngModel]="backend === 'vllm'"
+            (ngModelChange)="setVllmBackend($event)"
+          >
+            Enable vLLM model backend
+          </mat-checkbox>
+          <div class="field-hint">Use when deploying vLLM models.</div>
         </div>
       </div>
     </div>
@@ -186,13 +212,74 @@
       <div class="advanced-head">
         <div class="advanced-title-row">
           <span class="material-icons">settings_suggest</span>
-          <div class="advanced-title">Advanced Infrastructure Settings</div>
+          <div class="advanced-title">Advanced infrastructure</div>
         </div>
-        <div class="advanced-subtitle">
-          Optional deployment infrastructure settings. Expand only what you need.
-        </div>
+        <div class="advanced-subtitle">Optional settings.</div>
       </div>
       <mat-accordion class="optional-sections">
+        <mat-expansion-panel>
+          @let modelControlPanel = modelControlStatus();
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="material-icons">sync</span>
+              <span>Model Control</span>
+            </mat-panel-title>
+            <mat-panel-description>
+              <span class="panel-status-chip" [attr.data-tone]="modelControlPanel.tone">{{
+                modelControlPanel.label
+              }}</span>
+              <span class="panel-status-detail">{{ modelControlPanel.detail }}</span>
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <div class="form-grid split">
+            <div class="form-row">
+              <label class="field-label" for="deployment-model-control-mode">Mode</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="deployment-model-control-mode" [(ngModel)]="modelControlMode">
+                  <mat-option value="poll">Poll</mat-option>
+                  <mat-option value="explicit">Explicit</mat-option>
+                </mat-select>
+                <mat-hint>Poll refreshes automatically.</mat-hint>
+              </mat-form-field>
+            </div>
+            @if (modelControlMode === "poll") {
+              <div class="form-row">
+                <label class="field-label" for="deployment-repository-poll-secs"
+                  >Polling interval</label
+                >
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-repository-poll-secs"
+                    matInput
+                    type="number"
+                    min="1"
+                    step="1"
+                    [(ngModel)]="repositoryPollSecs"
+                    placeholder="15"
+                  />
+                  <mat-hint>Seconds between checks.</mat-hint>
+                </mat-form-field>
+              </div>
+            }
+          </div>
+          @if (modelControlMode === "explicit") {
+            <div class="form-row wide">
+              <label class="field-label" for="deployment-model-name"
+                >Startup model
+                <span class="field-hint">Empty = all models</span>
+              </label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-model-name"
+                  matInput
+                  [(ngModel)]="modelName"
+                  placeholder="e.g. ensemble (empty = all)"
+                />
+              </mat-form-field>
+            </div>
+          }
+        </mat-expansion-panel>
+
         <mat-expansion-panel>
           @let ingressPanel = ingressStatus();
           <mat-expansion-panel-header>
@@ -210,9 +297,7 @@
           <div class="form-grid split">
             <div class="form-row wide ingress-help">
               <div class="field-hint">
-                You can enter a hostname only or a full URL. Hostname-only defaults to
-                <code>https://</code>. Use <code>http://</code> or <code>https://</code>
-                explicitly to control the scheme.
+                Hostname or URL. Without a scheme, <code>https://</code> is used.
               </div>
             </div>
             <div class="form-row">
@@ -239,9 +324,7 @@
             </div>
             <div class="form-row wide ingress-help">
               <div class="field-hint">
-                TLS certificates are not configured by this form. For HTTPS ingress, provision TLS
-                via your ingress controller (for example cert-manager Certificate/Issuer or a
-                pre-created TLS Secret).
+                TLS is not created here. Provide certificates through your ingress controller.
               </div>
             </div>
           </div>
@@ -263,11 +346,9 @@
           </mat-expansion-panel-header>
           <div class="form-row wide">
             <label class="field-label" for="deployment-dockerconfigjson"
-              >Registry Credentials (.dockerconfigjson)</label
+              >Registry credentials (.dockerconfigjson)</label
             >
-            <div class="field-hint">
-              Paste Docker registry auth JSON used to pull private images.
-            </div>
+            <div class="field-hint">Docker auth JSON for private images.</div>
             <ngx-monaco-editor
               id="deployment-dockerconfigjson"
               class="dockerconfigjson-editor"
@@ -283,22 +364,20 @@
           <mat-expansion-panel-header>
             <mat-panel-title>
               <span class="material-icons">extension</span>
-              <span>Extra Python packages</span>
+              <span>Extra Python Packages</span>
             </mat-panel-title>
             <mat-panel-description>
               <span class="panel-status-chip" [attr.data-tone]="requirementsPanel.tone">{{
                 requirementsPanel.label
               }}</span>
               <span class="panel-status-detail">
-                {{ requirementsPanel.detail }} - installed before Triton starts
+                {{ requirementsPanel.detail }} - installed before Triton
               </span>
             </mat-panel-description>
           </mat-expansion-panel-header>
           <div class="form-row wide">
-            <label class="field-label" for="deployment-requirements">Extra Python packages</label>
-            <div class="field-hint">
-              Use requirements.txt format, one pip package per line with optional version pins.
-            </div>
+            <label class="field-label" for="deployment-requirements">Extra Python Packages</label>
+            <div class="field-hint">requirements.txt format, one pip package per line.</div>
             <ngx-monaco-editor
               id="deployment-requirements"
               class="requirements-editor"
@@ -339,13 +418,13 @@
               </mat-form-field>
             </div>
             <div class="form-row">
-              <label class="field-label" for="deployment-cpu">CPU request</label>
+              <label class="field-label" for="deployment-cpu">CPU Request</label>
               <mat-form-field appearance="outline">
                 <input id="deployment-cpu" matInput [(ngModel)]="cpu" placeholder="4" />
               </mat-form-field>
             </div>
             <div class="form-row">
-              <label class="field-label" for="deployment-memory">Memory request</label>
+              <label class="field-label" for="deployment-memory">Memory Request</label>
               <mat-form-field appearance="outline">
                 <input id="deployment-memory" matInput [(ngModel)]="memory" placeholder="10Gi" />
               </mat-form-field>

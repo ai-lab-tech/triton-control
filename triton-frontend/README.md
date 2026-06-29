@@ -49,9 +49,14 @@ npm run -s generate:api
 - `/dashboard`
 - `/instances`
 - `/development`
+- `/deployments/new`
+- `/perf-analyzers`
+- `/s3-profiles`
 - `/workflows` - embedded global Argo Workflows UI through Triton Control
+- `/mlflow` - embedded managed MLflow tracking UI through Triton Control
 - `/users`
 - `/settings`
+- `/error-logs`
 
 ## Local Email/Password Policy
 

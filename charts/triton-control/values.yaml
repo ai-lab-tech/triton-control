@@ -64,6 +64,10 @@ app:
       initialDelaySeconds: 30
       periodSeconds: 20
 
+# Image used only by vLLM repository init containers and S3 sync sidecars.
+tritonDeployments:
+  s3SyncImage: amazon/aws-cli:2.22.35
+
 postgresql:
   enabled: true
   image:

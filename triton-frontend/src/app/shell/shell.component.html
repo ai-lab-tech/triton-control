@@ -110,6 +110,14 @@
                 <span class="material-icons">group</span>
                 <span>User Management</span>
               </button>
+            }
+            @if (isLoggedIn() && canWriteInstances()) {
+              <button type="button" class="account-item" (click)="go('/s3-profiles')">
+                <span class="material-icons">key</span>
+                <span>S3 Profiles</span>
+              </button>
+            }
+            @if (isLoggedIn() && isAdmin()) {
               <button type="button" class="account-item" (click)="go('/settings')">
                 <span class="material-icons">tune</span>
                 <span>Settings</span>

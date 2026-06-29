@@ -38,6 +38,14 @@ export function resolveVersion(dto: { server_metadata?: unknown }): string {
 export function dtoToInstance(dto: TritonInstanceDTO): Instance {
   const metadata = (dto.server_metadata ?? null) as Record<string, unknown> | null;
   const deployment = dto as TritonInstanceDTO & Record<string, unknown>;
+  const deploymentLog = stringField(deployment["deployment_log"]);
+  const deploymentImage =
+    stringField(deployment["deployment_image"]) ||
+    stringField(metadata?.["image"]) ||
+    deploymentLogField(deploymentLog, "Image");
+  const deploymentRepository =
+    stringField(deployment["deployment_repository"]) ||
+    deploymentLogField(deploymentLog, "Model repository");
 
   return {
     id: String(dto.id),
@@ -61,7 +69,15 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
     deploymentName: stringField(deployment["deployment_name"]),
     deploymentServiceName: stringField(deployment["deployment_service_name"]),
     deploymentSecretName: stringField(deployment["deployment_secret_name"]),
-    deploymentLog: stringField(deployment["deployment_log"]),
+    deploymentImage,
+    deploymentRepository,
+    deploymentBackend: resolveDeploymentBackend(
+      deployment,
+      metadata,
+      deploymentLog,
+      deploymentImage,
+    ),
+    deploymentLog,
     isSelfDeployed: !!deployment["is_self_deployed"],
     podStatuses: Array.isArray(deployment["pod_statuses"])
       ? (deployment["pod_statuses"] as string[])
@@ -103,6 +119,32 @@ function repositoryModelsFromDto(dto: TritonInstanceDTO): Instance["repositoryMo
 
 function stringField(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function deploymentLogField(log: string, label: string): string {
+  const line = log
+    .split(/\r?\n/)
+    .find((entry) => entry.toLowerCase().startsWith(`${label.toLowerCase()}:`));
+  return line ? line.slice(line.indexOf(":") + 1).trim() : "";
+}
+
+function resolveDeploymentBackend(
+  deployment: Record<string, unknown>,
+  metadata: Record<string, unknown> | null,
+  log: string,
+  image: string,
+): string {
+  const explicitBackend =
+    stringField(deployment["deployment_backend"]) ||
+    stringField(metadata?.["backend"]) ||
+    stringField(metadata?.["model_backend"]);
+  if (explicitBackend) {
+    return explicitBackend.toLowerCase() === "vllm" ? "vLLM" : explicitBackend;
+  }
+  if (/vllm/i.test([log, image].join("\n"))) {
+    return "vLLM";
+  }
+  return "No backend in config.pbtxt";
 }
 
 function normalizePercent(value: unknown): number {

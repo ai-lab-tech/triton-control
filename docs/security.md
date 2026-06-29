@@ -72,13 +72,16 @@ connection examples.
 
 ## S3 Credentials
 
-S3 secret keys are encrypted by the backend before storage. Configure a strong:
+S3 secret keys are encrypted by the backend before storage. This includes
+instance S3 settings and reusable S3 deployment profiles. Configure a strong:
 
 ```text
 S3_SECRET_ENCRYPTION_KEY
 ```
 
 Do not reuse local development secrets in shared or production environments.
+Profiles are user-owned and visible only to the owning signed-in user through
+the S3 profile API.
 
 ## Reverse Proxy Headers
 
