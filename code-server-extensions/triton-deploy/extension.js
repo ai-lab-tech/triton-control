@@ -4,6 +4,12 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
+const {
+  ENSEMBLE_PRESETS,
+  TEMPLATES,
+  scaffoldEnsembleRepository,
+  scaffoldSingleModelRepository,
+} = require("./scaffold");
 
 let insecureWebviewWarningShown = false;
 let outputChannel;
@@ -45,7 +51,218 @@ function activate(context) {
       await runSimpleUploadWizard(initial);
     },
   );
-  context.subscriptions.push(webviewCommand, simpleCommand);
+  const scaffoldCommand = vscode.commands.registerCommand(
+    "tritonControl.newModelRepository",
+    async (resource) => {
+      await runNewModelRepositoryWizard(resource);
+    },
+  );
+  context.subscriptions.push(webviewCommand, simpleCommand, scaffoldCommand);
+}
+
+async function runNewModelRepositoryWizard(resource) {
+  const baseFolder = await resolveWorkspaceFolder(resource);
+  if (!baseFolder) {
+    return;
+  }
+  const repositoryType = await vscode.window.showQuickPick(
+    [
+      { label: "Single model", value: "single" },
+      { label: "Ensemble pipeline", value: "ensemble" },
+    ],
+    {
+      title: "Triton Control",
+      placeHolder: "Repository type",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!repositoryType) {
+    return;
+  }
+
+  try {
+    const result = repositoryType.value === "ensemble"
+      ? await collectAndCreateEnsembleRepository(baseFolder)
+      : await collectAndCreateSingleModelRepository(baseFolder);
+    if (!result) {
+      return;
+    }
+    const openSelection = await vscode.window.showInformationMessage(
+      `Created Triton repository at ${result.repositoryFolder}`,
+      "Open config.pbtxt",
+      "Open folder",
+      "Deploy repository",
+    );
+    if (openSelection === "Open config.pbtxt") {
+      const document = await vscode.workspace.openTextDocument(result.configPath);
+      await vscode.window.showTextDocument(document);
+    } else if (openSelection === "Open folder") {
+      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(result.repositoryFolder), false);
+    } else if (openSelection === "Deploy repository") {
+      await vscode.commands.executeCommand("tritonControl.deployModelRepository", vscode.Uri.file(result.repositoryFolder));
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function collectAndCreateSingleModelRepository(baseFolder) {
+  const targetFolder = await promptRepositoryTargetFolder(baseFolder);
+  if (!targetFolder) {
+    return null;
+  }
+  const modelName = await promptValue("Model name", "model", true);
+  if (!modelName) {
+    return null;
+  }
+  const template = await promptTemplate(TEMPLATES, "Model template");
+  if (!template) {
+    return null;
+  }
+  return scaffoldSingleModelRepository({
+    targetFolder,
+    modelName,
+    templateId: template.id,
+  });
+}
+
+async function collectAndCreateEnsembleRepository(baseFolder) {
+  const targetFolder = await promptRepositoryTargetFolder(baseFolder);
+  if (!targetFolder) {
+    return null;
+  }
+  const source = await vscode.window.showQuickPick(
+    [
+      ...ENSEMBLE_PRESETS.map((preset) => ({
+        label: preset.label,
+        description: "Preset",
+        value: preset,
+      })),
+      {
+        label: "Custom ordered pipeline",
+        description: "Choose each step template",
+        value: null,
+      },
+    ],
+    {
+      title: "Triton Control",
+      placeHolder: "Ensemble pipeline",
+      ignoreFocusOut: true,
+    },
+  );
+  if (!source) {
+    return null;
+  }
+
+  const ensembleName = await promptValue("Ensemble model name", source.value?.ensembleName || "pipeline", true);
+  if (!ensembleName) {
+    return null;
+  }
+  const steps = source.value ? await promptPresetStepNames(source.value.steps) : await promptCustomEnsembleSteps();
+  if (!steps?.length) {
+    return null;
+  }
+  return scaffoldEnsembleRepository({
+    targetFolder,
+    ensembleName,
+    steps,
+  });
+}
+
+async function resolveWorkspaceFolder(resource) {
+  if (resource?.fsPath && fs.existsSync(resource.fsPath) && fs.statSync(resource.fsPath).isDirectory()) {
+    return resource.fsPath;
+  }
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+  if (workspaceFolder) {
+    return workspaceFolder;
+  }
+  const selection = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: "Select workspace folder",
+  });
+  return selection?.[0]?.fsPath || "";
+}
+
+async function promptRepositoryTargetFolder(baseFolder) {
+  const folderName = await vscode.window.showInputBox({
+    title: "Triton Control",
+    prompt: "Repository target folder name",
+    value: "triton-model-repository",
+    ignoreFocusOut: true,
+    validateInput: (input) => input.trim() ? undefined : "Repository folder name is required.",
+  });
+  if (folderName === undefined) {
+    return "";
+  }
+  const trimmed = folderName.trim();
+  if (path.isAbsolute(trimmed)) {
+    return trimmed;
+  }
+  return path.join(baseFolder, trimmed);
+}
+
+async function promptTemplate(templates, placeHolder) {
+  const selection = await vscode.window.showQuickPick(
+    templates.map((template) => ({
+      label: template.label,
+      description: `${template.configKind}: ${template.configValue}`,
+      detail: `${template.gpuHint} Ensemble step: ${template.ensembleStepEligible ? "yes" : "no"}`,
+      id: template.id,
+    })),
+    {
+      title: "Triton Control",
+      placeHolder,
+      ignoreFocusOut: true,
+    },
+  );
+  return selection ? templates.find((template) => template.id === selection.id) : null;
+}
+
+async function promptPresetStepNames(defaultSteps) {
+  const steps = [];
+  for (const step of defaultSteps) {
+    const name = await promptValue(`${step.name} step model name`, step.name, true);
+    if (!name) {
+      return null;
+    }
+    steps.push({ name, templateId: step.templateId });
+  }
+  return steps;
+}
+
+async function promptCustomEnsembleSteps() {
+  const countText = await vscode.window.showInputBox({
+    title: "Triton Control",
+    prompt: "Number of ensemble steps",
+    value: "3",
+    ignoreFocusOut: true,
+    validateInput: (input) => {
+      const count = Number(input);
+      return Number.isInteger(count) && count >= 2 ? undefined : "Enter a whole number of 2 or more.";
+    },
+  });
+  if (countText === undefined) {
+    return null;
+  }
+  const count = Number(countText);
+  const eligibleTemplates = TEMPLATES.filter((template) => template.ensembleStepEligible);
+  const steps = [];
+  for (let index = 0; index < count; index += 1) {
+    const stepNumber = index + 1;
+    const name = await promptValue(`Step ${stepNumber} model name`, `step_${stepNumber}`, true);
+    if (!name) {
+      return null;
+    }
+    const template = await promptTemplate(eligibleTemplates, `Step ${stepNumber} template`);
+    if (!template) {
+      return null;
+    }
+    steps.push({ name, templateId: template.id });
+  }
+  return steps;
 }
 
 async function resolveSourceFolder(resource) {
@@ -363,16 +580,27 @@ function findConfigPbtxt(sourceFolder) {
     return direct;
   }
   const entries = fs.readdirSync(sourceFolder, { withFileTypes: true });
+  let firstConfig = "";
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
     const candidate = path.join(sourceFolder, entry.name, "config.pbtxt");
     if (fs.existsSync(candidate)) {
-      return candidate;
+      if (!firstConfig) {
+        firstConfig = candidate;
+      }
+      try {
+        const config = fs.readFileSync(candidate, "utf8");
+        if (/(?:^|\n)\s*platform\s*:\s*"ensemble"/.test(config)) {
+          return candidate;
+        }
+      } catch {
+        return candidate;
+      }
     }
   }
-  return "";
+  return firstConfig;
 }
 
 async function promptForModelName(sourceFolder) {

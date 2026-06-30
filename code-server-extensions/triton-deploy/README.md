@@ -6,6 +6,44 @@ then calls Triton Control's existing `POST /api/deployments` endpoint.
 
 ## Flow
 
+### Create a model repository
+
+1. Open a workspace folder in code-server.
+2. Run `Triton Control: New Model Repository` from the command palette, or
+   right-click a folder in the explorer and run the same command.
+3. Choose `Single model` or `Ensemble pipeline`.
+4. Enter the repository target folder name.
+5. For a single model, enter the Triton model name and choose a template.
+6. For an ensemble, enter the ensemble model name and choose a preset or custom
+   ordered pipeline. Step names become child Triton model folders.
+
+The target folder is the Triton repository root. The model, ensemble, and step
+names become folders inside that repository.
+
+Supported single-model templates:
+
+- Python backend
+- ONNX Runtime
+- TensorRT plan
+- TensorRT-LLM
+- vLLM
+- PyTorch / LibTorch
+
+Python scaffolds include a starter `model.py`. Artifact-based templates include
+editable README guidance in the version folder explaining which model artifact
+the user must provide before deployment.
+
+Preset ensembles:
+
+- Python -> ONNX Runtime -> Python
+- Python -> TensorRT -> Python
+
+Custom ensembles can use templates marked as ensemble-step eligible. The
+generated ensemble `config.pbtxt` contains `platform: "ensemble"` and editable
+`ensemble_scheduling` input/output maps.
+
+### Deploy a model repository
+
 1. Right-click a Triton model folder or model repository root in code-server.
 2. Run `Triton Control: Deploy Model Repository`.
 3. The extension detects the model name and `backend` value from `config.pbtxt`.

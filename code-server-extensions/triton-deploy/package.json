@@ -12,7 +12,8 @@
   ],
   "activationEvents": [
     "onCommand:tritonControl.deployModelRepository",
-    "onCommand:tritonControl.uploadModelRepositorySimple"
+    "onCommand:tritonControl.uploadModelRepositorySimple",
+    "onCommand:tritonControl.newModelRepository"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -24,6 +25,10 @@
       {
         "command": "tritonControl.uploadModelRepositorySimple",
         "title": "Triton Control: Upload Model Repository (Simple Wizard)"
+      },
+      {
+        "command": "tritonControl.newModelRepository",
+        "title": "Triton Control: New Model Repository"
       }
     ],
     "menus": {
@@ -37,6 +42,11 @@
           "command": "tritonControl.uploadModelRepositorySimple",
           "when": "explorerResourceIsFolder",
           "group": "navigation@91"
+        },
+        {
+          "command": "tritonControl.newModelRepository",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@89"
         }
       ]
     },
@@ -95,6 +105,7 @@
     "@vscode/vsce": "^2.15.0"
   },
   "scripts": {
+    "test": "node --test",
     "package": "vsce package"
   }
 }

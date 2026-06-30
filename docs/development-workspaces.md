@@ -164,6 +164,76 @@ For a private or self-signed HTTPS object-store certificate, provide the PEM CA
 certificate requested by the extension. This certificate is passed to the
 Triton deployment so its model repository client can trust the endpoint.
 
+## Create a Model Repository
+
+The bundled **Triton Control Deploy** extension can create starter Triton model
+repository structures in `/workspace`.
+
+Run **Triton Control: New Model Repository** from the command palette, or
+right-click a workspace folder in the code-server explorer and run the same
+command.
+
+The command asks for:
+
+1. repository type: **Single model** or **Ensemble pipeline**
+2. repository target folder name
+3. model name for a single model, or ensemble name plus step names for an
+   ensemble
+4. template/backend selection
+
+The target folder becomes the Triton repository root. Model, ensemble, and step
+names become folders inside that repository.
+
+Single-model templates:
+
+- Python backend
+- ONNX Runtime
+- TensorRT plan
+- TensorRT-LLM
+- vLLM
+- PyTorch / LibTorch
+
+Example single-model output:
+
+```text
+/workspace/my-repository/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+```
+
+Artifact-based templates create the model folder, `config.pbtxt`, a version
+folder, and editable README guidance explaining which model artifact must be
+provided before deployment.
+
+Ensemble scaffolding creates child model folders plus a separate ensemble model
+folder with `platform: "ensemble"` and editable `ensemble_scheduling` maps.
+
+Example ensemble output:
+
+```text
+/workspace/fraud-pipeline/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+  score/
+    config.pbtxt
+    1/
+      README.md
+  postprocess/
+    config.pbtxt
+    1/
+      model.py
+  fraud_detector/
+    config.pbtxt
+```
+
+After creation, choose **Open config.pbtxt** to edit the generated config,
+**Open folder** to switch code-server to the repository, or **Deploy
+repository** to start the existing deploy flow.
+
 ## Deploy a Model Repository
 
 The **Triton Control Deploy** extension has two modes:
