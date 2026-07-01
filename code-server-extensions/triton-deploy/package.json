@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Upload a Triton model repository from code-server to S3-compatible storage and create a Triton Control deployment.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -15,7 +15,8 @@
     "onCommand:tritonControl.uploadModelRepositorySimple",
     "onCommand:tritonControl.newModelRepository",
     "onCommand:tritonControl.openRepositorySetup",
-    "onView:tritonControl.workspaceActions"
+    "onView:tritonControl.workspaceActions",
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {

@@ -223,7 +223,7 @@ export class DevelopmentPageComponent implements OnDestroy {
         this.developmentApi.listCodeServersApiDevelopmentGet(),
       )) as CodeServer[];
       this.workspaces.set(workspaces);
-      await this.ensureSelectedWorkspace();
+      await this.ensureSelectedWorkspace({ refreshReadyWorkspace: true });
       this.updateStatusPolling();
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to load Development workspaces."), "error");
@@ -383,16 +383,25 @@ export class DevelopmentPageComponent implements OnDestroy {
     });
   }
 
-  private async ensureSelectedWorkspace(): Promise<void> {
+  private async ensureSelectedWorkspace(options: { refreshReadyWorkspace?: boolean } = {}): Promise<void> {
     const workspaces = this.workspaces();
     const selectedId = this.selectedWorkspaceId();
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
+      if (options.refreshReadyWorkspace && selected.status === "ready") {
+        await this.refresh(selected);
+        return;
+      }
       await this.selectWorkspaceAsync(selected);
       return;
     }
     const first = workspaces[0];
     if (first) {
+      if (options.refreshReadyWorkspace && first.status === "ready") {
+        this.selectedWorkspaceId.set(first.id);
+        await this.refresh(first);
+        return;
+      }
       await this.selectWorkspaceAsync(first);
       return;
     }
