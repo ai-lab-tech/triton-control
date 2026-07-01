@@ -1,7 +1,11 @@
 """Unit tests for per-user Development workspace behavior."""
 
 import asyncio
+import base64
+import io
+import json
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -221,6 +225,30 @@ class CodeServerTests(unittest.TestCase):
                 k8s._triton_deploy_extension_dir(),
                 configured / "triton-deploy",
             )
+
+    def test_TritonDeployExtensionVsix_IncludesScaffoldModule(self) -> None:
+        extension_dir = k8s._triton_deploy_extension_dir()
+        package_json = {"name": "triton-control-deploy", "version": "0.1.0", "publisher": "triton-control"}
+
+        encoded = k8s._triton_deploy_extension_vsix_b64(extension_dir, package_json)
+
+        with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded))) as archive:
+            names = set(archive.namelist())
+
+        self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/scaffold.js", names)
+        self.assertIn("extension/resources/triton-control.svg", names)
+
+    def test_TritonDeployExtensionPackage_ContributesActivityBarView(self) -> None:
+        extension_dir = k8s._triton_deploy_extension_dir()
+        package_json = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
+
+        contributes = package_json["contributes"]
+
+        self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
+        self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
+        self.assertIn("onView:tritonControl.workspaceActions", package_json["activationEvents"])
+        self.assertIn("onCommand:tritonControl.openRepositorySetup", package_json["activationEvents"])
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         request = self._request().model_copy(

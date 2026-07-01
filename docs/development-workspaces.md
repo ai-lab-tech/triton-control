@@ -169,9 +169,9 @@ Triton deployment so its model repository client can trust the endpoint.
 The bundled **Triton Control Deploy** extension can create starter Triton model
 repository structures in `/workspace`.
 
-Run **Triton Control: New Model Repository** from the command palette, or
-right-click a workspace folder in the code-server explorer and run the same
-command.
+Open the Triton Control icon in the code-server Activity Bar and select
+**New Model Repository**. The same command is also available from the command
+palette and from the Explorer folder context menu.
 
 The command asks for:
 
@@ -207,6 +207,10 @@ Artifact-based templates create the model folder, `config.pbtxt`, a version
 folder, and editable README guidance explaining which model artifact must be
 provided before deployment.
 
+Generated `config.pbtxt` files are templates. Review and update the real model
+name, backend/platform, input tensor names, output tensor names, shapes, and
+data types before deploying. The scaffold defaults are intentionally generic.
+
 Ensemble scaffolding creates child model folders plus a separate ensemble model
 folder with `platform: "ensemble"` and editable `ensemble_scheduling` maps.
 
@@ -230,9 +234,17 @@ Example ensemble output:
     config.pbtxt
 ```
 
-After creation, choose **Open config.pbtxt** to edit the generated config,
-**Open folder** to switch code-server to the repository, or **Deploy
-repository** to start the existing deploy flow.
+After creation, the repository appears both in Explorer and in the Triton
+Control Activity Bar view. The Triton Control view marks repositories as:
+
+- **review model setup** when placeholder artifact guidance or generated
+  `config.pbtxt` template values are still present
+- **ready to deploy** when the scaffold placeholders are no longer detected
+
+Select a repository marked **review model setup** to open the setup README or
+`config.pbtxt` template. Review the model files and config before using the
+deploy action. Repositories marked **ready to deploy** expose deploy actions in
+the Triton Control view and context menu.
 
 ## Deploy a Model Repository
 
@@ -252,8 +264,11 @@ webviews use browser APIs and service workers that do not work on insecure
 origins.
 
 1. Create or edit a Triton model repository under `/workspace`.
-2. Right-click the repository root or a single model folder.
-3. Run **Triton Control: Deploy Model Repository**.
+2. Confirm required model artifacts are present and `config.pbtxt` matches the
+   real model inputs and outputs.
+3. Use a **ready to deploy** repository from the Triton Control Activity Bar
+   view, or right-click the repository root or a single model folder in
+   Explorer and run **Triton Control: Deploy Model Repository**.
 4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
 5. Confirm the Triton image, detected backend summary, S3 upload target, model
    control mode, and optional resources.

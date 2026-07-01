@@ -434,6 +434,10 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
+        "extension/resources/triton-control.svg": (extension_dir / "resources" / "triton-control.svg").read_text(
+            encoding="utf-8",
+        ),
         "extension/README.md": (extension_dir / "README.md").read_text(encoding="utf-8"),
         "extension.vsixmanifest": _triton_deploy_vsix_manifest(package_json),
         "[Content_Types].xml": _vsix_content_types(),
@@ -482,6 +486,7 @@ def _vsix_content_types() -> str:
         '  <Default Extension="json" ContentType="application/json" />\n'
         '  <Default Extension="js" ContentType="application/javascript" />\n'
         '  <Default Extension="md" ContentType="text/markdown" />\n'
+        '  <Default Extension="svg" ContentType="image/svg+xml" />\n'
         '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n'
         "</Types>\n"
     )

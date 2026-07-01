@@ -9,8 +9,9 @@ then calls Triton Control's existing `POST /api/deployments` endpoint.
 ### Create a model repository
 
 1. Open a workspace folder in code-server.
-2. Run `Triton Control: New Model Repository` from the command palette, or
-   right-click a folder in the explorer and run the same command.
+2. Open the Triton Control Activity Bar view and select **New Model
+   Repository**. The command is also available from the command palette and
+   from the Explorer folder context menu.
 3. Choose `Single model` or `Ensemble pipeline`.
 4. Enter the repository target folder name.
 5. For a single model, enter the Triton model name and choose a template.
@@ -33,6 +34,10 @@ Python scaffolds include a starter `model.py`. Artifact-based templates include
 editable README guidance in the version folder explaining which model artifact
 the user must provide before deployment.
 
+Generated `config.pbtxt` files are templates. Review and update the model name,
+backend/platform, tensor names, shapes, and data types before deploying a real
+model.
+
 Preset ensembles:
 
 - Python -> ONNX Runtime -> Python
@@ -42,10 +47,25 @@ Custom ensembles can use templates marked as ensemble-step eligible. The
 generated ensemble `config.pbtxt` contains `platform: "ensemble"` and editable
 `ensemble_scheduling` input/output maps.
 
+### Workspace view
+
+The Triton Control Activity Bar view lists workspace actions and discovered
+Triton model repositories below the workspace root.
+
+- **New Model Repository** starts the scaffold wizard.
+- Repositories marked **review model setup** still contain placeholder artifact
+  guidance or generated `config.pbtxt` template values. Select them to open the
+  setup file first.
+- Repositories marked **ready to deploy** expose deploy actions in the view and
+  context menu.
+
 ### Deploy a model repository
 
-1. Right-click a Triton model folder or model repository root in code-server.
-2. Run `Triton Control: Deploy Model Repository`.
+1. Confirm the model files are present and `config.pbtxt` matches the real
+   model inputs and outputs.
+2. Use a **ready to deploy** repository from the Triton Control view, or
+   right-click a Triton model folder or model repository root in Explorer and
+   run `Triton Control: Deploy Model Repository`.
 3. The extension detects the model name and `backend` value from `config.pbtxt`.
    If no model name is found, it asks for one. When no backend is declared, the
    form shows `No backend in config.pbtxt`.

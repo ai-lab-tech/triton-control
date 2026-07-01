@@ -13,7 +13,9 @@
   "activationEvents": [
     "onCommand:tritonControl.deployModelRepository",
     "onCommand:tritonControl.uploadModelRepositorySimple",
-    "onCommand:tritonControl.newModelRepository"
+    "onCommand:tritonControl.newModelRepository",
+    "onCommand:tritonControl.openRepositorySetup",
+    "onView:tritonControl.workspaceActions"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -28,10 +30,40 @@
       },
       {
         "command": "tritonControl.newModelRepository",
-        "title": "Triton Control: New Model Repository"
+        "title": "Triton Control: New Model Repository",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tritonControl.openRepositorySetup",
+        "title": "Triton Control: Open Repository Setup",
+        "icon": "$(book)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tritonControl",
+          "title": "Triton Control",
+          "icon": "resources/triton-control.svg"
+        }
+      ]
+    },
+    "views": {
+      "tritonControl": [
+        {
+          "id": "tritonControl.workspaceActions",
+          "name": "Workspace"
+        }
+      ]
+    },
     "menus": {
+      "view/title": [
+        {
+          "command": "tritonControl.newModelRepository",
+          "when": "view == workbench.explorer.fileView || view == tritonControl.workspaceActions",
+          "group": "navigation@89"
+        }
+      ],
       "explorer/context": [
         {
           "command": "tritonControl.deployModelRepository",
@@ -47,6 +79,18 @@
           "command": "tritonControl.newModelRepository",
           "when": "explorerResourceIsFolder",
           "group": "navigation@89"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tritonControl.openRepositorySetup",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryPending",
+          "group": "navigation@80"
+        },
+        {
+          "command": "tritonControl.deployModelRepository",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
+          "group": "navigation@90"
         }
       ]
     },

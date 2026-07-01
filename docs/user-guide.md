@@ -399,11 +399,19 @@ Users can create one persistent workspace, edit model repositories under
 `/workspace`, and deploy them through the bundled **Triton Control Deploy**
 extension.
 
-Inside code-server, run **Triton Control: New Model Repository** from the
-command palette or explorer folder menu to create a starter Triton repository.
-The command can create a single-model repository from Python, ONNX Runtime,
-TensorRT, TensorRT-LLM, vLLM, or PyTorch/LibTorch templates, or an ensemble
-pipeline with child model folders and an ensemble `config.pbtxt`.
+Inside code-server, open the Triton Control Activity Bar view and select
+**New Model Repository** to create a starter Triton repository. The command is
+also available from the command palette and Explorer folder context menu. It
+can create a single-model repository from Python, ONNX Runtime, TensorRT,
+TensorRT-LLM, vLLM, or PyTorch/LibTorch templates, or an ensemble pipeline
+with child model folders and an ensemble `config.pbtxt`.
+
+Generated `config.pbtxt` files are templates. Review the model artifacts,
+input/output tensor names, shapes, and data types before deploying. The
+Triton Control Activity Bar view marks discovered repositories as
+**review model setup** until scaffold placeholders or generic config template
+values are removed; **ready to deploy** repositories expose deploy actions in
+the view and context menu.
 
 The deploy extension has a full webview form for trusted HTTPS or localhost.
 For plain HTTP or an untrusted local certificate, use

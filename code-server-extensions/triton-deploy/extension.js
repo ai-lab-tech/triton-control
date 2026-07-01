@@ -13,10 +13,18 @@ const {
 
 let insecureWebviewWarningShown = false;
 let outputChannel;
+let actionsProvider;
 
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
+  actionsProvider = new TritonControlActionsProvider();
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider(
+      "tritonControl.workspaceActions",
+      actionsProvider,
+    ),
+  );
 
   const webviewCommand = vscode.commands.registerCommand(
     "tritonControl.deployModelRepository",
@@ -57,7 +65,220 @@ function activate(context) {
       await runNewModelRepositoryWizard(resource);
     },
   );
-  context.subscriptions.push(webviewCommand, simpleCommand, scaffoldCommand);
+  const openSetupCommand = vscode.commands.registerCommand(
+    "tritonControl.openRepositorySetup",
+    async (repository) => {
+      await openRepositorySetup(repository);
+    },
+  );
+  context.subscriptions.push(webviewCommand, simpleCommand, scaffoldCommand, openSetupCommand);
+}
+
+class TritonControlActionsProvider {
+  constructor() {
+    this._onDidChangeTreeData = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+  }
+
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(item) {
+    return item;
+  }
+
+  getChildren(item) {
+    if (item?.children) {
+      return item.children;
+    }
+    if (item) {
+      return [];
+    }
+    const repositories = discoverWorkspaceRepositories().map((repository) => (
+      new TritonControlRepositoryItem(repository)
+    ));
+    return [
+      new TritonControlActionItem(
+        "New Model Repository",
+        "tritonControl.newModelRepository",
+        new vscode.ThemeIcon("new-folder"),
+      ),
+      ...repositories,
+    ];
+  }
+}
+
+class TritonControlActionItem extends vscode.TreeItem {
+  constructor(label, commandId, iconPath, args = []) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.iconPath = iconPath;
+    this.command = {
+      command: commandId,
+      title: label,
+      arguments: args,
+    };
+  }
+}
+
+class TritonControlRepositoryItem extends vscode.TreeItem {
+  constructor(repository) {
+    super(repository.name, vscode.TreeItemCollapsibleState.Collapsed);
+    this.description = repository.needsSetup ? "review model setup" : "ready to deploy";
+    this.tooltip = repository.folder;
+    this.iconPath = new vscode.ThemeIcon("repo");
+    this.resourceUri = vscode.Uri.file(repository.folder);
+    this.contextValue = repository.needsSetup ? "tritonModelRepositoryPending" : "tritonModelRepositoryReady";
+    this.command = {
+      command: "tritonControl.openRepositorySetup",
+      title: "Open Repository Setup",
+      arguments: [repository],
+    };
+    this.children = repository.needsSetup
+      ? [
+          new TritonControlActionItem(
+            repository.setupLabel,
+            "tritonControl.openRepositorySetup",
+            new vscode.ThemeIcon(repository.setupIcon),
+            [repository],
+          ),
+          new TritonControlInfoItem("Review config inputs/outputs before deploy"),
+        ]
+      : [
+          new TritonControlActionItem(
+            "Open config.pbtxt",
+            "tritonControl.openRepositorySetup",
+            new vscode.ThemeIcon("file-code"),
+            [repository],
+          ),
+          new TritonControlActionItem(
+            "Deploy repository",
+            "tritonControl.deployModelRepository",
+            new vscode.ThemeIcon("rocket"),
+            [vscode.Uri.file(repository.folder)],
+          ),
+        ];
+  }
+}
+
+class TritonControlInfoItem extends vscode.TreeItem {
+  constructor(label) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.iconPath = new vscode.ThemeIcon("info");
+  }
+}
+
+function discoverWorkspaceRepositories() {
+  const folders = vscode.workspace.workspaceFolders || [];
+  const repositories = [];
+  for (const folder of folders) {
+    const root = folder.uri.fsPath;
+    for (const child of safeReadDirectory(root)) {
+      const fullPath = path.join(root, child);
+      if (isTritonRepositoryFolder(fullPath)) {
+        repositories.push({
+          name: child,
+          folder: fullPath,
+          workspaceFolder: root,
+          setupFile: findRepositorySetupFile(fullPath),
+          needsSetup: repositoryNeedsSetup(fullPath),
+          setupLabel: repositoryNeedsArtifacts(fullPath) ? "Open artifact guidance" : "Open config template",
+          setupIcon: repositoryNeedsArtifacts(fullPath) ? "book" : "file-code",
+        });
+      }
+    }
+  }
+  return repositories.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function isTritonRepositoryFolder(folder) {
+  if (!safeStat(folder)?.isDirectory()) {
+    return false;
+  }
+  return safeReadDirectory(folder).some((entry) => (
+    fs.existsSync(path.join(folder, entry, "config.pbtxt"))
+  ));
+}
+
+function repositoryNeedsSetup(folder) {
+  return repositoryNeedsArtifacts(folder) || findScaffoldConfigFiles(folder).length > 0;
+}
+
+function findRepositorySetupFile(folder) {
+  const guidance = findPlaceholderGuidanceFiles(folder);
+  if (guidance.length) {
+    return guidance[0];
+  }
+  const scaffoldConfigs = findScaffoldConfigFiles(folder);
+  if (scaffoldConfigs.length) {
+    return scaffoldConfigs[0];
+  }
+  for (const modelFolder of safeReadDirectory(folder)) {
+    const configPath = path.join(folder, modelFolder, "config.pbtxt");
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
+  }
+  return folder;
+}
+
+function repositoryNeedsArtifacts(folder) {
+  return findPlaceholderGuidanceFiles(folder).length > 0;
+}
+
+function findPlaceholderGuidanceFiles(folder) {
+  const files = [];
+  for (const modelFolder of safeReadDirectory(folder)) {
+    const fullModelFolder = path.join(folder, modelFolder);
+    for (const versionFolder of safeReadDirectory(fullModelFolder)) {
+      const readme = path.join(fullModelFolder, versionFolder, "README.md");
+      if (safeReadFile(readme).includes("This scaffold is intentionally not a production model.")) {
+        files.push(readme);
+      }
+    }
+  }
+  return files.sort();
+}
+
+function findScaffoldConfigFiles(folder) {
+  const files = [];
+  for (const modelFolder of safeReadDirectory(folder)) {
+    const configPath = path.join(folder, modelFolder, "config.pbtxt");
+    const content = safeReadFile(configPath);
+    if (
+      content.includes('name: "') &&
+      content.includes("INPUT__0") &&
+      content.includes("OUTPUT__0") &&
+      content.includes("dims: [ 1 ]")
+    ) {
+      files.push(configPath);
+    }
+  }
+  return files.sort();
+}
+
+function safeReadFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function safeReadDirectory(folder) {
+  try {
+    return fs.readdirSync(folder);
+  } catch {
+    return [];
+  }
+}
+
+function safeStat(filePath) {
+  try {
+    return fs.statSync(filePath);
+  } catch {
+    return null;
+  }
 }
 
 async function runNewModelRepositoryWizard(resource) {
@@ -87,6 +308,7 @@ async function runNewModelRepositoryWizard(resource) {
     if (!result) {
       return;
     }
+    actionsProvider?.refresh();
     const openSelection = await vscode.window.showInformationMessage(
       `Created Triton repository at ${result.repositoryFolder}`,
       "Open config.pbtxt",
@@ -103,6 +325,19 @@ async function runNewModelRepositoryWizard(resource) {
     }
   } catch (error) {
     vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function openRepositorySetup(repository) {
+  if (!repository?.setupFile) {
+    return;
+  }
+  const stats = safeStat(repository.setupFile);
+  if (stats?.isFile()) {
+    const document = await vscode.workspace.openTextDocument(repository.setupFile);
+    await vscode.window.showTextDocument(document);
+  } else {
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(repository.folder), false);
   }
 }
 
