@@ -238,6 +238,7 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("extension/extension.js", names)
         self.assertIn("extension/scaffold.js", names)
+        self.assertIn("extension/workspace-repositories.js", names)
         self.assertIn("extension/resources/triton-control.svg", names)
 
     def test_TritonDeployExtensionPackage_ContributesActivityBarView(self) -> None:

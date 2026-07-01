@@ -438,6 +438,7 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
         "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
+        "extension/workspace-repositories.js": (extension_dir / "workspace-repositories.js").read_text(encoding="utf-8"),
         "extension/resources/triton-control.svg": (extension_dir / "resources" / "triton-control.svg").read_text(
             encoding="utf-8",
         ),

@@ -10,10 +10,12 @@ const {
   scaffoldEnsembleRepository,
   scaffoldSingleModelRepository,
 } = require("./scaffold");
+const { discoverWorkspaceRepositories } = require("./workspace-repositories");
 
 let insecureWebviewWarningShown = false;
 let outputChannel;
 let actionsProvider;
+let repositoryRefreshTimer;
 
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
@@ -25,10 +27,10 @@ function activate(context) {
       actionsProvider,
     ),
   );
-  const workspaceWatcher = vscode.workspace.createFileSystemWatcher("**/{config.pbtxt,README.md}");
-  workspaceWatcher.onDidCreate(() => actionsProvider?.refresh());
-  workspaceWatcher.onDidChange(() => actionsProvider?.refresh());
-  workspaceWatcher.onDidDelete(() => actionsProvider?.refresh());
+  const workspaceWatcher = vscode.workspace.createFileSystemWatcher("**/*");
+  workspaceWatcher.onDidCreate(scheduleRepositoryRefresh);
+  workspaceWatcher.onDidChange(scheduleRepositoryRefresh);
+  workspaceWatcher.onDidDelete(scheduleRepositoryRefresh);
   context.subscriptions.push(workspaceWatcher);
 
   const webviewCommand = vscode.commands.registerCommand(
@@ -95,7 +97,18 @@ function activate(context) {
     openSetupCommand,
     revealRepositoryCommand,
     refreshRepositoriesCommand,
+    { dispose: () => repositoryRefreshTimer && clearTimeout(repositoryRefreshTimer) },
   );
+}
+
+function scheduleRepositoryRefresh() {
+  if (repositoryRefreshTimer) {
+    clearTimeout(repositoryRefreshTimer);
+  }
+  repositoryRefreshTimer = setTimeout(() => {
+    repositoryRefreshTimer = undefined;
+    actionsProvider?.refresh();
+  }, 150);
 }
 
 class TritonControlActionsProvider {
@@ -116,7 +129,7 @@ class TritonControlActionsProvider {
     if (item) {
       return [];
     }
-    const repositories = discoverWorkspaceRepositories().map((repository) => (
+    const repositories = discoverWorkspaceRepositories(vscode.workspace.workspaceFolders || []).map((repository) => (
       new TritonControlRepositoryItem(repository)
     ));
     return [
@@ -155,111 +168,6 @@ class TritonControlRepositoryItem extends vscode.TreeItem {
       title: "Reveal Repository",
       arguments: [repository],
     };
-  }
-}
-
-function discoverWorkspaceRepositories() {
-  const folders = vscode.workspace.workspaceFolders || [];
-  const repositories = [];
-  for (const folder of folders) {
-    const root = folder.uri.fsPath;
-    for (const child of safeReadDirectory(root)) {
-      const fullPath = path.join(root, child);
-      if (isTritonRepositoryFolder(fullPath)) {
-        repositories.push({
-          name: child,
-          folder: fullPath,
-          workspaceFolder: root,
-          setupFile: findRepositorySetupFile(fullPath),
-          needsSetup: repositoryNeedsSetup(fullPath),
-          setupLabel: repositoryNeedsArtifacts(fullPath) ? "Open artifact guidance" : "Open config template",
-          setupIcon: repositoryNeedsArtifacts(fullPath) ? "book" : "file-code",
-        });
-      }
-    }
-  }
-  return repositories.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function isTritonRepositoryFolder(folder) {
-  if (!safeStat(folder)?.isDirectory()) {
-    return false;
-  }
-  return safeReadDirectory(folder).some((entry) => (
-    fs.existsSync(path.join(folder, entry, "config.pbtxt"))
-  ));
-}
-
-function repositoryNeedsSetup(folder) {
-  return repositoryNeedsArtifacts(folder) || findScaffoldConfigFiles(folder).length > 0;
-}
-
-function findRepositorySetupFile(folder) {
-  const guidance = findPlaceholderGuidanceFiles(folder);
-  if (guidance.length) {
-    return guidance[0];
-  }
-  const scaffoldConfigs = findScaffoldConfigFiles(folder);
-  if (scaffoldConfigs.length) {
-    return scaffoldConfigs[0];
-  }
-  for (const modelFolder of safeReadDirectory(folder)) {
-    const configPath = path.join(folder, modelFolder, "config.pbtxt");
-    if (fs.existsSync(configPath)) {
-      return configPath;
-    }
-  }
-  return folder;
-}
-
-function repositoryNeedsArtifacts(folder) {
-  return findPlaceholderGuidanceFiles(folder).length > 0;
-}
-
-function findPlaceholderGuidanceFiles(folder) {
-  const files = [];
-  for (const modelFolder of safeReadDirectory(folder)) {
-    const fullModelFolder = path.join(folder, modelFolder);
-    for (const versionFolder of safeReadDirectory(fullModelFolder)) {
-      const readme = path.join(fullModelFolder, versionFolder, "README.md");
-      if (safeReadFile(readme).includes("This scaffold is intentionally not a production model.")) {
-        files.push(readme);
-      }
-    }
-  }
-  return files.sort();
-}
-
-function findScaffoldConfigFiles(folder) {
-  const files = [];
-  for (const modelFolder of safeReadDirectory(folder)) {
-    const configPath = path.join(folder, modelFolder, "config.pbtxt");
-    const content = safeReadFile(configPath);
-    if (
-      content.includes('name: "') &&
-      content.includes("INPUT__0") &&
-      content.includes("OUTPUT__0") &&
-      content.includes("dims: [ 1 ]")
-    ) {
-      files.push(configPath);
-    }
-  }
-  return files.sort();
-}
-
-function safeReadFile(filePath) {
-  try {
-    return fs.readFileSync(filePath, "utf8");
-  } catch {
-    return "";
-  }
-}
-
-function safeReadDirectory(folder) {
-  try {
-    return fs.readdirSync(folder);
-  } catch {
-    return [];
   }
 }
 
