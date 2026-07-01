@@ -133,7 +133,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("CODE_SERVER_EXTENSIONS=$PERSISTENT_EXTENSIONS", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
         self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
-        self.assertIn("-name 'triton-control.triton-control-deploy-*' -exec rm -rf {} +", container["args"][0])
+        self.assertIn("--uninstall-extension triton-control.triton-control-deploy", container["args"][0])
         self.assertIn("--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\"", container["args"][0])
         self.assertIn("--force", container["args"][0])
         self.assertIn("triton-control.triton-control-deploy", container["args"][0])
@@ -251,6 +251,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
         self.assertIn("onView:tritonControl.workspaceActions", package_json["activationEvents"])
         self.assertIn("onCommand:tritonControl.openRepositorySetup", package_json["activationEvents"])
+        self.assertIn("onCommand:tritonControl.refreshRepositories", package_json["activationEvents"])
         self.assertIn("onStartupFinished", package_json["activationEvents"])
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:

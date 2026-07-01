@@ -15,6 +15,8 @@
     "onCommand:tritonControl.uploadModelRepositorySimple",
     "onCommand:tritonControl.newModelRepository",
     "onCommand:tritonControl.openRepositorySetup",
+    "onCommand:tritonControl.revealRepository",
+    "onCommand:tritonControl.refreshRepositories",
     "onView:tritonControl.workspaceActions",
     "onStartupFinished"
   ],
@@ -38,6 +40,16 @@
         "command": "tritonControl.openRepositorySetup",
         "title": "Triton Control: Open Repository Setup",
         "icon": "$(book)"
+      },
+      {
+        "command": "tritonControl.revealRepository",
+        "title": "Triton Control: Reveal Repository",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "tritonControl.refreshRepositories",
+        "title": "Triton Control: Refresh Repositories",
+        "icon": "$(refresh)"
       }
     ],
     "viewsContainers": {
@@ -63,6 +75,11 @@
           "command": "tritonControl.newModelRepository",
           "when": "view == workbench.explorer.fileView || view == tritonControl.workspaceActions",
           "group": "navigation@89"
+        },
+        {
+          "command": "tritonControl.refreshRepositories",
+          "when": "view == tritonControl.workspaceActions",
+          "group": "navigation@90"
         }
       ],
       "explorer/context": [
@@ -86,6 +103,11 @@
         {
           "command": "tritonControl.openRepositorySetup",
           "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryPending",
+          "group": "navigation@80"
+        },
+        {
+          "command": "tritonControl.openRepositorySetup",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
           "group": "navigation@80"
         },
         {

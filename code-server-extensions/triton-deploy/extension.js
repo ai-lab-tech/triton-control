@@ -25,6 +25,11 @@ function activate(context) {
       actionsProvider,
     ),
   );
+  const workspaceWatcher = vscode.workspace.createFileSystemWatcher("**/{config.pbtxt,README.md}");
+  workspaceWatcher.onDidCreate(() => actionsProvider?.refresh());
+  workspaceWatcher.onDidChange(() => actionsProvider?.refresh());
+  workspaceWatcher.onDidDelete(() => actionsProvider?.refresh());
+  context.subscriptions.push(workspaceWatcher);
 
   const webviewCommand = vscode.commands.registerCommand(
     "tritonControl.deployModelRepository",
@@ -71,7 +76,26 @@ function activate(context) {
       await openRepositorySetup(repository);
     },
   );
-  context.subscriptions.push(webviewCommand, simpleCommand, scaffoldCommand, openSetupCommand);
+  const revealRepositoryCommand = vscode.commands.registerCommand(
+    "tritonControl.revealRepository",
+    async (repository) => {
+      await revealRepositoryInExplorer(repository?.folder || repository?.fsPath || repository);
+    },
+  );
+  const refreshRepositoriesCommand = vscode.commands.registerCommand(
+    "tritonControl.refreshRepositories",
+    () => {
+      actionsProvider?.refresh();
+    },
+  );
+  context.subscriptions.push(
+    webviewCommand,
+    simpleCommand,
+    scaffoldCommand,
+    openSetupCommand,
+    revealRepositoryCommand,
+    refreshRepositoriesCommand,
+  );
 }
 
 class TritonControlActionsProvider {
@@ -89,9 +113,6 @@ class TritonControlActionsProvider {
   }
 
   getChildren(item) {
-    if (item?.children) {
-      return item.children;
-    }
     if (item) {
       return [];
     }
@@ -123,48 +144,17 @@ class TritonControlActionItem extends vscode.TreeItem {
 
 class TritonControlRepositoryItem extends vscode.TreeItem {
   constructor(repository) {
-    super(repository.name, vscode.TreeItemCollapsibleState.Collapsed);
+    super(repository.name, vscode.TreeItemCollapsibleState.None);
     this.description = repository.needsSetup ? "review model setup" : "ready to deploy";
     this.tooltip = repository.folder;
     this.iconPath = new vscode.ThemeIcon("repo");
     this.resourceUri = vscode.Uri.file(repository.folder);
     this.contextValue = repository.needsSetup ? "tritonModelRepositoryPending" : "tritonModelRepositoryReady";
     this.command = {
-      command: "tritonControl.openRepositorySetup",
-      title: "Open Repository Setup",
+      command: "tritonControl.revealRepository",
+      title: "Reveal Repository",
       arguments: [repository],
     };
-    this.children = repository.needsSetup
-      ? [
-          new TritonControlActionItem(
-            repository.setupLabel,
-            "tritonControl.openRepositorySetup",
-            new vscode.ThemeIcon(repository.setupIcon),
-            [repository],
-          ),
-          new TritonControlInfoItem("Review config inputs/outputs before deploy"),
-        ]
-      : [
-          new TritonControlActionItem(
-            "Open config.pbtxt",
-            "tritonControl.openRepositorySetup",
-            new vscode.ThemeIcon("file-code"),
-            [repository],
-          ),
-          new TritonControlActionItem(
-            "Deploy repository",
-            "tritonControl.deployModelRepository",
-            new vscode.ThemeIcon("rocket"),
-            [vscode.Uri.file(repository.folder)],
-          ),
-        ];
-  }
-}
-
-class TritonControlInfoItem extends vscode.TreeItem {
-  constructor(label) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon("info");
   }
 }
 
@@ -309,6 +299,7 @@ async function runNewModelRepositoryWizard(resource) {
       return;
     }
     actionsProvider?.refresh();
+    await revealRepositoryInExplorer(result.repositoryFolder);
     const openSelection = await vscode.window.showInformationMessage(
       `Created Triton repository at ${result.repositoryFolder}`,
       "Open config.pbtxt",
@@ -339,6 +330,16 @@ async function openRepositorySetup(repository) {
   } else {
     await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(repository.folder), false);
   }
+}
+
+async function revealRepositoryInExplorer(repositoryFolder) {
+  const folder = typeof repositoryFolder === "string" ? repositoryFolder : repositoryFolder?.fsPath;
+  if (!folder) {
+    return;
+  }
+  const uri = vscode.Uri.file(folder);
+  await vscode.commands.executeCommand("workbench.view.explorer");
+  await vscode.commands.executeCommand("revealInExplorer", uri);
 }
 
 async function collectAndCreateSingleModelRepository(baseFolder) {

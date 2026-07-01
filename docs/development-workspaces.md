@@ -241,10 +241,15 @@ Control Activity Bar view. The Triton Control view marks repositories as:
   `config.pbtxt` template values are still present
 - **ready to deploy** when the scaffold placeholders are no longer detected
 
-Select a repository marked **review model setup** to open the setup README or
-`config.pbtxt` template. Review the model files and config before using the
+Select a repository row to switch to Explorer and reveal the real folder in the
+workspace filesystem. Use the repository context menu to open the setup README
+or `config.pbtxt` template. Review the model files and config before using the
 deploy action. Repositories marked **ready to deploy** expose deploy actions in
 the Triton Control view and context menu.
+
+Repository discovery follows the filesystem. If a repository folder is deleted
+from Explorer or the terminal, it is removed from the Triton Control view after
+the filesystem watcher or the view refresh action runs.
 
 ## Deploy a Model Repository
 

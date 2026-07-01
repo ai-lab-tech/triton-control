@@ -410,8 +410,9 @@ Generated `config.pbtxt` files are templates. Review the model artifacts,
 input/output tensor names, shapes, and data types before deploying. The
 Triton Control Activity Bar view marks discovered repositories as
 **review model setup** until scaffold placeholders or generic config template
-values are removed; **ready to deploy** repositories expose deploy actions in
-the view and context menu.
+values are removed. Selecting a repository row switches to Explorer and
+reveals the real workspace folder; **ready to deploy** repositories expose
+deploy actions in the view and context menu.
 
 The deploy extension has a full webview form for trusted HTTPS or localhost.
 For plain HTTP or an untrusted local certificate, use

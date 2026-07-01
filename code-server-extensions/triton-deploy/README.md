@@ -53,11 +53,16 @@ The Triton Control Activity Bar view lists workspace actions and discovered
 Triton model repositories below the workspace root.
 
 - **New Model Repository** starts the scaffold wizard.
+- Selecting a repository switches to Explorer and reveals the real folder in
+  the workspace filesystem.
 - Repositories marked **review model setup** still contain placeholder artifact
-  guidance or generated `config.pbtxt` template values. Select them to open the
-  setup file first.
+  guidance or generated `config.pbtxt` template values. Use the repository
+  context menu to open setup guidance before deploying.
 - Repositories marked **ready to deploy** expose deploy actions in the view and
   context menu.
+Repository discovery follows the filesystem. If a repository folder is deleted
+from Explorer or the terminal, it is removed from the Triton Control view after
+the filesystem watcher or the view refresh action runs.
 
 ### Deploy a model repository
 
