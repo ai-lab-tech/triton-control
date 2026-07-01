@@ -43,7 +43,6 @@ Architecture:
 - [Architecture Overview](architecture-overview.md): high-level architecture, runtime boundaries, and core system interactions.
 - [Architecture Backend Components](architecture-backend-components.md): backend service components and responsibilities.
 - [Model Config Validation](model-config-validation.md): model repository validation behavior and configuration rules.
-- [Repo Baseline](repo-baseline.md): repo-wide subsystem ownership, runtime flows, boundaries, and verification surfaces.
 
 Operations:
 

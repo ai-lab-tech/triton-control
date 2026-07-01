@@ -22,7 +22,6 @@ nav:
     - Overview: architecture-overview.md
     - Backend Components: architecture-backend-components.md
     - Model Config Validation: model-config-validation.md
-    - Repo Baseline: repo-baseline.md
   - Operations:
     - Configuration: configuration.md
     - Deployment: deployment.md
