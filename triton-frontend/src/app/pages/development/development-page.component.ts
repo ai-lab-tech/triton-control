@@ -383,7 +383,9 @@ export class DevelopmentPageComponent implements OnDestroy {
     });
   }
 
-  private async ensureSelectedWorkspace(options: { refreshReadyWorkspace?: boolean } = {}): Promise<void> {
+  private async ensureSelectedWorkspace(
+    options: { refreshReadyWorkspace?: boolean } = {},
+  ): Promise<void> {
     const workspaces = this.workspaces();
     const selectedId = this.selectedWorkspaceId();
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
