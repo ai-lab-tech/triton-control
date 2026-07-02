@@ -61,7 +61,6 @@ Object.defineProperty(testGlobal, "monaco", {
     };
   },
 });
-testGlobal.monaco = testGlobal.monaco;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const context = (require as any).context("./", true, /\.spec\.ts$/);
