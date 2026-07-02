@@ -6,8 +6,71 @@ then calls Triton Control's existing `POST /api/deployments` endpoint.
 
 ## Flow
 
-1. Right-click a Triton model folder or model repository root in code-server.
-2. Run `Triton Control: Deploy Model Repository`.
+### Create a model repository
+
+1. Open a workspace folder in code-server.
+2. Open the Triton Control Activity Bar view and select **New Model
+   Repository**. The command is also available from the command palette and
+   from the Explorer folder context menu.
+3. Choose `Single model` or `Ensemble pipeline`.
+4. Enter the repository target folder name.
+5. For a single model, enter the Triton model name and choose a template.
+6. For an ensemble, enter the ensemble model name and choose a preset or custom
+   ordered pipeline. Step names become child Triton model folders.
+
+The target folder is the Triton repository root. The model, ensemble, and step
+names become folders inside that repository.
+
+Supported single-model templates:
+
+- Python backend
+- ONNX Runtime
+- TensorRT plan
+- TensorRT-LLM
+- vLLM
+- PyTorch / LibTorch
+
+Python scaffolds include a starter `model.py`. Artifact-based templates include
+editable README guidance in the version folder explaining which model artifact
+the user must provide before deployment.
+
+Generated `config.pbtxt` files are templates. Review and update the model name,
+backend/platform, tensor names, shapes, and data types before deploying a real
+model.
+
+Preset ensembles:
+
+- Python -> ONNX Runtime -> Python
+- Python -> TensorRT -> Python
+
+Custom ensembles can use templates marked as ensemble-step eligible. The
+generated ensemble `config.pbtxt` contains `platform: "ensemble"` and editable
+`ensemble_scheduling` input/output maps.
+
+### Workspace view
+
+The Triton Control Activity Bar view lists workspace actions and discovered
+Triton model repositories below the workspace root.
+
+- **New Model Repository** starts the scaffold wizard.
+- Selecting a repository switches to Explorer and reveals the real folder in
+  the workspace filesystem.
+- Repositories marked **review model setup** still contain placeholder artifact
+  guidance or generated `config.pbtxt` template values. Use the repository
+  context menu to open setup guidance before deploying.
+- Repositories marked **ready to deploy** expose deploy actions in the view and
+  context menu.
+Repository discovery follows the filesystem. If a repository folder is deleted
+from Explorer or the terminal, it is removed from the Triton Control view after
+the filesystem watcher or the view refresh action runs.
+
+### Deploy a model repository
+
+1. Confirm the model files are present and `config.pbtxt` matches the real
+   model inputs and outputs.
+2. Use a **ready to deploy** repository from the Triton Control view, or
+   right-click a Triton model folder or model repository root in Explorer and
+   run `Triton Control: Deploy Model Repository`.
 3. The extension detects the model name and `backend` value from `config.pbtxt`.
    If no model name is found, it asks for one. When no backend is declared, the
    form shows `No backend in config.pbtxt`.

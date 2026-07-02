@@ -164,6 +164,93 @@ For a private or self-signed HTTPS object-store certificate, provide the PEM CA
 certificate requested by the extension. This certificate is passed to the
 Triton deployment so its model repository client can trust the endpoint.
 
+## Create a Model Repository
+
+The bundled **Triton Control Deploy** extension can create starter Triton model
+repository structures in `/workspace`.
+
+Open the Triton Control icon in the code-server Activity Bar and select
+**New Model Repository**. The same command is also available from the command
+palette and from the Explorer folder context menu.
+
+The command asks for:
+
+1. repository type: **Single model** or **Ensemble pipeline**
+2. repository target folder name
+3. model name for a single model, or ensemble name plus step names for an
+   ensemble
+4. template/backend selection
+
+The target folder becomes the Triton repository root. Model, ensemble, and step
+names become folders inside that repository.
+
+Single-model templates:
+
+- Python backend
+- ONNX Runtime
+- TensorRT plan
+- TensorRT-LLM
+- vLLM
+- PyTorch / LibTorch
+
+Example single-model output:
+
+```text
+/workspace/my-repository/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+```
+
+Artifact-based templates create the model folder, `config.pbtxt`, a version
+folder, and editable README guidance explaining which model artifact must be
+provided before deployment.
+
+Generated `config.pbtxt` files are templates. Review and update the real model
+name, backend/platform, input tensor names, output tensor names, shapes, and
+data types before deploying. The scaffold defaults are intentionally generic.
+
+Ensemble scaffolding creates child model folders plus a separate ensemble model
+folder with `platform: "ensemble"` and editable `ensemble_scheduling` maps.
+
+Example ensemble output:
+
+```text
+/workspace/fraud-pipeline/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+  score/
+    config.pbtxt
+    1/
+      README.md
+  postprocess/
+    config.pbtxt
+    1/
+      model.py
+  fraud_detector/
+    config.pbtxt
+```
+
+After creation, the repository appears both in Explorer and in the Triton
+Control Activity Bar view. The Triton Control view marks repositories as:
+
+- **review model setup** when placeholder artifact guidance or generated
+  `config.pbtxt` template values are still present
+- **ready to deploy** when the scaffold placeholders are no longer detected
+
+Select a repository row to switch to Explorer and reveal the real folder in the
+workspace filesystem. Use the repository context menu to open the setup README
+or `config.pbtxt` template. Review the model files and config before using the
+deploy action. Repositories marked **ready to deploy** expose deploy actions in
+the Triton Control view and context menu.
+
+Repository discovery follows the filesystem. If a repository folder is deleted
+from Explorer or the terminal, it is removed from the Triton Control view after
+the filesystem watcher or the view refresh action runs.
+
 ## Deploy a Model Repository
 
 The **Triton Control Deploy** extension has two modes:
@@ -182,8 +269,11 @@ webviews use browser APIs and service workers that do not work on insecure
 origins.
 
 1. Create or edit a Triton model repository under `/workspace`.
-2. Right-click the repository root or a single model folder.
-3. Run **Triton Control: Deploy Model Repository**.
+2. Confirm required model artifacts are present and `config.pbtxt` matches the
+   real model inputs and outputs.
+3. Use a **ready to deploy** repository from the Triton Control Activity Bar
+   view, or right-click the repository root or a single model folder in
+   Explorer and run **Triton Control: Deploy Model Repository**.
 4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
 5. Confirm the Triton image, detected backend summary, S3 upload target, model
    control mode, and optional resources.
