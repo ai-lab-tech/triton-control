@@ -37,28 +37,29 @@ const baseMonaco = {
     parse: (value: string) => ({ path: value, toString: () => value }),
   },
 };
-let monacoMock = baseMonaco;
+const withBaseMonaco = (value: typeof testGlobal.monaco) => ({
+  ...baseMonaco,
+  ...value,
+  editor: {
+    ...baseMonaco.editor,
+    ...value?.editor,
+  },
+  MarkerSeverity: {
+    ...baseMonaco.MarkerSeverity,
+    ...value?.MarkerSeverity,
+  },
+  Uri: {
+    ...baseMonaco.Uri,
+    ...value?.Uri,
+  },
+});
+let monacoMock = withBaseMonaco(testGlobal.monaco);
 
 Object.defineProperty(testGlobal, "monaco", {
   configurable: true,
-  get: () => monacoMock,
+  get: () => withBaseMonaco(monacoMock),
   set: (value) => {
-    monacoMock = {
-      ...baseMonaco,
-      ...value,
-      editor: {
-        ...baseMonaco.editor,
-        ...value?.editor,
-      },
-      MarkerSeverity: {
-        ...baseMonaco.MarkerSeverity,
-        ...value?.MarkerSeverity,
-      },
-      Uri: {
-        ...baseMonaco.Uri,
-        ...value?.Uri,
-      },
-    };
+    monacoMock = withBaseMonaco(value);
   },
 });
 
