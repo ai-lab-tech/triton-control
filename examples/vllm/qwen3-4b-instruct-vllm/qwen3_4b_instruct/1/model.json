@@ -1,0 +1,8 @@
+{
+  "model": "./model",
+  "tokenizer": "./model",
+  "dtype": "float16",
+  "max_model_len": 8192,
+  "gpu_memory_utilization": 0.85,
+  "enforce_eager": true
+}

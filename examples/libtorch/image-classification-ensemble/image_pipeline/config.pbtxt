@@ -1,0 +1,46 @@
+name: "image_pipeline"
+platform: "ensemble"
+max_batch_size: 8
+
+input [
+  {
+    name: "IMAGE"
+    data_type: TYPE_UINT8
+    dims: [ 224, 224, 3 ]
+  }
+]
+
+output [
+  {
+    name: "PROBABILITIES"
+    data_type: TYPE_FP32
+    dims: [ 1000 ]
+  }
+]
+
+ensemble_scheduling {
+  step [
+    {
+      model_name: "preprocess"
+      input_map {
+        key: "IMAGE"
+        value: "IMAGE"
+      }
+      output_map {
+        key: "NORMALIZED_IMAGE"
+        value: "NORMALIZED_IMAGE"
+      }
+    },
+    {
+      model_name: "resnet18_libtorch"
+      input_map {
+        key: "input__0"
+        value: "NORMALIZED_IMAGE"
+      }
+      output_map {
+        key: "output__0"
+        value: "PROBABILITIES"
+      }
+    }
+  ]
+}

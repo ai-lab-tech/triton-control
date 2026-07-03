@@ -1,0 +1,75 @@
+name: "yolo_pipeline"
+platform: "ensemble"
+max_batch_size: 0
+
+input [
+  {
+    name: "IMAGE"
+    data_type: TYPE_UINT8
+    dims: [ 640, 640, 3 ]
+  }
+]
+
+output [
+  {
+    name: "BOXES"
+    data_type: TYPE_FP32
+    dims: [ -1, 4 ]
+  },
+  {
+    name: "SCORES"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "CLASS_IDS"
+    data_type: TYPE_INT64
+    dims: [ -1 ]
+  }
+]
+
+ensemble_scheduling {
+  step [
+    {
+      model_name: "preprocess"
+      input_map {
+        key: "IMAGE"
+        value: "IMAGE"
+      }
+      output_map {
+        key: "PREPROCESSED_IMAGE"
+        value: "PREPROCESSED_IMAGE"
+      }
+    },
+    {
+      model_name: "yolov8_onnx"
+      input_map {
+        key: "images"
+        value: "PREPROCESSED_IMAGE"
+      }
+      output_map {
+        key: "output0"
+        value: "RAW_DETECTIONS"
+      }
+    },
+    {
+      model_name: "postprocess"
+      input_map {
+        key: "RAW_DETECTIONS"
+        value: "RAW_DETECTIONS"
+      }
+      output_map {
+        key: "BOXES"
+        value: "BOXES"
+      }
+      output_map {
+        key: "SCORES"
+        value: "SCORES"
+      }
+      output_map {
+        key: "CLASS_IDS"
+        value: "CLASS_IDS"
+      }
+    }
+  ]
+}
