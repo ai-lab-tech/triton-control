@@ -1,0 +1,9 @@
+model: Qwen/Qwen2.5-0.5B-Instruct
+backend: "pytorch"
+
+tensor_parallel_size: 1
+pipeline_parallel_size: 1
+
+triton_config:
+  max_batch_size: 0
+  decoupled: False

@@ -1,0 +1,46 @@
+name: "postprocess"
+backend: "python"
+max_batch_size: 0
+
+input [
+  {
+    name: "CONTEXT_TEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "OFFSET_MAPPING"
+    data_type: TYPE_INT32
+    dims: [ 1, 384, 2 ]
+  },
+  {
+    name: "START_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ 1, 384 ]
+  },
+  {
+    name: "END_LOGITS"
+    data_type: TYPE_FP32
+    dims: [ 1, 384 ]
+  }
+]
+
+output [
+  {
+    name: "ANSWER"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "SCORE"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

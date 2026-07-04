@@ -1,0 +1,46 @@
+name: "preprocess"
+backend: "python"
+max_batch_size: 0
+
+input [
+  {
+    name: "QUESTION"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "CONTEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "INPUT_IDS"
+    data_type: TYPE_INT32
+    dims: [ 1, 384 ]
+  },
+  {
+    name: "ATTENTION_MASK"
+    data_type: TYPE_INT32
+    dims: [ 1, 384 ]
+  },
+  {
+    name: "OFFSET_MAPPING"
+    data_type: TYPE_INT32
+    dims: [ 1, 384, 2 ]
+  },
+  {
+    name: "CONTEXT_TEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

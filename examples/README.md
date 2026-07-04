@@ -60,12 +60,17 @@ Examples are grouped by Triton backend or deployment pattern:
 python/
 libtorch/
 onnx/
+tensorrt/
+tensorrt_llm/
 vllm/
 s3_upload/
 ```
 
 | Path | Use | Backend |
 | --- | --- | --- |
+| `tensorrt/yolov8n-object-detection-tensorrt-ensemble` | YOLOv8 object detection optimized as a TensorRT plan | `ensemble`, `python`, `tensorrt_plan` |
+| `tensorrt/distilbert-squad-question-answering-tensorrt` | Text question answering optimized as a TensorRT plan | `ensemble`, `python`, `tensorrt_plan` |
+| `tensorrt_llm/qwen2.5-0.5b-instruct-trtllm` | Small TensorRT-LLM LLM smoke test | `python`, TensorRT-LLM LLM API |
 | `vllm/phi3-mini-4k-instruct-vllm` | Smaller vLLM LLM smoke test | `vllm` |
 | `vllm/qwen3-4b-instruct-vllm` | Qwen3 4B LLM on a 16 GB GPU | `vllm` |
 | `onnx/yolov8-object-detection-ensemble` | YOLOv8 image detection pipeline | `ensemble`, `python`, `onnxruntime_onnx` |
@@ -79,6 +84,9 @@ s3_upload/
 - Python backend examples use `nvcr.io/nvidia/tritonserver:25.02-py3` plus
   the deploy form's `requirements.txt` field when extra packages are needed.
 - PyTorch/ONNX examples in this folder use `nvcr.io/nvidia/tritonserver:25.02-py3`.
+- TensorRT plan examples must build the plan on the same GPU class and with the
+  same Triton image used for serving.
+- TensorRT-LLM examples use `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3`.
 - vLLM examples use `nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3`.
 
 - Polling examples require the S3 Browser connection and Triton deployment

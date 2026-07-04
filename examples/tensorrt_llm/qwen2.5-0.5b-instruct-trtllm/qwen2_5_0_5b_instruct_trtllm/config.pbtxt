@@ -1,0 +1,67 @@
+name: "qwen2_5_0_5b_instruct_trtllm"
+backend: "python"
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]
+
+input [
+  {
+    name: "text_input"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "streaming"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_temperature"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_top_k"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_top_p"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_max_tokens"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_exclude_input_from_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_param_return_perf_metrics"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "text_output"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  }
+]
