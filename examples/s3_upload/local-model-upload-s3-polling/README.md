@@ -35,19 +35,22 @@ where the instance S3 Browser will upload the local model files.
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
-| Repository prefix | `examples/cancer-polling-repository` |
+| S3 profile | `dev` |
+| Repository prefix | `cancer/test` |
 | GPU count | `0` |
 | vLLM model backend | Disabled |
 | Model control mode | `poll` |
 | Poll interval | `30` |
 | Advanced Infrastructure > Extra Python Packages | `scikit-learn` and `joblib` |
 
+![Create a polling deployment with the dev S3 profile](screenshots/01-create-deployment-dev-profile.png)
+
 The instance **S3 Connection** must point to the same bucket and repository
-prefix as the deployment. For the example prefix above, the uploaded files must
+prefix as the deployment. With the `dev` profile above, the uploaded files must
 end up under:
 
 ```text
-examples/cancer-polling-repository/
+s3://triton-models/cancer/test/
 ```
 
 ## 2. Prepare the Local Repository and Artifact
@@ -83,7 +86,7 @@ local_breast_cancer_repository/breast_cancer_classifier
 Correct S3 layout:
 
 ```text
-examples/cancer-polling-repository/
+cancer/test/
   breast_cancer_classifier/
     config.pbtxt
     1/
@@ -92,6 +95,8 @@ examples/cancer-polling-repository/
 ```
 
 Do not upload the outer `local_breast_cancer_repository` folder.
+
+![Upload the local model folder with the instance S3 Browser](screenshots/02-upload-folder-s3-browser.png)
 
 ## 4. Wait and Verify
 
@@ -116,6 +121,8 @@ Use the Triton Control instance inference view first:
 3. Open **Inference** and use the manual input view.
 4. Paste the JSON request body from the curl command below.
 5. Run inference.
+
+![Run inference from Triton Control](screenshots/03-run-inference.png)
 
 For terminal testing, replace `localhost:8000` with the instance HTTP endpoint
 unless you are port-forwarding it locally.
