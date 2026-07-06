@@ -29,6 +29,8 @@ import {
   selectInferSubmitting,
 } from "../../../state/instances-infer/instances-infer.selectors";
 
+const GENERATE_ENDPOINT_BACKENDS = new Set(["vllm", "tensorrtllm", "tensorrt_llm", "trtllm"]);
+
 @Component({
   selector: "app-instance-model-infer-page",
   standalone: true,
@@ -379,7 +381,7 @@ export class InstanceModelInferPageComponent implements OnInit {
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl = instance?.url ?? this.instanceUrl;
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
-      const usesGenerate = this.usesGenerateEndpointBackend(instance);
+      const usesGenerate = await this.resolveUsesGenerateEndpoint();
       this.usesGenerateEndpoint.set(usesGenerate);
       if (usesGenerate && this.editorContent.trim() === this.inferBodyDefault.trim()) {
         this._editorContent = this.generateBodyDefault;
@@ -391,22 +393,43 @@ export class InstanceModelInferPageComponent implements OnInit {
     }
   }
 
-  private usesGenerateEndpointBackend(instance: TritonInstanceDTO | null | undefined): boolean {
-    if (!instance) {
+  private async resolveUsesGenerateEndpoint(): Promise<boolean> {
+    try {
+      const config =
+        (await firstValueFrom(
+          this.instancesApi.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet(
+            this.instanceId(),
+            this.modelName(),
+            this.version(),
+          ),
+        )) as Record<string, unknown>;
+      return this.modelConfigUsesGenerateEndpoint(config);
+    } catch {
       return false;
     }
-    const metadata = instance.server_metadata as Record<string, unknown> | null | undefined;
+  }
+
+  private modelConfigUsesGenerateEndpoint(config: Record<string, unknown> | null | undefined): boolean {
     const values: string[] = [];
-    if (metadata && typeof metadata === "object") {
-      values.push(...Object.values(metadata).map((value) => String(value ?? "")));
+    if (config && typeof config === "object") {
+      values.push(String(config["backend"] ?? ""), String(config["platform"] ?? ""));
+      const parameters = config["parameters"];
+      if (parameters && typeof parameters === "object") {
+        values.push(
+          ...Object.values(parameters as Record<string, unknown>).map((value) => {
+            if (value && typeof value === "object" && "string_value" in value) {
+              return String((value as { string_value?: unknown }).string_value ?? "");
+            }
+            return String(value ?? "");
+          }),
+        );
+      }
     }
-    values.push(instance.deployment_log ?? "");
-    for (const model of instance.repository_models ?? []) {
-      values.push(String(model.name ?? ""), String(model.reason ?? ""), String(model.state ?? ""));
-    }
-    const haystack = values.join("\n").toLowerCase();
-    return ["vllm", "tensorrtllm", "tensorrt_llm", "trtllm"].some((token) =>
-      haystack.includes(token),
-    );
+    return values.some((value) => this.isGenerateBackend(value));
+  }
+
+  private isGenerateBackend(value: string): boolean {
+    const normalized = value.toLowerCase().replace(/[-\s]+/g, "_");
+    return GENERATE_ENDPOINT_BACKENDS.has(normalized);
   }
 }

@@ -896,6 +896,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                     headers={"content-type": "application/json"},
                 )
             ),
+            get_model_config=AsyncMock(return_value={"backend": "python"}),
             collect_inference_stats_snapshot=AsyncMock(
                 side_effect=[
                     {
@@ -988,6 +989,36 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                         },
                         "error": None,
                     },
+                    {
+                        "series": {
+                            "m|1": {
+                                "model": "m",
+                                "version": "1",
+                                "request_count": 4,
+                                "total_us": 7000,
+                                "queue_us": 700,
+                                "input_us": 700,
+                                "infer_us": 5200,
+                                "output_us": 400,
+                            }
+                        },
+                        "error": None,
+                    },
+                    {
+                        "series": {
+                            "m|1": {
+                                "model": "m",
+                                "version": "1",
+                                "request_count": 5,
+                                "total_us": 9000,
+                                "queue_us": 900,
+                                "input_us": 900,
+                                "infer_us": 6700,
+                                "output_us": 500,
+                            }
+                        },
+                        "error": None,
+                    },
                 ],
             ),
             collect_inference_metrics_snapshot=AsyncMock(
@@ -1038,6 +1069,30 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         triton_service.assert_not_called()
 
         # Arrange / Act
+        instance.deployment_log = "Image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3"
+        request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
+        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+            "app.services.access.ensure_instance_access", return_value=None
+        ):
+            response = await infer_instance_model(
+                1,
+                "m",
+                "1",
+                {"inputs": []},
+                request,
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        service.infer_model_raw.assert_awaited_once_with("m", "1", b'{"inputs":[]}', "application/json")
+        service.generate_model_raw.assert_not_awaited()
+
+        # Arrange / Act
+        service.infer_model_raw.reset_mock()
+        service.generate_model_raw.reset_mock()
+        service.get_model_config.return_value = {"platform": "tensorrt_plan"}
         request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
         with patch("app.services.triton.models.TritonService", return_value=service), patch(
             "app.services.access.ensure_instance_access", return_value=None
@@ -1059,6 +1114,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange / Act
         instance.server_metadata = {"backend": "vllm"}
+        service.get_model_config.return_value = {"backend": "vllm"}
         request = _BodyRequest(
             b'{"text_input":"hello","parameters":{"stream":false}}',
             headers={"content-type": "application/json"},
@@ -1086,6 +1142,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange / Act
         instance.server_metadata = {"backend": "tensorrt_llm"}
+        service.get_model_config.return_value = {"backend": "tensorrt_llm"}
         request = _BodyRequest(
             b'{"text_input":"hello","sampling_param_max_tokens":50}',
             headers={"content-type": "application/json"},
