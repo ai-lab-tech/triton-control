@@ -38,10 +38,12 @@ Copy or upload this example folder into `/workspace`.
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose the PyTorch/LibTorch template.
-3. Use `distilbert_sentiment` as the model name.
-4. Keep `KIND_GPU` in `config.pbtxt`.
-5. Copy this example's notebook into the generated repository.
+2. Choose **Single model**.
+3. Enter `model` as the model repository folder.
+4. Enter `distilbert_sentiment` as the model name.
+5. Choose the PyTorch/LibTorch model template.
+6. Upload and replace this example's `config.pbtxt` and notebook into the generated
+   repository with the context menu.
 
 Then open and run:
 
