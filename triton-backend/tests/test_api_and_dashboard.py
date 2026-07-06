@@ -1257,6 +1257,40 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.put_calls[0]["Body"], b"\x00\xff\x01")
         self.assertEqual(client.put_calls[0]["ContentType"], "application/octet-stream")
 
+    async def test_PutInstanceS3Content_FolderMarker_PreservesTrailingSlash(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="gpu-a",
+            model_names=[],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="models/",
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3Client()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            result = put_instance_s3_content(
+                1,
+                path="resnet/",
+                content=b"",
+                content_type="application/x-directory",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(result.path, "/resnet/")
+        self.assertEqual(client.put_calls[0]["Key"], "models/resnet/")
+        self.assertEqual(client.put_calls[0]["ContentType"], "application/x-directory")
+
     async def test_DeleteInstanceS3Content_FileOrFolderPath_DeletesExpectedObjects(self):
         # Arrange
         instance = TritonInstanceEntity(

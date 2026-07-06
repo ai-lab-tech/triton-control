@@ -286,6 +286,8 @@ def put_instance_s3_content(
     if not bucket:
         raise BadRequestError("S3 bucket is required")
     object_key = _join_s3_key(instance.s3_prefix, path)
+    if path.endswith("/") and object_key:
+        object_key = f"{object_key}/"
 
     content_bytes = content.encode("utf-8") if isinstance(content, str) else content
 

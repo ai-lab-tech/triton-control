@@ -1,8 +1,15 @@
-# Local Model Upload to a Polling Triton Instance
+# Local Host Model Upload to a Polling Triton Instance
 
-Train a small scikit-learn breast cancer classifier, upload the model folder
-with Triton Control's S3 Browser, and let an existing Triton instance load it by
-repository polling.
+This example starts with a Triton model repository that exists locally on your
+host:
+
+```text
+local_breast_cancer_repository/breast_cancer_classifier
+```
+
+Create a polling Triton deployment with an S3 repository prefix, then upload the
+local model folder into that running instance with the instance **S3 Browser**.
+Triton loads the uploaded files from S3 by repository polling.
 
 Do not use **Deploy Model Repository** for this walkthrough. Create the polling
 instance first, then upload the existing model folder with the instance
@@ -16,63 +23,55 @@ instance first, then upload the existing model folder with the instance
 - Input: `FEATURES`, `FP32`, shape `[30]`
 - Outputs: `CLASS_ID` `[1]`, `PROBABILITIES` `[2]`
 
-Use Triton Control's `requirements.txt` field to install `scikit-learn` and
-`joblib` before Triton starts.
+Use **Advanced Infrastructure** > **Extra Python Packages** to install
+`scikit-learn` and `joblib` before Triton starts.
 
-## 1. Create Development Workspace
+## 1. Create the Polling Deployment
 
-In Triton Control, open **Development** and create the workspace:
-
-| Field | Value |
-| --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
-| Image already has Development installed | Disabled |
-| Workspace storage | At least `20Gi` |
-| GPU count | `0` |
-
-When the workspace is ready, open code-server from **Development**.
-
-## 2. Create the Repository and Artifact
-
-Choose one path:
-
-### Option A: Use the Example Repository
-
-Copy or upload this example folder into `/workspace`.
-
-### Option B: Create the Structure with the Plugin
-
-1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose the Python backend template.
-3. Use `breast_cancer_classifier` as the model name.
-4. Keep `KIND_CPU` in `config.pbtxt`.
-5. Copy this example's `model.py` and notebook into the generated repository.
-
-Then open and run:
-
-```text
-create_breast_cancer_classifier.ipynb
-```
-
-## 3. Create the Polling Deployment
-
-In Triton Control, open **Add Deployment** and create a Triton instance with an
-empty S3 repository prefix.
+In Triton Control, open **Add Deployment** and create a Triton instance that
+uses an S3 repository prefix. The prefix is the remote model repository root
+where the instance S3 Browser will upload the local model files.
 
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
 | Repository prefix | `team-a/polling-repository` |
-| GPU count | `0`; `config.pbtxt` uses `KIND_CPU` |
+| GPU count | `0` |
 | vLLM model backend | Disabled |
 | Model control mode | `poll` |
 | Poll interval | `30` |
-| `requirements.txt` | `scikit-learn` and `joblib` |
+| Advanced Infrastructure > Extra Python Packages | `scikit-learn` and `joblib` |
 
 The instance **S3 Connection** must point to the same bucket and repository
-prefix as the deployment.
+prefix as the deployment. For the example prefix above, the uploaded files must
+end up under:
 
-## 4. Upload the Model Folder
+```text
+team-a/polling-repository/
+```
+
+## 2. Prepare the Local Repository and Artifact
+
+The repository structure is local on the host. If `model.joblib` already exists,
+you can skip artifact generation and upload the folder in the next step.
+
+Use this repository from the example folder:
+
+```text
+local_breast_cancer_repository/breast_cancer_classifier
+```
+
+Run the notebook only if you need to create the missing large artifact:
+
+```text
+create_breast_cancer_classifier.ipynb
+```
+
+If you run the notebook in a Triton Control code-server workspace, download or
+otherwise copy the generated `breast_cancer_classifier` folder back to the local
+host before uploading it with the instance **S3 Browser**.
+
+## 3. Upload the Local Model Folder
 
 In the instance **S3 Browser**, upload this existing model folder:
 
@@ -93,7 +92,7 @@ team-a/polling-repository/
 
 Do not upload the outer `local_breast_cancer_repository` folder.
 
-## 5. Wait and Verify
+## 4. Wait and Verify
 
 Wait at least one poll interval, refresh the Triton instance, and confirm
 `breast_cancer_classifier` appears in the model list.
@@ -103,9 +102,10 @@ If it does not appear, check:
 - `model.joblib` exists
 - `config.pbtxt` was uploaded
 - S3 does not contain an extra parent folder
-- `requirements.txt` includes `scikit-learn` and `joblib`
+- **Advanced Infrastructure** > **Extra Python Packages** includes
+  `scikit-learn` and `joblib`
 
-## 6. Test Inference
+## 5. Test Inference
 
 Use the Triton Control instance inference view first:
 
