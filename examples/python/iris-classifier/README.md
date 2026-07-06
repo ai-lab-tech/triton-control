@@ -12,8 +12,8 @@ Small scikit-learn Iris classifier served with Triton's Python backend.
   - `CLASS_ID`, `INT64`, shape `[1]`
   - `PROBABILITIES`, `FP32`, shape `[3]`
 
-Use Triton Control's `requirements.txt` field to install `scikit-learn` and
-`joblib` before Triton starts.
+Use Triton Control's **Extra Python Packages** field to install `scikit-learn`
+and `joblib` before Triton starts.
 
 ## 1. Create Development Workspace
 
@@ -73,7 +73,7 @@ Use these deployment settings:
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
 | GPU count | `0`; `config.pbtxt` uses `KIND_CPU` |
-| `requirements.txt` | `scikit-learn` and `joblib` |
+| Extra Python Packages | `scikit-learn` and `joblib` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
 2. Select **Triton Control: Deploy Model Repository** from the context menu.

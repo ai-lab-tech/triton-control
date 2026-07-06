@@ -564,6 +564,14 @@ async function collectSimpleUploadForm(initial) {
   if (!modelName) return null;
   values.modelName = modelName;
 
+  const requirementsTxt = await promptValue(
+    "Extra Python Packages (requirements.txt, optional)",
+    values.requirementsTxt,
+    false,
+  );
+  if (requirementsTxt === undefined) return null;
+  values.requirementsTxt = requirementsTxt;
+
   const forcePathStyle = await vscode.window.showQuickPick(
     [
       { label: "Path-style S3", value: true },
@@ -664,6 +672,7 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
+    requirementsTxt: cfg.get("requirementsTxt") || "",
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
@@ -782,6 +791,7 @@ async function saveS3Settings(values) {
   await cfg.update("s3ForcePathStyle", forcePathStyle, target);
   await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
   await cfg.update("tritonImage", values.image, target);
+  await cfg.update("requirementsTxt", values.requirementsTxt || "", target);
   await saveS3xSettingsIfAvailable(values, forcePathStyle, target);
 }
 
@@ -821,6 +831,7 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
+    requirementsTxt: String(form.requirementsTxt || "").trim(),
     detectedBackend: String(form.detectedBackend || "").trim().toLowerCase(),
     modelControlMode:
       repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
@@ -1082,6 +1093,9 @@ function deploymentPayload(form) {
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
   }
+  if (form.requirementsTxt) {
+    payload.requirements_txt = form.requirementsTxt;
+  }
   if (form.cpu) {
     payload.cpu = form.cpu;
   }
@@ -1212,6 +1226,12 @@ function renderHtml(webview, nonce, initial) {
           <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
         </div>
         <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Extra Python Packages</summary>
+      <div class="details-grid">
+        <label class="wide">Extra Python Packages<textarea name="requirementsTxt" rows="5" placeholder="scikit-learn&#10;joblib"></textarea></label>
       </div>
     </details>
     <details class="wide">
