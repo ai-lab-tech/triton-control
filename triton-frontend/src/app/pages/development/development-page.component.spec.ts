@@ -378,4 +378,19 @@ describe("DevelopmentPageComponent", () => {
     ).not.toHaveBeenCalled();
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
+
+  it("Load_ReadyWorkspaceReturned_RefreshesBeforeEmbeddingWorkspace", async () => {
+    // Arrange
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([readyWorkspace]) as any);
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.load();
+
+    // Assert
+    expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(3);
+    expect(component.selectedWorkspaceId()).toBe(3);
+    expect(component.embeddedWorkspaceUrl()).not.toBeNull();
+  });
 });

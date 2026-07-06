@@ -151,6 +151,49 @@
               People shown here can access this instance with the listed permission.
             </div>
           </div>
+          @if (instance.isSelfDeployed) {
+            <div class="panel-card deployment-card">
+              <div class="panel-title">Deployment</div>
+              <div class="kv">
+                <span class="kv-label">Backend</span>
+                <span class="kv-value">{{
+                  instance.deploymentBackend || "No backend in config.pbtxt"
+                }}</span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Image</span>
+                <span class="kv-value">
+                  @if (instance.deploymentImage) {
+                    <code class="network-url">{{ instance.deploymentImage }}</code>
+                  } @else {
+                    <span>Unavailable</span>
+                  }
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Repository</span>
+                <span class="kv-value">
+                  @if (instance.deploymentRepository) {
+                    <code class="network-url">{{ instance.deploymentRepository }}</code>
+                  } @else {
+                    <span>Unavailable</span>
+                  }
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Namespace</span>
+                <span class="kv-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Deployment</span>
+                <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Service</span>
+                <span class="kv-value">{{ instance.deploymentServiceName || "Unavailable" }}</span>
+              </div>
+            </div>
+          }
           <div class="panel-card networking-card">
             <div class="networking-card-header">
               <div class="panel-title">Networking</div>
@@ -655,7 +698,7 @@
               <span class="slider"></span>
             </label>
           </div>
-          @if (s3VerifySsl) {
+          @if (shouldShowS3CaCertificate()) {
             <div class="form-row s3-certificate-row">
               <label class="field-label" for="s3-ca-certificate">Certificate</label>
               <mat-form-field appearance="outline">

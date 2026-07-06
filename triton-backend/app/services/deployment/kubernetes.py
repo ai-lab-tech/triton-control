@@ -14,11 +14,13 @@ queries except through deployment record helper functions.
 
 from __future__ import annotations
 
+import os
 import shlex
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
 
@@ -232,11 +234,64 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
         for pod in v1.list_namespaced_pod(namespace=namespace, label_selector=selector).items:
             name = getattr(getattr(pod, "metadata", None), "name", "")
             if name:
-                log = v1.read_namespaced_pod_log(name=name, namespace=namespace, tail_lines=300)
-                chunks.append(f"--- pod/{name} ---\n{log}")
+                status = getattr(pod, "status", None)
+                phase = getattr(status, "phase", "") or ""
+                reason = getattr(status, "reason", "") or ""
+                message = getattr(status, "message", "") or ""
+                if phase in {"Failed", "Succeeded"}:
+                    detail = "\n".join(part for part in [f"{phase}: {reason}".strip(), message] if part)
+                    chunks.append(f"--- pod/{name} status ---\n{detail or phase}")
+                    continue
+                containers = getattr(getattr(pod, "spec", None), "containers", None) or []
+                container_names = [
+                    getattr(container, "name", "")
+                    for container in containers
+                    if getattr(container, "name", "")
+                ] or [None]
+                for container_name in container_names:
+                    label = f"pod/{name}"
+                    if container_name:
+                        label = f"{label} container/{container_name}"
+                    try:
+                        log = v1.read_namespaced_pod_log(
+                            name=name,
+                            namespace=namespace,
+                            container=container_name,
+                            tail_lines=300,
+                        )
+                        chunks.append(f"--- {label} ---\n{log}")
+                    except ApiException as exc:
+                        chunks.append(f"--- {label} unavailable ---\n{_api_error(exc)}")
+                        continue
+                    if container_name == "triton":
+                        previous = _read_previous_pod_log(
+                            v1, namespace=namespace, name=name, container=container_name
+                        )
+                        if previous:
+                            chunks.append(f"--- {label} previous ---\n{previous}")
         return "\n\n".join(chunks).strip()
     except ApiException as exc:
         raise BadGatewayError(_api_error(exc)) from exc
+
+
+def _read_previous_pod_log(v1: Any, *, namespace: str, name: str, container: str) -> str:
+    from kubernetes.client.rest import ApiException
+
+    try:
+        return (
+            v1.read_namespaced_pod_log(
+                name=name,
+                namespace=namespace,
+                container=container,
+                previous=True,
+                tail_lines=300,
+            )
+            or ""
+        )
+    except ApiException as exc:
+        if exc.status in {400, 404}:
+            return ""
+        raise
 
 
 def _client() -> Any:
@@ -392,6 +447,9 @@ def _manifests(
         ingress_class_name=request.ingress_class_name or "nginx",
     )
     manifests = [m for m in yaml.safe_load_all(rendered) if m]
+    for manifest in manifests:
+        if manifest.get("kind") == "Deployment" and request.repository_sync_mode != "direct":
+            _add_local_s3_repository(manifest, request, secret_name)
     # Ingress is optional; avoid creating catch-all ingress entries when no host is provided.
     if not (request.ingress_host or "").strip():
         manifests = [m for m in manifests if str(m.get("kind", "")).lower() != "ingress"]
@@ -440,7 +498,7 @@ def _ingress_host_rule(ingress_host: str | None, q: Any) -> str:
 def _triton_server_args(request: CreateDeploymentRequest) -> str:
     allow_metrics = str(request.allow_metrics).lower()
     args = [
-        f"--model-repository={request.s3_url}",
+        f"--model-repository={'/models' if request.repository_sync_mode != 'direct' else request.s3_url}",
         f"--model-control-mode={request.model_control_mode}",
         f"--allow-metrics={allow_metrics}",
         f"--allow-cpu-metrics={allow_metrics}",
@@ -453,6 +511,163 @@ def _triton_server_args(request: CreateDeploymentRequest) -> str:
         model_name = (request.model_name or "").strip() or "*"
         args.append(f"--load-model={model_name}")
     return " ".join(shlex.quote(arg) for arg in args)
+
+
+def _add_local_s3_repository(
+    deployment: dict[str, Any], request: CreateDeploymentRequest, secret_name: str
+) -> None:
+    """Attach the stable local repository and the selected S3 synchronization worker."""
+    pod_spec = deployment["spec"]["template"]["spec"]
+    triton = pod_spec["containers"][0]
+    pod_spec.setdefault("volumes", []).append({"name": "model-repository", "emptyDir": {}})
+    pod_spec["volumes"].append({"name": "s3-sync-staging", "emptyDir": {}})
+    triton.setdefault("volumeMounts", []).append(
+        {"name": "model-repository", "mountPath": "/models"}
+    )
+
+    sync_container = _s3_sync_container(request, secret_name)
+    if request.repository_sync_mode == "init":
+        pod_spec.setdefault("initContainers", []).append(sync_container)
+        return
+
+    pod_spec["containers"].append(sync_container)
+    # Containers start concurrently. Do not let Triton scan a partial first sync.
+    triton["args"][0] = (
+        "until [ -f /models/.s3-sync-ready ]; do sleep 1; done\n" + triton["args"][0]
+    )
+
+
+def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> dict[str, Any]:
+    source, endpoint = _aws_s3_source(request.s3_url)
+    sync_command = (
+        "aws s3 sync \"$S3_SOURCE\" /staging --delete --only-show-errors"
+        + (" --endpoint-url \"$S3_ENDPOINT\"" if endpoint else "")
+    )
+    publish_command = (
+        "REPOSITORY_NEXT=/tmp/.s3-sync-next\n"
+        "REPOSITORY_CURRENT=/tmp/.s3-sync-current\n"
+        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\"\n"
+        "mkdir -p \"$REPOSITORY_NEXT\"\n"
+        "publish_model() {\n"
+        "  source_dir=\"$1\"\n"
+        "  fallback_name=\"$2\"\n"
+        "  model_name=$(sed -n -E 's/^[[:space:]]*name[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\\1/p' "
+        "\"$source_dir/config.pbtxt\" | head -n 1)\n"
+        "  [ -n \"$model_name\" ] || model_name=\"$fallback_name\"\n"
+        "  case \"$model_name\" in ''|'.'|'..'|*/*) echo 'Invalid Triton model name' >&2; exit 1;; esac\n"
+        "  mkdir -p \"$REPOSITORY_NEXT/$model_name\"\n"
+        "  cp -R \"$source_dir/.\" \"$REPOSITORY_NEXT/$model_name/\"\n"
+        "}\n"
+        "if [ -f /staging/config.pbtxt ]; then\n"
+        "  publish_model /staging \"$(basename \"${S3_SOURCE%/}\")\"\n"
+        "else\n"
+        "  found_model=0\n"
+        "  for source_dir in /staging/*; do\n"
+        "    [ -d \"$source_dir\" ] || continue\n"
+        "    [ -f \"$source_dir/config.pbtxt\" ] || continue\n"
+        "    found_model=1\n"
+        "    publish_model \"$source_dir\" \"$(basename \"$source_dir\")\"\n"
+        "  done\n"
+        "  [ \"$found_model\" -eq 1 ] || cp -R /staging/. \"$REPOSITORY_NEXT/\"\n"
+        "fi\n"
+        "find \"$REPOSITORY_NEXT\" -depth -type d -empty -delete"
+    )
+    # vLLM reads these as host paths. Triton's native S3 repository otherwise
+    # downloads into an opaque namespace, making relative values invalid.
+    rewrite_command = (
+        "find \"$REPOSITORY_NEXT\" -type f -name model.json -exec sh -c '\n"
+        "  for file do\n"
+        "    dir=$(dirname \"$file\")\n"
+        "    final_dir=/models${dir#/tmp/.s3-sync-next}\n"
+        "    escaped_dir=$(printf \"%s\\n\" \"$final_dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
+        "    sed -i -E \"s#(\\\"(model|tokenizer)\\\"[[:space:]]*:[[:space:]]*\\\")"
+        "([^/][^\\\"]*)\\\"#\\1${escaped_dir}/\\3\\\"#g\" \"$file\"\n"
+        "  done\n"
+        "' sh {} +"
+    )
+    compare_and_publish_command = (
+        "mkdir -p \"$REPOSITORY_CURRENT\"\n"
+        "find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready "
+        "-exec cp -R -- {} \"$REPOSITORY_CURRENT/\" \\;\n"
+        "if diff -qr \"$REPOSITORY_CURRENT\" \"$REPOSITORY_NEXT\" >/dev/null 2>&1; then\n"
+        "  echo 'S3 model repository unchanged; keeping current /models content.'\n"
+        "else\n"
+        "  find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready -exec rm -rf -- {} +\n"
+        "  cp -R \"$REPOSITORY_NEXT/.\" /models/\n"
+        "  find /models -depth -type d -empty -delete\n"
+        "fi\n"
+        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\""
+    )
+    once = (
+        f"{sync_command}\n{publish_command}\n{rewrite_command}\n"
+        f"{compare_and_publish_command}\ntouch /models/.s3-sync-ready"
+    )
+    script = "set -eu\n" + once
+    if request.repository_sync_mode == "sidecar":
+        script += f"\nwhile sleep {request.repository_poll_secs}; do\n{once}\ndone"
+
+    env: list[dict[str, Any]] = [
+        {
+            "name": "AWS_ACCESS_KEY_ID",
+            "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "AWS_ACCESS_KEY_ID"}},
+        },
+        {
+            "name": "AWS_SECRET_ACCESS_KEY",
+            "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "AWS_SECRET_ACCESS_KEY"}},
+        },
+        {"name": "AWS_DEFAULT_REGION", "value": request.s3_region},
+        {"name": "S3_SOURCE", "value": source},
+    ]
+    if endpoint:
+        env.append({"name": "S3_ENDPOINT", "value": endpoint})
+    mounts: list[dict[str, Any]] = [
+        {"name": "model-repository", "mountPath": "/models"},
+        {"name": "s3-sync-staging", "mountPath": "/staging"},
+    ]
+    if request.s3_ca_certificate:
+        env.append({"name": "AWS_CA_BUNDLE", "value": "/etc/ssl/certs/ca-certificates.crt"})
+        mounts.append(
+            {
+                "name": "s3-ca-bundle",
+                "mountPath": "/etc/ssl/certs/ca-certificates.crt",
+                "subPath": "ca-certificates.crt",
+                "readOnly": True,
+            }
+        )
+    return {
+        "name": "s3-model-sync",
+        "image": _repository_sync_image(request),
+        "imagePullPolicy": "IfNotPresent",
+        "securityContext": {
+            "runAsNonRoot": True,
+            "runAsUser": 10001,
+            "allowPrivilegeEscalation": False,
+            "readOnlyRootFilesystem": False,
+            "capabilities": {"drop": ["ALL"]},
+        },
+        "env": env,
+        "volumeMounts": mounts,
+        "command": ["/bin/sh", "-c"],
+        "args": [script],
+    }
+
+
+def _aws_s3_source(s3_url: str) -> tuple[str, str | None]:
+    value = s3_url.removeprefix("s3://").strip("/")
+    if value.startswith(("http://", "https://")):
+        parsed = urlparse(value)
+        scheme = "https" if parsed.scheme == "http" and parsed.port == 443 else parsed.scheme
+        path = parsed.path.strip("/")
+        return f"s3://{path}", f"{scheme}://{parsed.netloc}"
+    return f"s3://{value}", None
+
+
+def _repository_sync_image(request: CreateDeploymentRequest) -> str:
+    return (
+        (request.repository_sync_image or "").strip()
+        or (os.getenv("TRITON_DEPLOY_S3_SYNC_IMAGE") or "").strip()
+        or "amazon/aws-cli:2.22.35"
+    )
 
 
 def _resources_block(request: CreateDeploymentRequest) -> str:

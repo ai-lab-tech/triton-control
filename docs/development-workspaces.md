@@ -76,6 +76,14 @@ authenticated backend proxy:
 Both HTTP and WebSocket traffic pass through this proxy. The code-server
 Service is therefore not exposed directly to the browser.
 
+code-server webviews, including the bundled **Triton Control Deploy**
+extension, require a browser secure context. Use trusted HTTPS for
+non-localhost hosts. Plain `http://triton-control.test` can load the
+workspace, but plugin webviews may fail because browser crypto APIs are
+unavailable. HTTPS with an untrusted certificate can still fail when
+code-server registers its webview service worker. For local testing,
+`http://localhost:<port>` via `kubectl port-forward` also works.
+
 Use **Refresh** to read the latest pod status. Use **Delete** to remove the
 managed StatefulSet, Service, Secrets, ConfigMap, and any legacy ingress.
 
@@ -99,11 +107,31 @@ These files survive pod restarts while the PVC remains available. New
 workspaces receive the Python extension when its marketplace installation
 succeeds and the bundled **Triton Control Deploy** extension.
 
-## Optional: Install S3/R2 Explorer
+Triton Control starts code-server with Workspace Trust disabled. The managed
+`/workspace` folder is treated as the user's development area, so code-server
+does not prompt users to mark the folder as trusted on each new workspace.
+
+## S3 Profiles and Optional S3/R2 Explorer
+
+The **Triton Control Deploy** extension works best with an S3 profile. Members
+and admins can create profiles from the Triton Control account menu under
+**S3 Profiles**. The extension loads those profiles and shows them in an
+`S3 profile` dropdown.
+
+Use profiles for shared or repeated deployment settings. Each profile stores
+the endpoint, bucket, optional prefix, region, access key, encrypted secret
+key, path-style mode, and optional CA certificate.
+
+Manual S3 settings are still available inside the extension in a collapsed
+section. Use them for one-off deployments or to save a new profile from inside
+code-server.
+
+### Optional: Install S3/R2 Explorer
 
 S3/R2 Explorer is optional and is not installed automatically when a
 Development workspace is created. The **Triton Control Deploy** extension works
-without it and prompts for missing S3 values itself.
+without it because S3 profiles and manual settings are handled by Triton
+Control.
 
 To add S3/R2 Explorer:
 
@@ -117,8 +145,8 @@ The installed extension is stored under
 `/workspace/.triton-control/code-server-extensions` and therefore survives
 workspace pod restarts while the PVC is retained.
 
-When S3/R2 Explorer is installed and configured, the **Triton Control Deploy**
-extension reuses these code-server settings:
+When S3/R2 Explorer is installed and configured, its settings can still be used
+as defaults for manual extension fields:
 
 | Setting | Used for |
 | --- | --- |
@@ -128,9 +156,6 @@ extension reuses these code-server settings:
 | `s3x.secretAccessKey` | Secret key |
 | `s3x.forcePathStyle` | Path-style request mode |
 
-Missing values are requested interactively and saved in the persistent
-code-server settings. Bucket and prefix remain choices for each deployment.
-
 Use path-style access for compatible object stores that address objects as
 `https://s3.example.com/bucket/key`. Disable it only when the object store uses
 virtual-host addressing such as `https://bucket.s3.example.com/key`.
@@ -139,18 +164,121 @@ For a private or self-signed HTTPS object-store certificate, provide the PEM CA
 certificate requested by the extension. This certificate is passed to the
 Triton deployment so its model repository client can trust the endpoint.
 
+## Create a Model Repository
+
+The bundled **Triton Control Deploy** extension can create starter Triton model
+repository structures in `/workspace`.
+
+Open the Triton Control icon in the code-server Activity Bar and select
+**New Model Repository**. The same command is also available from the command
+palette and from the Explorer folder context menu.
+
+The command asks for:
+
+1. repository type: **Single model** or **Ensemble pipeline**
+2. repository target folder name
+3. model name for a single model, or ensemble name plus step names for an
+   ensemble
+4. template/backend selection
+
+The target folder becomes the Triton repository root. Model, ensemble, and step
+names become folders inside that repository.
+
+Single-model templates:
+
+- Python backend
+- ONNX Runtime
+- TensorRT plan
+- TensorRT-LLM
+- vLLM
+- PyTorch / LibTorch
+
+Example single-model output:
+
+```text
+/workspace/my-repository/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+```
+
+Artifact-based templates create the model folder, `config.pbtxt`, a version
+folder, and editable README guidance explaining which model artifact must be
+provided before deployment.
+
+Generated `config.pbtxt` files are templates. Review and update the real model
+name, backend/platform, input tensor names, output tensor names, shapes, and
+data types before deploying. The scaffold defaults are intentionally generic.
+
+Ensemble scaffolding creates child model folders plus a separate ensemble model
+folder with `platform: "ensemble"` and editable `ensemble_scheduling` maps.
+
+Example ensemble output:
+
+```text
+/workspace/fraud-pipeline/
+  preprocess/
+    config.pbtxt
+    1/
+      model.py
+  score/
+    config.pbtxt
+    1/
+      README.md
+  postprocess/
+    config.pbtxt
+    1/
+      model.py
+  fraud_detector/
+    config.pbtxt
+```
+
+After creation, the repository appears both in Explorer and in the Triton
+Control Activity Bar view. The Triton Control view marks repositories as:
+
+- **review model setup** when placeholder artifact guidance or generated
+  `config.pbtxt` template values are still present
+- **ready to deploy** when the scaffold placeholders are no longer detected
+
+Select a repository row to switch to Explorer and reveal the real folder in the
+workspace filesystem. Use the repository context menu to open the setup README
+or `config.pbtxt` template. Review the model files and config before using the
+deploy action. Repositories marked **ready to deploy** expose deploy actions in
+the Triton Control view and context menu.
+
+Repository discovery follows the filesystem. If a repository folder is deleted
+from Explorer or the terminal, it is removed from the Triton Control view after
+the filesystem watcher or the view refresh action runs.
+
 ## Deploy a Model Repository
 
-The **Triton Control Deploy** extension uploads a model repository to
-S3-compatible storage and creates a self-deployed Triton instance.
+The **Triton Control Deploy** extension has two modes:
+
+- **Triton Control: Deploy Model Repository** opens the full webview form,
+  uploads the repository to S3-compatible storage, and creates a self-deployed
+  Triton instance.
+- **Triton Control: Upload Model Repository (Simple Wizard)** uses native
+  code-server prompts instead of a webview. Use it when Triton Control is
+  opened through plain HTTP or an untrusted local certificate. It uploads the
+  repository and prints the Add Deployment values in the output panel; finish
+  the deployment from Triton Control's **Add Deployment** page.
+
+The full webview mode requires trusted HTTPS or localhost because code-server
+webviews use browser APIs and service workers that do not work on insecure
+origins.
 
 1. Create or edit a Triton model repository under `/workspace`.
-2. Right-click the repository root or a single model folder.
-3. Run **Triton Control: Deploy Model Repository**.
-4. Confirm the object-store endpoint, bucket, optional prefix, credentials,
-   Triton image, model control mode, and optional S3 CA certificate.
-5. After deployment, Triton Control opens the new instance and its deployment
-   logs.
+2. Confirm required model artifacts are present and `config.pbtxt` matches the
+   real model inputs and outputs.
+3. Use a **ready to deploy** repository from the Triton Control Activity Bar
+   view, or right-click the repository root or a single model folder in
+   Explorer and run **Triton Control: Deploy Model Repository**.
+4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
+5. Confirm the Triton image, detected backend summary, S3 upload target, model
+   control mode, and optional resources.
+6. After full webview deployment, Triton Control opens the new instance and its
+   deployment logs.
 
 A repository should follow Triton's model layout:
 
@@ -162,10 +290,19 @@ repository-root/
       model.py
 ```
 
-The extension reads the model name from `config.pbtxt` and prompts when the
-name is missing. Selecting a single model folder uploads it below the chosen
-deployment prefix while keeping the deployment's `s3_url` at the parent
-repository prefix.
+The extension reads the model name and backend from `config.pbtxt`. If no model
+name is present, it prompts for one. If no backend is declared, the detected
+backend summary shows `No backend in config.pbtxt`; otherwise it shows the
+configured backend, for example `vLLM model backend`.
+
+Selecting a single model folder uploads it below the chosen repository prefix
+while keeping the deployment's `s3_url` at the parent repository prefix. The
+form shows an **S3 upload target** preview before deploy. Manual S3 deployments
+show the same final path as **Target path** at the end of the manual S3 section.
+
+Model control is displayed as a summary and configured in the collapsed
+**Model control** section. **Polling mode** shows the poll interval field;
+**Explicit mode** hides it and uses the startup model behavior.
 
 The resulting deployment behaves like one created through **Add Deployment**.
 Its in-pod S3 repository connection is fixed at deployment time. Changing that

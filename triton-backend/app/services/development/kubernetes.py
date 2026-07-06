@@ -239,6 +239,14 @@ def _statefulset_manifest(
     startup_command = (
         "CODE_SERVER_RUNTIME=/tmp/triton-control-code-server; "
         "CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions; "
+        "mkdir -p \"$HOME/.local/bin\"; "
+        "export PATH=\"$HOME/.local/bin:$PATH\"; "
+        "for shell_rc in \"$HOME/.profile\" \"$HOME/.bashrc\"; do "
+        "touch \"$shell_rc\" 2>/dev/null || continue; "
+        "if ! grep -qx 'export PATH=\"$HOME/.local/bin:$PATH\"' \"$shell_rc\" 2>/dev/null; then "
+        "printf '%s\n' 'export PATH=\"$HOME/.local/bin:$PATH\"' >> \"$shell_rc\"; "
+        "fi; "
+        "done; "
         "mkdir -p \"$CODE_SERVER_RUNTIME/bin\" "
         "\"$CODE_SERVER_RUNTIME/user-data/User\" "
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
@@ -248,6 +256,8 @@ def _statefulset_manifest(
         "PERSISTENT_EXTENSIONS=/workspace/.triton-control/code-server-extensions; "
         "DEFAULT_SETTINGS='{\"workbench.startupEditor\":\"none\","
         "\"window.restoreWindows\":\"none\","
+        "\"security.workspace.trust.enabled\":false,"
+        "\"security.workspace.trust.startupPrompt\":\"never\","
         "\"s3x.forcePathStyle\":true,"
         f"\"workbench.colorTheme\":\"{request.theme}\"}}'; "
         "if mkdir -p /workspace/.triton-control \"$PERSISTENT_EXTENSIONS\" 2>/dev/null && "
@@ -278,6 +288,9 @@ def _statefulset_manifest(
         "if [ -f \"$TRITON_DEPLOY_EXTENSION_VSIX\" ]; then "
         "\"$CODE_SERVER_BIN\" "
         "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
+        "--uninstall-extension triton-control.triton-control-deploy >/dev/null 2>&1 || true; "
+        "\"$CODE_SERVER_BIN\" "
+        "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
         "--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\" --force || "
         "{ echo 'Error: failed to install Triton deploy extension' >&2; exit 1; }; "
         "if ! \"$CODE_SERVER_BIN\" "
@@ -296,6 +309,7 @@ def _statefulset_manifest(
         "fi; "
         "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
         "--reconnection-grace-time 30 "
+        "--disable-workspace-trust "
         "--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\" "
         "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
         "/workspace"
@@ -423,6 +437,13 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
+        "extension/workspace-repositories.js": (
+            extension_dir / "workspace-repositories.js"
+        ).read_text(encoding="utf-8"),
+        "extension/resources/triton-control.svg": (extension_dir / "resources" / "triton-control.svg").read_text(
+            encoding="utf-8",
+        ),
         "extension/README.md": (extension_dir / "README.md").read_text(encoding="utf-8"),
         "extension.vsixmanifest": _triton_deploy_vsix_manifest(package_json),
         "[Content_Types].xml": _vsix_content_types(),
@@ -471,6 +492,7 @@ def _vsix_content_types() -> str:
         '  <Default Extension="json" ContentType="application/json" />\n'
         '  <Default Extension="js" ContentType="application/javascript" />\n'
         '  <Default Extension="md" ContentType="text/markdown" />\n'
+        '  <Default Extension="svg" ContentType="image/svg+xml" />\n'
         '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n'
         "</Types>\n"
     )

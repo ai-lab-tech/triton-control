@@ -260,6 +260,9 @@ export class InstancesDetailEffects {
       deploymentName: stringDtoField(dto, "deployment_name"),
       deploymentServiceName: stringDtoField(dto, "deployment_service_name"),
       deploymentSecretName: stringDtoField(dto, "deployment_secret_name"),
+      deploymentImage: instance.deploymentImage,
+      deploymentRepository: instance.deploymentRepository,
+      deploymentBackend: instance.deploymentBackend,
       deploymentLog: stringDtoField(dto, "deployment_log"),
       isSelfDeployed: !!(dto as TritonInstanceDTO & Record<string, unknown>)["is_self_deployed"],
       podStatuses: Array.isArray(

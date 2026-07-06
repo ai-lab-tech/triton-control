@@ -45,3 +45,40 @@ class S3FileWriteResponse(SQLModel):
 class S3DeleteResponse(SQLModel):
     path: str
     deleted: int
+
+
+class S3ProfileDTO(SQLModel):
+    id: int
+    name: str
+    endpoint: str
+    bucket: str
+    region: str = "us-east-1"
+    access_key: str
+    secret_key: str
+    prefix: str = ""
+    force_path_style: bool = True
+    ca_certificate: str = ""
+
+
+class CreateS3ProfileRequest(SQLModel):
+    name: str
+    endpoint: str
+    bucket: str
+    region: str = "us-east-1"
+    access_key: str
+    secret_key: str
+    prefix: str = ""
+    force_path_style: bool = True
+    ca_certificate: str = ""
+
+
+class UpdateS3ProfileRequest(SQLModel):
+    name: Optional[str] = None
+    endpoint: Optional[str] = None
+    bucket: Optional[str] = None
+    region: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    prefix: Optional[str] = None
+    force_path_style: Optional[bool] = None
+    ca_certificate: Optional[str] = None

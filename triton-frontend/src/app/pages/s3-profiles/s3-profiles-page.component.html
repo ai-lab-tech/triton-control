@@ -1,0 +1,144 @@
+<div class="s3-profiles">
+  <div class="page-title">S3 Profiles</div>
+
+  <mat-card class="card">
+    @if (!canManage()) {
+      <div class="message error">Member or admin role required.</div>
+    } @else {
+      <div class="toolbar">
+        <mat-form-field appearance="outline">
+          <mat-select
+            placeholder="S3 profile"
+            [(ngModel)]="selectedId"
+            (selectionChange)="selectProfile($event.value)"
+          >
+            <mat-option value="">New profile</mat-option>
+            @for (profile of profiles(); track profile.id) {
+              <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="newProfile()">
+          <span class="material-icons">add</span>
+          New
+        </button>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-name">Profile name</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="s3-profile-name"
+              matInput
+              [(ngModel)]="draft.name"
+              placeholder="team-minio"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-endpoint">Endpoint</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="s3-profile-endpoint"
+              matInput
+              [(ngModel)]="draft.endpoint"
+              placeholder="https://s3.example.com"
+            />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-bucket">Bucket</label>
+          <mat-form-field appearance="outline">
+            <input id="s3-profile-bucket" matInput [(ngModel)]="draft.bucket" />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-region">Region</label>
+          <mat-form-field appearance="outline">
+            <input id="s3-profile-region" matInput [(ngModel)]="draft.region" />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-access-key">Access key</label>
+          <mat-form-field appearance="outline">
+            <input id="s3-profile-access-key" matInput [(ngModel)]="draft.access_key" />
+          </mat-form-field>
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="s3-profile-secret-key">Secret key</label>
+          <mat-form-field appearance="outline">
+            <input
+              id="s3-profile-secret-key"
+              matInput
+              type="password"
+              [(ngModel)]="draft.secret_key"
+              autocomplete="new-password"
+            />
+          </mat-form-field>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-title">Path-style S3</div>
+            <div class="toggle-sub">
+              Use path-style bucket URLs for MinIO and S3-compatible endpoints.
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" [(ngModel)]="draft.force_path_style" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        @if (usesHttpsS3()) {
+          <div class="form-row wide">
+            <label class="field-label" for="s3-profile-ca">CA certificate</label>
+            <mat-form-field appearance="outline">
+              <textarea
+                id="s3-profile-ca"
+                matInput
+                rows="5"
+                [(ngModel)]="draft.ca_certificate"
+                placeholder="-----BEGIN CERTIFICATE-----"
+              ></textarea>
+              <mat-hint>
+                Optional. Only needed for private, self-signed, or internal CA chains.
+              </mat-hint>
+            </mat-form-field>
+          </div>
+        }
+      </div>
+
+      <div class="actions">
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="saveProfile()"
+          [disabled]="saving()"
+        >
+          <span class="material-icons">save</span>
+          Save
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="deleteProfile()"
+          [disabled]="!selectedId || saving()"
+        >
+          <span class="material-icons">delete</span>
+          Delete
+        </button>
+      </div>
+
+      @if (message()) {
+        <div
+          class="message"
+          [class.success]="messageTone() === 'success'"
+          [class.error]="messageTone() === 'error'"
+        >
+          {{ message() }}
+        </div>
+      }
+    }
+  </mat-card>
+</div>

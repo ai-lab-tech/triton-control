@@ -172,8 +172,8 @@ def _kubernetes_proxy_http_sync(
     from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
     api = api_client()
-    encoded_path = quote(path.lstrip("/"), safe="/:@")
-    resource_path = "/api/v1/namespaces/{namespace}/services/{name}/proxy/{path}"
+    encoded_path = _encoded_proxy_path(path)
+    resource_path = _kubernetes_proxy_resource_path(query_params)
     path_params = {
         "namespace": row.namespace,
         "name": _service_proxy_name(row),
@@ -184,7 +184,7 @@ def _kubernetes_proxy_http_sync(
             resource_path,
             method.upper(),
             path_params=path_params,
-            query_params=query_params,
+            query_params=[],
             header_params=headers,
             body=body if body else None,
             response_type="file",
@@ -221,7 +221,7 @@ def _websocket_upstream(
     host = config.host.rstrip("/")
     scheme = "wss" if host.startswith("https://") else "ws"
     base = host.removeprefix("https://").removeprefix("http://")
-    encoded_path = quote(path.lstrip("/"), safe="/:@")
+    encoded_path = _encoded_proxy_path(path)
     query = urlencode(query_params, doseq=True)
     upstream_url = (
         f"{scheme}://{base}/api/v1/namespaces/{quote(row.namespace, safe='')}"
@@ -239,12 +239,22 @@ def _service_proxy_name(row: CodeServerEntity) -> str:
     return f"{row.service_name}:http"
 
 
+def _encoded_proxy_path(path: str) -> str:
+    return quote(path.lstrip("/"), safe="/:@")
+
+
+def _kubernetes_proxy_resource_path(query_params: list[tuple[str, str]]) -> str:
+    resource_path = "/api/v1/namespaces/{namespace}/services/{name}/proxy/{path}"
+    query = urlencode(query_params, doseq=True)
+    return f"{resource_path}?{query}" if query else resource_path
+
+
 def _direct_http_url(
     row: CodeServerEntity,
     path: str,
     query_params: list[tuple[str, str]],
 ) -> str:
-    encoded_path = quote(path.lstrip("/"), safe="/:@")
+    encoded_path = _encoded_proxy_path(path)
     query = urlencode(query_params, doseq=True)
     url = (
         f"http://{row.service_name}.{row.namespace}.svc.cluster.local:8080/"

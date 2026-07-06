@@ -31,9 +31,20 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: dshm
+              mountPath: /dev/shm
           command:
             - /bin/bash
             - -c
           args:
             - |
               exec sleep infinity
+      volumes:
+        - name: tmp
+          emptyDir: {{}}
+        - name: dshm
+          emptyDir:
+            medium: Memory

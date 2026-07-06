@@ -1,7 +1,11 @@
 """Unit tests for per-user Development workspace behavior."""
 
 import asyncio
+import base64
+import io
+import json
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -112,8 +116,11 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
+        self.assertIn("--disable-workspace-trust", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
+        self.assertIn("\"security.workspace.trust.enabled\":false", container["args"][0])
+        self.assertIn("\"security.workspace.trust.startupPrompt\":\"never\"", container["args"][0])
         self.assertIn("\"s3x.forcePathStyle\":true", container["args"][0])
         self.assertIn("CODE_SERVER_RUNTIME=/tmp/triton-control-code-server", container["args"][0])
         self.assertIn("CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions", container["args"][0])
@@ -126,6 +133,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("CODE_SERVER_EXTENSIONS=$PERSISTENT_EXTENSIONS", container["args"][0])
         self.assertIn("--install-extension ms-python.python", container["args"][0])
         self.assertIn("triton-control-deploy.vsix.b64", container["args"][0])
+        self.assertIn("--uninstall-extension triton-control.triton-control-deploy", container["args"][0])
         self.assertIn("--install-extension \"$TRITON_DEPLOY_EXTENSION_VSIX\"", container["args"][0])
         self.assertIn("--force", container["args"][0])
         self.assertIn("triton-control.triton-control-deploy", container["args"][0])
@@ -218,6 +226,34 @@ class CodeServerTests(unittest.TestCase):
                 k8s._triton_deploy_extension_dir(),
                 configured / "triton-deploy",
             )
+
+    def test_TritonDeployExtensionVsix_IncludesScaffoldModule(self) -> None:
+        extension_dir = k8s._triton_deploy_extension_dir()
+        package_json = {"name": "triton-control-deploy", "version": "0.1.0", "publisher": "triton-control"}
+
+        encoded = k8s._triton_deploy_extension_vsix_b64(extension_dir, package_json)
+
+        with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded))) as archive:
+            names = set(archive.namelist())
+
+        self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/scaffold.js", names)
+        self.assertIn("extension/workspace-repositories.js", names)
+        self.assertIn("extension/resources/triton-control.svg", names)
+
+    def test_TritonDeployExtensionPackage_ContributesActivityBarView(self) -> None:
+        extension_dir = k8s._triton_deploy_extension_dir()
+        package_json = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
+
+        contributes = package_json["contributes"]
+
+        self.assertEqual(package_json["version"], "0.1.1")
+        self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
+        self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
+        self.assertIn("onView:tritonControl.workspaceActions", package_json["activationEvents"])
+        self.assertIn("onCommand:tritonControl.openRepositorySetup", package_json["activationEvents"])
+        self.assertIn("onCommand:tritonControl.refreshRepositories", package_json["activationEvents"])
+        self.assertIn("onStartupFinished", package_json["activationEvents"])
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         request = self._request().model_copy(
@@ -610,8 +646,57 @@ class CodeServerTests(unittest.TestCase):
             "name": "code-7-dev-workspace-svc:http",
             "path": "index.html",
         })
+        self.assertEqual(calls["resource_path"], "/api/v1/namespaces/{namespace}/services/{name}/proxy/{path}?v=1")
+        self.assertEqual(calls["query_params"], [])
         self.assertNotIn("x-frame-options", {key.lower() for key in response.headers})
         self.assertNotIn("content-encoding", {key.lower() for key in response.headers})
+        self.assertTrue(calls["released"])
+
+    def test_ProxyHttpSync_KubernetesProxyKeepsCodeServerRemoteResourcePathQuery(self) -> None:
+        calls: dict[str, object] = {}
+
+        class Upstream:
+            data = b'{"name":"Default Dark+"}'
+
+            def release_conn(self) -> None:
+                calls["released"] = True
+
+        class Api:
+            def call_api(self, resource_path: str, method: str, **kwargs: object) -> object:
+                calls["resource_path"] = resource_path
+                calls["method"] = method
+                calls.update(kwargs)
+                return Upstream(), 200, {"Content-Type": "application/json"}
+
+        with patch("app.services.development.proxy.is_running_in_cluster", return_value=False), patch(
+            "app.services.development.proxy.api_client",
+            return_value=Api(),
+        ):
+            response = code_proxy._proxy_http_sync(
+                self._row(),
+                "stable-abc/vscode-remote-resource",
+                "GET",
+                {"accept": "application/json"},
+                [
+                    (
+                        "path",
+                        "/tmp/triton-control-code-server/lib/code-server-4.126.0/lib/vscode/extensions/theme-defaults/themes/dark_plus.json",
+                    ),
+                    ("tkn", ""),
+                ],
+                b"",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Default Dark+", response.body)
+        self.assertEqual(calls["path_params"], {
+            "namespace": "triton-control",
+            "name": "code-7-dev-workspace-svc:http",
+            "path": "stable-abc/vscode-remote-resource",
+        })
+        self.assertIn("/proxy/{path}?path=%2Ftmp%2Ftriton-control-code-server", calls["resource_path"])
+        self.assertTrue(str(calls["resource_path"]).endswith("&tkn="))
+        self.assertEqual(calls["query_params"], [])
         self.assertTrue(calls["released"])
 
     def test_ProxyHttpSync_InClusterUsesDirectServiceDns(self) -> None:

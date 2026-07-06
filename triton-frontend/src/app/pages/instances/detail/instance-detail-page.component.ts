@@ -283,8 +283,8 @@ export class InstanceDetailPageComponent implements OnInit {
       prefix: this.s3Prefix?.trim(),
       access_key: this.s3AccessKey?.trim() || undefined,
       secret_key: this.s3SecretKey?.trim() || undefined,
-      verify_ssl: this.s3VerifySsl,
-      ca_certificate: this.s3VerifySsl ? this.s3CaCertificate.trim() : "",
+      verify_ssl: this.shouldShowS3CaCertificate(),
+      ca_certificate: this.shouldShowS3CaCertificate() ? this.s3CaCertificate.trim() : "",
       address_style: "path",
     };
 
@@ -319,6 +319,10 @@ export class InstanceDetailPageComponent implements OnInit {
       input.value = "";
     };
     reader.readAsText(file);
+  }
+
+  shouldShowS3CaCertificate(): boolean {
+    return this.s3VerifySsl && this.s3Endpoint.trim().toLowerCase().startsWith("https://");
   }
 
   closeS3Dialog(): void {

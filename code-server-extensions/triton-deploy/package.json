@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Upload a Triton model repository from code-server to S3-compatible storage and create a Triton Control deployment.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -11,7 +11,14 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:tritonControl.deployModelRepository"
+    "onCommand:tritonControl.deployModelRepository",
+    "onCommand:tritonControl.uploadModelRepositorySimple",
+    "onCommand:tritonControl.newModelRepository",
+    "onCommand:tritonControl.openRepositorySetup",
+    "onCommand:tritonControl.revealRepository",
+    "onCommand:tritonControl.refreshRepositories",
+    "onView:tritonControl.workspaceActions",
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -19,13 +26,93 @@
       {
         "command": "tritonControl.deployModelRepository",
         "title": "Triton Control: Deploy Model Repository"
+      },
+      {
+        "command": "tritonControl.uploadModelRepositorySimple",
+        "title": "Triton Control: Upload Model Repository (Simple Wizard)"
+      },
+      {
+        "command": "tritonControl.newModelRepository",
+        "title": "Triton Control: New Model Repository",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tritonControl.openRepositorySetup",
+        "title": "Triton Control: Open Repository Setup",
+        "icon": "$(book)"
+      },
+      {
+        "command": "tritonControl.revealRepository",
+        "title": "Triton Control: Reveal Repository",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "tritonControl.refreshRepositories",
+        "title": "Triton Control: Refresh Repositories",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tritonControl",
+          "title": "Triton Control",
+          "icon": "resources/triton-control.svg"
+        }
+      ]
+    },
+    "views": {
+      "tritonControl": [
+        {
+          "id": "tritonControl.workspaceActions",
+          "name": "Workspace"
+        }
+      ]
+    },
     "menus": {
+      "view/title": [
+        {
+          "command": "tritonControl.newModelRepository",
+          "when": "view == workbench.explorer.fileView || view == tritonControl.workspaceActions",
+          "group": "navigation@89"
+        },
+        {
+          "command": "tritonControl.refreshRepositories",
+          "when": "view == tritonControl.workspaceActions",
+          "group": "navigation@90"
+        }
+      ],
       "explorer/context": [
         {
           "command": "tritonControl.deployModelRepository",
           "when": "explorerResourceIsFolder",
+          "group": "navigation@90"
+        },
+        {
+          "command": "tritonControl.uploadModelRepositorySimple",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@91"
+        },
+        {
+          "command": "tritonControl.newModelRepository",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@89"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tritonControl.openRepositorySetup",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryPending",
+          "group": "navigation@80"
+        },
+        {
+          "command": "tritonControl.openRepositorySetup",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
+          "group": "navigation@80"
+        },
+        {
+          "command": "tritonControl.deployModelRepository",
+          "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
           "group": "navigation@90"
         }
       ]
@@ -85,6 +172,7 @@
     "@vscode/vsce": "^2.15.0"
   },
   "scripts": {
+    "test": "node --test",
     "package": "vsce package"
   }
 }

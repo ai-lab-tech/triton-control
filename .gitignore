@@ -1,5 +1,8 @@
 .git-backups/
 site/
+.codex/
+openspec/
+/values.yaml
 
 triton-backend/.venv/
 triton-backend/.env
