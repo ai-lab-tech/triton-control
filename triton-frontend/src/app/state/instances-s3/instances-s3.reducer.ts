@@ -31,6 +31,7 @@ export type BrowserEntry = {
 export interface InstancesS3State {
   instanceName: string;
   bucketName: string;
+  prefix: string;
   currentPath: string;
   entries: BrowserEntry[];
   knownFolderPaths: string[];
@@ -46,6 +47,7 @@ export interface InstancesS3State {
 export const initialInstancesS3State: InstancesS3State = {
   instanceName: "",
   bucketName: "",
+  prefix: "",
   currentPath: "/",
   entries: [],
   knownFolderPaths: ["/"],
@@ -61,10 +63,11 @@ export const initialInstancesS3State: InstancesS3State = {
 export const instancesS3Reducer = createReducer(
   initialInstancesS3State,
   on(s3PageOpened, () => ({ ...initialInstancesS3State, pageLoading: true })),
-  on(s3PageDataLoaded, (state, { instanceName, bucketName }) => ({
+  on(s3PageDataLoaded, (state, { instanceName, bucketName, prefix }) => ({
     ...state,
     instanceName,
     bucketName,
+    prefix,
   })),
   on(s3PageDataLoadFailed, (state) => ({ ...state, pageLoading: false })),
   on(s3NavigateTo, (state, { path }) => ({ ...state, currentPath: path })),

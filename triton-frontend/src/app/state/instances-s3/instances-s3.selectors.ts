@@ -3,6 +3,7 @@ import { instancesS3Feature } from "./instances-s3.reducer";
 export const {
   selectInstanceName: selectS3InstanceName,
   selectBucketName: selectS3BucketName,
+  selectPrefix: selectS3Prefix,
   selectCurrentPath: selectS3CurrentPath,
   selectEntries: selectS3Entries,
   selectKnownFolderPaths: selectS3KnownFolderPaths,

@@ -35,6 +35,7 @@ describe("InstanceS3BrowserPageComponent", () => {
     instancesS3: {
       instanceName: "",
       bucketName: "",
+      prefix: "",
       currentPath: "/",
       entries: [],
       knownFolderPaths: ["/"],
@@ -124,6 +125,25 @@ describe("InstanceS3BrowserPageComponent", () => {
     const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
     const component = fixture.componentInstance;
     expect(component.breadcrumbs[0].label).toBe("root");
+  });
+
+  it("PrefixLabel_ConfiguredOrEmptyPrefix_ReturnsLocationText", () => {
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.prefixLabel()).toBe("bucket root");
+    expect(component.repositoryRootPath()).toBe("No S3 location configured");
+
+    mockStore.setState({
+      instancesS3: {
+        ...s3InitialState.instancesS3,
+        bucketName: "triton-test",
+        prefix: "cancer",
+      },
+    });
+
+    expect(component.prefixLabel()).toBe("cancer");
+    expect(component.repositoryRootPath()).toBe("s3://triton-test/cancer");
   });
 
   it("TreeNodes_KnownFolderPathsSet_BuildsHierarchyNodes", () => {

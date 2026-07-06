@@ -297,7 +297,8 @@ def put_instance_s3_content(
         except UnicodeDecodeError as exc:
             raise UnsupportedMediaTypeError("config.pbtxt must be valid UTF-8 text") from exc
         triton_version = extract_triton_version(instance.server_metadata)
-        validate_triton_config_pbtxt(content_bytes, triton_version)
+        if _should_validate_config_pbtxt(instance, triton_version):
+            validate_triton_config_pbtxt(content_bytes, triton_version)
         object_key = _discover_config_pbtxt_key(client, bucket, instance.s3_prefix, path) or object_key
 
     put_args = {
@@ -314,6 +315,12 @@ def put_instance_s3_content(
         raise BadGatewayError(f"Failed to write S3 object ({format_s3_error(exc)})") from exc
 
     return S3FileWriteResponse(path=f"/{path}", size=len(content_bytes))
+
+
+def _should_validate_config_pbtxt(instance: Any, triton_version: str | None) -> bool:
+    if triton_version:
+        return True
+    return bool(getattr(instance, "health_live", False) and getattr(instance, "health_ready", False))
 
 
 def delete_instance_s3_content(

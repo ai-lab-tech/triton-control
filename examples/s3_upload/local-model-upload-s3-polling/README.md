@@ -35,7 +35,7 @@ where the instance S3 Browser will upload the local model files.
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
-| Repository prefix | `team-a/polling-repository` |
+| Repository prefix | `examples/cancer-polling-repository` |
 | GPU count | `0` |
 | vLLM model backend | Disabled |
 | Model control mode | `poll` |
@@ -47,21 +47,22 @@ prefix as the deployment. For the example prefix above, the uploaded files must
 end up under:
 
 ```text
-team-a/polling-repository/
+examples/cancer-polling-repository/
 ```
 
 ## 2. Prepare the Local Repository and Artifact
 
-The repository structure is local on the host. If `model.joblib` already exists,
-you can skip artifact generation and upload the folder in the next step.
-
-Use this repository from the example folder:
+From this example directory, check the local model folder:
 
 ```text
 local_breast_cancer_repository/breast_cancer_classifier
 ```
 
-Run the notebook only if you need to create the missing large artifact:
+If this file is missing, run the notebook to create it:
+
+```text
+local_breast_cancer_repository/breast_cancer_classifier/1/model.joblib
+```
 
 ```text
 create_breast_cancer_classifier.ipynb
@@ -82,7 +83,7 @@ local_breast_cancer_repository/breast_cancer_classifier
 Correct S3 layout:
 
 ```text
-team-a/polling-repository/
+examples/cancer-polling-repository/
   breast_cancer_classifier/
     config.pbtxt
     1/

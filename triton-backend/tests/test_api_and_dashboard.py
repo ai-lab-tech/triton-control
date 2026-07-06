@@ -1160,11 +1160,17 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             s3_access_key="ak",
             s3_secret_key_enc="enc",
             s3_prefix="",
+            server_metadata={"version": "2.55.0"},
+            health_live=True,
+            health_ready=True,
         )
         session = _FakeSession(get_map={1: instance})
         client = _S3Client()
         # Act
-        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch("app.services.storage.s3.validate_triton_config_pbtxt", return_value=None):
+        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch(
+            "app.services.storage.s3.validate_triton_config_pbtxt",
+            return_value=None,
+        ) as validate_config:
             result = put_instance_s3_content(
                 1,
                 path="config.pbtxt",
@@ -1177,6 +1183,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         # Assert
         self.assertEqual(result.path, "/config.pbtxt")
         self.assertEqual(client.put_calls[0]["ContentType"], "text/plain")
+        validate_config.assert_called_once_with(b'name: "x"', "2.55.0")
 
         # Act / Assert
         with self.assertRaises(HTTPException) as exc:
@@ -1189,6 +1196,45 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                 claims={"role": "viewer"},
             )
         self.assertEqual(exc.exception.status_code, 403)
+
+    async def test_PutInstanceS3Content_UnhealthyInstanceWithoutVersion_SkipsConfigValidation(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="gpu-a",
+            model_names=[],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="",
+            server_metadata=None,
+            health_live=False,
+            health_ready=False,
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3Client()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch(
+            "app.services.storage.s3.validate_triton_config_pbtxt",
+            return_value=None,
+        ) as validate_config:
+            result = put_instance_s3_content(
+                1,
+                path="config.pbtxt",
+                content=b'name: "x"',
+                content_type="text/plain",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(result.path, "/config.pbtxt")
+        validate_config.assert_not_called()
 
     async def test_PutInstanceS3Content_ConfigPbtxtMissingAtGuessedPath_UpdatesDiscoveredRepositoryConfig(self):
         # Arrange

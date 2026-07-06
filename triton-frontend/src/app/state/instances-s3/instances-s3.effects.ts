@@ -57,6 +57,7 @@ export class InstancesS3Effects {
               s3PageDataLoaded({
                 instanceName: dto?.name ?? "",
                 bucketName: s3?.bucket ?? "",
+                prefix: cleanPrefix(s3?.prefix),
               }),
               s3NavigateTo({ instanceId, path: "/" }),
             );
@@ -255,6 +256,10 @@ export class InstancesS3Effects {
 function normalizePath(path: string | null | undefined): string {
   const clean = `${path ?? ""}`.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
   return clean ? `/${clean}` : "/";
+}
+
+function cleanPrefix(prefix: unknown): string {
+  return `${prefix ?? ""}`.replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
 }
 
 function joinPath(basePath: string, name: string): string {
