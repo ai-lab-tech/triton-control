@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import ANY, patch
 
 import httpx
+from fastapi import Response
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import development_api as code_server_api
@@ -521,6 +522,81 @@ class CodeServerTests(unittest.TestCase):
         create_service.assert_called_once()
         get_service.assert_called_once()
         delete_service.assert_called_once()
+
+    def test_ProxyCodeServer_ClosesSessionBeforeProxyingHttp(self) -> None:
+        events: list[str] = []
+        row = self._row()
+
+        class SessionContext:
+            def __enter__(self) -> SimpleNamespace:
+                events.append("enter")
+                return SimpleNamespace()
+
+            def __exit__(self, *_args: object) -> None:
+                events.append("exit")
+
+        async def proxy_http(target: object, path: str, request: object) -> Response:
+            events.append("proxy")
+            self.assertEqual(path, "stable/resource")
+            self.assertIn("exit", events)
+            self.assertLess(events.index("exit"), events.index("proxy"))
+            self.assertEqual(target, code_proxy.CodeServerProxyTarget("triton-control", "code-7-dev-workspace-svc"))
+            return Response(content=b"ok", status_code=200)
+
+        with patch("app.api.development_api.session_factory", return_value=SessionContext()), patch(
+            "app.services.development.workspaces.get_owned_code_server",
+            side_effect=lambda _session, _claims, _code_server_id: events.append("lookup") or row,
+        ), patch("app.services.development.proxy.proxy_http", side_effect=proxy_http):
+            response = asyncio.run(
+                code_server_api.proxy_code_server(
+                    2,
+                    request=SimpleNamespace(),
+                    path="stable/resource",
+                    claims={"email": "u@example.com"},
+                ),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(events, ["enter", "lookup", "exit", "proxy"])
+
+    def test_ProxyCodeServerWebsocket_ClosesSessionBeforeProxyingWebsocket(self) -> None:
+        events: list[str] = []
+        row = self._row()
+
+        class SessionContext:
+            def __enter__(self) -> SimpleNamespace:
+                events.append("enter")
+                return SimpleNamespace()
+
+            def __exit__(self, *_args: object) -> None:
+                events.append("exit")
+
+        class WebSocket:
+            session = {"user": {"email": "u@example.com"}}
+
+            async def close(self, code: int = 1000) -> None:
+                events.append(f"close:{code}")
+
+        async def proxy_websocket(target: object, path: str, websocket: object) -> None:
+            events.append("proxy")
+            self.assertEqual(path, "stable/socket")
+            self.assertIn("exit", events)
+            self.assertLess(events.index("exit"), events.index("proxy"))
+            self.assertEqual(target, code_proxy.CodeServerProxyTarget("triton-control", "code-7-dev-workspace-svc"))
+
+        with patch("app.api.development_api.session_factory", return_value=SessionContext()), patch(
+            "app.services.development.workspaces.get_owned_code_server",
+            side_effect=lambda _session, _claims, _code_server_id: events.append("lookup") or row,
+        ), patch("app.services.development.proxy.proxy_websocket", side_effect=proxy_websocket):
+            asyncio.run(
+                code_server_api.proxy_code_server_websocket(
+                    WebSocket(),
+                    code_server_id=2,
+                    path="stable/socket",
+                ),
+            )
+
+        self.assertEqual(events, ["enter", "lookup", "exit", "proxy"])
 
     def test_DeploymentNavigation_StoresAndConsumesPerUserTarget(self) -> None:
         claims = {"user_id": 42, "email": "u@example.com"}

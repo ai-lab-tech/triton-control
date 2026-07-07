@@ -6,6 +6,7 @@ import asyncio
 import logging
 import ssl
 import time
+from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import quote, urlencode
 
@@ -43,7 +44,19 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 }
 
 
-async def proxy_http(row: CodeServerEntity, path: str, request: Request) -> Response:
+@dataclass(frozen=True)
+class CodeServerProxyTarget:
+    """Session-independent workspace routing data for long-lived proxy requests."""
+
+    namespace: str
+    service_name: str
+
+
+def proxy_target(row: CodeServerEntity) -> CodeServerProxyTarget:
+    return CodeServerProxyTarget(namespace=row.namespace, service_name=row.service_name)
+
+
+async def proxy_http(row: CodeServerProxyTarget, path: str, request: Request) -> Response:
     """Proxy an authenticated browser request to the workspace's Kubernetes Service."""
     body = await request.body()
     headers = {
@@ -63,7 +76,7 @@ async def proxy_http(row: CodeServerEntity, path: str, request: Request) -> Resp
     )
 
 
-async def proxy_websocket(row: CodeServerEntity, path: str, websocket: WebSocket) -> None:
+async def proxy_websocket(row: CodeServerProxyTarget, path: str, websocket: WebSocket) -> None:
     """Bridge an authenticated browser WebSocket to the workspace through the Kubernetes API."""
     upstream_url, headers, ssl_context = _websocket_upstream(row, path, list(websocket.query_params.multi_items()))
     requested_protocols = _requested_subprotocols(websocket)
@@ -109,7 +122,7 @@ async def _proxy_websocket_messages(websocket: WebSocket, upstream: websockets.C
 
 
 def _proxy_http_sync(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     method: str,
     headers: dict[str, str],
@@ -123,7 +136,7 @@ def _proxy_http_sync(
 
 
 def _direct_proxy_http_sync(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     method: str,
     headers: dict[str, str],
@@ -162,7 +175,7 @@ def _direct_proxy_http_sync(
 
 
 def _kubernetes_proxy_http_sync(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     method: str,
     headers: dict[str, str],
@@ -209,7 +222,7 @@ def _kubernetes_proxy_http_sync(
 
 
 def _websocket_upstream(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     query_params: list[tuple[str, str]],
 ) -> tuple[str, dict[str, str], ssl.SSLContext | None]:
@@ -235,7 +248,7 @@ def _websocket_upstream(
     return upstream_url, headers, _ssl_context(config) if scheme == "wss" else None
 
 
-def _service_proxy_name(row: CodeServerEntity) -> str:
+def _service_proxy_name(row: CodeServerProxyTarget) -> str:
     return f"{row.service_name}:http"
 
 
@@ -250,7 +263,7 @@ def _kubernetes_proxy_resource_path(query_params: list[tuple[str, str]]) -> str:
 
 
 def _direct_http_url(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     query_params: list[tuple[str, str]],
 ) -> str:
@@ -264,7 +277,7 @@ def _direct_http_url(
 
 
 def _direct_websocket_url(
-    row: CodeServerEntity,
+    row: CodeServerProxyTarget,
     path: str,
     query_params: list[tuple[str, str]],
 ) -> str:

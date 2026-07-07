@@ -101,12 +101,13 @@ async def proxy_code_server(
     code_server_id: int,
     request: Request,
     path: str = "",
-    session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> Response:
     """Proxy an authenticated request to an owned Development workspace."""
-    row = workspaces.get_owned_code_server(session, claims, code_server_id)
-    return await code_server_proxy.proxy_http(row, path, request)
+    with session_factory() as session:
+        row = workspaces.get_owned_code_server(session, claims, code_server_id)
+        target = code_server_proxy.proxy_target(row)
+    return await code_server_proxy.proxy_http(target, path, request)
 
 
 @router.websocket("/{code_server_id}/proxy")
@@ -124,6 +125,7 @@ async def proxy_code_server_websocket(
     try:
         with session_factory() as session:
             row = workspaces.get_owned_code_server(session, claims, code_server_id)
-            await code_server_proxy.proxy_websocket(row, path, websocket)
+            target = code_server_proxy.proxy_target(row)
+        await code_server_proxy.proxy_websocket(target, path, websocket)
     except AppError:
         await websocket.close(code=1008)
