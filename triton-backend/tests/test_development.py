@@ -113,6 +113,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
+        self.assertIn("--version 4.125.0", container["args"][0])
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
@@ -180,6 +181,23 @@ class CodeServerTests(unittest.TestCase):
         container = manifests[2]["spec"]["template"]["spec"]["containers"][0]
 
         self.assertIn("\"workbench.colorTheme\":\"Monokai\"", container["args"][0])
+
+    def test_Manifests_UsesConfiguredCodeServerVersion(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {"DEVELOPMENT_CODE_SERVER_VERSION": "4.126.0"},
+        ):
+            manifests = k8s._manifests(
+                self._request(),
+                "triton-control",
+                "code-7-dev-workspace",
+                "code-7-dev-workspace-svc",
+                "code-7-dev-workspace-secret",
+            )
+
+        container = manifests[2]["spec"]["template"]["spec"]["containers"][0]
+
+        self.assertIn("--version 4.126.0", container["args"][0])
 
     def test_Manifests_ImageAlreadyHasCodeServer_SkipsInstallScript(self) -> None:
         request = self._request().model_copy(update={"image_has_code_server": True})

@@ -55,6 +55,8 @@ spec:
           env:
             - name: TRITON_DEPLOY_S3_SYNC_IMAGE
               value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
+            - name: DEVELOPMENT_CODE_SERVER_VERSION
+              value: {{ .Values.development.codeServer.version | quote }}
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
