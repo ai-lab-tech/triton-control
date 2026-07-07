@@ -1,8 +1,10 @@
 # Triton Control Deploy Extension
 
 This code-server extension uploads a selected Triton model folder or Triton
-model repository root to S3-compatible storage. In the full webview flow it
-then calls Triton Control's existing `POST /api/deployments` endpoint.
+model repository root to S3-compatible storage. The full webview flow uploads
+and then calls Triton Control's existing `POST /api/deployments` endpoint. The
+Simple Wizard is upload-only and prints the values needed to finish deployment
+from Triton Control's **Add Deployment** page.
 
 ## Flow
 

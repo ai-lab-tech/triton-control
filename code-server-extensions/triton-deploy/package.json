@@ -1,7 +1,7 @@
 {
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
-  "description": "Upload a Triton model repository from code-server to S3-compatible storage and create a Triton Control deployment.",
+  "description": "Upload Triton model repositories from code-server to S3-compatible storage; the webview flow can also create a Triton Control deployment.",
   "version": "0.1.1",
   "publisher": "triton-control",
   "engines": {
