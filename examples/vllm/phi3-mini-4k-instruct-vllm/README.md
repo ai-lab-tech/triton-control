@@ -63,6 +63,24 @@ phi3_mini_4k_instruct/1/model/
 phi3_mini_4k_instruct/1/model.json
 ```
 
+The notebook progress bar can stay at `0%`. Check the real download progress
+from the code-server terminal:
+
+```bash
+du -sh phi3_mini_4k_instruct/1/model/.cache/huggingface/download
+ls -lh phi3_mini_4k_instruct/1/model/*.safetensors
+```
+
+The download is complete when both weight shards exist:
+
+```text
+phi3_mini_4k_instruct/1/model/model-00001-of-00002.safetensors
+phi3_mini_4k_instruct/1/model/model-00002-of-00002.safetensors
+```
+
+If the size does not change for several minutes, interrupt the notebook cell and
+run it again. Hugging Face resumes from the partial download.
+
 Before deploying, verify that the model directory contains the downloaded
 weights:
 
