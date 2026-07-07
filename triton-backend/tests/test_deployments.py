@@ -389,13 +389,16 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("aws s3 sync", sync["args"][0])
         sync_env = {item["name"]: item.get("value") for item in sync["env"]}
         self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
-        self.assertIn("REPOSITORY_NEXT=/tmp/.s3-sync-next", sync["args"][0])
+        self.assertIn("REPOSITORY_NEXT=/staging/.s3-sync-next", sync["args"][0])
         self.assertIn('mkdir -p "$REPOSITORY_NEXT/$model_name"', sync["args"][0])
-        self.assertIn('cp -R "$source_dir/." "$REPOSITORY_NEXT/$model_name/"', sync["args"][0])
+        self.assertIn(
+            'copy_repository_contents "$source_dir" "$REPOSITORY_NEXT/$model_name"',
+            sync["args"][0],
+        )
         self.assertIn('cp -R "$REPOSITORY_NEXT/." /models/', sync["args"][0])
         self.assertNotIn("cp -au", sync["args"][0])
         self.assertIn("model.json", sync["args"][0])
-        self.assertIn("final_dir=/models${dir#/tmp/.s3-sync-next}", sync["args"][0])
+        self.assertIn("final_dir=/models${dir#/staging/.s3-sync-next}", sync["args"][0])
         self.assertIn('escaped_dir=$(printf "%s\\n" "$final_dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
         self.assertIn("${escaped_dir}/", sync["args"][0])
 
@@ -567,7 +570,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("while sleep 9", sync_script)
         self.assertIn("--delete", sync_script)
         self.assertIn("/models/", sync_script)
-        self.assertIn('diff -qr "$REPOSITORY_CURRENT" "$REPOSITORY_NEXT"', sync_script)
+        self.assertIn('diff -qr /models "$REPOSITORY_NEXT"', sync_script)
         self.assertIn("S3 model repository unchanged", sync_script)
         self.assertNotIn("/models/.s3-sync-next", sync_script)
         self.assertIn("--model-control-mode=explicit", pod_spec["containers"][0]["args"][0])
@@ -612,6 +615,30 @@ class DeploymentServiceTests(unittest.TestCase):
                 k8s._repository_sync_image(overridden),
                 "registry.example/s3-sync:request",
             )
+
+    def test_Manifests_VllmSync_ConfiguredEmptyDirSizeLimits(self) -> None:
+        request = self._request().model_copy(update={"repository_sync_mode": "sidecar"})
+        with patch.dict(
+            "os.environ",
+            {
+                "TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE": "20Gi",
+                "TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE": "20Gi",
+            },
+        ):
+            manifests = k8s._manifests(
+                request,
+                "triton-minio",
+                "triton-minio",
+                "triton-minio-service",
+                "triton-minio-s3-credentials",
+                "triton-image",
+            )
+
+        volumes = {
+            volume["name"]: volume for volume in manifests[1]["spec"]["template"]["spec"]["volumes"]
+        }
+        self.assertEqual(volumes["model-repository"]["emptyDir"], {"sizeLimit": "20Gi"})
+        self.assertEqual(volumes["s3-sync-staging"]["emptyDir"], {"sizeLimit": "20Gi"})
 
     def test_Manifests_RequirementsProvided_InstallsPackagesBeforeTritonStart(self) -> None:
         # Arrange

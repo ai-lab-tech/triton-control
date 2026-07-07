@@ -519,8 +519,18 @@ def _add_local_s3_repository(
     """Attach the stable local repository and the selected S3 synchronization worker."""
     pod_spec = deployment["spec"]["template"]["spec"]
     triton = pod_spec["containers"][0]
-    pod_spec.setdefault("volumes", []).append({"name": "model-repository", "emptyDir": {}})
-    pod_spec["volumes"].append({"name": "s3-sync-staging", "emptyDir": {}})
+    pod_spec.setdefault("volumes", []).append(
+        {
+            "name": "model-repository",
+            "emptyDir": _empty_dir("TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE"),
+        }
+    )
+    pod_spec["volumes"].append(
+        {
+            "name": "s3-sync-staging",
+            "emptyDir": _empty_dir("TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE"),
+        }
+    )
     triton.setdefault("volumeMounts", []).append(
         {"name": "model-repository", "mountPath": "/models"}
     )
@@ -544,10 +554,15 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         + (" --endpoint-url \"$S3_ENDPOINT\"" if endpoint else "")
     )
     publish_command = (
-        "REPOSITORY_NEXT=/tmp/.s3-sync-next\n"
-        "REPOSITORY_CURRENT=/tmp/.s3-sync-current\n"
-        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\"\n"
+        "REPOSITORY_NEXT=/staging/.s3-sync-next\n"
+        "rm -rf \"$REPOSITORY_NEXT\"\n"
         "mkdir -p \"$REPOSITORY_NEXT\"\n"
+        "copy_repository_contents() {\n"
+        "  source_dir=\"$1\"\n"
+        "  target_dir=\"$2\"\n"
+        "  find \"$source_dir\" -mindepth 1 -maxdepth 1 ! -name .s3-sync-next "
+        "-exec cp -R -- {} \"$target_dir/\" \\;\n"
+        "}\n"
         "publish_model() {\n"
         "  source_dir=\"$1\"\n"
         "  fallback_name=\"$2\"\n"
@@ -556,7 +571,7 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "  [ -n \"$model_name\" ] || model_name=\"$fallback_name\"\n"
         "  case \"$model_name\" in ''|'.'|'..'|*/*) echo 'Invalid Triton model name' >&2; exit 1;; esac\n"
         "  mkdir -p \"$REPOSITORY_NEXT/$model_name\"\n"
-        "  cp -R \"$source_dir/.\" \"$REPOSITORY_NEXT/$model_name/\"\n"
+        "  copy_repository_contents \"$source_dir\" \"$REPOSITORY_NEXT/$model_name\"\n"
         "}\n"
         "if [ -f /staging/config.pbtxt ]; then\n"
         "  publish_model /staging \"$(basename \"${S3_SOURCE%/}\")\"\n"
@@ -568,7 +583,7 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "    found_model=1\n"
         "    publish_model \"$source_dir\" \"$(basename \"$source_dir\")\"\n"
         "  done\n"
-        "  [ \"$found_model\" -eq 1 ] || cp -R /staging/. \"$REPOSITORY_NEXT/\"\n"
+        "  [ \"$found_model\" -eq 1 ] || copy_repository_contents /staging \"$REPOSITORY_NEXT\"\n"
         "fi\n"
         "find \"$REPOSITORY_NEXT\" -depth -type d -empty -delete"
     )
@@ -578,7 +593,7 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "find \"$REPOSITORY_NEXT\" -type f -name model.json -exec sh -c '\n"
         "  for file do\n"
         "    dir=$(dirname \"$file\")\n"
-        "    final_dir=/models${dir#/tmp/.s3-sync-next}\n"
+        "    final_dir=/models${dir#/staging/.s3-sync-next}\n"
         "    escaped_dir=$(printf \"%s\\n\" \"$final_dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
         "    sed -i -E \"s#(\\\"(model|tokenizer)\\\"[[:space:]]*:[[:space:]]*\\\")"
         "([^/][^\\\"]*)\\\"#\\1${escaped_dir}/\\3\\\"#g\" \"$file\"\n"
@@ -586,17 +601,15 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "' sh {} +"
     )
     compare_and_publish_command = (
-        "mkdir -p \"$REPOSITORY_CURRENT\"\n"
-        "find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready "
-        "-exec cp -R -- {} \"$REPOSITORY_CURRENT/\" \\;\n"
-        "if diff -qr \"$REPOSITORY_CURRENT\" \"$REPOSITORY_NEXT\" >/dev/null 2>&1; then\n"
+        "touch \"$REPOSITORY_NEXT/.s3-sync-ready\"\n"
+        "if diff -qr /models \"$REPOSITORY_NEXT\" >/dev/null 2>&1; then\n"
         "  echo 'S3 model repository unchanged; keeping current /models content.'\n"
         "else\n"
-        "  find /models -mindepth 1 -maxdepth 1 ! -name .s3-sync-ready -exec rm -rf -- {} +\n"
+        "  find /models -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +\n"
         "  cp -R \"$REPOSITORY_NEXT/.\" /models/\n"
         "  find /models -depth -type d -empty -delete\n"
         "fi\n"
-        "rm -rf \"$REPOSITORY_NEXT\" \"$REPOSITORY_CURRENT\""
+        "rm -rf \"$REPOSITORY_NEXT\""
     )
     once = (
         f"{sync_command}\n{publish_command}\n{rewrite_command}\n"
@@ -668,6 +681,11 @@ def _repository_sync_image(request: CreateDeploymentRequest) -> str:
         or (os.getenv("TRITON_DEPLOY_S3_SYNC_IMAGE") or "").strip()
         or "amazon/aws-cli:2.22.35"
     )
+
+
+def _empty_dir(size_env_var: str) -> dict[str, str]:
+    size = (os.getenv(size_env_var) or "").strip()
+    return {"sizeLimit": size} if size else {}
 
 
 def _resources_block(request: CreateDeploymentRequest) -> str:
