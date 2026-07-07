@@ -20,7 +20,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from jose import JWTError, jwt
+import jwt
 
 from app.core.crypto import hash_password as hash_password
 
@@ -65,5 +65,5 @@ def verify_access_token(token: str) -> Dict[str, Any]:
     try:
         claims = jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
         return dict(claims)
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         raise ValueError(f"Local token verification failed: {e}")

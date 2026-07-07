@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from jose import JWTError
+import jwt
 
 from app.core.auth import KeycloakAuth
 
@@ -76,7 +76,7 @@ class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
         auth._get_jwks = AsyncMock(return_value={"keys": [{"kid": "k1"}]})
 
         # Act / Assert
-        with patch("app.core.auth.jwt.get_unverified_header", side_effect=JWTError("bad")):
+        with patch("app.core.auth.jwt.get_unverified_header", side_effect=jwt.PyJWTError("bad")):
             with self.assertRaisesRegex(ValueError, "Invalid token header"):
                 await auth.verify_token("token")
 
@@ -87,7 +87,7 @@ class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
 
         # Act / Assert
         with patch("app.core.auth.jwt.get_unverified_header", return_value={"kid": "k1"}), patch(
-            "app.core.auth.jwt.decode", side_effect=JWTError("decode bad")
+            "app.core.auth.jwt.decode", side_effect=jwt.PyJWTError("decode bad")
         ):
             with self.assertRaisesRegex(ValueError, "Token verification failed"):
                 await auth.verify_token("token")

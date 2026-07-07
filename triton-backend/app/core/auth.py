@@ -2,7 +2,7 @@
 
 Provides ``KeycloakAuth``, an async verifier that fetches OIDC discovery
 documents and JWKS from a Keycloak realm, validates bearer tokens with
-``python-jose``, and caches remote documents with a configurable TTL to
+``PyJWT``, and caches remote documents with a configurable TTL to
 avoid redundant network round-trips.
 """
 
@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 from cachetools import TTLCache
-from jose import JWTError, jwt
+import jwt
 
 
 class KeycloakAuth:
@@ -64,7 +64,7 @@ class KeycloakAuth:
 
         try:
             header = jwt.get_unverified_header(token)
-        except JWTError as e:
+        except jwt.PyJWTError as e:
             raise ValueError(f"Invalid token header: {e}")
 
         kid = header.get("kid")
@@ -95,5 +95,5 @@ class KeycloakAuth:
                 options=options,
             )
             return claims
-        except JWTError as e:
+        except jwt.PyJWTError as e:
             raise ValueError(f"Token verification failed: {e}")
