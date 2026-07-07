@@ -68,6 +68,10 @@ Copy or upload this example folder into `/workspace`.
 5. Copy this example's configs, Python models, helper scripts, and notebook into
    the generated repository.
 
+Keep `distilbert_squad_pipeline/1/.keep` in the repository and upload it with
+the model files. Triton requires at least one version under the ensemble model
+folder, and object storage does not preserve empty directories.
+
 Then open and run:
 
 ```text

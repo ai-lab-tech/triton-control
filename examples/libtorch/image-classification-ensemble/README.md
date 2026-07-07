@@ -17,12 +17,18 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/pytorch:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `0` |
 
 When the workspace is ready, open code-server from **Development**.
+
+Use NVIDIA's PyTorch image for the workspace because the notebook exports a
+TorchScript artifact with Python `torch` and `torchvision`. Do not install
+`torch` or `torchvision` in the notebook when using this image. The deployment
+step below still uses the Triton image because Triton serves the exported
+artifact with the PyTorch/LibTorch backend.
 
 ## 2. Create the Repository and Artifact
 
@@ -35,11 +41,21 @@ Copy or upload this example folder into `/workspace`.
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose an ensemble pipeline template.
-3. Add `preprocess` and `resnet18_libtorch`.
-4. Use `image_pipeline` as the public ensemble model.
-5. Copy the example `preprocess`, `config.pbtxt`, and notebook files into the
-   generated repository.
+2. Choose **Ensemble**.
+3. Enter `model` as the repository name.
+4. Choose **Custom pipeline** as the backend.
+5. Enter `image_pipeline` as the ensemble model name.
+6. Enter `2` as the number of steps.
+7. Enter `preprocess` as the step 1 model name.
+8. Choose **Python** as the step 1 backend.
+9. Enter `resnet18_libtorch` as the step 2 model name.
+10. Choose **PyTorch/LibTorch** as the step 2 backend.
+11. Upload and replace this example's generated model files and `config.pbtxt`
+    files in the generated repository.
+
+Keep `image_pipeline/1/.keep` in the repository and upload it with the model
+files. Triton requires at least one version under the ensemble model folder, and
+object storage does not preserve empty directories.
 
 Then open and run:
 
@@ -59,7 +75,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | GPU count | `0`; this example does not force `KIND_GPU` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
@@ -75,7 +91,7 @@ Run inference against `image_pipeline`, not the internal child models.
 Generate a small JSON request:
 
 ```bash
-python make_curl_payload.py > request.json
+python make_curl_payload.py
 ```
 
 Use the Triton Control instance inference view first:

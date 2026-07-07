@@ -57,6 +57,10 @@ Copy or upload this example folder into `/workspace`.
 5. Copy the example `preprocess`, `postprocess`, and `config.pbtxt` files into
    the generated repository.
 
+Keep `yolo_pipeline/1/.keep` in the repository and upload it with the model
+files. Triton requires at least one version under the ensemble model folder, and
+object storage does not preserve empty directories.
+
 Then open and run:
 
 ```text

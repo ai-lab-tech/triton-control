@@ -32,6 +32,7 @@ ensemble_scheduling {
   step [
     {
       model_name: "preprocess"
+      model_version: 1
       input_map {
         key: "QUESTION"
         value: "QUESTION"
@@ -59,6 +60,7 @@ ensemble_scheduling {
     },
     {
       model_name: "distilbert_squad_trt"
+      model_version: 1
       input_map {
         key: "input_ids"
         value: "INPUT_IDS"
@@ -78,6 +80,7 @@ ensemble_scheduling {
     },
     {
       model_name: "postprocess"
+      model_version: 1
       input_map {
         key: "CONTEXT_TEXT"
         value: "CONTEXT_TEXT"

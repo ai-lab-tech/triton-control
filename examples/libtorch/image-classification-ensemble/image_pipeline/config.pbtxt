@@ -22,6 +22,7 @@ ensemble_scheduling {
   step [
     {
       model_name: "preprocess"
+      model_version: 1
       input_map {
         key: "IMAGE"
         value: "IMAGE"
@@ -33,6 +34,7 @@ ensemble_scheduling {
     },
     {
       model_name: "resnet18_libtorch"
+      model_version: 1
       input_map {
         key: "input__0"
         value: "NORMALIZED_IMAGE"
