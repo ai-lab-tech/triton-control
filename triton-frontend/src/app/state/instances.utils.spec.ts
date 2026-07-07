@@ -78,7 +78,7 @@ describe("instances utils", () => {
       created_at: "2026-06-24T00:00:00Z",
       health_live: true,
       health_ready: true,
-      deployment_image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+      deployment_image: "nvcr.io/nvidia/tritonserver:26.06-py3",
     };
     const mapped = dtoToInstance(dto);
 

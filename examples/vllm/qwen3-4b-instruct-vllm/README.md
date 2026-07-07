@@ -19,7 +19,7 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `50Gi` |
 | GPU count | `0` |

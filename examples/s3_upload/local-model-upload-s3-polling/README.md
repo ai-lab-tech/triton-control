@@ -34,7 +34,7 @@ where the instance S3 Browser will upload the local model files.
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | S3 profile | `dev` |
 | Repository prefix | `cancer/test` |
 | GPU count | `0` |

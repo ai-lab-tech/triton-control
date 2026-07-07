@@ -81,9 +81,9 @@ s3_upload/
 
 ## Runtime Notes
 
-- Python backend examples use `nvcr.io/nvidia/tritonserver:25.02-py3` plus
+- Python backend examples use `nvcr.io/nvidia/tritonserver:26.06-py3` plus
   the deploy form's `requirements.txt` field when extra packages are needed.
-- PyTorch/ONNX examples in this folder use `nvcr.io/nvidia/tritonserver:25.02-py3`.
+- PyTorch/ONNX examples in this folder use `nvcr.io/nvidia/tritonserver:26.06-py3`.
 - TensorRT plan examples must build the plan on the same GPU class and with the
   same Triton image used for serving.
 - TensorRT-LLM examples use `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3`.

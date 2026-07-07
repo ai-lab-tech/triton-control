@@ -31,7 +31,7 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `1` |
@@ -83,7 +83,7 @@ The notebook uses `trtexec` from the Triton image. Keep the same image for
 build and deploy:
 
 ```text
-nvcr.io/nvidia/tritonserver:25.02-py3
+nvcr.io/nvidia/tritonserver:26.06-py3
 ```
 
 ## 3. Deploy
@@ -92,7 +92,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | GPU count | At least `1`; `yolov8_trt/config.pbtxt` uses `KIND_GPU` |
 
 1. In the opened code-server Explorer, right-click this repository folder.

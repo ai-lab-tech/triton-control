@@ -70,7 +70,7 @@ export class NewDeploymentPageComponent {
     .replace(/\/$/, "");
 
   deploymentName = "";
-  image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+  image = "nvcr.io/nvidia/tritonserver:26.06-py3";
   ingressHost = "";
   ingressClassName = "";
   selectedS3ProfileId = "";

@@ -26,7 +26,7 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `0` |
@@ -51,11 +51,19 @@ Copy or upload this example folder into `/workspace`.
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose an ensemble pipeline template.
-3. Add `preprocess`, `yolov8_onnx`, and `postprocess`.
-4. Use `yolo_pipeline` as the public ensemble model.
-5. Copy the example `preprocess`, `postprocess`, and `config.pbtxt` files into
-   the generated repository.
+2. Choose **Ensemble**.
+3. Enter `model` as the repository name.
+4. Choose **Custom pipeline** as the backend.
+5. Enter `yolo_pipeline` as the ensemble model name.
+6. Enter `3` as the number of steps.
+7. Enter `preprocess` as the step 1 model name.
+8. Choose **Python** as the step 1 backend.
+9. Enter `yolov8_onnx` as the step 2 model name.
+10. Choose **ONNX Runtime** as the step 2 backend.
+11. Enter `postprocess` as the step 3 model name.
+12. Choose **Python** as the step 3 backend.
+13. Upload and replace this example's generated model files and `config.pbtxt`
+    files in the generated repository.
 
 Keep `yolo_pipeline/1/.keep` in the repository and upload it with the model
 files. Triton requires at least one version under the ensemble model folder, and
@@ -93,7 +101,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | GPU count | At least `1` if you keep `KIND_GPU`; `0` if you changed ONNX to `KIND_CPU` |
 
 1. In the opened code-server Explorer, right-click this repository folder.

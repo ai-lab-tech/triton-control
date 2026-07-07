@@ -27,7 +27,7 @@ class CodeServerTests(unittest.TestCase):
     def _request(self) -> CreateCodeServerRequest:
         return CreateCodeServerRequest(
             name="Dev Workspace",
-            image="nvcr.io/nvidia/tritonserver:25.02-py3",
+            image="nvcr.io/nvidia/tritonserver:26.06-py3",
             storage_size="30Gi",
             cpu="2",
             memory="4Gi",
@@ -42,7 +42,7 @@ class CodeServerTests(unittest.TestCase):
             "statefulset_name": "code-7-dev-workspace",
             "service_name": "code-7-dev-workspace-svc",
             "secret_name": "code-7-dev-workspace-secret",
-            "image": "nvcr.io/nvidia/tritonserver:25.02-py3",
+            "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
             "url": "http://code-7-dev-workspace-svc.triton-control.svc.cluster.local:8080",
             "password_enc": "",
             "status": "creating",
@@ -113,7 +113,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
-        self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
+        self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3")
         self.assertIn("--version 4.125.0", container["args"][0])
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
@@ -468,7 +468,7 @@ class CodeServerTests(unittest.TestCase):
             namespace="triton-control",
             statefulset_name="code-7-workspace",
             service_name="code-7-workspace-svc",
-            image="nvcr.io/nvidia/tritonserver:25.02-py3",
+            image="nvcr.io/nvidia/tritonserver:26.06-py3",
             url="http://code-7-workspace-svc.triton-control.svc.cluster.local:8080",
             password_enc="",
             status="ready",

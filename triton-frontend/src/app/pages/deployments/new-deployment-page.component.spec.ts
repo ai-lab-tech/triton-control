@@ -68,7 +68,7 @@ describe("NewDeploymentPageComponent", () => {
     const component = fixture.componentInstance;
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
-    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.ingressHost = "triton.example.local";
     component.s3AccessKey = "minioadmin";
     component.s3SecretKey = "secret";
@@ -136,13 +136,13 @@ describe("NewDeploymentPageComponent", () => {
         deployment_name: "triton-minio",
         service_name: "triton-minio-service",
         secret_name: "triton-minio-s3-credentials",
-        image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+        image: "nvcr.io/nvidia/tritonserver:26.06-py3",
         s3_url: "s3://http://minio:9000/triton-models",
         applied_resources: [],
       }) as unknown as ReturnType<DeploymentsService["createDeploymentApiDeploymentsPost"]>,
     );
     component.deploymentName = "triton-minio";
-    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.ingressHost = "triton.example.local";
     component.s3AccessKey = "minioadmin";
@@ -185,13 +185,13 @@ describe("NewDeploymentPageComponent", () => {
         deployment_name: "triton",
         service_name: "triton-service",
         secret_name: "triton-s3-credentials",
-        image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+        image: "nvcr.io/nvidia/tritonserver:26.06-py3",
         s3_url: "s3://https://object-store.example.com/triton-models",
         applied_resources: [],
       }) as unknown as ReturnType<DeploymentsService["createDeploymentApiDeploymentsPost"]>,
     );
     component.deploymentName = "triton";
-    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.s3Url = "https://object-store.example.com/triton-models";
     component.s3AccessKey = "access";
     component.s3SecretKey = "secret";
@@ -223,7 +223,7 @@ describe("NewDeploymentPageComponent", () => {
       >,
     );
     component.deploymentName = "triton";
-    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.s3Url = "https://object-store.example.com/triton-models/";
     component.s3Prefix = "/team/model-repository/";
     component.s3AccessKey = "access";
@@ -267,7 +267,7 @@ describe("NewDeploymentPageComponent", () => {
       >,
     );
     component.deploymentName = "opt-125m";
-    component.image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.s3Prefix = "serving/opt-125m";
     await fixture.whenStable();
 
