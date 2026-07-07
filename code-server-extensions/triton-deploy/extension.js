@@ -17,6 +17,9 @@ let outputChannel;
 let actionsProvider;
 let repositoryRefreshTimer;
 
+const DEFAULT_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-py3";
+const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3";
+
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
@@ -650,7 +653,7 @@ async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const s3x = vscode.workspace.getConfiguration("s3x");
   const detectedModelName = detectModelName(sourceFolder);
-  const detectedBackend = detectModelBackend(sourceFolder);
+  const detectedBackend = detectModelBackendOrPlatform(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
   if (!modelName) {
     return null;
@@ -660,7 +663,7 @@ async function initialFormValues(sourceFolder) {
   const initial = {
     sourceFolder,
     deploymentName,
-    image: cfg.get("tritonImage") || "nvcr.io/nvidia/tritonserver:25.02-py3",
+    image: defaultImageForBackend(detectedBackend),
     endpoint,
     bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
@@ -672,7 +675,7 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
-    requirementsTxt: cfg.get("requirementsTxt") || "",
+    requirementsTxt: "",
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
@@ -705,12 +708,14 @@ function detectModelName(sourceFolder) {
   return path.basename(path.dirname(configPath));
 }
 
-function detectModelBackend(sourceFolder) {
+function detectModelBackendOrPlatform(sourceFolder) {
   const configPath = findConfigPbtxt(sourceFolder);
   if (!configPath) return "";
   try {
     const config = fs.readFileSync(configPath, "utf8");
-    return config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase() || "";
+    const backend = config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase();
+    const platform = config.match(/(?:^|\n)\s*platform\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase();
+    return backend || platform || "";
   } catch {
     return "";
   }
@@ -721,10 +726,28 @@ function backendLabel(value) {
   if (backend === "vllm") {
     return "vLLM model backend";
   }
+  if (backend === "pytorch_libtorch") {
+    return "PyTorch/LibTorch platform";
+  }
+  if (backend === "onnxruntime_onnx") {
+    return "ONNX Runtime platform";
+  }
+  if (backend === "tensorrt_plan") {
+    return "TensorRT plan platform";
+  }
+  if (backend === "ensemble") {
+    return "Ensemble platform";
+  }
   if (backend) {
     return `${backend} model backend`;
   }
-  return "No backend in config.pbtxt";
+  return "No backend or platform in config.pbtxt";
+}
+
+function defaultImageForBackend(value) {
+  return String(value || "").trim().toLowerCase() === "vllm"
+    ? VLLM_TRITON_IMAGE
+    : DEFAULT_TRITON_IMAGE;
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -790,8 +813,6 @@ async function saveS3Settings(values) {
   await cfg.update("s3Region", values.region, target);
   await cfg.update("s3ForcePathStyle", forcePathStyle, target);
   await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
-  await cfg.update("tritonImage", values.image, target);
-  await cfg.update("requirementsTxt", values.requirementsTxt || "", target);
   await saveS3xSettingsIfAvailable(values, forcePathStyle, target);
 }
 
@@ -1189,8 +1210,8 @@ function renderHtml(webview, nonce, initial) {
     <input class="hidden" name="detectedBackendLabel">
     <div class="wide summary-grid">
       <div class="summary-card">
-        <span>Detected backend</span>
-        <strong id="detected-backend-label">No backend in config.pbtxt</strong>
+        <span>Detected backend/platform</span>
+        <strong id="detected-backend-label">No backend or platform in config.pbtxt</strong>
       </div>
       <div class="summary-card">
         <span>Model control</span>
@@ -1434,7 +1455,7 @@ function renderHtml(webview, nonce, initial) {
 
     function updateDetectedBackendLabel() {
       document.getElementById('detected-backend-label').textContent =
-        form.elements.detectedBackendLabel.value || 'No backend in config.pbtxt';
+        form.elements.detectedBackendLabel.value || 'No backend or platform in config.pbtxt';
     }
 
     function updateFormPreviews() {

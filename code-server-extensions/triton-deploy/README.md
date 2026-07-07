@@ -71,9 +71,10 @@ the filesystem watcher or the view refresh action runs.
 2. Use a **ready to deploy** repository from the Triton Control view, or
    right-click a Triton model folder or model repository root in Explorer and
    run `Triton Control: Deploy Model Repository`.
-3. The extension detects the model name and `backend` value from `config.pbtxt`.
-   If no model name is found, it asks for one. When no backend is declared, the
-   form shows `No backend in config.pbtxt`.
+3. The extension detects the model name plus `backend` or `platform` value from
+   `config.pbtxt`. If no model name is found, it asks for one. When neither
+   backend nor platform is declared, the form shows
+   `No backend or platform in config.pbtxt`.
 4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
    `s3://...` path before deploy.
@@ -187,12 +188,18 @@ Control as `s3_ca_certificate` so the Triton pod trusts the object store.
 
 ## Detected Backend and Model Control
 
-The deploy form shows detected backend and model control as summary values, not
-editable inputs. Backend is read from `config.pbtxt`:
+The deploy form shows detected backend/platform and model control as summary
+values, not editable inputs. Backend/platform is read from `config.pbtxt`:
 
 - `backend: "vllm"` is shown as `vLLM model backend`.
+- `platform: "pytorch_libtorch"` is shown as `PyTorch/LibTorch platform`.
 - Other backend values are shown as `<backend> model backend`.
-- Missing backend is shown as `No backend in config.pbtxt`.
+- Missing backend and platform are shown as
+  `No backend or platform in config.pbtxt`.
+
+Deployment-specific fields such as image, extra Python packages, resources, and
+model control are not reused from previous deployments. S3 connection settings
+can still be reused.
 
 Model control uses **Polling mode** by default. **Poll interval seconds** is
 shown only in polling mode. Switch to **Explicit mode** when the deployment

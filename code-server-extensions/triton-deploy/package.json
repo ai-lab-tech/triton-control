@@ -159,16 +159,6 @@
           "type": "string",
           "default": "",
           "description": "Optional PEM CA certificate passed to Triton deployments for HTTPS S3 endpoints."
-        },
-        "tritonControlDeploy.tritonImage": {
-          "type": "string",
-          "default": "nvcr.io/nvidia/tritonserver:25.02-py3",
-          "description": "Default Triton deployment image."
-        },
-        "tritonControlDeploy.requirementsTxt": {
-          "type": "string",
-          "default": "",
-          "description": "Optional requirements.txt content installed before Triton starts."
         }
       }
     }
