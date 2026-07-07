@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import httpx
-from cachetools import TTLCache
 import jwt
+from cachetools import TTLCache
 from jwt.types import Options
 
 
