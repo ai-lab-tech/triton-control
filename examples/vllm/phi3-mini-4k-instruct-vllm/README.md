@@ -112,7 +112,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3` |
 | GPU count | At least `1` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
