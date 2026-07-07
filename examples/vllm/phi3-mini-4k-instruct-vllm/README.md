@@ -43,9 +43,12 @@ Copy or upload this example folder into `/workspace`.
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose the vLLM template.
-3. Use `phi3_mini_4k_instruct` as the model name.
-4. Copy this example's notebook into the generated repository.
+2. Choose **Single model**.
+3. Enter `model` as the model repository folder.
+4. Enter `phi3_mini_4k_instruct` as the model name.
+5. Choose the vLLM backend model template.
+6. Upload and replace this example's `config.pbtxt`, `model.json`, notebook, and
+   client into the generated repository with the context menu.
 
 Then open and run:
 
@@ -59,6 +62,17 @@ This writes:
 phi3_mini_4k_instruct/1/model/
 phi3_mini_4k_instruct/1/model.json
 ```
+
+Before deploying, verify that the model directory contains the downloaded
+weights:
+
+```bash
+find phi3_mini_4k_instruct/1/model -maxdepth 1 -type f | head
+```
+
+If this prints nothing or the directory does not exist, rerun the notebook. The
+deployment will fail with `Cannot find any model weights` when
+`phi3_mini_4k_instruct/1/model/` is missing from the uploaded repository.
 
 Default `model.json`:
 
