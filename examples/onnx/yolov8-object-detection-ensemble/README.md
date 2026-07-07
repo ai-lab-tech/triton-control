@@ -112,12 +112,13 @@ Use these deployment settings:
 
 ## 5. Test Inference
 
-Generate a request from an image file:
+Generate a request with a built-in test image:
 
 ```bash
-pip install pillow numpy
-python make_curl_payload.py path/to/image.jpg > request.json
+python3 make_request_payload.py
 ```
+
+This writes `request.json` next to `make_request_payload.py`.
 
 Use the Triton Control instance inference view first:
 
