@@ -41,6 +41,7 @@ def apply_code_server_resources(
     statefulset_name: str,
     service_name: str,
     secret_name: str,
+    deploy_token: str | None = None,
 ) -> list[str]:
     from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
     from kubernetes.config.config_exception import ConfigException  # type: ignore[import-untyped]
@@ -58,7 +59,14 @@ def apply_code_server_resources(
         api = api_client()
         _ensure_namespace(api, namespace)
         applied = []
-        for manifest in _manifests(request, namespace, statefulset_name, service_name, secret_name):
+        for manifest in _manifests(
+            request,
+            namespace,
+            statefulset_name,
+            service_name,
+            secret_name,
+            deploy_token=deploy_token,
+        ):
             from kubernetes import utils  # type: ignore[import-untyped]
 
             meta = manifest.get("metadata") or {}
@@ -189,12 +197,21 @@ def _manifests(
     statefulset_name: str,
     service_name: str,
     secret_name: str,
+    *,
+    deploy_token: str | None = None,
 ) -> list[dict[str, Any]]:
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
         _secret_manifest(namespace, secret_name),
         _triton_deploy_extension_configmap(namespace, statefulset_name),
-        _statefulset_manifest(request, namespace, statefulset_name, service_name, labels),
+        _statefulset_manifest(
+            request,
+            namespace,
+            statefulset_name,
+            service_name,
+            labels,
+            deploy_token=deploy_token,
+        ),
         _service_manifest(namespace, service_name, labels),
     ]
     if request.dockerconfigjson:
@@ -218,6 +235,8 @@ def _statefulset_manifest(
     statefulset_name: str,
     service_name: str,
     labels: dict[str, str],
+    *,
+    deploy_token: str | None = None,
 ) -> dict[str, Any]:
     if request.image_has_code_server:
         binary_setup = (
@@ -400,6 +419,10 @@ def _statefulset_manifest(
     image_pull_secret = _image_pull_secret_name(statefulset_name)
     if request.dockerconfigjson:
         pod_spec["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]
+    if deploy_token:
+        pod_spec["template"]["spec"]["containers"][0]["env"].append(
+            {"name": "TRITON_CONTROL_DEPLOY_TOKEN", "value": deploy_token},
+        )
     resources = _resources(request)
     if resources:
         pod_spec["template"]["spec"]["containers"][0]["resources"] = resources
@@ -435,6 +458,7 @@ def _triton_deploy_extension_configmap(namespace: str, statefulset_name: str) ->
 
 def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[str, Any]) -> str:
     files = {
+        "extension/certificate-prompt.js": (extension_dir / "certificate-prompt.js").read_text(encoding="utf-8"),
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
         "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),

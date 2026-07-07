@@ -10,6 +10,7 @@ const {
   scaffoldEnsembleRepository,
   scaffoldSingleModelRepository,
 } = require("./scaffold");
+const { normalizePemCertificateInput } = require("./certificate-prompt");
 const { discoverWorkspaceRepositories } = require("./workspace-repositories");
 
 let insecureWebviewWarningShown = false;
@@ -519,7 +520,8 @@ async function runSimpleUploadWizard(initial) {
         });
       },
     );
-    showSimpleUploadResult(form);
+    const deployment = await createDeploymentFromSimpleWizard(form);
+    showSimpleUploadResult(form, deployment);
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(messageText);
@@ -560,9 +562,21 @@ async function collectSimpleUploadForm(initial) {
   if (!secretAccessKey) return null;
   values.secretAccessKey = secretAccessKey;
 
+  const s3CaCertificate = await promptS3CaCertificate(values.endpoint, values.s3CaCertificate);
+  if (s3CaCertificate === undefined) return null;
+  values.s3CaCertificate = s3CaCertificate;
+
   const modelName = await promptValue("Model name", values.modelName, true);
   if (!modelName) return null;
   values.modelName = modelName;
+
+  const requirementsTxt = await promptValue(
+    "Python packages to install (requirements.txt format, comma-separated, or blank)",
+    requirementsInputValue(values.requirementsTxt),
+    false,
+  );
+  if (requirementsTxt === undefined) return null;
+  values.requirementsTxt = normalizeRequirementsInput(requirementsTxt);
 
   const forcePathStyle = await vscode.window.showQuickPick(
     [
@@ -609,7 +623,52 @@ async function promptValue(prompt, value, required, password = false) {
   return input === undefined ? undefined : input.trim();
 }
 
-function showSimpleUploadResult(form) {
+async function promptS3CaCertificate(endpoint, value) {
+  if (!String(endpoint || "").toLowerCase().startsWith("https://")) {
+    return "";
+  }
+  const input = await vscode.window.showInputBox({
+    title: "Triton Control Deploy",
+    prompt: "Optional S3 CA certificate. Paste PEM text here, like a model name field.",
+    value: value || "",
+    ignoreFocusOut: true,
+    validateInput: () => undefined,
+  });
+  if (input === undefined) {
+    return undefined;
+  }
+  return normalizePemCertificateInput(input);
+}
+
+function normalizeRequirementsInput(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const withNewlines = text.includes("\\n") ? text.replace(/\\n/g, "\n") : text;
+  if (withNewlines.includes("\n")) {
+    return withNewlines;
+  }
+  return withNewlines
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function requirementsInputValue(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  return text
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function showSimpleUploadResult(form, deployment = null) {
   const payload = deploymentPayload(form);
   const displayPayload = {
     ...payload,
@@ -618,7 +677,14 @@ function showSimpleUploadResult(form) {
   outputChannel.clear();
   outputChannel.appendLine("Triton model repository upload complete.");
   outputChannel.appendLine("");
-  outputChannel.appendLine("Use Add Deployment in Triton Control with these values:");
+  if (deployment?.instance_id) {
+    outputChannel.appendLine(`Triton deployment created. Instance id: ${deployment.instance_id}`);
+  } else {
+    outputChannel.appendLine("Triton deployment was not created from the simple wizard.");
+    outputChannel.appendLine("No instance will appear in the Triton Control UI until Add Deployment is completed.");
+    outputChannel.appendLine("");
+    outputChannel.appendLine("Use Add Deployment in Triton Control with these values:");
+  }
   outputChannel.appendLine(`Deployment name: ${form.deploymentName}`);
   outputChannel.appendLine(`Image: ${form.image}`);
   outputChannel.appendLine(`Model repository: ${payload.s3_url}`);
@@ -626,6 +692,7 @@ function showSimpleUploadResult(form) {
   outputChannel.appendLine(`S3 bucket: ${form.bucket}`);
   outputChannel.appendLine(`Repository prefix: ${form.prefix}`);
   outputChannel.appendLine(`Model name: ${form.modelName}`);
+  outputChannel.appendLine(`Python packages: ${form.requirementsTxt ? "included" : "none"}`);
   outputChannel.appendLine(`Model control: ${form.modelControlMode}`);
   outputChannel.appendLine(`Repository sync: ${form.repositorySyncMode}`);
   outputChannel.appendLine("S3 credentials: use the same access key and secret entered in the wizard.");
@@ -634,8 +701,19 @@ function showSimpleUploadResult(form) {
   outputChannel.appendLine(JSON.stringify(displayPayload, null, 2));
   outputChannel.show(true);
   vscode.window.showInformationMessage(
-    "Repository uploaded. Finish the deployment from Triton Control Add Deployment using the shown S3 target.",
+    deployment?.instance_id
+      ? `Deployment created. Instance id: ${deployment.instance_id}`
+      : "Repository uploaded. Finish Add Deployment in Triton Control using the shown S3 target.",
   );
+}
+
+async function createDeploymentFromSimpleWizard(form) {
+  const token = process.env.TRITON_CONTROL_DEPLOY_TOKEN || "";
+  if (!token) {
+    throw new Error("TRITON_CONTROL_DEPLOY_TOKEN is required to create a Triton Control deployment from the simple wizard.");
+  }
+  const apiUrl = (process.env.TRITON_CONTROL_API_URL || "http://triton-control:8000").replace(/\/+$/, "");
+  return postJson(`${apiUrl}/api/deployments`, deploymentPayload(form), token);
 }
 
 async function initialFormValues(sourceFolder) {
@@ -643,6 +721,7 @@ async function initialFormValues(sourceFolder) {
   const s3x = vscode.workspace.getConfiguration("s3x");
   const detectedModelName = detectModelName(sourceFolder);
   const detectedBackend = detectModelBackend(sourceFolder);
+  const requirementsTxt = findRequirementsTxt(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
   if (!modelName) {
     return null;
@@ -670,6 +749,7 @@ async function initialFormValues(sourceFolder) {
     repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
+    requirementsTxt,
     profileId: "",
     profileName: "",
     cpu: "2",
@@ -745,6 +825,24 @@ function findConfigPbtxt(sourceFolder) {
     }
   }
   return firstConfig;
+}
+
+function findRequirementsTxt(sourceFolder) {
+  const candidates = [path.join(sourceFolder, "requirements.txt")];
+  const configPath = findConfigPbtxt(sourceFolder);
+  if (configPath) {
+    candidates.push(path.join(path.dirname(configPath), "requirements.txt"));
+  }
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return fs.readFileSync(candidate, "utf8").trim();
+      }
+    } catch {
+      return "";
+    }
+  }
+  return "";
 }
 
 async function promptForModelName(sourceFolder) {
@@ -827,6 +925,7 @@ function normalizeForm(form) {
     repositorySyncMode,
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
+    requirementsTxt: normalizeRequirementsInput(form.requirementsTxt),
     cpu: String(form.cpu || "").trim(),
     memory: String(form.memory || "").trim(),
     gpuCount: String(form.gpuCount || "").trim(),
@@ -1030,6 +1129,49 @@ function toAmzDate(date) {
   return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
 }
 
+function postJson(url, payload, bearerToken) {
+  const endpoint = new URL(url);
+  const client = endpoint.protocol === "https:" ? https : http;
+  const body = Buffer.from(JSON.stringify(payload), "utf8");
+  return new Promise((resolve, reject) => {
+    const req = client.request(
+      {
+        protocol: endpoint.protocol,
+        hostname: endpoint.hostname,
+        port: endpoint.port || (endpoint.protocol === "https:" ? 443 : 80),
+        method: "POST",
+        path: `${endpoint.pathname}${endpoint.search}`,
+        headers: {
+          authorization: `Bearer ${bearerToken}`,
+          "content-type": "application/json",
+          "content-length": String(body.length),
+        },
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let parsed = {};
+          try {
+            parsed = text ? JSON.parse(text) : {};
+          } catch {
+            parsed = {};
+          }
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(parsed);
+            return;
+          }
+          reject(new Error(parsed.detail || `Request failed with HTTP ${res.statusCode}: ${text}`));
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
 function sha256Hex(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -1081,6 +1223,9 @@ function deploymentPayload(form) {
   }
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
+  }
+  if (form.requirementsTxt) {
+    payload.requirements_txt = form.requirementsTxt;
   }
   if (form.cpu) {
     payload.cpu = form.cpu;
@@ -1191,6 +1336,7 @@ function renderHtml(webview, nonce, initial) {
     </div>
     <select class="hidden" name="repositorySyncMode"><option value="direct">direct</option><option value="sidecar">sidecar</option></select>
     <label>Model name<input name="modelName" placeholder="from config.pbtxt or manual input"></label>
+    <label class="wide">Python packages<textarea name="requirementsTxt" rows="5" placeholder="scikit-learn==1.5.2&#10;joblib==1.4.2"></textarea></label>
     <details class="wide">
       <summary>Model control</summary>
       <div class="details-grid">
@@ -1275,34 +1421,38 @@ function renderHtml(webview, nonce, initial) {
         return;
       }
       if (message.type === 'createDeployment') {
-        statusEl.textContent = 'Creating Triton Control deployment...';
-        try {
-          const response = await fetch('/api/deployments', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(message.payload),
-          });
-          const body = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            throw new Error(body.detail || 'Failed to create deployment.');
-          }
-          statusEl.className = 'status success';
-          statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
-          await notifyDeploymentNavigation(body.instance_id);
-          const navigationMessage = {
-            source: 'triton-control-deploy',
-            type: 'deploymentCreated',
-            instanceId: body.instance_id,
-          };
-          postToHostFrames(navigationMessage);
-        } catch (error) {
-          submit.disabled = false;
-          statusEl.className = 'status error';
-          statusEl.textContent = error.message || String(error);
-        }
+        await createDeployment(message.payload);
       }
     });
+
+    async function createDeployment(payload) {
+      statusEl.textContent = 'Creating Triton Control deployment...';
+      try {
+        const response = await fetch('/api/deployments', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.detail || 'Failed to create deployment.');
+        }
+        statusEl.className = 'status success';
+        statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
+        await notifyDeploymentNavigation(body.instance_id);
+        const navigationMessage = {
+          source: 'triton-control-deploy',
+          type: 'deploymentCreated',
+          instanceId: body.instance_id,
+        };
+        postToHostFrames(navigationMessage);
+      } catch (error) {
+        submit.disabled = false;
+        statusEl.className = 'status error';
+        statusEl.textContent = error.message || String(error);
+      }
+    }
 
     async function notifyDeploymentNavigation(instanceId) {
       try {

@@ -417,8 +417,10 @@ deploy actions in the view and context menu.
 The deploy extension has a full webview form for trusted HTTPS or localhost.
 For plain HTTP or an untrusted local certificate, use
 **Triton Control: Upload Model Repository (Simple Wizard)** in code-server.
-The simple wizard avoids webviews, uploads the repository to S3, and shows the
-values needed to finish in **Add Deployment**.
+The simple wizard avoids the initial webview prompt, uploads the repository to
+S3, then posts the same deployment payload to `POST /api/deployments` from the
+extension host. That path requires `TRITON_CONTROL_DEPLOY_TOKEN` in the
+code-server environment.
 
 See [Development Workspaces](development-workspaces.md) for workspace fields,
 Kubernetes resources, persistence, proxy behavior, deployment steps, and API

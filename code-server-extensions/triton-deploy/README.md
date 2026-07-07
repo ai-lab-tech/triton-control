@@ -1,8 +1,10 @@
 # Triton Control Deploy Extension
 
 This code-server extension uploads a selected Triton model folder or Triton
-model repository root to S3-compatible storage. In the full webview flow it
-then calls Triton Control's existing `POST /api/deployments` endpoint.
+model repository root to S3-compatible storage. The simple wizard then posts
+the same deployment payload to Triton Control's existing `POST /api/deployments`
+endpoint from the extension host. That path requires
+`TRITON_CONTROL_DEPLOY_TOKEN` in the code-server environment.
 
 ## Flow
 
@@ -77,15 +79,23 @@ the filesystem watcher or the view refresh action runs.
 4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
    `s3://...` path before deploy.
-5. The extension uploads files below `bucket/prefix/model-repository-path`.
-6. The webview calls `/api/deployments` with the current Triton Control browser
+5. If the S3 endpoint uses HTTPS, the simple wizard asks for the optional CA
+   certificate as a plain paste field. Paste the PEM block directly, or paste
+   the escaped `\n` form from another config. The wizard normalizes it before
+   saving.
+6. Add Python packages with a `requirements.txt` file beside the repository or
+   model folder, or enter packages in the deploy form. Triton Control installs
+   them into the Triton pod before starting `tritonserver`.
+7. The extension uploads files below `bucket/prefix/model-repository-path`.
+8. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
 
 The full deploy form is a code-server webview. Browser webviews require trusted
 HTTPS or localhost. If Triton Control is opened through plain HTTP or an
 untrusted certificate, run `Triton Control: Upload Model Repository (Simple
 Wizard)` instead. The simple wizard uses native VS Code prompts, uploads the
-repository to S3, and prints the Add Deployment values in the output panel.
+repository to S3, then posts the deployment request directly to Triton Control
+with the same payload shape as the webview flow.
 
 Repository access is selected automatically. Models without `backend: "vllm"`
 use Triton's native S3 model repository directly. vLLM models use the sync

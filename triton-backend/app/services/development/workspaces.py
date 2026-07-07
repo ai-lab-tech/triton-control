@@ -9,6 +9,7 @@ from typing import Any
 from sqlmodel import Session
 
 from app.core.identity import require_user_entity
+from app.core.user_auth import issue_access_token
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.repositories import developments as code_servers
@@ -44,12 +45,22 @@ def create_code_server(
     statefulset_name = resource_prefix
     service_name = f"{resource_prefix}-svc"
     secret_name = f"{resource_prefix}-secret"
+    deploy_token = issue_access_token(
+        {
+            "email": getattr(user, "email", None) or claims.get("email"),
+            "name": getattr(user, "name", None) or claims.get("name"),
+            "role": getattr(user, "role", None) or claims.get("role", "viewer"),
+            "auth_provider": getattr(user, "auth_provider", None) or claims.get("auth_provider", "local"),
+        },
+        expires_minutes=60 * 24 * 30,
+    )
     applied_resources = k8s.apply_code_server_resources(
         request,
         namespace=namespace,
         statefulset_name=statefulset_name,
         service_name=service_name,
         secret_name=secret_name,
+        deploy_token=deploy_token,
     )
 
     values = {

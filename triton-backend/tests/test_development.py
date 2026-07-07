@@ -76,6 +76,7 @@ class CodeServerTests(unittest.TestCase):
             "code-7-dev-workspace",
             "code-7-dev-workspace-svc",
             "code-7-dev-workspace-secret",
+            deploy_token="deploy-token",
         )
 
         secret = manifests[0]
@@ -112,6 +113,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
+        self.assertIn({"name": "TRITON_CONTROL_DEPLOY_TOKEN", "value": "deploy-token"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3")
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
@@ -237,6 +239,7 @@ class CodeServerTests(unittest.TestCase):
             names = set(archive.namelist())
 
         self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/certificate-prompt.js", names)
         self.assertIn("extension/scaffold.js", names)
         self.assertIn("extension/workspace-repositories.js", names)
         self.assertIn("extension/resources/triton-control.svg", names)
