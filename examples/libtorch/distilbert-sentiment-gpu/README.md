@@ -20,13 +20,17 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+| Image | `nvcr.io/nvidia/pytorch:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `1` |
 
 When the workspace is ready, open code-server from **Development**.
 
+The workspace uses NVIDIA's PyTorch image because the notebook exports the
+TorchScript artifact with Python `torch`. The deployment step below still uses
+the Triton image because Triton serves the exported artifact with the
+PyTorch/LibTorch backend.
 
 ## 2. Create the Repository and Artifact
 
