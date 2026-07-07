@@ -68,6 +68,11 @@ app:
 tritonDeployments:
   s3SyncImage: amazon/aws-cli:2.22.35
 
+development:
+  codeServer:
+    # Pin code-server for reproducible Development workspaces.
+    version: "4.125.0"
+
 postgresql:
   enabled: true
   image:
