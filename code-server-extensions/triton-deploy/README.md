@@ -212,7 +212,7 @@ there are real form values and are sent with the deployment:
 
 - CPU: `2`
 - RAM: `4Gi`
-- GPU count: `1`
+- GPU count: `0`
 
 Change or clear these values before deploy if the model needs different
 resources. Values present in the form are sent to Triton Control for every

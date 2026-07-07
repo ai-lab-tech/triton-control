@@ -686,7 +686,7 @@ async function initialFormValues(sourceFolder) {
     profileName: "",
     cpu: "2",
     memory: "4Gi",
-    gpuCount: "1",
+    gpuCount: "0",
   };
   return initial;
 }
