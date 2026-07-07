@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 import httpx
 from cachetools import TTLCache
 import jwt
+from jwt.types import Options
 
 
 class KeycloakAuth:
@@ -81,7 +82,7 @@ class KeycloakAuth:
             if not key:
                 raise ValueError("Signing key not found for kid")
 
-        options = {
+        options: Options = {
             "verify_aud": self.expected_audience is not None,
         }
 
