@@ -948,8 +948,8 @@ function repositoryLayout(sourceFolder, modelName) {
 
 async function putS3Object(form, key, filePath) {
   const endpoint = new URL(form.endpoint);
-  const body = fs.readFileSync(filePath);
-  const payloadHash = sha256Hex(body);
+  const fileSize = fs.statSync(filePath).size;
+  const payloadHash = await sha256FileHex(filePath);
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
   const pathName = form.forcePathStyle
     ? `/${encodeURIComponent(form.bucket)}/${encodedKey}`
@@ -981,9 +981,9 @@ async function putS3Object(form, key, filePath) {
     headers: {
       ...headers,
       authorization,
-      "content-length": String(body.length),
+      "content-length": String(fileSize),
     },
-    body,
+    body: fs.createReadStream(filePath),
     tlsRejectUnauthorized: false,
   });
 }
@@ -1054,6 +1054,11 @@ function sendHttpRequest(endpoint, request) {
       },
     );
     req.on("error", reject);
+    if (request.body && typeof request.body.pipe === "function") {
+      request.body.on("error", (error) => req.destroy(error));
+      request.body.pipe(req);
+      return;
+    }
     req.end(request.body);
   });
 }
@@ -1064,6 +1069,16 @@ function toAmzDate(date) {
 
 function sha256Hex(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function sha256FileHex(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
 }
 
 function hmac(key, value) {
@@ -1082,7 +1097,7 @@ function listFiles(root) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (![".git", ".vscode", "__pycache__"].includes(entry.name)) {
+        if (![".cache", ".git", ".vscode", "__pycache__"].includes(entry.name)) {
           stack.push(fullPath);
         }
         continue;
