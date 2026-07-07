@@ -20,12 +20,13 @@ In Triton Control, open **Development** and create the workspace:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `1` |
 
 When the workspace is ready, open code-server from **Development**.
+
 
 ## 2. Create the Repository and Artifact
 
@@ -63,7 +64,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | GPU count | At least `1`; `config.pbtxt` uses `KIND_GPU` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
