@@ -139,12 +139,21 @@ function resolveDeploymentBackend(
     stringField(metadata?.["backend"]) ||
     stringField(metadata?.["model_backend"]);
   if (explicitBackend) {
-    return explicitBackend.toLowerCase() === "vllm" ? "vLLM" : explicitBackend;
+    return formatBackendList(explicitBackend);
   }
   if (/vllm/i.test([log, image].join("\n"))) {
     return "vLLM";
   }
   return "No backend in config.pbtxt";
+}
+
+function formatBackendList(value: string): string {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => (part.toLowerCase() === "vllm" ? "vLLM" : part))
+    .join(", ");
 }
 
 function normalizePercent(value: unknown): number {

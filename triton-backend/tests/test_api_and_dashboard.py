@@ -31,7 +31,10 @@ from app.api.s3_api import (
     update_instance_s3,
 )
 from app.services.storage import s3_client
-from app.services.storage.s3 import require_s3_client as _build_s3_client
+from app.services.storage.s3 import (
+    discover_instance_repository_backends,
+    require_s3_client as _build_s3_client,
+)
 from app.api.dashboard_api import list_dashboard_alerts
 from app.db.entities import DashboardAlertEntity, TritonInstanceEntity, UserEntity
 from app.schemas import CreateTritonInstanceRequest, UpdateInstanceS3Request, UpdateTritonInstanceRequest
@@ -157,6 +160,29 @@ class _S3ConfigDiscoveryClient(_S3Client):
         return {"Body": _S3Body(b'name: "opt125m"\nbackend: "vllm"\n')}
 
 
+class _S3MultiConfigClient(_S3Client):
+    def list_objects_v2(self, **kwargs):
+        self.list_calls.append(kwargs)
+        return {
+            "Contents": [
+                {"Key": "models/ensemble/config.pbtxt", "Size": 30},
+                {"Key": "models/preprocess/config.pbtxt", "Size": 30},
+                {"Key": "models/classifier/config.pbtxt", "Size": 30},
+                {"Key": "models/classifier/1/model.onnx", "Size": 30},
+            ],
+            "IsTruncated": False,
+        }
+
+    def get_object(self, **kwargs):
+        self.get_calls.append(kwargs)
+        payloads = {
+            "models/ensemble/config.pbtxt": b'name: "ensemble"\nplatform: "ensemble"\n',
+            "models/preprocess/config.pbtxt": b'name: "preprocess"\nbackend: "python"\n',
+            "models/classifier/config.pbtxt": b'name: "classifier"\nplatform: "onnxruntime_onnx"\n',
+        }
+        return {"Body": _S3Body(payloads[kwargs["Key"]])}
+
+
 class _BodyRequest:
     def __init__(self, payload: bytes, headers=None):
         self._payload = payload
@@ -193,6 +219,17 @@ class ApiHelperTests(unittest.TestCase):
         # Act / Assert
         with self.assertRaises(BadRequestError):
             _build_s3_client(entity)
+
+    def test_DiscoverRepositoryBackends_MultipleConfigs_ReturnsUniqueValues(self):
+        # Arrange
+        entity = self._instance()
+
+        # Act
+        with patch("app.services.storage.s3.build_s3_client", return_value=_S3MultiConfigClient()):
+            backends = discover_instance_repository_backends(entity)
+
+        # Assert
+        self.assertEqual(backends, "onnxruntime_onnx, ensemble, python")
 
     def test_MetricsUrl_BaseEndpointProvided_AppendsMetricsPath(self):
         # Act

@@ -126,6 +126,28 @@ avoid local hosts-file drift:
 http://triton11-test.192.168.49.2.sslip.io
 ```
 
+## Deployment Logs Show `PodInitializing`
+
+If logs fail with an error like:
+
+```text
+container "s3-model-sync" in pod "<pod>" is waiting to start: PodInitializing
+```
+
+the deployment is usually still starting. Kubernetes may still be pulling the
+Triton image, running init containers, or starting the repository sync sidecar.
+
+Check the pod state:
+
+```bash
+kubectl -n <namespace> get pod <pod> -w
+kubectl -n <namespace> describe pod <pod>
+```
+
+When the pod leaves `PodInitializing`, retry the logs or inference request. If
+it stays there, inspect the events in `describe pod` for image pull, volume, or
+S3 sync errors.
+
 ## code-server Plugin Window Does Not Open
 
 If the Development workspace loads but the **Triton Control Deploy** plugin

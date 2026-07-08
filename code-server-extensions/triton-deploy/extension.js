@@ -18,7 +18,7 @@ let actionsProvider;
 let repositoryRefreshTimer;
 
 const DEFAULT_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-py3";
-const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3";
+const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3";
 
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");

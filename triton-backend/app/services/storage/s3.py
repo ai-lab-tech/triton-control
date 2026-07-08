@@ -17,6 +17,7 @@ the backend API:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -54,6 +55,63 @@ def require_s3_client(entity: Any) -> Any:
         return build_s3_client(entity)
     except RuntimeError as exc:
         raise BadRequestError(str(exc)) from exc
+
+
+def discover_instance_repository_backends(entity: Any) -> str:
+    """Return unique backend/platform values from all S3 config.pbtxt files."""
+    if not getattr(entity, "s3_enabled", False):
+        return ""
+    try:
+        client = require_s3_client(entity)
+        bucket = entity.s3_bucket
+        if not bucket:
+            return ""
+        values: list[str] = []
+        for key in _list_config_pbtxt_keys(client, bucket, entity.s3_prefix):
+            try:
+                response = client.get_object(Bucket=bucket, Key=key)
+                payload = response.get("Body").read() if response.get("Body") else b""
+                content = payload.decode("utf-8", errors="replace")
+            except (BotoCoreError, ClientError, OSError):
+                continue
+            value = _extract_config_backend_or_platform(content)
+            if value and value not in values:
+                values.append(value)
+        return ", ".join(values)
+    except (BadRequestError, BadGatewayError, BotoCoreError, ClientError, OSError):
+        return ""
+
+
+def _list_config_pbtxt_keys(client: Any, bucket: str, repository_prefix: str | None) -> list[str]:
+    root_prefix = _s3_list_prefix(repository_prefix, "")
+    keys: list[str] = []
+    continuation_token: str | None = None
+    while True:
+        list_args: dict[str, Any] = {"Bucket": bucket, "Prefix": root_prefix}
+        if continuation_token:
+            list_args["ContinuationToken"] = continuation_token
+        response = client.list_objects_v2(**list_args)
+        for item in response.get("Contents", []) or []:
+            key = str(item.get("Key") or "")
+            if not key or key.endswith("/"):
+                continue
+            relative = key[len(root_prefix) :] if root_prefix and key.startswith(root_prefix) else key
+            if relative == "config.pbtxt" or relative.lower().endswith("/config.pbtxt"):
+                keys.append(key)
+        if not response.get("IsTruncated"):
+            break
+        continuation_token = response.get("NextContinuationToken")
+        if not continuation_token:
+            break
+    return sorted(set(keys))
+
+
+def _extract_config_backend_or_platform(content: str) -> str:
+    for field in ("backend", "platform"):
+        match = re.search(rf'(?:^|\n)\s*{field}\s*:\s*"([^"]+)"', content)
+        if match and match.group(1).strip():
+            return match.group(1).strip()
+    return ""
 
 
 def get_instance_s3(session: Session, claims: dict[str, Any], instance_id: int) -> InstanceS3ConfigDTO:

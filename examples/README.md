@@ -87,7 +87,7 @@ s3_upload/
 - TensorRT plan examples must build the plan on the same GPU class and with the
   same Triton image used for serving.
 - TensorRT-LLM examples use `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3`.
-- vLLM examples use `nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3`.
+- vLLM examples use `nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3`.
 
 - Polling examples require the S3 Browser connection and Triton deployment
   repository prefix to point to the same S3 repository root.

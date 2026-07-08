@@ -46,9 +46,12 @@ Copy or upload this example folder into `/workspace`.
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose the vLLM template.
-3. Use `qwen3_4b_instruct` as the model name.
-4. Copy this example's notebook into the generated repository.
+2. Choose **Single model**.
+3. Enter `model` as the model repository folder.
+4. Enter `qwen3_4b_instruct` as the model name.
+5. Choose the vLLM backend model template.
+6. Upload and replace this example's `config.pbtxt`, `model.json`, notebook, and
+   client into the generated repository with the context menu.
 
 Then open and run:
 
@@ -62,6 +65,34 @@ This writes:
 qwen3_4b_instruct/1/model/
 qwen3_4b_instruct/1/model.json
 ```
+
+The notebook progress bar can stay at `0%`. Check the real download progress
+from the code-server terminal:
+
+```bash
+du -sh qwen3_4b_instruct/1/model/.cache/huggingface/download
+ls -lh qwen3_4b_instruct/1/model/*.safetensors
+```
+
+The download is complete when the model weight files exist in:
+
+```text
+qwen3_4b_instruct/1/model/
+```
+
+If the size does not change for several minutes, interrupt the notebook cell and
+run it again. Hugging Face resumes from the partial download.
+
+Before deploying, verify that the model directory contains the downloaded
+weights:
+
+```bash
+find qwen3_4b_instruct/1/model -maxdepth 1 -type f | head
+```
+
+If this prints nothing or the directory does not exist, rerun the notebook. The
+deployment will fail with `Cannot find any model weights` when
+`qwen3_4b_instruct/1/model/` is missing from the uploaded repository.
 
 Default `model.json`:
 
@@ -84,7 +115,7 @@ Use these deployment settings:
 
 | Field | Value |
 | --- | --- |
-| Image | `nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3` |
+| Image | `nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3` |
 | GPU count | At least `1` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
