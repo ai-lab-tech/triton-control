@@ -1,2 +1,5 @@
-qwen2_5_0_5b_instruct_trtllm/1/model.py
-qwen2_5_0_5b_instruct_trtllm/1/helpers.py
+hf_model/
+ckpt/
+engine/
+qwen2_5_0_5b_instruct_trtllm/1/*
+!qwen2_5_0_5b_instruct_trtllm/1/.keep

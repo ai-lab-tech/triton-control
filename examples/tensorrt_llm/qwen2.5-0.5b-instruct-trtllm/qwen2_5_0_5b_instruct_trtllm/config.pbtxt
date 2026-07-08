@@ -1,67 +1,63 @@
 name: "qwen2_5_0_5b_instruct_trtllm"
-backend: "python"
+backend: "tensorrtllm"
+max_batch_size: 1
 
-instance_group [
-  {
-    count: 1
-    kind: KIND_CPU
-  }
-]
+model_transaction_policy {
+  decoupled: true
+}
 
 input [
   {
-    name: "text_input"
-    data_type: TYPE_STRING
+    name: "input_ids"
+    data_type: TYPE_INT32
     dims: [ -1 ]
   },
   {
-    name: "streaming"
-    data_type: TYPE_BOOL
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "sampling_param_temperature"
-    data_type: TYPE_FP32
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "sampling_param_top_k"
+    name: "input_lengths"
     data_type: TYPE_INT32
     dims: [ 1 ]
-    optional: true
   },
   {
-    name: "sampling_param_top_p"
-    data_type: TYPE_FP32
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "sampling_param_max_tokens"
+    name: "request_output_len"
     data_type: TYPE_INT32
     dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "sampling_param_exclude_input_from_output"
-    data_type: TYPE_BOOL
-    dims: [ 1 ]
-    optional: true
-  },
-  {
-    name: "sampling_param_return_perf_metrics"
-    data_type: TYPE_BOOL
-    dims: [ 1 ]
-    optional: true
   }
 ]
 
 output [
   {
-    name: "text_output"
-    data_type: TYPE_STRING
+    name: "output_ids"
+    data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  },
+  {
+    name: "sequence_length"
+    data_type: TYPE_INT32
     dims: [ -1 ]
   }
 ]
+
+parameters: {
+  key: "gpt_model_type"
+  value: { string_value: "inflight_fused_batching" }
+}
+
+parameters: {
+  key: "gpt_model_path"
+  value: { string_value: "qwen2_5_0_5b_instruct_trtllm/1" }
+}
+
+parameters: {
+  key: "batch_scheduler_policy"
+  value: { string_value: "guaranteed_no_evict" }
+}
+
+parameters: {
+  key: "kv_cache_free_gpu_mem_fraction"
+  value: { string_value: "0.85" }
+}
+
+parameters: {
+  key: "tokenizer_dir"
+  value: { string_value: "qwen2_5_0_5b_instruct_trtllm/1/tokenizer" }
+}
