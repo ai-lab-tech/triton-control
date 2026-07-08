@@ -1,0 +1,32 @@
+{
+  "inputs": [
+    {
+      "name": "QUESTION",
+      "shape": [
+        1
+      ],
+      "datatype": "BYTES",
+      "data": [
+        "What does Triton Control deploy?"
+      ]
+    },
+    {
+      "name": "CONTEXT",
+      "shape": [
+        1
+      ],
+      "datatype": "BYTES",
+      "data": [
+        "Triton Control helps teams create development workspaces, upload model repositories, and deploy NVIDIA Triton Inference Server instances."
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "ANSWER"
+    },
+    {
+      "name": "SCORE"
+    }
+  ]
+}

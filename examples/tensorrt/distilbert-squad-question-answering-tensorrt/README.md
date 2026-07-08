@@ -65,8 +65,13 @@ Copy or upload this example folder into `/workspace`.
 3. Use `distilbert_squad_pipeline` as the public ensemble model.
 4. Use `preprocess`, `distilbert_squad_trt`, and `postprocess` as the step
    names.
-5. Copy this example's configs, Python models, helper scripts, and notebook into
-   the generated repository.
+5. Replace the generated template configs with this example's `config.pbtxt`
+   files, then copy the Python models, helper scripts, and notebook into the
+   generated repository.
+
+The plugin creates a starter structure. Its generated specs are placeholders;
+for this example, the final tensor names, shapes, data types, and ensemble maps
+must match the `config.pbtxt` files committed here.
 
 Keep `distilbert_squad_pipeline/1/.keep` in the repository and upload it with
 the model files. Triton requires at least one version under the ensemble model
@@ -101,7 +106,7 @@ Use these deployment settings:
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | GPU count | At least `1`; `distilbert_squad_trt/config.pbtxt` uses `KIND_GPU` |
-| `requirements.txt` | `transformers` |
+| Extra Python Packages | `transformers==4.53.0` |
 
 1. In the opened code-server Explorer, right-click this repository folder.
 2. Select **Triton Control: Deploy Model Repository** from the context menu.
@@ -114,11 +119,8 @@ models.
 
 ## 4. Test Inference
 
-Generate a small JSON request:
-
-```bash
-python make_curl_payload.py > request.json
-```
+This example includes `request.json`, a small Triton HTTP inference payload
+with the `QUESTION` and `CONTEXT` inputs used by this model.
 
 Use the Triton Control instance inference view first:
 
@@ -131,7 +133,7 @@ Use the Triton Control instance inference view first:
 For terminal testing, replace `localhost:8000` with the instance HTTP endpoint
 unless you are port-forwarding it locally.
 
-Send the same request with curl:
+Send the included request file with curl:
 
 ```bash
 curl -X POST "http://localhost:8000/v2/models/distilbert_squad_pipeline/infer" \
