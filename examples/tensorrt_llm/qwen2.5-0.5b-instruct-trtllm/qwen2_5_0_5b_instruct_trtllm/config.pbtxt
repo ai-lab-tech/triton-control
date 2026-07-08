@@ -44,7 +44,7 @@ parameters: {
 
 parameters: {
   key: "gpt_model_path"
-  value: { string_value: "qwen2_5_0_5b_instruct_trtllm/1" }
+  value: { string_value: "1" }
 }
 
 parameters: {
@@ -59,5 +59,5 @@ parameters: {
 
 parameters: {
   key: "tokenizer_dir"
-  value: { string_value: "qwen2_5_0_5b_instruct_trtllm/1/tokenizer" }
+  value: { string_value: "1/tokenizer" }
 }

@@ -29,7 +29,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    local_model = Path("hf_model")
+    local_model = Path(MODEL_NAME) / "1" / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(local_model if local_model.exists() else HF_MODEL_ID)
     input_ids = tokenizer.encode(args.prompt, add_special_tokens=True)
 

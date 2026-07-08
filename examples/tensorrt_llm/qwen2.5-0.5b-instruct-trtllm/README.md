@@ -42,15 +42,30 @@ Choose one path:
 
 ### Option A: Use the Example Repository
 
-Copy or upload this example folder into `/workspace`.
+Put this example at one path only, for example:
+
+```text
+/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/
+```
+
+Do not copy the folder into itself. This is wrong:
+
+```text
+/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/qwen2.5-0.5b-instruct-trtllm/
+```
 
 ### Option B: Create the Structure with the Plugin
 
 1. In code-server, run **New Model Repository** from the Triton Control plugin.
-2. Choose the TensorRT-LLM template.
-3. Use `qwen2_5_0_5b_instruct_trtllm` as the model name.
-4. Copy this example's notebook, `config.pbtxt`, and client into the generated
-   repository.
+2. Choose **Single model**.
+3. Enter `qwen2.5-0.5b-instruct-trtllm` as the repository target folder name.
+4. Enter `qwen2_5_0_5b_instruct_trtllm` as the model name.
+5. Choose the TensorRT-LLM model template.
+6. Put `prepare_qwen2_5_0_5b_trtllm.ipynb`, `infer_client.py`, and `README.md`
+   in the created `qwen2.5-0.5b-instruct-trtllm/` repository folder.
+7. Replace the generated model `config.pbtxt` with this example's
+   `qwen2_5_0_5b_instruct_trtllm/config.pbtxt`.
+
 
 Then open and run:
 
@@ -58,15 +73,17 @@ Then open and run:
 prepare_qwen2_5_0_5b_trtllm.ipynb
 ```
 
-This writes generated model files and the final Triton model repository:
+This writes the final Triton model repository:
 
 ```text
-hf_model/
-ckpt/
-engine/
 qwen2_5_0_5b_instruct_trtllm/config.pbtxt
 qwen2_5_0_5b_instruct_trtllm/1/
+qwen2_5_0_5b_instruct_trtllm/1/rank0.engine
+qwen2_5_0_5b_instruct_trtllm/1/tokenizer/
 ```
+
+The temporary folders `hf_model/`, `ckpt/`, and `engine/` are deleted by the
+notebook after the final Triton model repository has been written.
 
 Do not install `torch` in this notebook. Use the TensorRT-LLM image's Python
 environment and tools (`/opt/venv-tritonserver/bin/python`, `trtllm-build`).
@@ -80,7 +97,9 @@ Use these deployment settings:
 | Image | `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3` |
 | GPU count | At least `1` |
 
-1. In the opened code-server Explorer, right-click this repository folder.
+1. In the opened code-server Explorer, right-click the example folder:
+   `/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/`.
+   Do not deploy the parent folder `/workspace/tensorrt-llm/`.
 2. Select **Triton Control: Deploy Model Repository** from the context menu.
 3. Select S3 settings.
 4. Enter the deployment settings shown above.
