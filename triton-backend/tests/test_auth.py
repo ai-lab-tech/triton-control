@@ -9,6 +9,7 @@ Covers:
 """
 
 import unittest
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -45,8 +46,8 @@ class _Resp:
         return self._payload
 
 
-class _Claims(dict):
-    def validate(self):
+class _Claims(dict[str, Any]):
+    def validate(self) -> None:
         return None
 
 

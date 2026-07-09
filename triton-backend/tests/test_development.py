@@ -543,9 +543,13 @@ class CodeServerTests(unittest.TestCase):
             self.assertEqual(target, code_proxy.CodeServerProxyTarget("triton-control", "code-7-dev-workspace-svc"))
             return Response(content=b"ok", status_code=200)
 
+        def lookup_code_server(_session: object, _claims: object, _code_server_id: object) -> SimpleNamespace:
+            events.append("lookup")
+            return row
+
         with patch("app.api.development_api.session_factory", return_value=SessionContext()), patch(
             "app.services.development.workspaces.get_owned_code_server",
-            side_effect=lambda _session, _claims, _code_server_id: events.append("lookup") or row,
+            side_effect=lookup_code_server,
         ), patch("app.services.development.proxy.proxy_http", side_effect=proxy_http):
             response = asyncio.run(
                 code_server_api.proxy_code_server(
@@ -584,9 +588,13 @@ class CodeServerTests(unittest.TestCase):
             self.assertLess(events.index("exit"), events.index("proxy"))
             self.assertEqual(target, code_proxy.CodeServerProxyTarget("triton-control", "code-7-dev-workspace-svc"))
 
+        def lookup_code_server(_session: object, _claims: object, _code_server_id: object) -> SimpleNamespace:
+            events.append("lookup")
+            return row
+
         with patch("app.api.development_api.session_factory", return_value=SessionContext()), patch(
             "app.services.development.workspaces.get_owned_code_server",
-            side_effect=lambda _session, _claims, _code_server_id: events.append("lookup") or row,
+            side_effect=lookup_code_server,
         ), patch("app.services.development.proxy.proxy_websocket", side_effect=proxy_websocket):
             asyncio.run(
                 code_server_api.proxy_code_server_websocket(
