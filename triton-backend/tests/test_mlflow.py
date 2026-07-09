@@ -74,6 +74,36 @@ class MlflowTests(unittest.TestCase):
         self.assertEqual(result.status_message, "still starting")
         self.assertFalse(result.ready)
 
+    def test_Status_Installed_ReportsClusterServiceUrl(self) -> None:
+        entity = MlflowEntity(
+            namespace="triton-control",
+            deployment_name="mlflow",
+            service_name="mlflow-service",
+            image="mlflow:test",
+            status="ready",
+            status_message="ready",
+        )
+        with (
+            patch("app.services.mlflow.installer.mlflow.get", return_value=entity),
+            patch(
+                "app.services.mlflow.installer.k8s.read_installation_readiness",
+                return_value=(True, "MLflow pod is Running."),
+            ),
+        ):
+            result = installer.get_mlflow_status(SimpleNamespace())
+
+        self.assertTrue(result.ready)
+        self.assertEqual(
+            result.service_url,
+            "http://mlflow-service.triton-control.svc.cluster.local:5000",
+        )
+
+    def test_Status_NotInstalled_HasEmptyServiceUrl(self) -> None:
+        with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
+            result = installer.get_mlflow_status(SimpleNamespace())
+
+        self.assertEqual(result.service_url, "")
+
     def test_InstallMlflow_ExistingInstallation_RaisesConflict(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=object()):
             with self.assertRaises(ConflictError):

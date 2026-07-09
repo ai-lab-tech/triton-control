@@ -32,6 +32,7 @@ describe("WorkflowsPageComponent", () => {
         namespace: "triton-control",
         service_name: "argo-server",
         base_path: "/api/workflows/proxy/",
+        service_url: "http://argo-server.triton-control.svc.cluster.local:2746",
       }) as unknown as ReturnType<WorkflowsService["getArgoWorkflowsStatusApiWorkflowsGet"]>,
     );
 
@@ -97,6 +98,38 @@ describe("WorkflowsPageComponent", () => {
         width: "900px",
         maxWidth: "95vw",
       }),
+    );
+  });
+
+  it("opens the proxied workflows server in a new tab", async () => {
+    const fixture = TestBed.createComponent(WorkflowsPageComponent);
+    const component = fixture.componentInstance;
+    await flushMicrotasks();
+
+    const openSpy = spyOn(window, "open").and.returnValue(null);
+    component.openInNewTab();
+
+    expect(component.frameRawUrl()).toBe("/api/workflows/proxy/");
+    expect(openSpy).toHaveBeenCalledWith("/api/workflows/proxy/", "_blank", "noopener");
+  });
+
+  it("copies the in-cluster service url to the clipboard", async () => {
+    const fixture = TestBed.createComponent(WorkflowsPageComponent);
+    const component = fixture.componentInstance;
+    await flushMicrotasks();
+
+    const writeText = jasmine.createSpy("writeText").and.resolveTo();
+    spyOnProperty(navigator, "clipboard", "get").and.returnValue({
+      writeText,
+    } as unknown as Clipboard);
+
+    expect(component.status()?.service_url).toBe(
+      "http://argo-server.triton-control.svc.cluster.local:2746",
+    );
+    component.copyServiceUrl();
+
+    expect(writeText).toHaveBeenCalledWith(
+      "http://argo-server.triton-control.svc.cluster.local:2746",
     );
   });
 

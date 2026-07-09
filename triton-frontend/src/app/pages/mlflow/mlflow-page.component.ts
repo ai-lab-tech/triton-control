@@ -32,6 +32,7 @@ type MlflowStatusResponse = {
   ready: boolean;
   status_message: string;
   base_path: string;
+  service_url: string;
   installation: MlflowInstallResponse | null;
 };
 
@@ -92,6 +93,7 @@ export class MlflowPageComponent implements OnDestroy {
   readonly frameLoading = signal(false);
   readonly status = signal<MlflowStatusResponse | null>(null);
   readonly frameUrl = signal<SafeResourceUrl | null>(null);
+  readonly frameRawUrl = signal<string | null>(null);
   readonly message = signal("");
   readonly messageTone = signal<"info" | "success" | "error">("info");
   private reloadNonce = 0;
@@ -117,11 +119,13 @@ export class MlflowPageComponent implements OnDestroy {
         this.openFrame(status.base_path || "/api/mlflow/proxy/");
       } else {
         this.frameUrl.set(null);
+        this.frameRawUrl.set(null);
         this.frameLoading.set(false);
       }
     } catch (error) {
       this.status.set(null);
       this.frameUrl.set(null);
+      this.frameRawUrl.set(null);
       this.frameLoading.set(false);
       this.setMessage(mapApiErrorMessage(error, "Failed to load MLflow status."), "error");
     } finally {
@@ -140,6 +144,20 @@ export class MlflowPageComponent implements OnDestroy {
 
   onFrameLoaded(): void {
     this.frameLoading.set(false);
+  }
+
+  openInNewTab(): void {
+    const url = this.frameRawUrl();
+    if (url) {
+      window.open(url, "_blank", "noopener");
+    }
+  }
+
+  copyServiceUrl(): void {
+    const url = this.status()?.service_url?.trim();
+    if (url && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(url);
+    }
   }
 
   pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "error"; detail: string } {
@@ -220,9 +238,11 @@ export class MlflowPageComponent implements OnDestroy {
         ready: false,
         status_message: "",
         base_path: "/api/mlflow/proxy/",
+        service_url: "",
         installation: null,
       });
       this.frameUrl.set(null);
+      this.frameRawUrl.set(null);
       this.frameLoading.set(false);
       this.setMessage(response.message, "success");
     } catch (error) {
@@ -237,6 +257,7 @@ export class MlflowPageComponent implements OnDestroy {
     const normalized = path.startsWith("/") ? path : `/${path}`;
     const separator = normalized.includes("?") ? "&" : "?";
     this.frameLoading.set(true);
+    this.frameRawUrl.set(`${this.basePath}${normalized}`);
     this.frameUrl.set(
       this.sanitizer.bypassSecurityTrustResourceUrl(
         `${this.basePath}${normalized}${separator}_tc_reload=${this.reloadNonce}`,

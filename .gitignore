@@ -3,6 +3,8 @@ site/
 .codex/
 openspec/
 /values.yaml
+.agents/
+skills-lock.json
 
 triton-backend/.venv/
 triton-backend/.env
