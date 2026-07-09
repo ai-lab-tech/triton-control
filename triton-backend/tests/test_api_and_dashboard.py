@@ -6,6 +6,7 @@ requests) are replaced with mocks so the tests run without any live
 infrastructure.
 """
 
+import itertools
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -935,7 +936,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             ),
             get_model_config=AsyncMock(return_value={"backend": "python"}),
             collect_inference_stats_snapshot=AsyncMock(
-                side_effect=[
+                side_effect=itertools.cycle([
                     {
                         "series": {
                             "m|1": {
@@ -1056,10 +1057,10 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                         },
                         "error": None,
                     },
-                ],
+                ]),
             ),
             collect_inference_metrics_snapshot=AsyncMock(
-                side_effect=[
+                side_effect=itertools.cycle([
                     {
                         "series": {
                             "m|1": {
@@ -1090,7 +1091,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                         },
                         "error": None,
                     },
-                ],
+                ]),
             ),
             inference_metrics_delta=TritonService.inference_metrics_delta,
         )

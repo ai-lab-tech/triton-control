@@ -87,13 +87,18 @@ const normalizeMonaco = (value: typeof testGlobal.monaco) => {
 const withBaseMonaco = normalizeMonaco;
 let monacoMock = withBaseMonaco(testGlobal.monaco);
 
+const currentMonaco = () => {
+  monacoMock = withBaseMonaco(monacoMock);
+  return monacoMock;
+};
+
 const syncMonacoGlobals = (value?: unknown) => {
   monacoMock = withBaseMonaco(value as typeof testGlobal.monaco);
 
   Object.defineProperty(testGlobal, "monaco", {
     configurable: true,
     enumerable: true,
-    get: () => monacoMock,
+    get: currentMonaco,
     set: (newValue) => {
       monacoMock = withBaseMonaco(newValue as typeof testGlobal.monaco);
     },
@@ -104,7 +109,7 @@ const syncMonacoGlobals = (value?: unknown) => {
       Object.defineProperty(target, "monaco", {
         configurable: true,
         enumerable: true,
-        get: () => monacoMock,
+        get: currentMonaco,
         set: (newValue) => {
           monacoMock = withBaseMonaco(newValue as typeof testGlobal.monaco);
         },
