@@ -112,6 +112,26 @@ class CreateDeploymentRequest(SQLModel):
         cleaned = (value or "").strip()
         return cleaned or None
 
+    @field_validator("memory", "memory_limit", mode="before")
+    @classmethod
+    def normalize_memory_quantity(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        if not cleaned:
+            return None
+        numeric = re.fullmatch(r"([1-9][0-9]*)", cleaned)
+        if numeric:
+            return f"{numeric.group(1)}Gi"
+        with_unit = re.fullmatch(r"([1-9][0-9]*)\s*([gG]i?)", cleaned)
+        if with_unit:
+            return f"{with_unit.group(1)}Gi"
+        if re.fullmatch(r"[1-9][0-9]*Mi", cleaned):
+            return cleaned
+        if re.fullmatch(r"[1-9][0-9]*Gi", cleaned):
+            return cleaned
+        raise ValueError("memory must be a positive Gi number, for example 16 or 16Gi")
+
     @field_validator("s3_ca_certificate")
     @classmethod
     def normalize_optional_certificate(cls, value: str | None) -> str | None:

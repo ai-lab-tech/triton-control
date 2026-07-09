@@ -97,6 +97,24 @@ describe("NewDeploymentPageComponent", () => {
     expect(canDeploy).toBeFalse();
   });
 
+  it("CanDeploy_DecimalMemoryGi_ReturnsFalse", () => {
+    // Arrange
+    const fixture = createComponent();
+    const component = fixture.componentInstance;
+    component.s3Url = "s3://http://minio:9000/triton-models";
+    component.deploymentName = "triton-minio";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
+    component.s3AccessKey = "minioadmin";
+    component.s3SecretKey = "secret";
+    component.memoryGi = 1.5;
+
+    // Act
+    const canDeploy = component.canDeploy();
+
+    // Assert
+    expect(canDeploy).toBeFalse();
+  });
+
   it("BackendChanged_VllmBackend_UsesSidecarAndKeepsPollMode", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
@@ -206,7 +224,7 @@ describe("NewDeploymentPageComponent", () => {
     component.s3AccessKey = "access";
     component.s3SecretKey = "secret";
     component.cpu = "4";
-    component.memory = "10Gi";
+    component.memoryGi = 10;
 
     // Act
     await component.deploy();

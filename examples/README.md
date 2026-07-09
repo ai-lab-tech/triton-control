@@ -70,7 +70,8 @@ s3_upload/
 | --- | --- | --- |
 | `tensorrt/yolov8n-object-detection-tensorrt-ensemble` | YOLOv8 object detection optimized as a TensorRT plan | `ensemble`, `python`, `tensorrt_plan` |
 | `tensorrt/distilbert-squad-question-answering-tensorrt` | Text question answering optimized as a TensorRT plan | `ensemble`, `python`, `tensorrt_plan` |
-| `tensorrt_llm/qwen2.5-0.5b-instruct-trtllm` | Small TensorRT-LLM LLM smoke test | `python`, TensorRT-LLM LLM API |
+| `tensorrt_llm/qwen2.5-0.5b-instruct-trtllm` | Small raw TensorRT-LLM backend smoke test | `tensorrtllm` |
+| `tensorrt_llm/qwen2.5-0.5b-instruct-llmapi-s3` | Small TensorRT-LLM LLM API smoke test via Triton S3 | `python`, TensorRT-LLM LLM API |
 | `vllm/phi3-mini-4k-instruct-vllm` | Smaller vLLM LLM smoke test | `vllm` |
 | `vllm/qwen3-4b-instruct-vllm` | Qwen3 4B LLM on a 16 GB GPU | `vllm` |
 | `onnx/yolov8-object-detection-ensemble` | YOLOv8 image detection pipeline | `ensemble`, `python`, `onnxruntime_onnx` |

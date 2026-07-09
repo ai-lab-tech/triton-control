@@ -31,7 +31,7 @@ type S3Profile = {
 };
 
 const DEFAULT_CPU = "4";
-const DEFAULT_MEMORY = "10Gi";
+const DEFAULT_MEMORY_GI = 10;
 const DEFAULT_GPU_COUNT = 0;
 
 @Component({
@@ -89,7 +89,7 @@ export class NewDeploymentPageComponent {
 
   gpuCount: number | null = DEFAULT_GPU_COUNT;
   cpu = DEFAULT_CPU;
-  memory = DEFAULT_MEMORY;
+  memoryGi: number | null = DEFAULT_MEMORY_GI;
   readonly dockerconfigjson = signal("");
   readonly requirementsTxt = signal("");
   readonly s3Profiles = signal<S3Profile[]>([]);
@@ -166,18 +166,21 @@ export class NewDeploymentPageComponent {
     if (gpu < 0) {
       return { label: "Invalid", tone: "error", detail: "GPU count cannot be negative" };
     }
+    if (!this.hasValidMemoryGi()) {
+      return { label: "Invalid", tone: "error", detail: "Memory must be a whole Gi number" };
+    }
     const cpu = this.cpu.trim();
-    const memory = this.memory.trim();
+    const memory = this.memoryQuantity();
     const hasCpu = cpu.length > 0;
     const hasMemory = memory.length > 0;
     if (gpu > 0) {
       return { label: "On", tone: "ok", detail: "GPU enabled" };
     }
-    if (cpu === DEFAULT_CPU && memory === DEFAULT_MEMORY) {
+    if (cpu === DEFAULT_CPU && this.memoryGi === DEFAULT_MEMORY_GI) {
       return {
         label: "Default",
         tone: "ok",
-        detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY}`,
+        detail: `CPU ${DEFAULT_CPU}, memory ${DEFAULT_MEMORY_GI}Gi`,
       };
     }
     if (hasCpu || hasMemory) {
@@ -276,8 +279,8 @@ export class NewDeploymentPageComponent {
       gpu_count: this.gpuCount ?? undefined,
       cpu: this.cpu.trim() || undefined,
       cpu_limit: this.cpu.trim() || undefined,
-      memory: this.memory.trim() || undefined,
-      memory_limit: this.memory.trim() || undefined,
+      memory: this.memoryQuantity() || undefined,
+      memory_limit: this.memoryQuantity() || undefined,
     };
     const caCertificate = this.usesHttpsS3() ? this.s3CaCertificate.trim() : "";
     if (caCertificate) {
@@ -316,6 +319,7 @@ export class NewDeploymentPageComponent {
       this.image.trim().length > 0 &&
       this.s3AccessKey.trim().length > 0 &&
       this.s3SecretKey.trim().length > 0 &&
+      this.hasValidMemoryGi() &&
       !this.deploying()
     );
   }
@@ -323,6 +327,16 @@ export class NewDeploymentPageComponent {
   private setMessage(message: string, tone: "info" | "success" | "error"): void {
     this._message.set(message);
     this._messageTone.set(tone);
+  }
+
+  private memoryQuantity(): string {
+    const value = this.memoryGi ?? 0;
+    return value > 0 && Number.isInteger(value) ? `${value}Gi` : "";
+  }
+
+  private hasValidMemoryGi(): boolean {
+    const value = this.memoryGi ?? 0;
+    return value >= 0 && Number.isInteger(value);
   }
 
   private apiUrl(path: string): string {

@@ -124,6 +124,36 @@ class DeploymentServiceTests(unittest.TestCase):
         # Assert
         self.assertEqual(request.requirements_txt, "numpy===custom-build")
 
+    def test_CreateDeploymentRequest_MemoryNumber_NormalizesToGiQuantity(self) -> None:
+        # Act
+        request = CreateDeploymentRequest(
+            deployment_name="triton",
+            image="custom/image:latest",
+            s3_url="s3://bucket",
+            s3_access_key="ak",
+            s3_secret_key="secret",
+            memory=16,
+            memory_limit="16 Gi",
+        )
+
+        # Assert
+        self.assertEqual(request.memory, "16Gi")
+        self.assertEqual(request.memory_limit, "16Gi")
+
+    def test_CreateDeploymentRequest_InvalidMemoryQuantity_RaisesValidationError(self) -> None:
+        # Act / Assert
+        with self.assertRaises(ValueError) as raised:
+            CreateDeploymentRequest(
+                deployment_name="triton",
+                image="custom/image:latest",
+                s3_url="s3://bucket",
+                s3_access_key="ak",
+                s3_secret_key="secret",
+                memory="16 GB",
+            )
+
+        self.assertIn("memory must be a positive Gi number", str(raised.exception))
+
     def test_CreateDeploymentRequest_S3Url_HttpsWithoutPrefix_NormalizesToS3Scheme(self) -> None:
         # Act
         request = CreateDeploymentRequest(

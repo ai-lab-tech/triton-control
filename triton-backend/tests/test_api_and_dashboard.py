@@ -1179,7 +1179,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange / Act
         instance.server_metadata = {"backend": "tensorrt_llm"}
-        service.get_model_config.return_value = {"backend": "tensorrt_llm"}
+        service.get_model_config.return_value = {"backend": "tensorrt_llm", "input": [{"name": "text_input"}]}
         request = _BodyRequest(
             b'{"text_input":"hello","sampling_param_max_tokens":50}',
             headers={"content-type": "application/json"},
@@ -1204,6 +1204,37 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             b'{"text_input":"hello","sampling_param_max_tokens":50}',
             "application/json",
         )
+
+        # Arrange / Act
+        service.generate_model_raw.reset_mock()
+        service.infer_model_raw.reset_mock()
+        instance.server_metadata = {"backend": "tensorrt_llm"}
+        service.get_model_config.return_value = {
+            "backend": "tensorrt_llm",
+            "input": [
+                {"name": "input_ids"},
+                {"name": "input_lengths"},
+                {"name": "request_output_len"},
+            ],
+        }
+        request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
+        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+            "app.services.access.ensure_instance_access", return_value=None
+        ):
+            response = await infer_instance_model(
+                1,
+                "m",
+                "1",
+                {"inputs": []},
+                request,
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        service.infer_model_raw.assert_awaited_once_with("m", "1", b'{"inputs":[]}', "application/json")
+        service.generate_model_raw.assert_not_awaited()
 
         # Act / Assert
         with self.assertRaises(HTTPException) as exc:

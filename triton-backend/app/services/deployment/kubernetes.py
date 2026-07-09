@@ -701,13 +701,13 @@ def _resources_block(request: CreateDeploymentRequest) -> str:
         if cpu_req:
             lines.append(f'              cpu: "{cpu_req}"')
         if mem_req:
-            lines.append(f"              memory: {mem_req}")
+            lines.append(f'              memory: "{mem_req}"')
     if has_limits:
         lines.append("            limits:")
         if cpu_lim:
             lines.append(f'              cpu: "{cpu_lim}"')
         if mem_lim:
-            lines.append(f"              memory: {mem_lim}")
+            lines.append(f'              memory: "{mem_lim}"')
         if has_gpu:
             lines.append(f'              nvidia.com/gpu: "{request.gpu_count}"')
     return "\n".join(lines) + "\n"
