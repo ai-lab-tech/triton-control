@@ -122,6 +122,16 @@ describe("NewDeploymentPageComponent", () => {
     expect(component.repositorySyncMode).toBe("direct");
   });
 
+  it("BackendChanged_TensorRtLlmImage_UsesSidecar", () => {
+    const fixture = createComponent();
+    const component = fixture.componentInstance;
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
+
+    component.backendChanged();
+
+    expect(component.repositorySyncMode).toBe("sidecar");
+  });
+
   it("Deploy_RequirementsProvided_SendsRequirementsTxt", async () => {
     // Arrange
     const fixture = createComponent();
@@ -142,7 +152,7 @@ describe("NewDeploymentPageComponent", () => {
       }) as unknown as ReturnType<DeploymentsService["createDeploymentApiDeploymentsPost"]>,
     );
     component.deploymentName = "triton-minio";
-    component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
+    component.image = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.ingressHost = "triton.example.local";
     component.s3AccessKey = "minioadmin";
@@ -161,7 +171,7 @@ describe("NewDeploymentPageComponent", () => {
         dockerconfigjson: '{"auths":{"registry.example":{"auth":"token"}}}',
         ingress_host: "triton.example.local",
         model_control_mode: "poll",
-        repository_sync_mode: "direct",
+        repository_sync_mode: "sidecar",
         repository_poll_secs: 9,
         model_name: "simple_identity",
         allow_metrics: true,

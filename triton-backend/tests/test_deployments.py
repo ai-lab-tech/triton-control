@@ -396,6 +396,9 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("final_dir=/models${dir#$REPOSITORY_SOURCE}", sync["args"][0])
         self.assertIn('escaped_dir=$(printf "%s\\n" "$final_dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
         self.assertIn("${escaped_dir}/", sync["args"][0])
+        self.assertIn("config.pbtxt", sync["args"][0])
+        self.assertIn("engine_dir|gpt_model_path|encoder_model_path|tokenizer_dir", sync["args"][0])
+        self.assertIn('#\\1${escaped_dir}/\\2\\3#', sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
         # Arrange

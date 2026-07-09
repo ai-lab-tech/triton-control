@@ -211,13 +211,13 @@ export class NewDeploymentPageComponent {
   }
 
   backendChanged(): void {
-    this.repositorySyncMode = this.backend === "vllm" ? "sidecar" : "direct";
+    this.repositorySyncMode = this.usesSyncedRepository() ? "sidecar" : "direct";
     if (this.backend === "vllm" && !this.gpuCount) {
       this.gpuCount = 1;
     }
   }
 
-  setVllmBackend(enabled: boolean): void {
+  setSyncedLlmBackend(enabled: boolean): void {
     this.backend = enabled ? "vllm" : "triton";
     this.backendChanged();
   }
@@ -269,7 +269,7 @@ export class NewDeploymentPageComponent {
       dockerconfigjson: this.dockerconfigjson().trim() || undefined,
       model_control_mode: this.modelControlMode,
       repository_poll_secs: this.repositoryPollSecs,
-      repository_sync_mode: this.backend === "vllm" ? "sidecar" : "direct",
+      repository_sync_mode: this.usesSyncedRepository() ? "sidecar" : this.repositorySyncMode,
       model_name: this.modelName.trim() || undefined,
       allow_metrics: true,
       requirements_txt: this.requirementsTxt().trim() || undefined,
@@ -302,6 +302,11 @@ export class NewDeploymentPageComponent {
     } finally {
       this.deploying.set(false);
     }
+  }
+
+  usesSyncedRepository(): boolean {
+    const image = this.image.toLowerCase();
+    return this.backend === "vllm" || image.includes("trtllm") || image.includes("tensorrtllm");
   }
 
   canDeploy(): boolean {

@@ -19,6 +19,7 @@ let repositoryRefreshTimer;
 
 const DEFAULT_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-py3";
 const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3";
+const TRTLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
 
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
@@ -602,7 +603,7 @@ async function collectSimpleUploadForm(initial) {
   );
   if (!modelControl) return null;
   values.modelControlMode = modelControl.value;
-  values.repositorySyncMode = values.detectedBackend === "vllm" ? "sidecar" : "direct";
+  values.repositorySyncMode = usesSyncedRepositoryBackend(values.detectedBackend) ? "sidecar" : "direct";
   values.repositoryPollSecs = 15;
 
   return normalizeForm(values);
@@ -679,7 +680,7 @@ async function initialFormValues(sourceFolder) {
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
-    repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
+    repositorySyncMode: usesSyncedRepositoryBackend(detectedBackend) ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
     profileId: "",
@@ -745,9 +746,23 @@ function backendLabel(value) {
 }
 
 function defaultImageForBackend(value) {
-  return String(value || "").trim().toLowerCase() === "vllm"
-    ? VLLM_TRITON_IMAGE
-    : DEFAULT_TRITON_IMAGE;
+  const backend = String(value || "").trim().toLowerCase();
+  if (backend === "vllm") {
+    return VLLM_TRITON_IMAGE;
+  }
+  if (isTensorRtLlmBackend(backend)) {
+    return TRTLLM_TRITON_IMAGE;
+  }
+  return DEFAULT_TRITON_IMAGE;
+}
+
+function usesSyncedRepositoryBackend(value) {
+  const backend = String(value || "").trim().toLowerCase();
+  return backend === "vllm" || isTensorRtLlmBackend(backend);
+}
+
+function isTensorRtLlmBackend(value) {
+  return ["tensorrtllm", "tensorrt_llm", "trtllm"].includes(String(value || "").trim().toLowerCase());
 }
 
 function findConfigPbtxt(sourceFolder) {

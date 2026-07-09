@@ -198,12 +198,12 @@
         <div class="form-row wide backend-toggle">
           <mat-checkbox
             id="deployment-backend-vllm"
-            [ngModel]="backend === 'vllm'"
-            (ngModelChange)="setVllmBackend($event)"
+            [ngModel]="usesSyncedRepository()"
+            (ngModelChange)="setSyncedLlmBackend($event)"
           >
-            Enable vLLM model backend
+            Enable vLLM / TensorRT-LLM model backend
           </mat-checkbox>
-          <div class="field-hint">Use when deploying vLLM models.</div>
+          <div class="field-hint">Use when deploying vLLM or TensorRT-LLM models.</div>
         </div>
       </div>
     </div>

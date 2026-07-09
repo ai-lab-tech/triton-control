@@ -569,8 +569,9 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "fi\n"
         "export REPOSITORY_SOURCE DIRECT_REPOSITORY"
     )
-    # vLLM reads these as host paths. Triton's native S3 repository otherwise
-    # downloads into an opaque namespace, making relative values invalid.
+    # vLLM and TensorRT-LLM read these as host paths. Triton's native S3
+    # repository otherwise downloads into an opaque namespace, making relative
+    # values invalid.
     rewrite_command = (
         "find \"$REPOSITORY_SOURCE\" -type f -name model.json -exec sh -c '\n"
         "  for file do\n"
@@ -579,6 +580,20 @@ def _s3_sync_container(request: CreateDeploymentRequest, secret_name: str) -> di
         "    escaped_dir=$(printf \"%s\\n\" \"$final_dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
         "    sed -i -E \"s#(\\\"(model|tokenizer)\\\"[[:space:]]*:[[:space:]]*\\\")"
         "([^/][^\\\"]*)\\\"#\\1${escaped_dir}/\\3\\\"#g\" \"$file\"\n"
+        "  done\n"
+        "' sh {} +\n"
+        "find \"$REPOSITORY_SOURCE\" -type f -name config.pbtxt -exec sh -c '\n"
+        "  for file do\n"
+        "    dir=$(dirname \"$file\")\n"
+        "    final_dir=/models${dir#$REPOSITORY_SOURCE}\n"
+        "    escaped_dir=$(printf \"%s\\n\" \"$final_dir\" | sed \"s/[\\\\&#]/\\\\\\\\&/g\")\n"
+        "    sed -i -E \"/key[[:space:]]*:[[:space:]]*\\\""
+        "(engine_dir|gpt_model_path|encoder_model_path|tokenizer_dir)\\\"/ {\n"
+        "      N\n"
+        "      s#(key[^\\n]*\\n[[:space:]]*value[[:space:]]*:[[:space:]]*\\{"
+        "[[:space:]]*string_value[[:space:]]*:[[:space:]]*\\\")([^/:\\\"][^:\\\"]*)"
+        "(\\\".*)#\\1${escaped_dir}/\\2\\3#\n"
+        "    }\" \"$file\"\n"
         "  done\n"
         "' sh {} +"
     )

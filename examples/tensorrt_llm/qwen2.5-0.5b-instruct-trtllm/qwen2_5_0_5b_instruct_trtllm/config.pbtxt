@@ -38,13 +38,38 @@ output [
 ]
 
 parameters: {
+  key: "triton_backend"
+  value: { string_value: "tensorrtllm" }
+}
+
+parameters: {
+  key: "triton_max_batch_size"
+  value: { string_value: "1" }
+}
+
+parameters: {
+  key: "decoupled_mode"
+  value: { string_value: "true" }
+}
+
+parameters: {
+  key: "engine_dir"
+  value: { string_value: "/models/qwen2_5_0_5b_instruct_trtllm/1" }
+}
+
+parameters: {
   key: "gpt_model_type"
   value: { string_value: "inflight_fused_batching" }
 }
 
 parameters: {
   key: "gpt_model_path"
-  value: { string_value: "1" }
+  value: { string_value: "/models/qwen2_5_0_5b_instruct_trtllm/1" }
+}
+
+parameters: {
+  key: "batching_strategy"
+  value: { string_value: "inflight_fused_batching" }
 }
 
 parameters: {
@@ -53,11 +78,61 @@ parameters: {
 }
 
 parameters: {
+  key: "max_queue_delay_microseconds"
+  value: { string_value: "0" }
+}
+
+parameters: {
+  key: "max_queue_size"
+  value: { string_value: "0" }
+}
+
+parameters: {
+  key: "max_beam_width"
+  value: { string_value: "1" }
+}
+
+parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: { string_value: "0.85" }
 }
 
 parameters: {
+  key: "exclude_input_in_output"
+  value: { string_value: "true" }
+}
+
+parameters: {
+  key: "enable_kv_cache_reuse"
+  value: { string_value: "false" }
+}
+
+parameters: {
+  key: "encoder_input_features_data_type"
+  value: { string_value: "TYPE_FP16" }
+}
+
+parameters: {
+  key: "logits_datatype"
+  value: { string_value: "TYPE_FP32" }
+}
+
+parameters: {
+  key: "prompt_embedding_table_data_type"
+  value: { string_value: "TYPE_FP16" }
+}
+
+parameters: {
+  key: "guided_decoding_backend"
+  value: { string_value: "" }
+}
+
+parameters: {
   key: "tokenizer_dir"
   value: { string_value: "1/tokenizer" }
+}
+
+parameters: {
+  key: "xgrammar_tokenizer_info_path"
+  value: { string_value: "" }
 }
