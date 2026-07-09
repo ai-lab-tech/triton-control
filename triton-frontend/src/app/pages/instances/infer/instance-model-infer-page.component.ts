@@ -395,21 +395,22 @@ export class InstanceModelInferPageComponent implements OnInit {
 
   private async resolveUsesGenerateEndpoint(): Promise<boolean> {
     try {
-      const config =
-        (await firstValueFrom(
-          this.instancesApi.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet(
-            this.instanceId(),
-            this.modelName(),
-            this.version(),
-          ),
-        )) as Record<string, unknown>;
+      const config = (await firstValueFrom(
+        this.instancesApi.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet(
+          this.instanceId(),
+          this.modelName(),
+          this.version(),
+        ),
+      )) as Record<string, unknown>;
       return this.modelConfigUsesGenerateEndpoint(config);
     } catch {
       return false;
     }
   }
 
-  private modelConfigUsesGenerateEndpoint(config: Record<string, unknown> | null | undefined): boolean {
+  private modelConfigUsesGenerateEndpoint(
+    config: Record<string, unknown> | null | undefined,
+  ): boolean {
     const values: string[] = [];
     if (config && typeof config === "object") {
       values.push(String(config["backend"] ?? ""), String(config["platform"] ?? ""));
@@ -439,7 +440,10 @@ export class InstanceModelInferPageComponent implements OnInit {
     return value.toLowerCase().replace(/[-\s]+/g, "_");
   }
 
-  private modelConfigHasInput(config: Record<string, unknown> | null | undefined, inputName: string): boolean {
+  private modelConfigHasInput(
+    config: Record<string, unknown> | null | undefined,
+    inputName: string,
+  ): boolean {
     const inputs = config?.["input"] ?? config?.["inputs"];
     return (
       Array.isArray(inputs) &&

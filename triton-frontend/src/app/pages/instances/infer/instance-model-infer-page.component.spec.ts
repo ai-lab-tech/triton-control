@@ -171,9 +171,7 @@ describe("InstanceModelInferPageComponent", () => {
     await component.ngOnInit();
 
     // Assert
-    expect(component.requestUrl()).toBe(
-      "http://localhost:8000/v2/models/model-a/versions/1/infer",
-    );
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/versions/1/infer");
     expect(component.editorContent).toContain('"inputs"');
   });
 
@@ -197,9 +195,7 @@ describe("InstanceModelInferPageComponent", () => {
     await component.ngOnInit();
 
     // Assert
-    expect(component.requestUrl()).toBe(
-      "http://localhost:8000/v2/models/model-a/versions/1/infer",
-    );
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/versions/1/infer");
     expect(component.editorContent).toContain('"inputs"');
   });
 
@@ -215,9 +211,7 @@ describe("InstanceModelInferPageComponent", () => {
     await component.ngOnInit();
 
     // Assert
-    expect(component.requestUrl()).toBe(
-      "http://localhost:8000/v2/models/model-a/versions/1/infer",
-    );
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/versions/1/infer");
   });
 
   it("NgOnInit_SavedResultExists_HydratesInferResult", async () => {

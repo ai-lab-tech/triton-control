@@ -37,22 +37,40 @@ const baseMonaco = {
     parse: (value: string) => ({ path: value, toString: () => value }),
   },
 };
-const withBaseMonaco = (value: typeof testGlobal.monaco) => ({
-  ...baseMonaco,
-  ...value,
-  editor: {
-    ...baseMonaco.editor,
-    ...value?.editor,
-  },
-  MarkerSeverity: {
-    ...baseMonaco.MarkerSeverity,
-    ...value?.MarkerSeverity,
-  },
-  Uri: {
-    ...baseMonaco.Uri,
-    ...value?.Uri,
-  },
-});
+const normalizeMonaco = (value: typeof testGlobal.monaco) => {
+  const normalized = {
+    ...baseMonaco,
+    ...value,
+    editor: {
+      ...baseMonaco.editor,
+      ...value?.editor,
+    },
+    MarkerSeverity: {
+      ...baseMonaco.MarkerSeverity,
+      ...value?.MarkerSeverity,
+    },
+    Uri: {
+      ...baseMonaco.Uri,
+      ...value?.Uri,
+    },
+  };
+
+  if (typeof normalized.editor.create !== "function") {
+    normalized.editor.create = baseMonaco.editor.create;
+  }
+  if (typeof normalized.editor.createModel !== "function") {
+    normalized.editor.createModel = baseMonaco.editor.createModel;
+  }
+  if (typeof normalized.editor.getModelMarkers !== "function") {
+    normalized.editor.getModelMarkers = baseMonaco.editor.getModelMarkers;
+  }
+  if (typeof normalized.editor.setModelMarkers !== "function") {
+    normalized.editor.setModelMarkers = baseMonaco.editor.setModelMarkers;
+  }
+
+  return normalized;
+};
+const withBaseMonaco = normalizeMonaco;
 let monacoMock = withBaseMonaco(testGlobal.monaco);
 
 Object.defineProperty(testGlobal, "monaco", {
