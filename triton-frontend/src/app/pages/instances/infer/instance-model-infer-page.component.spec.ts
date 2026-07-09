@@ -119,7 +119,7 @@ describe("InstanceModelInferPageComponent", () => {
       } as any),
     );
     instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
-      of({ backend: "tensorrt_llm" } as any),
+      of({ backend: "tensorrt_llm", input: [{ name: "text_input" }] } as any),
     );
     const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
     const component = fixture.componentInstance;
@@ -130,6 +130,51 @@ describe("InstanceModelInferPageComponent", () => {
     // Assert
     expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/generate");
     expect(component.editorContent).toContain('"text_input"');
+  });
+
+  it("NgOnInit_VllmModelConfigWithoutInputs_UsesGenerateEndpoint", async () => {
+    // Arrange
+    instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
+      of({ backend: "vllm" } as any),
+    );
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.ngOnInit();
+
+    // Assert
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/generate");
+    expect(component.editorContent).toContain('"text_input"');
+  });
+
+  it("NgOnInit_TensorRtLlmTensorInputs_UsesInferEndpoint", async () => {
+    // Arrange
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "trtllm",
+        url: "http://localhost:8000",
+        server_metadata: {},
+        repository_models: [],
+      } as any),
+    );
+    instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
+      of({
+        backend: "tensorrt_llm",
+        input: [{ name: "input_ids" }, { name: "input_lengths" }, { name: "request_output_len" }],
+      } as any),
+    );
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    await component.ngOnInit();
+
+    // Assert
+    expect(component.requestUrl()).toBe(
+      "http://localhost:8000/v2/models/model-a/versions/1/infer",
+    );
+    expect(component.editorContent).toContain('"inputs"');
   });
 
   it("NgOnInit_VllmImageButPythonModel_UsesInferEndpoint", async () => {

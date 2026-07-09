@@ -38,20 +38,21 @@ Qwen2.5 0.5B Instruct is public at the time this example was written.
 
 ## 2. Create the Repository and Engine
 
-Choose one path:
+Choose one repository folder. The repository folder is the folder you will
+upload and deploy with Triton Control.
 
 ### Option A: Use the Example Repository
 
-Put this example at one path only, for example:
+Put this example at one path only:
 
 ```text
-/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/
+<repository-folder>/
 ```
 
 Do not copy the folder into itself. This is wrong:
 
 ```text
-/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/qwen2.5-0.5b-instruct-trtllm/
+<repository-folder>/<repository-folder>/
 ```
 
 ### Option B: Create the Structure with the Plugin
@@ -97,9 +98,11 @@ Use these deployment settings:
 | Image | `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3` |
 | GPU count | At least `1` |
 
-1. In the opened code-server Explorer, right-click the example folder:
-   `/workspace/tensorrt-llm/qwen2.5-0.5b-instruct-trtllm/`.
-   Do not deploy the parent folder `/workspace/tensorrt-llm/`.
+1. In the opened code-server Explorer, right-click the repository folder for
+   this example. It must be the folder that directly contains
+   `qwen2_5_0_5b_instruct_trtllm/config.pbtxt`.
+   Do not deploy a parent folder that only contains multiple repositories or
+   examples.
 2. Select **Triton Control: Deploy Model Repository** from the context menu.
 3. Select S3 settings.
 4. Enter the deployment settings shown above.
@@ -111,15 +114,50 @@ engine.
 
 ## 4. Test Inference
 
-Use the Python client. It tokenizes the prompt and sends TensorRT-LLM tensor
-inputs to `/infer`.
+Use Triton Control for the first inference smoke test:
+
+1. Generate a Triton tensor payload for your prompt:
+
+   ```bash
+   python3 -m pip install transformers
+   python3 infer_client.py --print-payload "Give me a compact TensorRT-LLM deployment checklist."
+   ```
+
+2. Open the deployed instance in Triton Control.
+3. Open the `qwen2_5_0_5b_instruct_trtllm` model.
+4. Open **Infer**.
+5. Paste the generated JSON payload and send it.
+
+This example model is a raw TensorRT-LLM backend model. It accepts token tensor
+inputs, so Triton Control sends the request to `/infer` with `input_ids`,
+`input_lengths`, and `request_output_len`.
+
+Payload shape:
+
+```json
+{
+  "inputs": [
+    { "name": "input_ids", "shape": [1, 5], "datatype": "INT32", "data": [1, 2, 3, 4, 5] },
+    { "name": "input_lengths", "shape": [1, 1], "datatype": "INT32", "data": [5] },
+    { "name": "request_output_len", "shape": [1, 1], "datatype": "INT32", "data": [128] }
+  ],
+  "outputs": [{ "name": "output_ids" }, { "name": "sequence_length" }]
+}
+```
 
 ## Optional Python Client
 
-Tests the deployed Triton instance over HTTP. Replace `localhost:8000` with the
-instance HTTP endpoint unless you are port-forwarding it locally:
+After the Triton Control smoke test succeeds, you can also test the deployed
+Triton instance directly over HTTP. Replace `localhost:8000` with the instance
+HTTP endpoint unless you are port-forwarding it locally:
 
 ```bash
 python3 -m pip install requests transformers
 python3 infer_client.py --url localhost:8000 "Give me a compact TensorRT-LLM deployment checklist."
+```
+
+For an in-cluster deployment, the full endpoint has this shape:
+
+```text
+http://qwen2-5-0-5b-instruct-trtllm-service.triton-control.svc.cluster.local:18000/v2/models/qwen2_5_0_5b_instruct_trtllm/infer
 ```

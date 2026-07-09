@@ -29,7 +29,7 @@ import {
   selectInferSubmitting,
 } from "../../../state/instances-infer/instances-infer.selectors";
 
-const GENERATE_ENDPOINT_BACKENDS = new Set(["vllm", "tensorrtllm", "tensorrt_llm", "trtllm"]);
+const TENSORRT_LLM_GENERATE_BACKENDS = new Set(["tensorrtllm", "tensorrt_llm", "trtllm"]);
 
 @Component({
   selector: "app-instance-model-infer-page",
@@ -425,11 +425,30 @@ export class InstanceModelInferPageComponent implements OnInit {
         );
       }
     }
-    return values.some((value) => this.isGenerateBackend(value));
+    const normalizedValues = values.map((value) => this.normalizeBackend(value));
+    if (normalizedValues.includes("vllm")) {
+      return true;
+    }
+    if (normalizedValues.some((value) => TENSORRT_LLM_GENERATE_BACKENDS.has(value))) {
+      return this.modelConfigHasInput(config, "text_input");
+    }
+    return false;
   }
 
-  private isGenerateBackend(value: string): boolean {
-    const normalized = value.toLowerCase().replace(/[-\s]+/g, "_");
-    return GENERATE_ENDPOINT_BACKENDS.has(normalized);
+  private normalizeBackend(value: string): string {
+    return value.toLowerCase().replace(/[-\s]+/g, "_");
+  }
+
+  private modelConfigHasInput(config: Record<string, unknown> | null | undefined, inputName: string): boolean {
+    const inputs = config?.["input"] ?? config?.["inputs"];
+    return (
+      Array.isArray(inputs) &&
+      inputs.some(
+        (input) =>
+          input &&
+          typeof input === "object" &&
+          String((input as { name?: unknown }).name ?? "") === inputName,
+      )
+    );
   }
 }

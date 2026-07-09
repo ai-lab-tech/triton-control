@@ -3,7 +3,7 @@ backend: "tensorrtllm"
 max_batch_size: 1
 
 model_transaction_policy {
-  decoupled: true
+  decoupled: false
 }
 
 input [
@@ -49,7 +49,7 @@ parameters: {
 
 parameters: {
   key: "decoupled_mode"
-  value: { string_value: "true" }
+  value: { string_value: "false" }
 }
 
 parameters: {

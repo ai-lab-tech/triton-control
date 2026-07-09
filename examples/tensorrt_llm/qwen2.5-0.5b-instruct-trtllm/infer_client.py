@@ -18,22 +18,10 @@ def output_by_name(response: dict[str, Any], name: str) -> dict[str, Any]:
     raise KeyError(f"Missing output {name!r}: {response}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--url", default="localhost:8000", help="Triton HTTP endpoint")
-    parser.add_argument("--max-tokens", type=int, default=128)
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        default="Write a short checklist for deploying TensorRT-LLM with Triton Control.",
-    )
-    args = parser.parse_args()
-
+def build_payload(prompt: str, max_tokens: int) -> tuple[dict[str, Any], Any]:
     local_model = Path(MODEL_NAME) / "1" / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(local_model if local_model.exists() else HF_MODEL_ID)
-    input_ids = tokenizer.encode(args.prompt, add_special_tokens=True)
-
-    endpoint = f"http://{args.url}/v2/models/{MODEL_NAME}/infer"
+    input_ids = tokenizer.encode(prompt, add_special_tokens=True)
     payload = {
         "inputs": [
             {
@@ -52,7 +40,7 @@ def main() -> None:
                 "name": "request_output_len",
                 "shape": [1, 1],
                 "datatype": "INT32",
-                "data": [args.max_tokens],
+                "data": [max_tokens],
             },
         ],
         "outputs": [
@@ -60,7 +48,32 @@ def main() -> None:
             {"name": "sequence_length"},
         ],
     }
+    return payload, tokenizer
 
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="localhost:8000", help="Triton HTTP endpoint")
+    parser.add_argument("--max-tokens", type=int, default=128)
+    parser.add_argument(
+        "--print-payload",
+        action="store_true",
+        help="Print the Triton /infer JSON payload for use in Triton Control.",
+    )
+    parser.add_argument(
+        "prompt",
+        nargs="?",
+        default="Write a short checklist for deploying TensorRT-LLM with Triton Control.",
+    )
+    args = parser.parse_args()
+
+    payload, tokenizer = build_payload(args.prompt, args.max_tokens)
+
+    if args.print_payload:
+        print(json.dumps(payload, indent=2))
+        return
+
+    endpoint = f"http://{args.url}/v2/models/{MODEL_NAME}/infer"
     response = requests.post(endpoint, json=payload, timeout=300)
     response.raise_for_status()
     result = response.json()

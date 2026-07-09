@@ -29,6 +29,7 @@ from app.services.triton.client import TritonService
 from app.services.triton.config import extract_triton_error_detail
 
 GENERATE_ENDPOINT_BACKENDS = {"vllm", "tensorrtllm", "tensorrt_llm", "trtllm"}
+TENSORRT_LLM_GENERATE_BACKENDS = {"tensorrtllm", "tensorrt_llm", "trtllm"}
 
 
 async def list_models(
@@ -253,12 +254,29 @@ def _model_config_uses_generate_endpoint(config: Any) -> bool:
                         parts.append(str(string_value))
                 elif value is not None:
                     parts.append(str(value))
-    return any(_is_generate_backend(part) for part in parts)
+    normalized_parts = {_normalize_backend(part) for part in parts}
+    if "vllm" in normalized_parts:
+        return True
+    if normalized_parts & TENSORRT_LLM_GENERATE_BACKENDS:
+        return _model_config_has_input(config, "text_input")
+    return False
+
+
+def _model_config_has_input(config: Any, input_name: str) -> bool:
+    if not isinstance(config, dict):
+        return False
+    for item in config.get("input") or config.get("inputs") or []:
+        if isinstance(item, dict) and str(item.get("name") or "") == input_name:
+            return True
+    return False
 
 
 def _is_generate_backend(value: str) -> bool:
-    normalized = value.lower().replace("-", "_").replace(" ", "_")
-    return normalized in GENERATE_ENDPOINT_BACKENDS
+    return _normalize_backend(value) in GENERATE_ENDPOINT_BACKENDS
+
+
+def _normalize_backend(value: str) -> str:
+    return value.lower().replace("-", "_").replace(" ", "_")
 
 
 def _is_metrics_snapshot_available(snapshot: dict[str, Any] | None) -> bool:
