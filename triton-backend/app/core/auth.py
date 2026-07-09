@@ -2,17 +2,22 @@
 
 Provides ``KeycloakAuth``, an async verifier that fetches OIDC discovery
 documents and JWKS from a Keycloak realm, validates bearer tokens with
-``python-jose``, and caches remote documents with a configurable TTL to
+Authlib, and caches remote documents with a configurable TTL to
 avoid redundant network round-trips.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from typing import Any, Dict, Optional
 
 import httpx
+from authlib.jose import JoseError, JsonWebToken
 from cachetools import TTLCache
-from jose import JWTError, jwt
+
+_jwt = JsonWebToken(["RS256"])
 
 
 class KeycloakAuth:
@@ -63,8 +68,8 @@ class KeycloakAuth:
         jwks = await self._get_jwks()
 
         try:
-            header = jwt.get_unverified_header(token)
-        except JWTError as e:
+            header = _get_unverified_header(token)
+        except (JoseError, ValueError) as e:
             raise ValueError(f"Invalid token header: {e}")
 
         kid = header.get("kid")
@@ -81,19 +86,33 @@ class KeycloakAuth:
             if not key:
                 raise ValueError("Signing key not found for kid")
 
-        options = {
-            "verify_aud": self.expected_audience is not None,
+        claims_options: Dict[str, Dict[str, Any]] = {
+            "iss": {"value": self.issuer},
         }
+        if self.expected_audience is not None:
+            claims_options["aud"] = {"value": self.expected_audience}
 
         try:
-            claims = jwt.decode(
+            claims = _jwt.decode(
                 token,
                 key,
-                algorithms=["RS256"],
-                issuer=self.issuer,
-                audience=self.expected_audience,
-                options=options,
+                claims_options=claims_options,
             )
-            return claims
-        except JWTError as e:
+            claims.validate()
+            return dict(claims)
+        except (JoseError, ValueError) as e:
             raise ValueError(f"Token verification failed: {e}")
+
+
+def _get_unverified_header(token: str) -> Dict[str, Any]:
+    try:
+        header_segment = token.split(".", 1)[0]
+        padded = header_segment + "=" * (-len(header_segment) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        header = json.loads(decoded)
+    except (binascii.Error, UnicodeDecodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid JWT header") from exc
+
+    if not isinstance(header, dict):
+        raise ValueError("Invalid JWT header")
+    return header

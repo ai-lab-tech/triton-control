@@ -20,9 +20,11 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from jose import JWTError, jwt
+from authlib.jose import JoseError, JsonWebToken
 
 from app.core.crypto import hash_password as hash_password
+
+_jwt = JsonWebToken(["HS256"])
 
 
 def verify_password(password: str, encoded_hash: str) -> bool:
@@ -58,12 +60,14 @@ def issue_access_token(user: Dict[str, Any], expires_minutes: int = 60) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
+    token = _jwt.encode({"alg": "HS256"}, payload, _jwt_secret())
+    return token.decode("ascii")
 
 
 def verify_access_token(token: str) -> Dict[str, Any]:
     try:
-        claims = jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
+        claims = _jwt.decode(token, _jwt_secret())
+        claims.validate()
         return dict(claims)
-    except JWTError as e:
+    except JoseError as e:
         raise ValueError(f"Local token verification failed: {e}")

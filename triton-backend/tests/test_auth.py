@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from jose import JWTError
+from authlib.jose import JoseError
 
 from app.core.auth import KeycloakAuth
 
@@ -43,6 +43,11 @@ class _Resp:
 
     def json(self):
         return self._payload
+
+
+class _Claims(dict):
+    def validate(self):
+        return None
 
 
 class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
@@ -76,18 +81,18 @@ class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
         auth._get_jwks = AsyncMock(return_value={"keys": [{"kid": "k1"}]})
 
         # Act / Assert
-        with patch("app.core.auth.jwt.get_unverified_header", side_effect=JWTError("bad")):
+        with patch("app.core.auth._get_unverified_header", side_effect=JoseError("bad")):
             with self.assertRaisesRegex(ValueError, "Invalid token header"):
                 await auth.verify_token("token")
 
         # Act / Assert
-        with patch("app.core.auth.jwt.get_unverified_header", return_value={}):
+        with patch("app.core.auth._get_unverified_header", return_value={}):
             with self.assertRaisesRegex(ValueError, "Missing kid"):
                 await auth.verify_token("token")
 
         # Act / Assert
-        with patch("app.core.auth.jwt.get_unverified_header", return_value={"kid": "k1"}), patch(
-            "app.core.auth.jwt.decode", side_effect=JWTError("decode bad")
+        with patch("app.core.auth._get_unverified_header", return_value={"kid": "k1"}), patch(
+            "app.core.auth._jwt.decode", side_effect=JoseError("decode bad")
         ):
             with self.assertRaisesRegex(ValueError, "Token verification failed"):
                 await auth.verify_token("token")
@@ -99,16 +104,16 @@ class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
         auth._get_jwks = AsyncMock(return_value={"keys": [{"kid": "new"}]})
 
         # Act
-        with patch("app.core.auth.jwt.get_unverified_header", return_value={"kid": "new"}), patch(
-            "app.core.auth.jwt.decode", return_value={"sub": "u1"}
+        with patch("app.core.auth._get_unverified_header", return_value={"kid": "new"}), patch(
+            "app.core.auth._jwt.decode", return_value=_Claims({"sub": "u1"})
         ) as decode_mock:
             claims = await auth.verify_token("token")
 
         # Assert
         self.assertEqual(claims["sub"], "u1")
         self.assertEqual(auth._get_jwks.call_count, 1)
-        self.assertEqual(decode_mock.call_args.kwargs["audience"], "client")
-        self.assertTrue(decode_mock.call_args.kwargs["options"]["verify_aud"])
+        self.assertEqual(decode_mock.call_args.kwargs["claims_options"]["aud"]["value"], "client")
+        self.assertEqual(decode_mock.call_args.kwargs["claims_options"]["iss"]["value"], "https://issuer.example")
 
     async def test_VerifyToken_KeyMissingAfterRefresh_RaisesValueError(self):
         # Arrange
@@ -117,7 +122,7 @@ class KeycloakAuthTests(unittest.IsolatedAsyncioTestCase):
         auth._get_jwks = AsyncMock(return_value={"keys": [{"kid": "still-other"}]})
 
         # Act / Assert
-        with patch("app.core.auth.jwt.get_unverified_header", return_value={"kid": "wanted"}):
+        with patch("app.core.auth._get_unverified_header", return_value={"kid": "wanted"}):
             with self.assertRaisesRegex(ValueError, "Signing key not found"):
                 await auth.verify_token("token")
 
