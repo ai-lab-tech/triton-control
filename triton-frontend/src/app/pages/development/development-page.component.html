@@ -199,6 +199,18 @@
         </div>
 
         <div class="workspace-toolbar-actions">
+          @if (embeddedWorkspaceUrl()) {
+            <button
+              mat-stroked-button
+              type="button"
+              aria-label="Open Development workspace in a new tab"
+              title="Open Development workspace in a new tab"
+              (click)="openInNewTab(workspace)"
+            >
+              <span class="material-icons">open_in_new</span>
+              Open in new tab
+            </button>
+          }
           <button
             mat-stroked-button
             type="button"

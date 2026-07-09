@@ -81,6 +81,73 @@ describe("MlflowPageComponent", () => {
     expect(`${component.frameUrl()}`).toContain("/api/mlflow/proxy/?_tc_reload=");
   });
 
+  it("opens the proxied MLflow server in a new tab", async () => {
+    const fixture = TestBed.createComponent(MlflowPageComponent);
+    const component = fixture.componentInstance;
+
+    await flushMicrotasks();
+    const req = http.expectOne("/api/mlflow");
+    req.flush({
+      installed: true,
+      status: "ready",
+      ready: true,
+      status_message: "ok",
+      base_path: "/api/mlflow/proxy/",
+      installation: {
+        namespace: "triton-control",
+        deployment_name: "mlflow",
+        service_name: "mlflow-service",
+        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        applied_resources: ["Deployment/mlflow"],
+      },
+    });
+    await flushMicrotasks();
+
+    const openSpy = spyOn(window, "open").and.returnValue(null);
+    component.openInNewTab();
+
+    expect(component.frameRawUrl()).toBe("/api/mlflow/proxy/");
+    expect(openSpy).toHaveBeenCalledWith("/api/mlflow/proxy/", "_blank", "noopener");
+  });
+
+  it("copies the in-cluster service url to the clipboard", async () => {
+    const fixture = TestBed.createComponent(MlflowPageComponent);
+    const component = fixture.componentInstance;
+
+    await flushMicrotasks();
+    const req = http.expectOne("/api/mlflow");
+    req.flush({
+      installed: true,
+      status: "ready",
+      ready: true,
+      status_message: "ok",
+      base_path: "/api/mlflow/proxy/",
+      service_url: "http://mlflow-service.triton-control.svc.cluster.local:5000",
+      installation: {
+        namespace: "triton-control",
+        deployment_name: "mlflow",
+        service_name: "mlflow-service",
+        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        applied_resources: ["Deployment/mlflow"],
+      },
+    });
+    await flushMicrotasks();
+
+    const writeText = jasmine.createSpy("writeText").and.resolveTo();
+    spyOnProperty(navigator, "clipboard", "get").and.returnValue({
+      writeText,
+    } as unknown as Clipboard);
+
+    expect(component.status()?.service_url).toBe(
+      "http://mlflow-service.triton-control.svc.cluster.local:5000",
+    );
+    component.copyServiceUrl();
+
+    expect(writeText).toHaveBeenCalledWith(
+      "http://mlflow-service.triton-control.svc.cluster.local:5000",
+    );
+  });
+
   it("can install when fields are present and not installed", async () => {
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();

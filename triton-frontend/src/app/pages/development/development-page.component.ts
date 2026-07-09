@@ -321,6 +321,12 @@ export class DevelopmentPageComponent implements OnDestroy {
     }
   }
 
+  openInNewTab(workspace: CodeServer): void {
+    if (workspace.status === "ready" && workspace.url) {
+      window.open(this.proxyUrl(workspace.url), "_blank", "noopener");
+    }
+  }
+
   async delete(workspace: CodeServer): Promise<void> {
     this.deletingId.set(workspace.id);
     try {

@@ -58,6 +58,7 @@ class MlflowStatusResponse(SQLModel):
     ready: bool = False
     status_message: str = ""
     base_path: str = "/api/mlflow/proxy/"
+    service_url: str = ""
     installation: Optional[MlflowInstallResponse] = None
 
 

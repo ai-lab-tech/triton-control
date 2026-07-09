@@ -16,6 +16,7 @@ class ArgoWorkflowsStatusResponse(SQLModel):
     namespace: str
     service_name: str
     base_path: str
+    service_url: str = ""
 
 
 class CreateWorkflowS3CredentialRequest(SQLModel):
