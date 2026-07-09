@@ -31,7 +31,7 @@
               id="deployment-image"
               matInput
               [(ngModel)]="image"
-              placeholder="nvcr.io/nvidia/tritonserver:25.02-py3"
+              placeholder="nvcr.io/nvidia/tritonserver:26.06-py3"
             />
           </mat-form-field>
         </div>
@@ -198,12 +198,12 @@
         <div class="form-row wide backend-toggle">
           <mat-checkbox
             id="deployment-backend-vllm"
-            [ngModel]="backend === 'vllm'"
-            (ngModelChange)="setVllmBackend($event)"
+            [ngModel]="usesSyncedRepository()"
+            (ngModelChange)="setSyncedLlmBackend($event)"
           >
-            Enable vLLM model backend
+            Enable vLLM / TensorRT-LLM model backend
           </mat-checkbox>
-          <div class="field-hint">Use when deploying vLLM models.</div>
+          <div class="field-hint">Use when deploying vLLM or TensorRT-LLM models.</div>
         </div>
       </div>
     </div>
@@ -424,9 +424,18 @@
               </mat-form-field>
             </div>
             <div class="form-row">
-              <label class="field-label" for="deployment-memory">Memory Request</label>
+              <label class="field-label" for="deployment-memory-gi">Memory Request</label>
               <mat-form-field appearance="outline">
-                <input id="deployment-memory" matInput [(ngModel)]="memory" placeholder="10Gi" />
+                <input
+                  id="deployment-memory-gi"
+                  matInput
+                  type="number"
+                  min="0"
+                  step="1"
+                  [(ngModel)]="memoryGi"
+                  placeholder="10"
+                />
+                <span matTextSuffix>Gi</span>
               </mat-form-field>
             </div>
           </div>

@@ -1,0 +1,12 @@
+name: "qwen3_4b_instruct"
+backend: "vllm"
+
+# vLLM owns GPU placement. KIND_MODEL keeps Triton from creating a separate
+# framework instance group and matches NVIDIA's vLLM backend sample layout.
+instance_group [
+  {
+    count: 1
+    kind: KIND_MODEL
+  }
+]
+

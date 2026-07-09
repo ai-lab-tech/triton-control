@@ -14,14 +14,14 @@
         <div class="page-title">Model Repository</div>
         <p class="page-subtitle">
           {{ instanceName() || "Instance #" + instanceId() }} ·
-          {{ bucketName() || "No bucket configured" }}
+          {{ repositoryRootPath() }}
         </p>
       </div>
     </div>
     <mat-card class="card browser-card">
       <div class="explorer">
         <aside class="explorer-tree">
-          <div class="tree-title">Buckets</div>
+          <div class="tree-title">S3 location</div>
           <button
             class="tree-item"
             type="button"
@@ -29,7 +29,10 @@
             [class.active]="isActivePath('/')"
           >
             <span class="material-icons">storage</span>
-            {{ bucketName() || "bucket" }}
+            <span class="location-summary">
+              <span>Bucket: {{ bucketName() || "bucket" }}</span>
+              <span>Prefix: {{ prefixLabel() }}</span>
+            </span>
           </button>
           @for (node of treeNodes; track node.path) {
             <button

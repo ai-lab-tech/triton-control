@@ -1,3 +1,4 @@
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { HttpClientTestingModule, HttpTestingController } from "@angular/common/http/testing";
 import { provideRouter } from "@angular/router";
@@ -27,6 +28,7 @@ describe("MlflowPageComponent", () => {
 
     await TestBed.configureTestingModule({
       imports: [MlflowPageComponent, HttpClientTestingModule],
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: auth },

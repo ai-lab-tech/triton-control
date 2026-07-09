@@ -48,6 +48,22 @@ describe("instances utils", () => {
     expect(mapped.deploymentBackend).toBe("python");
   });
 
+  it("DtoToInstance_MultipleDeploymentBackendsPresent_FormatsBackendList", () => {
+    const dto: TritonInstanceDTO & Record<string, unknown> = {
+      id: 46,
+      name: "ensemble",
+      url: "http://ensemble",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
+      health_live: true,
+      health_ready: true,
+      deployment_backend: "ensemble, python, vllm",
+    };
+    const mapped = dtoToInstance(dto);
+
+    expect(mapped.deploymentBackend).toBe("ensemble, python, vLLM");
+  });
+
   it("DtoToInstance_MetadataImageAndBackendPresent_UsesMetadataFallbacks", () => {
     const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 44,
@@ -78,7 +94,7 @@ describe("instances utils", () => {
       created_at: "2026-06-24T00:00:00Z",
       health_live: true,
       health_ready: true,
-      deployment_image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+      deployment_image: "nvcr.io/nvidia/tritonserver:26.06-py3",
     };
     const mapped = dtoToInstance(dto);
 

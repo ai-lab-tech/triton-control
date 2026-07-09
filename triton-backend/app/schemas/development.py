@@ -13,7 +13,7 @@ class CreateCodeServerRequest(SQLModel):
     """Request body for creating the caller's Development workspace."""
 
     name: str = "workspace"
-    image: str = "nvcr.io/nvidia/tritonserver:25.02-py3"
+    image: str = "nvcr.io/nvidia/tritonserver:26.06-py3"
     theme: Literal[
         "Default Dark+",
         "Default Light+",

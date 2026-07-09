@@ -1,0 +1,27 @@
+name: "preprocess"
+backend: "python"
+max_batch_size: 8
+
+input [
+  {
+    name: "IMAGE"
+    data_type: TYPE_UINT8
+    dims: [ 224, 224, 3 ]
+  }
+]
+
+output [
+  {
+    name: "NORMALIZED_IMAGE"
+    data_type: TYPE_FP32
+    dims: [ 3, 224, 224 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]
+

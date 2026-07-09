@@ -9,7 +9,7 @@ export const s3PageOpened = createAction(
 
 export const s3PageDataLoaded = createAction(
   "[Instances S3] Page Data Loaded",
-  props<{ instanceName: string; bucketName: string }>(),
+  props<{ instanceName: string; bucketName: string; prefix: string }>(),
 );
 
 export const s3PageDataLoadFailed = createAction(

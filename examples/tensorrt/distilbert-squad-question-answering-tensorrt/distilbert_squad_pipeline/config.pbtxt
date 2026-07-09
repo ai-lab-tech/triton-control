@@ -1,0 +1,110 @@
+name: "distilbert_squad_pipeline"
+platform: "ensemble"
+max_batch_size: 0
+
+input [
+  {
+    name: "QUESTION"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "CONTEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "ANSWER"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "SCORE"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+ensemble_scheduling {
+  step [
+    {
+      model_name: "preprocess"
+      model_version: 1
+      input_map {
+        key: "QUESTION"
+        value: "QUESTION"
+      }
+      input_map {
+        key: "CONTEXT"
+        value: "CONTEXT"
+      }
+      output_map {
+        key: "INPUT_IDS"
+        value: "INPUT_IDS"
+      }
+      output_map {
+        key: "ATTENTION_MASK"
+        value: "ATTENTION_MASK"
+      }
+      output_map {
+        key: "OFFSET_MAPPING"
+        value: "OFFSET_MAPPING"
+      }
+      output_map {
+        key: "CONTEXT_TEXT"
+        value: "CONTEXT_TEXT"
+      }
+    },
+    {
+      model_name: "distilbert_squad_trt"
+      model_version: 1
+      input_map {
+        key: "input_ids"
+        value: "INPUT_IDS"
+      }
+      input_map {
+        key: "attention_mask"
+        value: "ATTENTION_MASK"
+      }
+      output_map {
+        key: "start_logits"
+        value: "START_LOGITS"
+      }
+      output_map {
+        key: "end_logits"
+        value: "END_LOGITS"
+      }
+    },
+    {
+      model_name: "postprocess"
+      model_version: 1
+      input_map {
+        key: "CONTEXT_TEXT"
+        value: "CONTEXT_TEXT"
+      }
+      input_map {
+        key: "OFFSET_MAPPING"
+        value: "OFFSET_MAPPING"
+      }
+      input_map {
+        key: "START_LOGITS"
+        value: "START_LOGITS"
+      }
+      input_map {
+        key: "END_LOGITS"
+        value: "END_LOGITS"
+      }
+      output_map {
+        key: "ANSWER"
+        value: "ANSWER"
+      }
+      output_map {
+        key: "SCORE"
+        value: "SCORE"
+      }
+    }
+  ]
+}

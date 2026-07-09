@@ -14,7 +14,7 @@ describe("DevelopmentPageComponent", () => {
     namespace: "triton-control",
     statefulset_name: "code-1-workspace",
     service_name: "code-1-workspace-svc",
-    image: "nvcr.io/nvidia/tritonserver:25.02-py3",
+    image: "nvcr.io/nvidia/tritonserver:26.06-py3",
     url: "/api/development/3/proxy/",
     status: "creating",
     status_message: "Waiting for pod readiness.",

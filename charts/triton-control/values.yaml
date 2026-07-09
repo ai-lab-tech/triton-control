@@ -67,6 +67,13 @@ app:
 # Image used only by vLLM repository init containers and S3 sync sidecars.
 tritonDeployments:
   s3SyncImage: amazon/aws-cli:2.22.35
+  modelRepositoryEmptyDirSize: ""
+  s3SyncStagingEmptyDirSize: ""
+
+development:
+  codeServer:
+    # Pin code-server for reproducible Development workspaces.
+    version: "4.125.0"
 
 postgresql:
   enabled: true

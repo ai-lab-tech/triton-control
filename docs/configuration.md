@@ -51,6 +51,8 @@ enter a new value to replace it.
 | `ARGO_WORKFLOWS_SERVICE_NAME` | No | Helm-derived | Argo Server Service name shown in status responses. |
 | `ARGO_WORKFLOWS_BASE_PATH` | No | `/api/workflows/proxy/` | Browser-facing proxy path; must match Argo Server `baseHref`. |
 | `TRITON_DEPLOY_S3_SYNC_IMAGE` | No | `amazon/aws-cli:2.22.35` | Default image for vLLM S3 repository init containers and sidecars created by Add Deployment. For a host-run backend, set it in `triton-backend/.env` or the backend process environment. Helm sets it from `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use it. |
+| `TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE` | No | unset | Optional Kubernetes `emptyDir.sizeLimit` for the local `/models` volume used by vLLM init/sidecar repository sync. Helm sets it from `tritonDeployments.modelRepositoryEmptyDirSize`. |
+| `TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE` | No | unset | Optional Kubernetes `emptyDir.sizeLimit` for the `/staging` volume used by vLLM init/sidecar repository sync. Helm sets it from `tritonDeployments.s3SyncStagingEmptyDirSize`. |
 | `OIDC_CONFIG_SOURCE` | No | `db` | Selects OIDC source: `db` for application-managed settings, `env` for environment-managed settings. |
 | `OIDC_ENABLED` | No | `true` in `.env.example`, `false` in Compose/Helm defaults | Enables OIDC login when OIDC settings are valid. |
 | `OIDC_ISSUER` | In `env` mode | `https://identity.example.com/realms/triton` | OIDC issuer URL published by your identity provider. |

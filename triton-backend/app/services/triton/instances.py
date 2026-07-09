@@ -34,6 +34,7 @@ from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTr
 from app.services.access import ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
+from app.services.storage.s3 import discover_instance_repository_backends
 from app.services.triton.client import TritonService
 from app.services.triton.repository_snapshot import normalize_repository_models, repository_model_names
 
@@ -215,7 +216,7 @@ def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -
 
 def get_instance(session: Session, claims: dict[str, Any], instance_id: int) -> TritonInstanceDTO:
     instance = get_instance_or_404(session, instance_id, claims)
-    return entity_to_dto(instance)
+    return _entity_to_dto_with_repository_backends(instance)
 
 
 def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) -> None:
@@ -267,7 +268,13 @@ def get_instance_by_name(session: Session, claims: dict[str, Any], name: str) ->
     if not instance:
         raise NotFoundError("Instance not found")
     ensure_instance_access(session, claims, instance.name)
-    return entity_to_dto(instance)
+    return _entity_to_dto_with_repository_backends(instance)
+
+
+def _entity_to_dto_with_repository_backends(instance: Any) -> TritonInstanceDTO:
+    dto = entity_to_dto(instance)
+    dto.deployment_backend = discover_instance_repository_backends(instance)
+    return dto
 
 
 def _format_triton_unavailable_detail(url: str, error: Any) -> str:

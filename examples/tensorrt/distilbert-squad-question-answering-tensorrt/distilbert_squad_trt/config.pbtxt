@@ -1,0 +1,36 @@
+name: "distilbert_squad_trt"
+platform: "tensorrt_plan"
+max_batch_size: 0
+
+input [
+  {
+    name: "input_ids"
+    data_type: TYPE_INT32
+    dims: [ 1, 384 ]
+  },
+  {
+    name: "attention_mask"
+    data_type: TYPE_INT32
+    dims: [ 1, 384 ]
+  }
+]
+
+output [
+  {
+    name: "start_logits"
+    data_type: TYPE_FP32
+    dims: [ 1, 384 ]
+  },
+  {
+    name: "end_logits"
+    data_type: TYPE_FP32
+    dims: [ 1, 384 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]

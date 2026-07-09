@@ -69,7 +69,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   @ViewChild("codeServerFrame") private codeServerFrame?: ElementRef<HTMLIFrameElement>;
 
   name = "workspace";
-  image = "nvcr.io/nvidia/tritonserver:25.02-py3";
+  image = "nvcr.io/nvidia/tritonserver:26.06-py3";
   theme: CreateCodeServerRequest["theme"] = "Default Dark+";
   storageSize = "20Gi";
   cpu = "";
@@ -371,8 +371,8 @@ export class DevelopmentPageComponent implements OnDestroy {
 
   imageLabel(image: string): string {
     const trimmed = image.trim();
-    if (trimmed === "nvcr.io/nvidia/tritonserver:25.02-py3") {
-      return "Triton SDK 25.02";
+    if (trimmed === "nvcr.io/nvidia/tritonserver:26.06-py3") {
+      return "Triton 26.06";
     }
     return trimmed.split("/").pop() || trimmed;
   }

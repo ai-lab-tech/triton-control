@@ -341,6 +341,18 @@ vLLM S3 repository handling:
   or timestamps, so it can run as Triton Control's non-root workload user.
 - Configure the worker image with Helm value
   `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use this image.
+- Large vLLM repositories may need larger local sync volumes. Configure
+  `/models` with `tritonDeployments.modelRepositoryEmptyDirSize` and `/staging`
+  with `tritonDeployments.s3SyncStagingEmptyDirSize`. Each volume should fit the
+  unpacked model repository plus a little headroom.
+
+Example:
+
+```yaml
+tritonDeployments:
+  modelRepositoryEmptyDirSize: 12Gi
+  s3SyncStagingEmptyDirSize: 12Gi
+```
 
 S3 deployment profiles:
 

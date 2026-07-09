@@ -28,6 +28,9 @@ from app.services.access import get_instance_or_404
 from app.services.triton.client import TritonService
 from app.services.triton.config import extract_triton_error_detail
 
+GENERATE_ENDPOINT_BACKENDS = {"vllm", "tensorrtllm", "tensorrt_llm", "trtllm"}
+TENSORRT_LLM_GENERATE_BACKENDS = {"tensorrtllm", "tensorrt_llm", "trtllm"}
+
 
 async def list_models(
     session: Session,
@@ -151,7 +154,7 @@ async def infer_model(
     source = "stats" if use_stats else "metrics"
     stats_before = await triton_service.collect_inference_stats_snapshot() if use_stats else None
     try:
-        if _uses_generate_endpoint_backend(instance):
+        if await _uses_generate_endpoint_backend(triton_service, model_name, version):
             triton_response = await triton_service.generate_model_raw(
                 model_name,
                 payload_bytes,
@@ -222,19 +225,58 @@ def _encode_metrics_header(metrics: dict[str, Any]) -> str:
     return base64.urlsafe_b64encode(payload).decode("ascii")
 
 
-def _uses_generate_endpoint_backend(instance: Any) -> bool:
+async def _uses_generate_endpoint_backend(
+    triton_service: TritonService,
+    model_name: str,
+    version: str,
+) -> bool:
+    try:
+        config = await triton_service.get_model_config(model_name, version)
+    except Exception:
+        return False
+
+    return _model_config_uses_generate_endpoint(config)
+
+
+def _model_config_uses_generate_endpoint(config: Any) -> bool:
     parts: list[str] = []
-    metadata = getattr(instance, "server_metadata", None)
-    if isinstance(metadata, dict):
-        parts.extend(str(value) for value in metadata.values() if value is not None)
-    for model in getattr(instance, "repository_models", None) or []:
-        if isinstance(model, dict):
-            parts.extend(str(value) for value in model.values() if value is not None)
-    deployment_log = getattr(instance, "deployment_log", None)
-    if deployment_log:
-        parts.append(str(deployment_log))
-    haystack = " ".join(parts).lower()
-    return any(token in haystack for token in ("vllm", "tensorrtllm", "tensorrt_llm", "trtllm"))
+    if isinstance(config, dict):
+        for key in ("backend", "platform"):
+            value = config.get(key)
+            if value is not None:
+                parts.append(str(value))
+        parameters = config.get("parameters")
+        if isinstance(parameters, dict):
+            for value in parameters.values():
+                if isinstance(value, dict):
+                    string_value = value.get("string_value")
+                    if string_value is not None:
+                        parts.append(str(string_value))
+                elif value is not None:
+                    parts.append(str(value))
+    normalized_parts = {_normalize_backend(part) for part in parts}
+    if "vllm" in normalized_parts:
+        return True
+    if normalized_parts & TENSORRT_LLM_GENERATE_BACKENDS:
+        return _model_config_has_input(config, "text_input")
+    return False
+
+
+def _model_config_has_input(config: Any, input_name: str) -> bool:
+    if not isinstance(config, dict):
+        return False
+    for item in config.get("input") or config.get("inputs") or []:
+        if isinstance(item, dict) and str(item.get("name") or "") == input_name:
+            return True
+    return False
+
+
+def _is_generate_backend(value: str) -> bool:
+    return _normalize_backend(value) in GENERATE_ENDPOINT_BACKENDS
+
+
+def _normalize_backend(value: str) -> str:
+    return value.lower().replace("-", "_").replace(" ", "_")
 
 
 def _is_metrics_snapshot_available(snapshot: dict[str, Any] | None) -> bool:

@@ -1,10 +1,13 @@
 import { TestBed } from "@angular/core/testing";
+import { MonacoEditorModule } from "ngx-monaco-editor-v2";
 import { InstanceModelMonacoEditorComponent } from "./instance-model-monaco-editor.component";
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 
 describe("InstanceModelMonacoEditorComponent", () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [InstanceModelMonacoEditorComponent],
+      imports: [InstanceModelMonacoEditorComponent, MonacoEditorModule],
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
   });
 

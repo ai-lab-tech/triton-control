@@ -6,6 +6,7 @@ requests) are replaced with mocks so the tests run without any live
 infrastructure.
 """
 
+import itertools
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -31,7 +32,10 @@ from app.api.s3_api import (
     update_instance_s3,
 )
 from app.services.storage import s3_client
-from app.services.storage.s3 import require_s3_client as _build_s3_client
+from app.services.storage.s3 import (
+    discover_instance_repository_backends,
+    require_s3_client as _build_s3_client,
+)
 from app.api.dashboard_api import list_dashboard_alerts
 from app.db.entities import DashboardAlertEntity, TritonInstanceEntity, UserEntity
 from app.schemas import CreateTritonInstanceRequest, UpdateInstanceS3Request, UpdateTritonInstanceRequest
@@ -157,6 +161,29 @@ class _S3ConfigDiscoveryClient(_S3Client):
         return {"Body": _S3Body(b'name: "opt125m"\nbackend: "vllm"\n')}
 
 
+class _S3MultiConfigClient(_S3Client):
+    def list_objects_v2(self, **kwargs):
+        self.list_calls.append(kwargs)
+        return {
+            "Contents": [
+                {"Key": "models/ensemble/config.pbtxt", "Size": 30},
+                {"Key": "models/preprocess/config.pbtxt", "Size": 30},
+                {"Key": "models/classifier/config.pbtxt", "Size": 30},
+                {"Key": "models/classifier/1/model.onnx", "Size": 30},
+            ],
+            "IsTruncated": False,
+        }
+
+    def get_object(self, **kwargs):
+        self.get_calls.append(kwargs)
+        payloads = {
+            "models/ensemble/config.pbtxt": b'name: "ensemble"\nplatform: "ensemble"\n',
+            "models/preprocess/config.pbtxt": b'name: "preprocess"\nbackend: "python"\n',
+            "models/classifier/config.pbtxt": b'name: "classifier"\nplatform: "onnxruntime_onnx"\n',
+        }
+        return {"Body": _S3Body(payloads[kwargs["Key"]])}
+
+
 class _BodyRequest:
     def __init__(self, payload: bytes, headers=None):
         self._payload = payload
@@ -193,6 +220,17 @@ class ApiHelperTests(unittest.TestCase):
         # Act / Assert
         with self.assertRaises(BadRequestError):
             _build_s3_client(entity)
+
+    def test_DiscoverRepositoryBackends_MultipleConfigs_ReturnsUniqueValues(self):
+        # Arrange
+        entity = self._instance()
+
+        # Act
+        with patch("app.services.storage.s3.build_s3_client", return_value=_S3MultiConfigClient()):
+            backends = discover_instance_repository_backends(entity)
+
+        # Assert
+        self.assertEqual(backends, "onnxruntime_onnx, ensemble, python")
 
     def test_MetricsUrl_BaseEndpointProvided_AppendsMetricsPath(self):
         # Act
@@ -896,8 +934,9 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                     headers={"content-type": "application/json"},
                 )
             ),
+            get_model_config=AsyncMock(return_value={"backend": "python"}),
             collect_inference_stats_snapshot=AsyncMock(
-                side_effect=[
+                side_effect=itertools.cycle([
                     {
                         "series": {
                             "m|1": {
@@ -988,10 +1027,40 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                         },
                         "error": None,
                     },
-                ],
+                    {
+                        "series": {
+                            "m|1": {
+                                "model": "m",
+                                "version": "1",
+                                "request_count": 4,
+                                "total_us": 7000,
+                                "queue_us": 700,
+                                "input_us": 700,
+                                "infer_us": 5200,
+                                "output_us": 400,
+                            }
+                        },
+                        "error": None,
+                    },
+                    {
+                        "series": {
+                            "m|1": {
+                                "model": "m",
+                                "version": "1",
+                                "request_count": 5,
+                                "total_us": 9000,
+                                "queue_us": 900,
+                                "input_us": 900,
+                                "infer_us": 6700,
+                                "output_us": 500,
+                            }
+                        },
+                        "error": None,
+                    },
+                ]),
             ),
             collect_inference_metrics_snapshot=AsyncMock(
-                side_effect=[
+                side_effect=itertools.cycle([
                     {
                         "series": {
                             "m|1": {
@@ -1022,7 +1091,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                         },
                         "error": None,
                     },
-                ],
+                ]),
             ),
             inference_metrics_delta=TritonService.inference_metrics_delta,
         )
@@ -1038,6 +1107,30 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         triton_service.assert_not_called()
 
         # Arrange / Act
+        instance.deployment_log = "Image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3"
+        request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
+        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+            "app.services.access.ensure_instance_access", return_value=None
+        ):
+            response = await infer_instance_model(
+                1,
+                "m",
+                "1",
+                {"inputs": []},
+                request,
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        service.infer_model_raw.assert_awaited_once_with("m", "1", b'{"inputs":[]}', "application/json")
+        service.generate_model_raw.assert_not_awaited()
+
+        # Arrange / Act
+        service.infer_model_raw.reset_mock()
+        service.generate_model_raw.reset_mock()
+        service.get_model_config.return_value = {"platform": "tensorrt_plan"}
         request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
         with patch("app.services.triton.models.TritonService", return_value=service), patch(
             "app.services.access.ensure_instance_access", return_value=None
@@ -1059,6 +1152,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange / Act
         instance.server_metadata = {"backend": "vllm"}
+        service.get_model_config.return_value = {"backend": "vllm"}
         request = _BodyRequest(
             b'{"text_input":"hello","parameters":{"stream":false}}',
             headers={"content-type": "application/json"},
@@ -1086,6 +1180,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange / Act
         instance.server_metadata = {"backend": "tensorrt_llm"}
+        service.get_model_config.return_value = {"backend": "tensorrt_llm", "input": [{"name": "text_input"}]}
         request = _BodyRequest(
             b'{"text_input":"hello","sampling_param_max_tokens":50}',
             headers={"content-type": "application/json"},
@@ -1110,6 +1205,37 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             b'{"text_input":"hello","sampling_param_max_tokens":50}',
             "application/json",
         )
+
+        # Arrange / Act
+        service.generate_model_raw.reset_mock()
+        service.infer_model_raw.reset_mock()
+        instance.server_metadata = {"backend": "tensorrt_llm"}
+        service.get_model_config.return_value = {
+            "backend": "tensorrt_llm",
+            "input": [
+                {"name": "input_ids"},
+                {"name": "input_lengths"},
+                {"name": "request_output_len"},
+            ],
+        }
+        request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
+        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+            "app.services.access.ensure_instance_access", return_value=None
+        ):
+            response = await infer_instance_model(
+                1,
+                "m",
+                "1",
+                {"inputs": []},
+                request,
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        service.infer_model_raw.assert_awaited_once_with("m", "1", b'{"inputs":[]}', "application/json")
+        service.generate_model_raw.assert_not_awaited()
 
         # Act / Assert
         with self.assertRaises(HTTPException) as exc:
@@ -1160,11 +1286,17 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             s3_access_key="ak",
             s3_secret_key_enc="enc",
             s3_prefix="",
+            server_metadata={"version": "2.55.0"},
+            health_live=True,
+            health_ready=True,
         )
         session = _FakeSession(get_map={1: instance})
         client = _S3Client()
         # Act
-        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch("app.services.storage.s3.validate_triton_config_pbtxt", return_value=None):
+        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch(
+            "app.services.storage.s3.validate_triton_config_pbtxt",
+            return_value=None,
+        ) as validate_config:
             result = put_instance_s3_content(
                 1,
                 path="config.pbtxt",
@@ -1177,6 +1309,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         # Assert
         self.assertEqual(result.path, "/config.pbtxt")
         self.assertEqual(client.put_calls[0]["ContentType"], "text/plain")
+        validate_config.assert_called_once_with(b'name: "x"', "2.55.0")
 
         # Act / Assert
         with self.assertRaises(HTTPException) as exc:
@@ -1189,6 +1322,45 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
                 claims={"role": "viewer"},
             )
         self.assertEqual(exc.exception.status_code, 403)
+
+    async def test_PutInstanceS3Content_UnhealthyInstanceWithoutVersion_SkipsConfigValidation(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="gpu-a",
+            model_names=[],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="",
+            server_metadata=None,
+            health_live=False,
+            health_ready=False,
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3Client()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client), patch(
+            "app.services.storage.s3.validate_triton_config_pbtxt",
+            return_value=None,
+        ) as validate_config:
+            result = put_instance_s3_content(
+                1,
+                path="config.pbtxt",
+                content=b'name: "x"',
+                content_type="text/plain",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(result.path, "/config.pbtxt")
+        validate_config.assert_not_called()
 
     async def test_PutInstanceS3Content_ConfigPbtxtMissingAtGuessedPath_UpdatesDiscoveredRepositoryConfig(self):
         # Arrange
@@ -1256,6 +1428,40 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.size, 3)
         self.assertEqual(client.put_calls[0]["Body"], b"\x00\xff\x01")
         self.assertEqual(client.put_calls[0]["ContentType"], "application/octet-stream")
+
+    async def test_PutInstanceS3Content_FolderMarker_PreservesTrailingSlash(self):
+        # Arrange
+        instance = TritonInstanceEntity(
+            id=1,
+            url="http://triton",
+            name="gpu-a",
+            model_names=[],
+            created_at=datetime.now(timezone.utc),
+            s3_enabled=True,
+            s3_endpoint="http://minio:9000",
+            s3_bucket="bucket",
+            s3_access_key="ak",
+            s3_secret_key_enc="enc",
+            s3_prefix="models/",
+        )
+        session = _FakeSession(get_map={1: instance})
+        client = _S3Client()
+
+        # Act
+        with patch("app.services.storage.s3.require_s3_client", return_value=client):
+            result = put_instance_s3_content(
+                1,
+                path="resnet/",
+                content=b"",
+                content_type="application/x-directory",
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(result.path, "/resnet/")
+        self.assertEqual(client.put_calls[0]["Key"], "models/resnet/")
+        self.assertEqual(client.put_calls[0]["ContentType"], "application/x-directory")
 
     async def test_DeleteInstanceS3Content_FileOrFolderPath_DeletesExpectedObjects(self):
         # Arrange

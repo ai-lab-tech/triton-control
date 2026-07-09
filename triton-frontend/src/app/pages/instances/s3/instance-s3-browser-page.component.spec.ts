@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap } from "@angular/router";
 import { of, Subject, throwError } from "rxjs";
@@ -35,6 +36,7 @@ describe("InstanceS3BrowserPageComponent", () => {
     instancesS3: {
       instanceName: "",
       bucketName: "",
+      prefix: "",
       currentPath: "/",
       entries: [],
       knownFolderPaths: ["/"],
@@ -86,6 +88,7 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     await TestBed.configureTestingModule({
       imports: [InstanceS3BrowserPageComponent],
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [
         provideMockStore({ initialState: s3InitialState }),
         provideMockActions(() => actionsSubject),
@@ -124,6 +127,25 @@ describe("InstanceS3BrowserPageComponent", () => {
     const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
     const component = fixture.componentInstance;
     expect(component.breadcrumbs[0].label).toBe("root");
+  });
+
+  it("PrefixLabel_ConfiguredOrEmptyPrefix_ReturnsLocationText", () => {
+    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.prefixLabel()).toBe("bucket root");
+    expect(component.repositoryRootPath()).toBe("No S3 location configured");
+
+    mockStore.setState({
+      instancesS3: {
+        ...s3InitialState.instancesS3,
+        bucketName: "triton-test",
+        prefix: "cancer",
+      },
+    });
+
+    expect(component.prefixLabel()).toBe("cancer");
+    expect(component.repositoryRootPath()).toBe("s3://triton-test/cancer");
   });
 
   it("TreeNodes_KnownFolderPathsSet_BuildsHierarchyNodes", () => {

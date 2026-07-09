@@ -124,6 +124,36 @@ class DeploymentServiceTests(unittest.TestCase):
         # Assert
         self.assertEqual(request.requirements_txt, "numpy===custom-build")
 
+    def test_CreateDeploymentRequest_MemoryNumber_NormalizesToGiQuantity(self) -> None:
+        # Act
+        request = CreateDeploymentRequest(
+            deployment_name="triton",
+            image="custom/image:latest",
+            s3_url="s3://bucket",
+            s3_access_key="ak",
+            s3_secret_key="secret",
+            memory=16,
+            memory_limit="16 Gi",
+        )
+
+        # Assert
+        self.assertEqual(request.memory, "16Gi")
+        self.assertEqual(request.memory_limit, "16Gi")
+
+    def test_CreateDeploymentRequest_InvalidMemoryQuantity_RaisesValidationError(self) -> None:
+        # Act / Assert
+        with self.assertRaises(ValueError) as raised:
+            CreateDeploymentRequest(
+                deployment_name="triton",
+                image="custom/image:latest",
+                s3_url="s3://bucket",
+                s3_access_key="ak",
+                s3_secret_key="secret",
+                memory="16 GB",
+            )
+
+        self.assertIn("memory must be a positive Gi number", str(raised.exception))
+
     def test_CreateDeploymentRequest_S3Url_HttpsWithoutPrefix_NormalizesToS3Scheme(self) -> None:
         # Act
         request = CreateDeploymentRequest(
@@ -389,15 +419,16 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("aws s3 sync", sync["args"][0])
         sync_env = {item["name"]: item.get("value") for item in sync["env"]}
         self.assertEqual(sync_env["S3_SOURCE"], "s3://triton-models")
-        self.assertIn("REPOSITORY_NEXT=/tmp/.s3-sync-next", sync["args"][0])
-        self.assertIn('mkdir -p "$REPOSITORY_NEXT/$model_name"', sync["args"][0])
-        self.assertIn('cp -R "$source_dir/." "$REPOSITORY_NEXT/$model_name/"', sync["args"][0])
-        self.assertIn('cp -R "$REPOSITORY_NEXT/." /models/', sync["args"][0])
+        self.assertIn("REPOSITORY_SOURCE=/staging", sync["args"][0])
+        self.assertIn('cp -R "$REPOSITORY_SOURCE/." /models/', sync["args"][0])
         self.assertNotIn("cp -au", sync["args"][0])
         self.assertIn("model.json", sync["args"][0])
-        self.assertIn("final_dir=/models${dir#/tmp/.s3-sync-next}", sync["args"][0])
+        self.assertIn("final_dir=/models${dir#$REPOSITORY_SOURCE}", sync["args"][0])
         self.assertIn('escaped_dir=$(printf "%s\\n" "$final_dir" | sed "s/[\\\\&#]/\\\\\\\\&/g")', sync["args"][0])
         self.assertIn("${escaped_dir}/", sync["args"][0])
+        self.assertIn("config.pbtxt", sync["args"][0])
+        self.assertIn("engine_dir|gpt_model_path|encoder_model_path|tokenizer_dir", sync["args"][0])
+        self.assertIn('#\\1${escaped_dir}/\\2\\3#', sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
         # Arrange
@@ -567,9 +598,9 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("while sleep 9", sync_script)
         self.assertIn("--delete", sync_script)
         self.assertIn("/models/", sync_script)
-        self.assertIn('diff -qr "$REPOSITORY_CURRENT" "$REPOSITORY_NEXT"', sync_script)
+        self.assertIn('diff -qr /models "$REPOSITORY_SOURCE"', sync_script)
         self.assertIn("S3 model repository unchanged", sync_script)
-        self.assertNotIn("/models/.s3-sync-next", sync_script)
+        self.assertNotIn(".s3-sync-next", sync_script)
         self.assertIn("--model-control-mode=explicit", pod_spec["containers"][0]["args"][0])
 
     def test_Manifests_TritonContainer_SetsUserAndTorchCacheEnvironment(self) -> None:
@@ -612,6 +643,30 @@ class DeploymentServiceTests(unittest.TestCase):
                 k8s._repository_sync_image(overridden),
                 "registry.example/s3-sync:request",
             )
+
+    def test_Manifests_VllmSync_ConfiguredEmptyDirSizeLimits(self) -> None:
+        request = self._request().model_copy(update={"repository_sync_mode": "sidecar"})
+        with patch.dict(
+            "os.environ",
+            {
+                "TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE": "20Gi",
+                "TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE": "20Gi",
+            },
+        ):
+            manifests = k8s._manifests(
+                request,
+                "triton-minio",
+                "triton-minio",
+                "triton-minio-service",
+                "triton-minio-s3-credentials",
+                "triton-image",
+            )
+
+        volumes = {
+            volume["name"]: volume for volume in manifests[1]["spec"]["template"]["spec"]["volumes"]
+        }
+        self.assertEqual(volumes["model-repository"]["emptyDir"], {"sizeLimit": "20Gi"})
+        self.assertEqual(volumes["s3-sync-staging"]["emptyDir"], {"sizeLimit": "20Gi"})
 
     def test_Manifests_RequirementsProvided_InstallsPackagesBeforeTritonStart(self) -> None:
         # Arrange

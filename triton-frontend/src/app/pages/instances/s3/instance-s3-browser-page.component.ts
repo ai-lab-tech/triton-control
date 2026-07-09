@@ -41,6 +41,7 @@ import {
   selectS3UploadLoading,
   selectS3InstanceName,
   selectS3KnownFolderPaths,
+  selectS3Prefix,
 } from "../../../state/instances-s3/instances-s3.selectors";
 import { displayFailure, displaySuccess } from "../../../state/shared/shared.actions";
 import { AuthStore } from "../../../shared/auth/auth.store";
@@ -87,6 +88,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   // Store state
   readonly instanceName = toSignal(this.store.select(selectS3InstanceName), { initialValue: "" });
   readonly bucketName = toSignal(this.store.select(selectS3BucketName), { initialValue: "" });
+  readonly prefix = toSignal(this.store.select(selectS3Prefix), { initialValue: "" });
   readonly currentPath = toSignal(this.store.select(selectS3CurrentPath), { initialValue: "/" });
   readonly entries = toSignal(this.store.select(selectS3Entries), { initialValue: [] });
   readonly knownFolderPaths = toSignal(this.store.select(selectS3KnownFolderPaths), {
@@ -112,6 +114,15 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
   );
   readonly canWriteInstances = this.auth.canWriteInstances;
+  readonly prefixLabel = computed(() => this.prefix().trim() || "bucket root");
+  readonly repositoryRootPath = computed(() => {
+    const bucket = this.bucketName().trim();
+    if (!bucket) {
+      return "No S3 location configured";
+    }
+    const prefix = this.prefix().trim();
+    return prefix ? `s3://${bucket}/${prefix}` : `s3://${bucket}`;
+  });
   readonly uploadStatusLabel = computed(() => {
     if (this.readingUploadFile) {
       return `Reading ${this.readingUploadFileName || "file"}...`;

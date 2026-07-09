@@ -37,10 +37,11 @@ describe("instancesS3Reducer", () => {
   it("S3PageDataLoaded_LoadingState_SetsInstanceNameAndBucket", () => {
     const state = instancesS3Reducer(
       { ...initialInstancesS3State, pageLoading: true },
-      s3PageDataLoaded({ instanceName: "node-1", bucketName: "my-bucket" }),
+      s3PageDataLoaded({ instanceName: "node-1", bucketName: "my-bucket", prefix: "repo" }),
     );
     expect(state.instanceName).toBe("node-1");
     expect(state.bucketName).toBe("my-bucket");
+    expect(state.prefix).toBe("repo");
   });
 
   it("S3PageDataLoadFailed_LoadingState_ClearsPageLoading", () => {

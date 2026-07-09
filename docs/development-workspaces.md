@@ -31,7 +31,7 @@ Open **Development** in the sidebar and configure the workspace:
 | Field | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | Workspace name | Yes | `workspace` | Name used to derive the user's Kubernetes resource names. |
-| Triton development image | Yes | `nvcr.io/nvidia/tritonserver:25.02-py3` | Container image used for the workspace pod. |
+| Triton development image | Yes | `nvcr.io/nvidia/tritonserver:26.06-py3` | Container image used for the workspace pod. |
 | Image already has Development installed | No | disabled | Uses the `code-server` binary from the image instead of installing a standalone runtime during startup. Triton Control starts it on `0.0.0.0:8080`. |
 | Workspace storage | Yes | `20Gi` | Persistent volume claim size mounted at `/workspace`. |
 | VS Code theme | Yes | `Default Dark+` | Initial code-server color theme. |

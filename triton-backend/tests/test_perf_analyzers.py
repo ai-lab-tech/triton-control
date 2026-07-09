@@ -19,7 +19,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
     def _request(self) -> InstallPerfAnalyzerRequest:
         return InstallPerfAnalyzerRequest(
             installation_name="perf analyzer",
-            image="nvcr.io/nvidia/tritonserver:25.02-py3-sdk",
+            image="nvcr.io/nvidia/tritonserver:26.06-py3-sdk",
         )
 
     def test_InstallPerfAnalyzer_NameProvided_AppliesNamedResources(self) -> None:
@@ -69,7 +69,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             [{"name": "perf-analyzer-pull-secret"}],
         )
         container = deployment["spec"]["template"]["spec"]["containers"][0]
-        self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:25.02-py3-sdk")
+        self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3-sdk")
         self.assertEqual(container["command"], ["/bin/bash", "-c"])
         self.assertIn("sleep infinity", container["args"][0])
         self.assertEqual(

@@ -3114,7 +3114,7 @@
           "image": {
             "type": "string",
             "title": "Image",
-            "default": "nvcr.io/nvidia/tritonserver:25.02-py3"
+            "default": "nvcr.io/nvidia/tritonserver:26.06-py3"
           },
           "theme": {
             "type": "string",
@@ -5004,6 +5004,11 @@
               }
             ],
             "title": "Deployment Secret Name"
+          },
+          "deployment_backend": {
+            "type": "string",
+            "title": "Deployment Backend",
+            "default": ""
           },
           "deployment_log": {
             "type": "string",

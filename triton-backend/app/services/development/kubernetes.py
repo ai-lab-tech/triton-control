@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import shlex
 import sys
 import zipfile
 from pathlib import Path
@@ -18,6 +19,8 @@ from app.schemas import CreateCodeServerRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CODE_SERVER_VERSION = "4.125.0"
 
 
 def _diag(event: str, **fields: Any) -> None:
@@ -228,11 +231,13 @@ def _statefulset_manifest(
             "fi; "
         )
     else:
+        version = _code_server_version()
+        version_arg = f"--version {shlex.quote(version)} " if version else ""
         binary_setup = (
             "CODE_SERVER_BIN=$CODE_SERVER_RUNTIME/bin/code-server; "
             "if [ ! -x \"$CODE_SERVER_BIN\" ]; then "
             "curl -fsSL https://code-server.dev/install.sh | "
-            "sh -s -- --method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"; "
+            f"sh -s -- {version_arg}--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"; "
             "fi; "
         )
 
@@ -409,6 +414,10 @@ def _statefulset_manifest(
         "metadata": {"name": statefulset_name, "namespace": namespace},
         "spec": pod_spec,
     }
+
+
+def _code_server_version() -> str:
+    return os.getenv("DEVELOPMENT_CODE_SERVER_VERSION", _DEFAULT_CODE_SERVER_VERSION).strip()
 
 
 def _triton_deploy_extension_configmap(namespace: str, statefulset_name: str) -> dict[str, Any]:

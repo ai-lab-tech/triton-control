@@ -1,0 +1,12 @@
+name: "phi3_mini_4k_instruct"
+backend: "vllm"
+
+# vLLM owns GPU placement. KIND_MODEL matches NVIDIA's vLLM backend sample
+# layout and lets the vLLM engine manage the CUDA device.
+instance_group [
+  {
+    count: 1
+    kind: KIND_MODEL
+  }
+]
+

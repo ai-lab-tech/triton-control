@@ -1,0 +1,32 @@
+name: "breast_cancer_classifier"
+backend: "python"
+max_batch_size: 32
+
+input [
+  {
+    name: "FEATURES"
+    data_type: TYPE_FP32
+    dims: [ 30 ]
+  }
+]
+
+output [
+  {
+    name: "CLASS_ID"
+    data_type: TYPE_INT64
+    dims: [ 1 ]
+  },
+  {
+    name: "PROBABILITIES"
+    data_type: TYPE_FP32
+    dims: [ 2 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]
+

@@ -81,6 +81,12 @@
   background: rgba(15, 23, 42, 0.06);
 }
 
+.location-summary {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
 .explorer-main {
   display: flex;
   flex-direction: column;

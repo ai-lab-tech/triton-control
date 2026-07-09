@@ -17,6 +17,10 @@ let outputChannel;
 let actionsProvider;
 let repositoryRefreshTimer;
 
+const DEFAULT_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-py3";
+const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3";
+const TRTLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
+
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
@@ -564,6 +568,14 @@ async function collectSimpleUploadForm(initial) {
   if (!modelName) return null;
   values.modelName = modelName;
 
+  const requirementsTxt = await promptValue(
+    "Extra Python Packages (requirements.txt, optional)",
+    values.requirementsTxt,
+    false,
+  );
+  if (requirementsTxt === undefined) return null;
+  values.requirementsTxt = requirementsTxt;
+
   const forcePathStyle = await vscode.window.showQuickPick(
     [
       { label: "Path-style S3", value: true },
@@ -591,7 +603,7 @@ async function collectSimpleUploadForm(initial) {
   );
   if (!modelControl) return null;
   values.modelControlMode = modelControl.value;
-  values.repositorySyncMode = values.detectedBackend === "vllm" ? "sidecar" : "direct";
+  values.repositorySyncMode = usesSyncedRepositoryBackend(values.detectedBackend) ? "sidecar" : "direct";
   values.repositoryPollSecs = 15;
 
   return normalizeForm(values);
@@ -642,7 +654,7 @@ async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const s3x = vscode.workspace.getConfiguration("s3x");
   const detectedModelName = detectModelName(sourceFolder);
-  const detectedBackend = detectModelBackend(sourceFolder);
+  const detectedBackend = detectModelBackendOrPlatform(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
   if (!modelName) {
     return null;
@@ -652,7 +664,7 @@ async function initialFormValues(sourceFolder) {
   const initial = {
     sourceFolder,
     deploymentName,
-    image: cfg.get("tritonImage") || "nvcr.io/nvidia/tritonserver:25.02-py3",
+    image: defaultImageForBackend(detectedBackend),
     endpoint,
     bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
@@ -664,17 +676,18 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
+    requirementsTxt: "",
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
-    repositorySyncMode: detectedBackend === "vllm" ? "sidecar" : "direct",
+    repositorySyncMode: usesSyncedRepositoryBackend(detectedBackend) ? "sidecar" : "direct",
     repositoryPollSecs: 15,
     modelName,
     profileId: "",
     profileName: "",
     cpu: "2",
     memory: "4Gi",
-    gpuCount: "1",
+    gpuCount: "0",
   };
   return initial;
 }
@@ -696,12 +709,14 @@ function detectModelName(sourceFolder) {
   return path.basename(path.dirname(configPath));
 }
 
-function detectModelBackend(sourceFolder) {
+function detectModelBackendOrPlatform(sourceFolder) {
   const configPath = findConfigPbtxt(sourceFolder);
   if (!configPath) return "";
   try {
     const config = fs.readFileSync(configPath, "utf8");
-    return config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase() || "";
+    const backend = config.match(/(?:^|\n)\s*backend\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase();
+    const platform = config.match(/(?:^|\n)\s*platform\s*:\s*"([^"]+)"/)?.[1]?.trim().toLowerCase();
+    return backend || platform || "";
   } catch {
     return "";
   }
@@ -712,10 +727,42 @@ function backendLabel(value) {
   if (backend === "vllm") {
     return "vLLM model backend";
   }
+  if (backend === "pytorch_libtorch") {
+    return "PyTorch/LibTorch platform";
+  }
+  if (backend === "onnxruntime_onnx") {
+    return "ONNX Runtime platform";
+  }
+  if (backend === "tensorrt_plan") {
+    return "TensorRT plan platform";
+  }
+  if (backend === "ensemble") {
+    return "Ensemble platform";
+  }
   if (backend) {
     return `${backend} model backend`;
   }
-  return "No backend in config.pbtxt";
+  return "No backend or platform in config.pbtxt";
+}
+
+function defaultImageForBackend(value) {
+  const backend = String(value || "").trim().toLowerCase();
+  if (backend === "vllm") {
+    return VLLM_TRITON_IMAGE;
+  }
+  if (isTensorRtLlmBackend(backend)) {
+    return TRTLLM_TRITON_IMAGE;
+  }
+  return DEFAULT_TRITON_IMAGE;
+}
+
+function usesSyncedRepositoryBackend(value) {
+  const backend = String(value || "").trim().toLowerCase();
+  return backend === "vllm" || isTensorRtLlmBackend(backend);
+}
+
+function isTensorRtLlmBackend(value) {
+  return ["tensorrtllm", "tensorrt_llm", "trtllm"].includes(String(value || "").trim().toLowerCase());
 }
 
 function findConfigPbtxt(sourceFolder) {
@@ -781,7 +828,6 @@ async function saveS3Settings(values) {
   await cfg.update("s3Region", values.region, target);
   await cfg.update("s3ForcePathStyle", forcePathStyle, target);
   await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
-  await cfg.update("tritonImage", values.image, target);
   await saveS3xSettingsIfAvailable(values, forcePathStyle, target);
 }
 
@@ -821,6 +867,7 @@ function normalizeForm(form) {
     region: String(form.region || "us-east-1").trim() || "us-east-1",
     forcePathStyle: effectiveForcePathStyle(endpoint, !!form.forcePathStyle),
     s3CaCertificate: String(form.s3CaCertificate || "").trim(),
+    requirementsTxt: String(form.requirementsTxt || "").trim(),
     detectedBackend: String(form.detectedBackend || "").trim().toLowerCase(),
     modelControlMode:
       repositorySyncMode === "init" ? "explicit" : form.modelControlMode === "poll" ? "poll" : "explicit",
@@ -916,8 +963,8 @@ function repositoryLayout(sourceFolder, modelName) {
 
 async function putS3Object(form, key, filePath) {
   const endpoint = new URL(form.endpoint);
-  const body = fs.readFileSync(filePath);
-  const payloadHash = sha256Hex(body);
+  const fileSize = fs.statSync(filePath).size;
+  const payloadHash = await sha256FileHex(filePath);
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
   const pathName = form.forcePathStyle
     ? `/${encodeURIComponent(form.bucket)}/${encodedKey}`
@@ -949,9 +996,9 @@ async function putS3Object(form, key, filePath) {
     headers: {
       ...headers,
       authorization,
-      "content-length": String(body.length),
+      "content-length": String(fileSize),
     },
-    body,
+    body: fs.createReadStream(filePath),
     tlsRejectUnauthorized: false,
   });
 }
@@ -1022,6 +1069,11 @@ function sendHttpRequest(endpoint, request) {
       },
     );
     req.on("error", reject);
+    if (request.body && typeof request.body.pipe === "function") {
+      request.body.on("error", (error) => req.destroy(error));
+      request.body.pipe(req);
+      return;
+    }
     req.end(request.body);
   });
 }
@@ -1032,6 +1084,16 @@ function toAmzDate(date) {
 
 function sha256Hex(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function sha256FileHex(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
 }
 
 function hmac(key, value) {
@@ -1050,7 +1112,7 @@ function listFiles(root) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (![".git", ".vscode", "__pycache__"].includes(entry.name)) {
+        if (![".cache", ".git", ".vscode", "__pycache__"].includes(entry.name)) {
           stack.push(fullPath);
         }
         continue;
@@ -1081,6 +1143,9 @@ function deploymentPayload(form) {
   }
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
+  }
+  if (form.requirementsTxt) {
+    payload.requirements_txt = form.requirementsTxt;
   }
   if (form.cpu) {
     payload.cpu = form.cpu;
@@ -1175,8 +1240,8 @@ function renderHtml(webview, nonce, initial) {
     <input class="hidden" name="detectedBackendLabel">
     <div class="wide summary-grid">
       <div class="summary-card">
-        <span>Detected backend</span>
-        <strong id="detected-backend-label">No backend in config.pbtxt</strong>
+        <span>Detected backend/platform</span>
+        <strong id="detected-backend-label">No backend or platform in config.pbtxt</strong>
       </div>
       <div class="summary-card">
         <span>Model control</span>
@@ -1212,6 +1277,12 @@ function renderHtml(webview, nonce, initial) {
           <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
         </div>
         <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Extra Python Packages</summary>
+      <div class="details-grid">
+        <label class="wide">Extra Python Packages<textarea name="requirementsTxt" rows="5" placeholder="scikit-learn&#10;joblib"></textarea></label>
       </div>
     </details>
     <details class="wide">
@@ -1414,7 +1485,7 @@ function renderHtml(webview, nonce, initial) {
 
     function updateDetectedBackendLabel() {
       document.getElementById('detected-backend-label').textContent =
-        form.elements.detectedBackendLabel.value || 'No backend in config.pbtxt';
+        form.elements.detectedBackendLabel.value || 'No backend or platform in config.pbtxt';
     }
 
     function updateFormPreviews() {

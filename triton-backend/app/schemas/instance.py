@@ -113,6 +113,7 @@ class TritonInstanceDTO(SQLModel):
     deployment_name: Optional[str] = None
     deployment_service_name: Optional[str] = None
     deployment_secret_name: Optional[str] = None
+    deployment_backend: str = ""
     deployment_log: str = ""
     is_self_deployed: bool = False
     pod_statuses: List[str] = Field(default_factory=list)

@@ -155,7 +155,9 @@
             <div class="panel-card deployment-card">
               <div class="panel-title">Deployment</div>
               <div class="kv">
-                <span class="kv-label">Backend</span>
+                <span class="kv-label">{{
+                  instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
+                }}</span>
                 <span class="kv-value">{{
                   instance.deploymentBackend || "No backend in config.pbtxt"
                 }}</span>

@@ -1,0 +1,32 @@
+name: "distilbert_sentiment"
+platform: "pytorch_libtorch"
+max_batch_size: 8
+
+input [
+  {
+    name: "input__0"
+    data_type: TYPE_INT64
+    dims: [ 32 ]
+  },
+  {
+    name: "input__1"
+    data_type: TYPE_INT64
+    dims: [ 32 ]
+  }
+]
+
+output [
+  {
+    name: "output__0"
+    data_type: TYPE_FP32
+    dims: [ 2 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]
+

@@ -57,7 +57,7 @@ export class NewPerfAnalyzerPageComponent implements OnInit {
   private readonly store = inject(Store);
 
   installationName = "perf-analyzer";
-  image = "nvcr.io/nvidia/tritonserver:25.02-py3-sdk";
+  image = "nvcr.io/nvidia/tritonserver:26.06-py3-sdk";
   readonly dockerconfigjson = signal("");
   readonly dockerconfigjsonEditorOptions = {
     theme: "vs-dark",
