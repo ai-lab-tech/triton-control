@@ -5005,6 +5005,11 @@
             ],
             "title": "Deployment Secret Name"
           },
+          "deployment_backend": {
+            "type": "string",
+            "title": "Deployment Backend",
+            "default": ""
+          },
           "deployment_log": {
             "type": "string",
             "title": "Deployment Log",
