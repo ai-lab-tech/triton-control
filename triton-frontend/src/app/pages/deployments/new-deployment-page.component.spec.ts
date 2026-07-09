@@ -1,5 +1,6 @@
 import { provideHttpClient } from "@angular/common/http";
 import { provideHttpClientTesting, HttpTestingController } from "@angular/common/http/testing";
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter, Router } from "@angular/router";
 import { of } from "rxjs";
@@ -11,6 +12,7 @@ describe("NewDeploymentPageComponent", () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [NewDeploymentPageComponent],
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [
         provideRouter([]),
         provideHttpClient(),

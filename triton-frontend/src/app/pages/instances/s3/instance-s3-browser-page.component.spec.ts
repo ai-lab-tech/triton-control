@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap } from "@angular/router";
 import { of, Subject, throwError } from "rxjs";
@@ -87,6 +88,7 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     await TestBed.configureTestingModule({
       imports: [InstanceS3BrowserPageComponent],
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [
         provideMockStore({ initialState: s3InitialState }),
         provideMockActions(() => actionsSubject),

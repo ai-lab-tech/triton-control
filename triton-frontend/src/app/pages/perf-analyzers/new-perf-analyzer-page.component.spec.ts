@@ -1,3 +1,4 @@
+import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
@@ -12,6 +13,7 @@ describe("NewPerfAnalyzerPageComponent", () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [NewPerfAnalyzerPageComponent],
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [
         provideRouter([]),
         provideMockStore(),
