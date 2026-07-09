@@ -73,13 +73,36 @@ const normalizeMonaco = (value: typeof testGlobal.monaco) => {
 const withBaseMonaco = normalizeMonaco;
 let monacoMock = withBaseMonaco(testGlobal.monaco);
 
-Object.defineProperty(testGlobal, "monaco", {
-  configurable: true,
-  get: () => withBaseMonaco(monacoMock),
-  set: (value) => {
-    monacoMock = withBaseMonaco(value);
-  },
-});
+const syncMonacoGlobals = (value?: unknown) => {
+  monacoMock = withBaseMonaco(value as typeof testGlobal.monaco);
+  const nextMonaco = withBaseMonaco(monacoMock);
+
+  Object.defineProperty(testGlobal, "monaco", {
+    configurable: true,
+    enumerable: true,
+    get: () => nextMonaco,
+    set: (newValue) => {
+      monacoMock = withBaseMonaco(newValue as typeof testGlobal.monaco);
+    },
+  });
+
+  for (const target of [globalThis, window, self] as Array<typeof globalThis>) {
+    if (target && target !== testGlobal) {
+      Object.defineProperty(target, "monaco", {
+        configurable: true,
+        enumerable: true,
+        get: () => nextMonaco,
+        set: (newValue) => {
+          monacoMock = withBaseMonaco(newValue as typeof testGlobal.monaco);
+        },
+      });
+    }
+  }
+
+  return nextMonaco;
+};
+
+syncMonacoGlobals(testGlobal.monaco);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const context = (require as any).context("./", true, /\.spec\.ts$/);
