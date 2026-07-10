@@ -3,6 +3,11 @@
 Small instruction LLM converted to a TensorRT-LLM checkpoint, built as a
 TensorRT-LLM engine, and served with Triton's `tensorrtllm` backend.
 
+> Legacy example: this repository uses the classic TensorRT-LLM backend flow
+> with checkpoint conversion, engine build, and token tensor inputs. For new
+> Qwen2.5 examples, prefer the LLM API variant in
+> `examples/tensorrt_llm/qwen2.5-0.5b-instruct-llmapi-s3/`.
+
 ## Model
 
 - Model: `Qwen/Qwen2.5-0.5B-Instruct`
