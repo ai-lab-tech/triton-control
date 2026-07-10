@@ -42,14 +42,29 @@ const baseMonaco = {
     parse: (value: string) => ({ path: value, toString: () => value }),
   },
 };
+
+const normalizeMonacoEditor = (value: typeof testGlobal.monaco) =>
+  new Proxy(
+    {
+      ...baseMonaco.editor,
+      ...value,
+    },
+    {
+      get(target, prop: keyof typeof baseMonaco.editor) {
+        const current = target[prop];
+        const fallback = baseMonaco.editor[prop];
+        if (typeof fallback === "function" && typeof current !== "function") {
+          return fallback;
+        }
+        return current;
+      },
+    },
+  );
+
 const normalizeMonaco = (value: typeof testGlobal.monaco) => {
   const normalized = {
     ...baseMonaco,
     ...value,
-    editor: {
-      ...baseMonaco.editor,
-      ...value?.editor,
-    },
     MarkerSeverity: {
       ...baseMonaco.MarkerSeverity,
       ...value?.MarkerSeverity,
@@ -60,27 +75,15 @@ const normalizeMonaco = (value: typeof testGlobal.monaco) => {
     },
   };
 
-  if (typeof normalized.editor.create !== "function") {
-    normalized.editor.create = baseMonaco.editor.create;
-  }
-  if (typeof normalized.editor.createDiffEditor !== "function") {
-    normalized.editor.createDiffEditor = baseMonaco.editor.createDiffEditor;
-  }
-  if (typeof normalized.editor.createModel !== "function") {
-    normalized.editor.createModel = baseMonaco.editor.createModel;
-  }
-  if (typeof normalized.editor.getModel !== "function") {
-    normalized.editor.getModel = baseMonaco.editor.getModel;
-  }
-  if (typeof normalized.editor.getModelMarkers !== "function") {
-    normalized.editor.getModelMarkers = baseMonaco.editor.getModelMarkers;
-  }
-  if (typeof normalized.editor.setModelMarkers !== "function") {
-    normalized.editor.setModelMarkers = baseMonaco.editor.setModelMarkers;
-  }
-  if (typeof normalized.editor.setTheme !== "function") {
-    normalized.editor.setTheme = baseMonaco.editor.setTheme;
-  }
+  let editor = normalizeMonacoEditor(value?.editor);
+  Object.defineProperty(normalized, "editor", {
+    configurable: true,
+    enumerable: true,
+    get: () => editor,
+    set: (newValue) => {
+      editor = normalizeMonacoEditor(newValue);
+    },
+  });
 
   return normalized;
 };
