@@ -59,6 +59,10 @@ class TritonConfigEdgeTests(unittest.TestCase):
         # Act / Assert
         triton_config.validate_triton_config_pbtxt(b'name: "m"\nbackend: "python"\n', "25.02")
 
+    def test_ValidateTritonConfigPbtxt_Triton270_LoadsBundledProto(self):
+        # Act / Assert
+        triton_config.validate_triton_config_pbtxt(b'name: "m"\nbackend: "python"\n', "2.70.0")
+
     def test_LoadModelConfigClass_MissingProto_RaisesUsefulError(self):
         # Act / Assert
         with patch("app.services.triton.config.PROTOBUFF_DIR", triton_config.Path("missing-protos")):
