@@ -38,6 +38,11 @@ rules:
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- if $clusterWide }}
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
+    verbs: ["get"]
+  {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if $clusterWide }}ClusterRoleBinding{{ else }}RoleBinding{{ end }}
@@ -67,6 +72,9 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
+    verbs: ["get"]
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

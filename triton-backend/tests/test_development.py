@@ -234,6 +234,23 @@ class CodeServerTests(unittest.TestCase):
         self.assertNotIn("requests", resources)
         self.assertEqual(resources["limits"], {"nvidia.com/gpu": "1"})
 
+    def test_Manifests_GpuRuntimeClassAvailable_AddsRuntimeClassName(self) -> None:
+        request = self._request().model_copy(update={"gpu_count": 1})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-control",
+            "code-7-dev-workspace",
+            "code-7-dev-workspace-svc",
+            "code-7-dev-workspace-secret",
+            runtime_class_name="nvidia",
+        )
+
+        statefulset = next(manifest for manifest in manifests if manifest["kind"] == "StatefulSet")
+        pod_spec = statefulset["spec"]["template"]["spec"]
+        self.assertEqual(pod_spec["runtimeClassName"], "nvidia")
+        self.assertEqual(pod_spec["containers"][0]["resources"]["limits"]["nvidia.com/gpu"], "1")
+
     def test_TritonDeployExtensionDir_ConfiguredParentDirectory_UsesChildExtension(self) -> None:
         configured = Path(__file__).resolve().parents[2] / "code-server-extensions"
 
