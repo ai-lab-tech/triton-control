@@ -112,7 +112,7 @@ describe("DevelopmentPageComponent", () => {
     const component = fixture.componentInstance;
     component.theme = "Monokai";
     component.cpu = "2";
-    component.memory = "4Gi";
+    component.memoryGi = 4;
     component.dockerconfigjson = '{"auths":{}}';
 
     // Act
@@ -137,6 +137,19 @@ describe("DevelopmentPageComponent", () => {
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(component.workspaces()[0].status).toBe("ready");
     expect(component.embeddedWorkspaceUrl()).not.toBeNull();
+  });
+
+  it("CanCreate_DecimalMemoryGi_ReturnsFalse", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const component = fixture.componentInstance;
+    component.memoryGi = 1.5;
+
+    // Act
+    const canCreate = component.canCreate();
+
+    // Assert
+    expect(canCreate).toBeFalse();
   });
 
   it("Load_ReadyWorkspaceReturned_SelectsAndEmbedsWorkspace", async () => {
