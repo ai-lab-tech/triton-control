@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  appVersion: "v1.3.0",
+  appVersion: "v1.2.1",
 
   // Use IPv4 explicitly on macOS to avoid localhost (::1) hitting gvproxy/docker port forwards.
   apiBaseUrl: "http://127.0.0.1:8000",
