@@ -131,6 +131,11 @@ Members and admins can manage reusable S3 profiles in Triton Control from the
 account menu. The extension loads those profiles from `/api/s3-profiles` and
 shows them in the **S3 profile** dropdown.
 
+S3 profiles are private to the signed-in user. Other users, including
+administrators, cannot list, edit, or delete a profile through the S3 profile
+API. Each user must create their own profile, even when multiple users connect
+to the same object store.
+
 Each profile stores:
 
 - profile name
@@ -214,12 +219,14 @@ The deploy form has a collapsed **Resources** section. The default values shown
 there are real form values and are sent with the deployment:
 
 - CPU: `2`
-- RAM: `4Gi`
+- RAM: `4` with a fixed `Gi` suffix
 - GPU count: `0`
 
-Change or clear these values before deploy if the model needs different
-resources. Values present in the form are sent to Triton Control for every
-backend.
+RAM accepts only non-negative whole Gi values. A positive value such as `4` is
+sent as both the Kubernetes memory request and limit (`4Gi`). Enter `0` or
+clear the field to omit the memory setting. Change or clear the resource values
+before deploy if the model needs different resources. Values present in the
+form are sent to Triton Control for every backend.
 
 ## Package
 
