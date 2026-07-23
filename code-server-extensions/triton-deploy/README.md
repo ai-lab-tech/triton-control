@@ -79,7 +79,8 @@ the filesystem watcher or the view refresh action runs.
    `No backend or platform in config.pbtxt`.
 4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
-   `s3://...` path before deploy.
+   `s3://...` path before deploy. Expand **Ingress** to optionally configure the
+   same ingress host and class settings available in Add Deployment.
 5. The extension uploads files below `bucket/prefix/model-repository-path`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
