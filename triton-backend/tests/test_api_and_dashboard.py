@@ -1109,7 +1109,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         # Arrange / Act
         instance.deployment_log = "Image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3"
         request = _BodyRequest(b'{"inputs":[]}', headers={"content-type": "application/json"})
-        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+        with patch("app.services.triton.models.TritonService", return_value=service) as triton_service, patch(
             "app.services.access.ensure_instance_access", return_value=None
         ):
             response = await infer_instance_model(
@@ -1124,6 +1124,7 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
 
         # Assert
         self.assertEqual(response.status_code, 200)
+        triton_service.assert_called_with("http://triton", False, "", timeout=600.0)
         service.infer_model_raw.assert_awaited_once_with("m", "1", b'{"inputs":[]}', "application/json")
         service.generate_model_raw.assert_not_awaited()
 
