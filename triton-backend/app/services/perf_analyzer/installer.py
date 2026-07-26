@@ -8,13 +8,12 @@ manifest application to the Kubernetes integration.
 
 import json
 import os
-import urllib.error
-import urllib.request
 from datetime import datetime
 from threading import Lock
 from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
+import httpx
 from sqlmodel import Session
 
 from app.db.entities import PerfAnalyzerEntity, PerfAnalyzerRunEntity
@@ -403,9 +402,11 @@ def _fetch_triton_model_config(
     path = f"/v2/models/{quote(model_name, safe='')}{version_path}/config"
     config_url = urlunsplit((scheme, netloc, path, "", ""))
     try:
-        with urllib.request.urlopen(config_url, timeout=5) as response:
-            payload = response.read().decode("utf-8")
-    except (OSError, urllib.error.URLError, TimeoutError, ValueError):
+        with httpx.Client(timeout=5, follow_redirects=False, trust_env=False) as client:
+            response = client.get(config_url)
+            response.raise_for_status()
+            payload = response.text
+    except (httpx.HTTPError, ValueError):
         return None
     try:
         parsed = json.loads(payload)
