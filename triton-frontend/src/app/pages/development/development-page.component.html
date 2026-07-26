@@ -110,9 +110,13 @@
                     <input
                       id="code-server-memory"
                       matInput
-                      [(ngModel)]="memory"
-                      placeholder="4Gi"
+                      type="number"
+                      min="1"
+                      step="1"
+                      [(ngModel)]="memoryGi"
+                      placeholder="4"
                     />
+                    <span matTextSuffix>Gi</span>
                   </mat-form-field>
                 </div>
                 <div class="form-row">

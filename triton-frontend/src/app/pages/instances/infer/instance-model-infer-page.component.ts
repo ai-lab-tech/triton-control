@@ -67,7 +67,7 @@ export class InstanceModelInferPageComponent implements OnInit {
   });
 
   instanceName = "";
-  instanceUrl = "";
+  readonly instanceUrl = signal("");
   resolvingInstance = false;
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
   readonly usesGenerateEndpoint = signal(false);
@@ -111,7 +111,7 @@ export class InstanceModelInferPageComponent implements OnInit {
   private inferUrlCopyResetTimer: ReturnType<typeof setTimeout> | null = null;
   private responseCopyResetTimer: ReturnType<typeof setTimeout> | null = null;
   readonly requestUrl = computed(() => {
-    const baseUrl = this.instanceUrl.trim().replace(/\/$/, "");
+    const baseUrl = this.instanceUrl().trim().replace(/\/$/, "");
     const modelName = encodeURIComponent(this.modelName().trim());
     const version = encodeURIComponent(this.version().trim());
 
@@ -187,7 +187,7 @@ export class InstanceModelInferPageComponent implements OnInit {
       this.instanceName = stateName;
     }
     if (stateUrl) {
-      this.instanceUrl = stateUrl;
+      this.instanceUrl.set(stateUrl);
     }
 
     await this.resolveInstance();
@@ -379,7 +379,7 @@ export class InstanceModelInferPageComponent implements OnInit {
       )) as TritonInstanceDTO;
 
       this.instanceName = instance?.name ?? this.instanceName;
-      this.instanceUrl = instance?.url ?? this.instanceUrl;
+      this.instanceUrl.set(instance?.url ?? this.instanceUrl());
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
       const usesGenerate = await this.resolveUsesGenerateEndpoint();
       this.usesGenerateEndpoint.set(usesGenerate);

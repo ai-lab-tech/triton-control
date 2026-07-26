@@ -687,8 +687,10 @@ async function initialFormValues(sourceFolder) {
     profileId: "",
     profileName: "",
     cpu: "2",
-    memory: "4Gi",
+    memoryGi: "4",
     gpuCount: requiresTensorRtLlmImage ? "1" : "0",
+    ingressHost: "",
+    ingressClassName: "",
   };
   return initial;
 }
@@ -894,8 +896,10 @@ function normalizeForm(form) {
     repositoryPollSecs: Number(form.repositoryPollSecs || 15),
     modelName: String(form.modelName || "").trim(),
     cpu: String(form.cpu || "").trim(),
-    memory: String(form.memory || "").trim(),
+    memoryGi: String(form.memoryGi || "").trim(),
     gpuCount: String(form.gpuCount || "").trim(),
+    ingressHost: String(form.ingressHost || "").trim(),
+    ingressClassName: String(form.ingressClassName || "").trim(),
   };
 }
 
@@ -946,6 +950,9 @@ function validateForm(form) {
   }
   if (form.gpuCount && (!/^\d+$/.test(form.gpuCount) || Number(form.gpuCount) < 0)) {
     throw new Error("GPU count must be a non-negative whole number.");
+  }
+  if (form.memoryGi && (!/^\d+$/.test(form.memoryGi) || Number(form.memoryGi) < 0)) {
+    throw new Error("RAM must be a non-negative whole number of Gi.");
   }
 }
 
@@ -1169,11 +1176,19 @@ function deploymentPayload(form) {
   if (form.cpu) {
     payload.cpu = form.cpu;
   }
-  if (form.memory) {
-    payload.memory = form.memory;
+  if (form.memoryGi && Number(form.memoryGi) > 0) {
+    const memory = `${Number(form.memoryGi)}Gi`;
+    payload.memory = memory;
+    payload.memory_limit = memory;
   }
   if (form.gpuCount && Number(form.gpuCount) > 0) {
     payload.gpu_count = Number(form.gpuCount);
+  }
+  if (form.ingressHost) {
+    payload.ingress_host = form.ingressHost;
+  }
+  if (form.ingressClassName) {
+    payload.ingress_class_name = form.ingressClassName;
   }
   return payload;
 }
@@ -1236,6 +1251,10 @@ function renderHtml(webview, nonce, initial) {
     details { border: 1px solid var(--vscode-input-border); background: var(--vscode-editorWidget-background); }
     summary { cursor: pointer; padding: 9px 10px; color: var(--vscode-foreground); }
     .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 10px 10px; }
+    .details-hint { color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); }
+    .input-with-suffix input { border: 0; }
+    .input-with-suffix span { padding: 0 8px; color: var(--vscode-descriptionForeground); }
     button { width: max-content; border: 0; background: var(--vscode-button-background); color: var(--vscode-button-foreground); padding: 9px 14px; cursor: pointer; }
     button:disabled { opacity: 0.55; cursor: default; }
     .status { margin-top: 18px; white-space: pre-wrap; color: var(--vscode-descriptionForeground); }
@@ -1308,8 +1327,22 @@ function renderHtml(webview, nonce, initial) {
       <summary>Resources</summary>
       <div class="details-grid">
         <label>CPU<input name="cpu"></label>
-        <label>RAM<input name="memory"></label>
+        <label>RAM
+          <span class="input-with-suffix">
+            <input name="memoryGi" type="number" min="0" step="1">
+            <span>Gi</span>
+          </span>
+        </label>
         <label>GPU count<input name="gpuCount" type="number" min="0" step="1"></label>
+      </div>
+    </details>
+    <details class="wide">
+      <summary>Ingress</summary>
+      <div class="details-grid">
+        <div class="wide details-hint">Hostname or URL. Without a scheme, <code>https://</code> is used.</div>
+        <label>Ingress host<input name="ingressHost" placeholder="http://triton.example.local"></label>
+        <label>Ingress class<input name="ingressClassName" placeholder="nginx"></label>
+        <div class="wide details-hint">TLS is not created here. Provide certificates through your ingress controller.</div>
       </div>
     </details>
     <div class="wide"><button id="submit" type="submit">Upload and Deploy</button></div>

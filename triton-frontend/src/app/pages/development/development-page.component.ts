@@ -73,7 +73,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   theme: CreateCodeServerRequest["theme"] = "Default Dark+";
   storageSize = "20Gi";
   cpu = "";
-  memory = "";
+  memoryGi: number | null = null;
   gpuCount: string | number = "";
   dockerconfigjson = "";
   imageHasCodeServer = false;
@@ -235,7 +235,12 @@ export class DevelopmentPageComponent implements OnDestroy {
 
   async create(): Promise<void> {
     if (!this.canCreate()) {
-      this.setMessage("Workspace name and image are required.", "error");
+      this.setMessage(
+        this.hasValidMemoryGi()
+          ? "Workspace name and image are required."
+          : "Memory must be a positive whole Gi number.",
+        "error",
+      );
       return;
     }
     this.saving.set(true);
@@ -250,8 +255,8 @@ export class DevelopmentPageComponent implements OnDestroy {
         storage_size: this.storageSize.trim() || "20Gi",
         cpu: this.cpu.trim() || undefined,
         cpu_limit: this.cpu.trim() || undefined,
-        memory: this.memory.trim() || undefined,
-        memory_limit: this.memory.trim() || undefined,
+        memory: this.memoryQuantity() || undefined,
+        memory_limit: this.memoryQuantity() || undefined,
         gpu_count: this.parseGpuCount(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
         image_has_code_server: this.imageHasCodeServer,
@@ -300,6 +305,14 @@ export class DevelopmentPageComponent implements OnDestroy {
     const raw = typeof this.gpuCount === "number" ? String(this.gpuCount) : this.gpuCount;
     const parsed = Number.parseInt((raw || "").trim(), 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  }
+
+  private memoryQuantity(): string {
+    return this.memoryGi === null ? "" : `${this.memoryGi}Gi`;
+  }
+
+  private hasValidMemoryGi(): boolean {
+    return this.memoryGi === null || (Number.isInteger(this.memoryGi) && this.memoryGi > 0);
   }
 
   async refresh(workspace: CodeServer): Promise<void> {
@@ -356,7 +369,12 @@ export class DevelopmentPageComponent implements OnDestroy {
   }
 
   canCreate(): boolean {
-    return this.name.trim().length > 0 && this.image.trim().length > 0 && !this.saving();
+    return (
+      this.name.trim().length > 0 &&
+      this.image.trim().length > 0 &&
+      this.hasValidMemoryGi() &&
+      !this.saving()
+    );
   }
 
   toggleWorkspacePanel(): void {

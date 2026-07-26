@@ -292,11 +292,14 @@ menu. A profile stores:
 - path-style mode
 - optional CA certificate
 
-Profiles are owned by the signed-in user. They are intended for deployment
-workflows, especially the code-server **Triton Control Deploy** extension, so
-users do not need to re-enter S3 credentials for every deploy. The extension
-shows the saved profiles in a dropdown and keeps manual S3 fields available in
-a collapsed optional section.
+Profiles are private to the signed-in user. Other users, including
+administrators, cannot list, edit, or delete them through the S3 profile API.
+Each user must create their own profile, even when multiple users connect to the
+same object store. Profiles are intended for deployment workflows, especially
+the code-server **Triton Control Deploy** extension, so users do not need to
+re-enter S3 credentials for every deploy. The extension shows the signed-in
+user's saved profiles in a dropdown and keeps manual S3 fields available in a
+collapsed optional section.
 
 The stored profile values are used to upload the selected model repository from
 the code-server workspace and to create the Triton deployment. The resulting
@@ -358,7 +361,7 @@ pod.
 | Ingress host/class | Optional | Expose deployment through ingress. | Use for external cluster access. |
 | `.dockerconfigjson` | Optional | Private registry pull credentials. | Required for private images. |
 | `requirements.txt` | Optional | Extra Python packages installed before Triton start. | Prefer dev/stage; bake into image for production. |
-| Resources (GPU/CPU/Memory) | Optional | Kubernetes GPU limit and CPU/memory resource settings. | Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
+| Resources (GPU/CPU/Memory) | Optional | Kubernetes GPU limit and CPU/memory resource settings. | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
 
 For private container registries, paste Docker registry authentication JSON into
 the image pull secret field (`.dockerconfigjson`). The following JSON is only

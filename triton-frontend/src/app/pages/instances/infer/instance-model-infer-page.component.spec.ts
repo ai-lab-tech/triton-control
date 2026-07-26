@@ -104,8 +104,21 @@ describe("InstanceModelInferPageComponent", () => {
 
     // Assert
     expect(component.instanceName).toBe("node-7");
-    expect(component.instanceUrl).toBe("http://localhost:8000");
+    expect(component.instanceUrl()).toBe("http://localhost:8000");
     expect(component.instanceS3()?.bucket).toBe("models");
+  });
+
+  it("NgOnInit_RequestUrlReadBeforeApiSuccess_UpdatesWhenInstanceUrlLoads", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+    expect(component.requestUrl()).toBe("");
+
+    // Act
+    await component.ngOnInit();
+
+    // Assert
+    expect(component.requestUrl()).toBe("http://localhost:8000/v2/models/model-a/versions/1/infer");
   });
 
   it("NgOnInit_TensorRtLlmInstance_UsesGenerateEndpoint", async () => {
@@ -437,7 +450,7 @@ describe("InstanceModelInferPageComponent", () => {
     // Arrange
     const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
     const component = fixture.componentInstance;
-    component.instanceUrl = "";
+    component.instanceUrl.set("");
 
     // Act
     await component.copyInferUrl();
@@ -476,7 +489,7 @@ describe("InstanceModelInferPageComponent", () => {
     spyOn(navigator.clipboard, "writeText").and.resolveTo();
     const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
     const component = fixture.componentInstance;
-    component.instanceUrl = "http://localhost:8000";
+    component.instanceUrl.set("http://localhost:8000");
     await component.ngOnInit();
 
     // Act
