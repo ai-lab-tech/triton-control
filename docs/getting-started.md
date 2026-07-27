@@ -5,33 +5,52 @@ run the backend with Python and the frontend with npm.
 
 ## Docker Compose
 
-Prerequisite: Docker Desktop or another Docker engine. Host Node.js, npm, and
-Java are not required for this path because the Dockerfile installs the
-frontend build tools inside the Node build stage and regenerates the
-Swagger/OpenAPI client before building Angular.
+With Docker installed, start the published image:
+
+```bash
+docker pull ailabtechtriton/triton-control:v1.2.2
+docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
+docker compose up --no-build
+```
+
+After the stack starts, open `http://localhost:8080` in your browser.
+
+To build from source instead:
 
 ```bash
 docker compose up --build
 ```
 
-Open:
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-
-PostgreSQL is exposed on:
-
-```text
-127.0.0.1:5433
-```
+Docker Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Podman Compose
+
+With Podman and `podman-compose` installed, start the published image:
+
+```bash
+podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
+podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
+  localhost/triton-control:compose
+podman-compose -f podman-compose.yaml up --no-build
+```
+
+After the stack starts, open `http://localhost:8080` in your browser.
+
+To build from source instead:
 
 ```bash
 podman-compose -f podman-compose.yaml up --build
 ```
 
-The exposed URLs match Docker Compose.
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
+
+Podman Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Kubernetes Quick Start
 
@@ -44,30 +63,20 @@ Prerequisites:
   which is stable from Kubernetes `v1.19`.
 - `kubectl` configured for the target cluster.
 - Helm `v3`.
-- A container registry reachable by the cluster.
 - An Ingress controller if `ingress.enabled=true`, for example nginx-ingress.
 - A default StorageClass, or an explicit `postgresql.persistence.storageClass`,
   when using the bundled PostgreSQL database with persistence enabled.
 
-Build and push the combined frontend/backend image:
-
-```bash
-docker build -t registry.example.com/triton-control:0.1.0 .
-docker push registry.example.com/triton-control:0.1.0
-```
-
-The image build requires Docker on the host. It does not require host npm or
-Java. The build needs network access to install npm packages and, if the
-Swagger generator jar is not already cached in the build context, to download
-`swagger-codegen-cli.jar`.
+The cluster pulls the published Triton Control image automatically. No local
+image build, pull, or push is required.
 
 Create a values file for your cluster:
 
 ```yaml
 app:
   image:
-    repository: registry.example.com/triton-control
-    tag: "0.1.0"
+    repository: ailabtechtriton/triton-control
+    tag: "v1.2.2"
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
