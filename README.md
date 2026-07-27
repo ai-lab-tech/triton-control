@@ -33,20 +33,9 @@ Core capabilities include:
   authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
 
-## Repository Layout
-
-- `triton-frontend/` - Angular Material frontend.
-- `triton-backend/` - Python FastAPI backend.
-- `charts/triton-control/` - Helm chart for Kubernetes deployment.
-- `compose.yaml` - Docker Compose stack for Triton Control and PostgreSQL.
-- `podman-compose.yaml` - Podman Compose equivalent of the Docker Compose stack.
-- `Dockerfile` - Builds a combined runtime image with frontend, backend, and Nginx.
-
 ## Run With Docker Compose
 
-Prerequisite: Docker Desktop or another Docker engine. Pull the published image,
-tag it with the local name expected by `compose.yaml`, and start the stack
-without building:
+With Docker installed, start the published image:
 
 ```bash
 docker pull ailabtechtriton/triton-control:v1.2.2
@@ -54,65 +43,28 @@ docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
 docker compose up --no-build
 ```
 
-To build the image from the checked-out source instead, run
-`docker compose up --build`. Host Node.js, npm, and Java are not required for
-that build because the Dockerfile installs the frontend build tools inside the
-`node:22-alpine` build stage.
+After the stack starts, open `http://localhost:8080` in your browser.
 
-The Compose stack exposes:
-
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-- PostgreSQL: `127.0.0.1:5433`
-
-The app container uses:
-
-```text
-postgresql://triton:tritonpw@postgres:5432/triton_backend
-```
-
-Backend logging is quiet by default. Set `BACKEND_VERBOSE=true` to enable
-info-level backend logs and Uvicorn access logs. Set `DATABASE_ECHO=1` only
-when SQL statement logging is needed.
-Set `CLIENT_MAX_BODY_SIZE` (for example `256m` or `1g`) to allow larger file
-uploads through the container nginx reverse proxy.
-
-For local development this is ready to run. Before using Compose outside local
-development, replace `SESSION_SECRET`, `JWT_SECRET`, `S3_SECRET_ENCRYPTION_KEY`,
-and `POSTGRES_PASSWORD`.
-
-If a Triton server is running in another Docker Compose project, `127.0.0.1`
-inside Triton Control points to the Triton Control container itself. Use one of
-these instead:
-
-```text
-http://host.docker.internal:<published-triton-http-port>
-```
-
-or attach the Triton container to the `triton-control` network and
-use the Triton container name:
+To build from source instead:
 
 ```bash
-docker network connect triton-control tritonserver-explicit
+docker compose up --build
 ```
 
-```text
-http://tritonserver-explicit:8000
-```
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
 
-For metrics, the backend automatically appends `/metrics` when the metrics URL
-has no path.
+Docker Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
-TLS certificate note:
-
-- With SSL verification enabled, Triton and S3 HTTPS endpoints are validated
-  against the system trust store by default.
-- A pasted CA certificate is optional and only needed for private,
-  self-signed, or internal CA chains.
+For Triton running on the host, use
+`http://host.docker.internal:<published-http-port>` instead of `127.0.0.1`.
+Before a non-development deployment, replace the secrets and database password
+defined in `compose.yaml`.
 
 ## Run With Podman Compose
 
-Prerequisite: Podman and `podman-compose`.
+With Podman and `podman-compose` installed, start the published image:
 
 ```bash
 podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
@@ -121,17 +73,19 @@ podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
 podman-compose -f podman-compose.yaml up --no-build
 ```
 
-To build the image from the checked-out source instead, run
-`podman-compose -f podman-compose.yaml up --build`.
+After the stack starts, open `http://localhost:8080` in your browser.
 
-The exposed URLs are the same as Docker Compose:
+To build from source instead:
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-- PostgreSQL: `127.0.0.1:5433`
+```bash
+podman-compose -f podman-compose.yaml up --build
+```
 
-The Podman file uses fully qualified image names such as
-`docker.io/library/postgres:16-alpine` and `localhost/triton-control:compose`.
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
+
+Podman Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Run On Kubernetes
 
@@ -384,6 +338,15 @@ npm run format:check
 npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 npm run test:smoke
 ```
+
+## Repository Layout
+
+- `triton-frontend/` - Angular Material frontend.
+- `triton-backend/` - Python FastAPI backend.
+- `charts/triton-control/` - Helm chart for Kubernetes deployment.
+- `compose.yaml` - Docker Compose stack for Triton Control and PostgreSQL.
+- `podman-compose.yaml` - Podman Compose equivalent of the Docker Compose stack.
+- `Dockerfile` - Builds a combined runtime image with frontend, backend, and Nginx.
 
 ## More Documentation
 
