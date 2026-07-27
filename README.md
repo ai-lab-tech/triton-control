@@ -1,5 +1,11 @@
 ﻿# Triton Control
 
+[![Release](https://img.shields.io/github/v/release/ai-lab-tech/triton-control)](https://github.com/ai-lab-tech/triton-control/releases/latest)
+[![Backend CI](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/ai-lab-tech/triton-control/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ai-lab-tech/triton-control/actions/workflows/frontend-ci.yml)
+[![Docs](https://github.com/ai-lab-tech/triton-control/actions/workflows/docs-pages.yml/badge.svg)](https://ai-lab-tech.github.io/triton-control/)
+[![License](https://img.shields.io/github/license/ai-lab-tech/triton-control)](LICENSE)
+
 Triton Control is a web application for managing and operating NVIDIA Triton
 Inference Server environments. The primary deployment target is Kubernetes
 through the Helm chart in `charts/triton-control`.
