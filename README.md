@@ -10,6 +10,9 @@ processes for development.
 
 Documentation: https://ai-lab-tech.github.io/triton-control/
 
+Published container image:
+[`ailabtechtriton/triton-control:v1.2.2`](https://hub.docker.com/r/ailabtechtriton/triton-control)
+
 Core capabilities include:
 
 - existing Triton instance registration and management
@@ -35,14 +38,20 @@ Core capabilities include:
 
 ## Run With Docker Compose
 
-Prerequisite: Docker Desktop or another Docker engine. Host Node.js, npm, and
-Java are not required for the Docker image build; the Dockerfile installs the
-frontend build tools inside the `node:22-alpine` build stage and regenerates the
-Swagger/OpenAPI client before building Angular.
+Prerequisite: Docker Desktop or another Docker engine. Pull the published image,
+tag it with the local name expected by `compose.yaml`, and start the stack
+without building:
 
 ```bash
-docker compose up --build
+docker pull ailabtechtriton/triton-control:v1.2.2
+docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
+docker compose up --no-build
 ```
+
+To build the image from the checked-out source instead, run
+`docker compose up --build`. Host Node.js, npm, and Java are not required for
+that build because the Dockerfile installs the frontend build tools inside the
+`node:22-alpine` build stage.
 
 The Compose stack exposes:
 
@@ -100,8 +109,14 @@ TLS certificate note:
 Prerequisite: Podman and `podman-compose`.
 
 ```bash
-podman-compose -f podman-compose.yaml up --build
+podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
+podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
+  localhost/triton-control:compose
+podman-compose -f podman-compose.yaml up --no-build
 ```
+
+To build the image from the checked-out source instead, run
+`podman-compose -f podman-compose.yaml up --build`.
 
 The exposed URLs are the same as Docker Compose:
 
@@ -126,24 +141,17 @@ OIDC login has been tested with Microsoft Entra ID, Keycloak, and Dex. The
 Kubernetes deployment has also been tested with Argo CD managing the Helm
 release in a GitOps workflow.
 
-Build and push the image to a registry first:
-
-```bash
-docker build -t registry.example.com/triton-control:0.1.0 .
-docker push registry.example.com/triton-control:0.1.0
-```
-
-Only Docker is required on the build host for this image build. The build needs
-network access to install npm packages and, if the Swagger generator jar is not
-already cached in the build context, to download `swagger-codegen-cli.jar`.
+The Helm deployment can use the published image directly; users do not need to
+build, pull, or push it on the machine running Helm. Kubernetes pulls the image
+from Docker Hub when it creates the application pod.
 
 Create a values file, for example `values-prod.yaml`:
 
 ```yaml
 app:
   image:
-    repository: registry.example.com/triton-control
-    tag: "0.1.0"
+    repository: ailabtechtriton/triton-control
+    tag: "v1.2.2"
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
