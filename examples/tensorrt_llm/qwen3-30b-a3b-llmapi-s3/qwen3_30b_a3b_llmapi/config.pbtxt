@@ -1,0 +1,109 @@
+name: "qwen3_30b_a3b_llmapi"
+backend: "python"
+max_batch_size: 2
+
+dynamic_batching {
+  preferred_batch_size: [ 2 ]
+  max_queue_delay_microseconds: 100000
+}
+
+input [
+  {
+    name: "text_input"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "stream"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_parameters"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "text_output"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]
+
+parameters: {
+  key: "hf_model_dir"
+  value: { string_value: "model" }
+}
+
+parameters: {
+  key: "max_tokens"
+  value: { string_value: "256" }
+}
+
+parameters: {
+  key: "temperature"
+  value: { string_value: "0.6" }
+}
+
+parameters: {
+  key: "top_p"
+  value: { string_value: "0.95" }
+}
+
+parameters: {
+  key: "trust_remote_code"
+  value: { string_value: "true" }
+}
+
+parameters: {
+  key: "tensor_parallel_size"
+  value: { string_value: "1" }
+}
+
+parameters: {
+  key: "max_batch_size"
+  value: { string_value: "2" }
+}
+
+parameters: {
+  key: "max_seq_len"
+  value: { string_value: "12000" }
+}
+
+parameters: {
+  key: "max_num_tokens"
+  value: { string_value: "4096" }
+}
+
+parameters: {
+  key: "kv_cache_max_tokens"
+  value: { string_value: "4096" }
+}
+
+parameters: {
+  key: "kv_cache_free_gpu_memory_fraction"
+  value: { string_value: "0.70" }
+}
+
+parameters: {
+  key: "enable_block_reuse"
+  value: { string_value: "false" }
+}

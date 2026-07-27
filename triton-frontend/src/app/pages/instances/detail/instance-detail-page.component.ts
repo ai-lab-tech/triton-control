@@ -420,13 +420,13 @@ export class InstanceDetailPageComponent implements OnInit {
       const response = await firstValueFrom(
         this.deploymentsApi.getDeploymentLogsApiDeploymentsInstanceIdLogsGet(instance.id),
       );
-      this.deploymentLogs.set(response.logs || instance.deploymentLog || "");
+      this.deploymentLogs.set(response.logs || "");
       if (!showLoading) {
         this.deploymentLogsError.set("");
       }
     } catch (error) {
       this.deploymentLogsError.set(mapApiErrorMessage(error, "Failed to load deployment logs."));
-      this.deploymentLogs.set(instance.deploymentLog || "");
+      this.deploymentLogs.set("");
     } finally {
       if (showLoading) {
         this.deploymentLogsLoading.set(false);

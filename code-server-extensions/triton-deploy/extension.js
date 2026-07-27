@@ -659,12 +659,13 @@ async function initialFormValues(sourceFolder) {
   if (!modelName) {
     return null;
   }
+  const requiresTensorRtLlmImage = isTensorRtLlmPythonRepository(sourceFolder, modelName);
   const deploymentName = toKubernetesName(modelName);
   const endpoint = cfg.get("s3Endpoint") || s3x.get("endpointUrl") || process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT || "";
   const initial = {
     sourceFolder,
     deploymentName,
-    image: defaultImageForBackend(detectedBackend),
+    image: defaultImageForBackend(detectedBackend, requiresTensorRtLlmImage),
     endpoint,
     bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
@@ -687,7 +688,7 @@ async function initialFormValues(sourceFolder) {
     profileName: "",
     cpu: "2",
     memoryGi: "4",
-    gpuCount: "0",
+    gpuCount: requiresTensorRtLlmImage ? "1" : "0",
     ingressHost: "",
     ingressClassName: "",
   };
@@ -747,12 +748,12 @@ function backendLabel(value) {
   return "No backend or platform in config.pbtxt";
 }
 
-function defaultImageForBackend(value) {
+function defaultImageForBackend(value, requiresTensorRtLlmImage = false) {
   const backend = String(value || "").trim().toLowerCase();
   if (backend === "vllm") {
     return VLLM_TRITON_IMAGE;
   }
-  if (isTensorRtLlmBackend(backend)) {
+  if (requiresTensorRtLlmImage || isTensorRtLlmBackend(backend)) {
     return TRTLLM_TRITON_IMAGE;
   }
   return DEFAULT_TRITON_IMAGE;
@@ -765,6 +766,24 @@ function usesSyncedRepositoryBackend(value) {
 
 function isTensorRtLlmBackend(value) {
   return ["tensorrtllm", "tensorrt_llm", "trtllm"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isTensorRtLlmPythonRepository(sourceFolder, modelName) {
+  const marker = `${sourceFolder} ${modelName}`.toLowerCase();
+  if (marker.includes("llmapi") || marker.includes("trtllm") || marker.includes("tensorrt-llm")) {
+    return true;
+  }
+  const configPath = findConfigPbtxt(sourceFolder);
+  if (!configPath) {
+    return false;
+  }
+  const modelPyPath = path.join(path.dirname(configPath), "1", "model.py");
+  try {
+    const modelPy = fs.readFileSync(modelPyPath, "utf8").toLowerCase();
+    return modelPy.includes("from tensorrt_llm import") || modelPy.includes("import tensorrt_llm");
+  } catch {
+    return false;
+  }
 }
 
 function findConfigPbtxt(sourceFolder) {

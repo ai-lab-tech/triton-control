@@ -6,5 +6,5 @@ export const environment = {
   apiBaseUrl: "https://127.0.0.1:8000",
   instancePollingIntervalMs: 10000,
   deploymentLogPollingIntervalMs: 5000,
-  inferenceRequestTimeoutMs: 120000,
+  inferenceRequestTimeoutMs: 180000,
 };

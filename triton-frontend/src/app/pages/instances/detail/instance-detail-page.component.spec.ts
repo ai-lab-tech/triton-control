@@ -161,6 +161,30 @@ describe("InstanceDetailPageComponent", () => {
     ).toHaveBeenCalledTimes(2);
   }));
 
+  it("LoadDeploymentLogs_ErrorClearsStaleInstanceDeploymentLog", fakeAsync(() => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      isSelfDeployed: true,
+      deploymentNamespace: "triton-minio",
+      deploymentLog: "stale old log",
+    } as any);
+    mockStore.refreshState();
+    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(
+      throwError(() => new Error("boom")),
+    );
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+    const component = fixture.componentInstance;
+
+    // Act
+    component.loadDeploymentLogs();
+    tick();
+
+    // Assert
+    expect(component.deploymentLogs()).toBe("");
+    expect(component.deploymentLogsError()).toContain("Failed to load deployment logs.");
+  }));
+
   it("NgOnInit_OpenLogsOnceNavigation_SelectsLogsAndStartsPolling", fakeAsync(() => {
     // Arrange
     window.history.replaceState({ openLogsOnce: true }, "", window.location.href);

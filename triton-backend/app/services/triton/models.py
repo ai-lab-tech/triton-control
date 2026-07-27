@@ -16,6 +16,7 @@ Provides async use cases that proxy model commands to a live Triton instance:
 import asyncio
 import base64
 import json
+import os
 from typing import Any
 
 from fastapi import Response
@@ -30,6 +31,7 @@ from app.services.triton.config import extract_triton_error_detail
 
 GENERATE_ENDPOINT_BACKENDS = {"vllm", "tensorrtllm", "tensorrt_llm", "trtllm"}
 TENSORRT_LLM_GENERATE_BACKENDS = {"tensorrtllm", "tensorrt_llm", "trtllm"}
+DEFAULT_INFERENCE_TIMEOUT_SECONDS = 600.0
 
 
 async def list_models(
@@ -144,6 +146,7 @@ async def infer_model(
         instance.url,
         instance.triton_verify_ssl,
         instance.triton_ca_certificate,
+        timeout=triton_inference_timeout_seconds(),
     )
     use_metrics = bool(instance.metrics_url)
     metrics_before = (
@@ -223,6 +226,19 @@ async def infer_model(
 def _encode_metrics_header(metrics: dict[str, Any]) -> str:
     payload = json.dumps(metrics, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return base64.urlsafe_b64encode(payload).decode("ascii")
+
+
+def triton_inference_timeout_seconds() -> float:
+    raw_value = (os.getenv("TRITON_INFERENCE_TIMEOUT_SECONDS") or "").strip()
+    if not raw_value:
+        return DEFAULT_INFERENCE_TIMEOUT_SECONDS
+    try:
+        timeout = float(raw_value)
+    except ValueError:
+        return DEFAULT_INFERENCE_TIMEOUT_SECONDS
+    if timeout <= 0:
+        return DEFAULT_INFERENCE_TIMEOUT_SECONDS
+    return timeout
 
 
 async def _uses_generate_endpoint_backend(
