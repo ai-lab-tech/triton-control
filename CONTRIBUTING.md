@@ -119,4 +119,5 @@ The `main` branch is protected.
 
 ## Code Of Conduct
 
-Be respectful and constructive in all discussions and reviews.
+All contributors must follow the [Code of Conduct](CODE_OF_CONDUCT.md). Be
+respectful and constructive in all discussions and reviews.
