@@ -323,12 +323,19 @@ describe("InstanceS3BrowserPageComponent", () => {
     const model = { uri: "file://model" };
     component.editorInstance = { getModel: () => model };
     (globalThis as any).monaco = {
+      ...(globalThis as any).monaco,
       editor: {
+        ...((globalThis as any).monaco?.editor ?? {}),
+        create: () => ({ dispose: () => undefined }),
+        createDiffEditor: () => ({ dispose: () => undefined }),
         getModelMarkers: () => [
           { severity: 8, startLineNumber: 3, startColumn: 2, message: "bad syntax" },
         ],
       },
-      MarkerSeverity: { Error: 8 },
+      MarkerSeverity: {
+        ...((globalThis as any).monaco?.MarkerSeverity ?? {}),
+        Error: 8,
+      },
     };
 
     const msg = component.getMonacoSyntaxError();
