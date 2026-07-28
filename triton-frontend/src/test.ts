@@ -43,6 +43,11 @@ const baseMonaco = {
   },
 };
 
+const normalizeEditorInstance = (value: unknown) => ({
+  ...monacoEditorStub,
+  ...(value && typeof value === "object" ? value : {}),
+});
+
 const normalizeMonacoEditor = (value: typeof testGlobal.monaco) =>
   new Proxy(
     {
@@ -53,6 +58,12 @@ const normalizeMonacoEditor = (value: typeof testGlobal.monaco) =>
       get(target, prop: keyof typeof baseMonaco.editor) {
         const current = target[prop];
         const fallback = baseMonaco.editor[prop];
+        if (prop === "create" || prop === "createDiffEditor") {
+          return (...args: unknown[]) => {
+            const createFn = typeof current === "function" ? current : fallback;
+            return normalizeEditorInstance(createFn(...args));
+          };
+        }
         if (typeof fallback === "function" && typeof current !== "function") {
           return fallback;
         }
