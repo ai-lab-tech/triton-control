@@ -44,7 +44,7 @@
                   id="mlflow-image"
                   matInput
                   [(ngModel)]="image"
-                  placeholder="ghcr.io/mlflow/mlflow:v2.15.1"
+                  placeholder="ghcr.io/mlflow/mlflow:v3.14.0"
                 />
               </mat-form-field>
             </div>
@@ -101,12 +101,14 @@
             mat-flat-button
             color="primary"
             type="button"
-            (click)="install()"
-            [disabled]="!canInstall()"
-          >
-            <span class="material-icons">rocket_launch</span>
-            {{ installing() ? "Waiting for pod..." : "Install" }}
-          </button>
+          (click)="install()"
+          [disabled]="!canInstall()"
+        >
+          <span class="material-icons" [class.spin]="installing()">{{
+            installing() ? "progress_activity" : "rocket_launch"
+          }}</span>
+          {{ installing() ? "Waiting for pod..." : "Install" }}
+        </button>
         </div>
       </mat-card>
     </div>

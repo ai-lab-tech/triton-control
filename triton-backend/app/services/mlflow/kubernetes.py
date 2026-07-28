@@ -132,6 +132,24 @@ def service_url(namespace: str, service_name: str) -> str:
     return f"http://{service_name}.{namespace}.svc.cluster.local:5000"
 
 
+def _allowed_hosts(namespace: str, service_name: str) -> str:
+    hosts = [
+        service_name,
+        f"{service_name}:5000",
+        f"{service_name}.{namespace}",
+        f"{service_name}.{namespace}:5000",
+        f"{service_name}.{namespace}.svc",
+        f"{service_name}.{namespace}.svc:5000",
+        f"{service_name}.{namespace}.svc.cluster.local",
+        f"{service_name}.{namespace}.svc.cluster.local:5000",
+        "localhost",
+        "localhost:*",
+        "127.0.0.1",
+        "127.0.0.1:*",
+    ]
+    return ",".join(hosts)
+
+
 def _manifests(
     request: InstallMlflowRequest,
     namespace: str,
@@ -157,6 +175,7 @@ def _manifests(
         service_name=q(service_name),
         data_pvc_name=q(_data_pvc_name(deployment_name)),
         image=q(request.image),
+        allowed_hosts=q(_allowed_hosts(namespace, service_name)),
     )
     return [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
 

@@ -28,6 +28,8 @@ _REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
     "content-length",
     "accept-encoding",
     "cookie",
+    "origin",
+    "referer",
     # Prevent Kubernetes service proxy from turning browser cache validation
     # requests into ApiException(304) errors.
     "if-none-match",

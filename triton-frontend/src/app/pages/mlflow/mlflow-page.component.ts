@@ -1,9 +1,10 @@
-import { Component, OnDestroy, inject, signal } from "@angular/core";
+import { Component, DestroyRef, OnDestroy, inject, signal } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { HttpClient } from "@angular/common/http";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, interval } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
@@ -72,12 +73,13 @@ export class MlflowPageComponent implements OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly auth = inject(AuthService);
   private readonly chrome = inject(ChromeService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
     .replace(/\/$/, "");
 
   installationName = "mlflow";
-  image = "ghcr.io/mlflow/mlflow:v2.15.1";
+  image = "ghcr.io/mlflow/mlflow:v3.14.0";
   dockerconfigjson = "";
   readonly dockerconfigjsonEditorOptions = {
     theme: "vs-dark",
@@ -101,14 +103,24 @@ export class MlflowPageComponent implements OnDestroy {
   constructor() {
     this.chrome.hideTopbar();
     void this.load();
+    interval(5000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        const current = this.status();
+        if (current?.installed && !current.ready) {
+          void this.load(true);
+        }
+      });
   }
 
   ngOnDestroy(): void {
     this.chrome.showTopbar();
   }
 
-  async load(): Promise<void> {
-    this.loading.set(true);
+  async load(silent = false): Promise<void> {
+    if (!silent) {
+      this.loading.set(true);
+    }
     try {
       await this.auth.refreshSession().catch(() => undefined);
       const status = await firstValueFrom(
@@ -127,9 +139,13 @@ export class MlflowPageComponent implements OnDestroy {
       this.frameUrl.set(null);
       this.frameRawUrl.set(null);
       this.frameLoading.set(false);
-      this.setMessage(mapApiErrorMessage(error, "Failed to load MLflow status."), "error");
+      if (!silent) {
+        this.setMessage(mapApiErrorMessage(error, "Failed to load MLflow status."), "error");
+      }
     } finally {
-      this.loading.set(false);
+      if (!silent) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -202,9 +218,17 @@ export class MlflowPageComponent implements OnDestroy {
       await firstValueFrom(
         this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload),
       );
+      this.status.set(this.creatingStatusFromPayload(payload));
       await this.load();
       this.setMessage("MLflow installation started.", "success");
     } catch (error) {
+      if (this.isTransportError(error)) {
+        this.setMessage("Connection lost while waiting. Checking MLflow status...", "info");
+        const recovered = await this.recoverInstallStatus();
+        if (recovered) {
+          return;
+        }
+      }
       this.setMessage(mapApiErrorMessage(error, "Failed to install MLflow."), "error");
     } finally {
       this.installing.set(false);
@@ -268,5 +292,52 @@ export class MlflowPageComponent implements OnDestroy {
   private setMessage(message: string, tone: "info" | "success" | "error"): void {
     this.message.set(message);
     this.messageTone.set(tone);
+  }
+
+  private creatingStatusFromPayload(payload: InstallMlflowRequest): MlflowStatusResponse {
+    const installationName = payload.installation_name;
+    return {
+      installed: true,
+      status: "creating",
+      ready: false,
+      status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",
+      base_path: "/api/mlflow/proxy/",
+      service_url: "",
+      installation: {
+        namespace: "triton-control",
+        deployment_name: installationName,
+        service_name: `${installationName}-service`,
+        image: payload.image,
+        applied_resources: [],
+      },
+    };
+  }
+
+  private isTransportError(error: unknown): boolean {
+    return (error as { status?: unknown } | null)?.status === 0;
+  }
+
+  private async recoverInstallStatus(): Promise<boolean> {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      if (attempt > 0) {
+        await this.delay(2000);
+      }
+      await this.load(true);
+      const current = this.status();
+      if (current?.installed) {
+        this.setMessage(
+          current.ready
+            ? "MLflow installed."
+            : "Installation exists. Waiting for MLflow pod to reach Running state.",
+          current.ready ? "success" : "info",
+        );
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 }

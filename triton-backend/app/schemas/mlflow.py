@@ -14,7 +14,7 @@ class InstallMlflowRequest(SQLModel):
     """Request body for ``POST /api/mlflow``."""
 
     installation_name: str = "mlflow"
-    image: str = "ghcr.io/mlflow/mlflow:v2.15.1"
+    image: str = "ghcr.io/mlflow/mlflow:v3.14.0"
     dockerconfigjson: Optional[str] = None
 
     @field_validator("installation_name", "image")
