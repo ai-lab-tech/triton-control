@@ -18,10 +18,6 @@ one open-source UI for NVIDIA Triton on Kubernetes.
 [Roadmap](https://ai-lab-tech.github.io/triton-control/roadmap/)
 
 <p>
-  <img src="assets/readme/triton-control-dashboard-hero.png" alt="Triton Control dashboard showing healthy Triton instances" />
-</p>
-
-<p>
   <img src="assets/readme/triton-control-demo.gif" alt="Triton Control Add Deployment demo showing form entry, S3 repository settings, Deploy click, pod startup, ready model, and inference metrics" />
 </p>
 
@@ -55,16 +51,6 @@ Core capabilities include:
 - Kubernetes-managed MLflow tracking with persistent storage and an embedded,
   authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
-
-## Screenshots
-
-<p>
-  <img src="assets/readme/triton-control-instances-list.png" alt="Triton Control instances page showing three healthy Triton deployments" />
-</p>
-
-<p>
-  <img src="assets/readme/triton-control-instance-qwen3-models.png" alt="Triton Control Qwen3 instance page showing the deployed qwen3_4b_instruct model as ready" />
-</p>
 
 ## Run With Docker Compose
 
@@ -371,6 +357,20 @@ npm run format:check
 npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 npm run test:smoke
 ```
+
+## Screenshots
+
+<p>
+  <img src="assets/readme/triton-control-dashboard-hero.png" alt="Triton Control dashboard showing healthy Triton instances" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instances-list.png" alt="Triton Control instances page showing three healthy Triton deployments" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instance-qwen3-models.png" alt="Triton Control Qwen3 instance page showing the deployed qwen3_4b_instruct model as ready" />
+</p>
 
 ## Repository Layout
 
