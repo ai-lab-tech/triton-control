@@ -6,18 +6,37 @@
 [![Docs](https://github.com/ai-lab-tech/triton-control/actions/workflows/docs-pages.yml/badge.svg)](https://ai-lab-tech.github.io/triton-control/)
 [![License](https://img.shields.io/github/license/ai-lab-tech/triton-control)](LICENSE)
 
-Triton Control is a web application for managing and operating NVIDIA Triton
-Inference Server environments. The primary deployment target is Kubernetes
-through the Helm chart in `charts/triton-control`.
-The same application can also run with Docker Compose or Podman Compose for
-local evaluation (with reduced Kubernetes-specific functionality, for example
-no self-deployed Triton deployment workflows), and with separate Python/npm
-processes for development.
+**Operate NVIDIA Triton on Kubernetes from one open-source control plane.**
 
-Documentation: https://ai-lab-tech.github.io/triton-control/
+Triton Control brings deployment, model repositories, inference testing,
+performance analysis, development workspaces, MLflow, and Argo Workflows into
+one open-source UI for NVIDIA Triton on Kubernetes.
+
+[Documentation](https://ai-lab-tech.github.io/triton-control/) ·
+[Quickstart](https://ai-lab-tech.github.io/triton-control/getting-started/) ·
+[Examples](examples) ·
+[Roadmap](https://ai-lab-tech.github.io/triton-control/roadmap/)
+
+<p>
+  <img src="assets/readme/triton-control-demo.gif" alt="Triton Control Add Deployment demo showing form entry, S3 repository settings, Deploy click, pod startup, ready model, and inference metrics" />
+</p>
+
+The primary deployment target is Kubernetes through the Helm chart in
+`charts/triton-control`. The same application can also run with Docker Compose
+or Podman Compose for local evaluation, with reduced Kubernetes-specific
+functionality such as no self-deployed Triton deployment workflows.
 
 Published container image:
 [`ailabtechtriton/triton-control:v1.2.2`](https://hub.docker.com/r/ailabtechtriton/triton-control)
+
+## Why Triton Control?
+
+NVIDIA Triton is a powerful inference server, but the workflow around it is
+often fragmented. Teams coordinate model repositories, S3 credentials,
+Kubernetes resources, model configuration, endpoint tests, performance runs,
+development environments, and access control across separate tools. Triton
+Control connects those steps without replacing Triton or hiding the underlying
+model engineering.
 
 Core capabilities include:
 
@@ -338,6 +357,20 @@ npm run format:check
 npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 npm run test:smoke
 ```
+
+## Screenshots
+
+<p>
+  <img src="assets/readme/triton-control-dashboard-hero.png" alt="Triton Control dashboard showing healthy Triton instances" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instances-list.png" alt="Triton Control instances page showing three healthy Triton deployments" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instance-qwen3-models.png" alt="Triton Control Qwen3 instance page showing the deployed qwen3_4b_instruct model as ready" />
+</p>
 
 ## Repository Layout
 

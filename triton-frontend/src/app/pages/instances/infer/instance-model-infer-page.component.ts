@@ -132,6 +132,8 @@ export class InstanceModelInferPageComponent implements OnInit {
   "text_input": "What is Triton Inference Server?",
   "parameters": {
     "stream": false,
+    "max_tokens": 2048,
+    "ignore_eos": false,
     "temperature": 0
   }
 }`;

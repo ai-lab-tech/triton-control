@@ -32,6 +32,7 @@ from app.services.triton.config import extract_triton_error_detail
 GENERATE_ENDPOINT_BACKENDS = {"vllm", "tensorrtllm", "tensorrt_llm", "trtllm"}
 TENSORRT_LLM_GENERATE_BACKENDS = {"tensorrtllm", "tensorrt_llm", "trtllm"}
 DEFAULT_INFERENCE_TIMEOUT_SECONDS = 600.0
+DEFAULT_GENERATE_MAX_TOKENS = 2048
 
 
 async def list_models(
@@ -158,6 +159,7 @@ async def infer_model(
     stats_before = await triton_service.collect_inference_stats_snapshot() if use_stats else None
     try:
         if await _uses_generate_endpoint_backend(triton_service, model_name, version):
+            payload_bytes = _with_default_generate_parameters(payload_bytes, content_type)
             triton_response = await triton_service.generate_model_raw(
                 model_name,
                 payload_bytes,
@@ -239,6 +241,36 @@ def triton_inference_timeout_seconds() -> float:
     if timeout <= 0:
         return DEFAULT_INFERENCE_TIMEOUT_SECONDS
     return timeout
+
+
+def _with_default_generate_parameters(payload_bytes: bytes, content_type: str) -> bytes:
+    if "json" not in (content_type or "application/json").lower():
+        return payload_bytes
+
+    try:
+        payload = json.loads(payload_bytes)
+    except (TypeError, ValueError):
+        return payload_bytes
+
+    if not isinstance(payload, dict):
+        return payload_bytes
+
+    parameters = payload.get("parameters")
+    if not isinstance(parameters, dict):
+        return payload_bytes
+
+    changed = False
+    if "max_tokens" not in parameters:
+        parameters["max_tokens"] = DEFAULT_GENERATE_MAX_TOKENS
+        changed = True
+    if "ignore_eos" not in parameters:
+        parameters["ignore_eos"] = False
+        changed = True
+
+    if not changed:
+        return payload_bytes
+
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 async def _uses_generate_endpoint_backend(

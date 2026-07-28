@@ -1175,7 +1175,34 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         service.generate_model_raw.assert_awaited_once_with(
             "m",
-            b'{"text_input":"hello","parameters":{"stream":false}}',
+            b'{"text_input":"hello","parameters":{"stream":false,"max_tokens":2048,"ignore_eos":false}}',
+            "application/json",
+        )
+
+        # Arrange / Act
+        service.generate_model_raw.reset_mock()
+        request = _BodyRequest(
+            b'{"text_input":"hello","parameters":{"stream":false,"max_tokens":64,"ignore_eos":true}}',
+            headers={"content-type": "application/json"},
+        )
+        with patch("app.services.triton.models.TritonService", return_value=service), patch(
+            "app.services.access.ensure_instance_access", return_value=None
+        ):
+            response = await infer_instance_model(
+                1,
+                "m",
+                "1",
+                {"text_input": "hello", "parameters": {"stream": False, "max_tokens": 64, "ignore_eos": True}},
+                request,
+                session=session,
+                claims={"role": "admin"},
+            )
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        service.generate_model_raw.assert_awaited_once_with(
+            "m",
+            b'{"text_input":"hello","parameters":{"stream":false,"max_tokens":64,"ignore_eos":true}}',
             "application/json",
         )
 
