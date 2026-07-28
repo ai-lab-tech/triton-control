@@ -10,6 +10,7 @@ async def infer(url: str, prompt: str, max_tokens: int, temperature: float) -> N
     client = grpcclient.InferenceServerClient(url=url)
     sampling_parameters = {
         "max_tokens": max_tokens,
+        "ignore_eos": False,
         "temperature": temperature,
         "top_p": 0.95,
     }
@@ -52,7 +53,7 @@ async def infer(url: str, prompt: str, max_tokens: int, temperature: float) -> N
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="localhost:8001", help="Triton gRPC endpoint")
-    parser.add_argument("--max-tokens", type=int, default=128)
+    parser.add_argument("--max-tokens", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument(
         "prompt",
