@@ -101,14 +101,14 @@
             mat-flat-button
             color="primary"
             type="button"
-          (click)="install()"
-          [disabled]="!canInstall()"
-        >
-          <span class="material-icons" [class.spin]="installing()">{{
-            installing() ? "progress_activity" : "rocket_launch"
-          }}</span>
-          {{ installing() ? "Waiting for pod..." : "Install" }}
-        </button>
+            (click)="install()"
+            [disabled]="!canInstall()"
+          >
+            <span class="material-icons" [class.spin]="installing()">{{
+              installing() ? "progress_activity" : "rocket_launch"
+            }}</span>
+            {{ installing() ? "Waiting for pod..." : "Install" }}
+          </button>
         </div>
       </mat-card>
     </div>
