@@ -3944,7 +3944,7 @@
           "image": {
             "type": "string",
             "title": "Image",
-            "default": "ghcr.io/mlflow/mlflow:v2.15.1"
+            "default": "ghcr.io/mlflow/mlflow:v3.14.0"
           },
           "dockerconfigjson": {
             "anyOf": [

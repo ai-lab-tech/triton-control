@@ -326,8 +326,19 @@ describe("InstanceS3BrowserPageComponent", () => {
       ...(globalThis as any).monaco,
       editor: {
         ...((globalThis as any).monaco?.editor ?? {}),
-        create: () => ({ dispose: () => undefined }),
-        createDiffEditor: () => ({ dispose: () => undefined }),
+        create: () => ({
+          dispose: () => undefined,
+          getValue: () => "",
+          layout: () => undefined,
+          onDidBlurEditorWidget: () => ({ dispose: () => undefined }),
+          onDidChangeModelContent: () => ({ dispose: () => undefined }),
+          setValue: () => undefined,
+        }),
+        createDiffEditor: () => ({
+          dispose: () => undefined,
+          layout: () => undefined,
+          setModel: () => undefined,
+        }),
         getModelMarkers: () => [
           { severity: 8, startLineNumber: 3, startColumn: 2, message: "bad syntax" },
         ],
