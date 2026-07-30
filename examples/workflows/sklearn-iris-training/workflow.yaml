@@ -1,0 +1,106 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: sklearn-iris-training-
+  labels:
+    app.kubernetes.io/name: sklearn-iris-training
+    app.kubernetes.io/part-of: triton-control-examples
+spec:
+  entrypoint: train
+  podGC:
+    strategy: OnPodCompletion
+  ttlStrategy:
+    secondsAfterCompletion: 86400
+    secondsAfterFailure: 86400
+  arguments:
+    parameters:
+      - name: workspace-pvc
+        value: workspace-code-1-workspace-0
+      - name: script-path
+        value: /workspace/train_iris.py
+      - name: output-dir
+        value: /workspace/outputs/iris-training
+      - name: test-size
+        value: "0.2"
+      - name: random-state
+        value: "42"
+      - name: max-iter
+        value: "200"
+  templates:
+    - name: train
+      inputs:
+        parameters:
+          - name: workspace-pvc
+          - name: script-path
+          - name: output-dir
+          - name: test-size
+          - name: random-state
+          - name: max-iter
+      container:
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-ec"]
+        args:
+          - |
+            mkdir -p /tmp/outputs
+            printf 'nan\n' > /tmp/outputs/accuracy.txt
+
+            SCRIPT_PATH="{{inputs.parameters.script-path}}"
+            if [ ! -f "$SCRIPT_PATH" ]; then
+              for candidate in \
+                /workspace/train_iris.py \
+                /workspace/*/train_iris.py
+              do
+                if [ -f "$candidate" ]; then
+                  SCRIPT_PATH="$candidate"
+                  break
+                fi
+              done
+            fi
+
+            if [ ! -f "$SCRIPT_PATH" ]; then
+              echo "Training script not found: {{inputs.parameters.script-path}}" >&2
+              echo "Check that workspace-pvc points to the same PVC used by code-server." >&2
+              echo "Mounted /workspace contents:" >&2
+              find /workspace -maxdepth 3 \( -type f -name train_iris.py -o -type d \) 2>/dev/null | sort >&2
+              exit 1
+            fi
+
+            export HOME=/tmp
+            unset PYTHONUSERBASE
+            unset PIP_USER
+            python -m pip install --no-cache-dir --target /tmp/python-packages \
+              scikit-learn==1.5.2 joblib==1.4.2
+            export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
+
+            python "$SCRIPT_PATH" \
+              --test-size "{{inputs.parameters.test-size}}" \
+              --random-state "{{inputs.parameters.random-state}}" \
+              --max-iter "{{inputs.parameters.max-iter}}" \
+              --output-dir "{{inputs.parameters.output-dir}}"
+
+            cp "{{inputs.parameters.output-dir}}/accuracy.txt" /tmp/outputs/accuracy.txt
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+      outputs:
+        parameters:
+          - name: accuracy
+            valueFrom:
+              path: /tmp/outputs/accuracy.txt
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: "{{inputs.parameters.workspace-pvc}}"
