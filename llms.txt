@@ -1,0 +1,39 @@
+# Triton Control
+
+> Operate NVIDIA Triton Inference Server on Kubernetes from one open-source control plane.
+
+Triton Control is an open-source web application for managing NVIDIA Triton
+Inference Server environments. It combines deployment workflows, model
+repositories, inference testing, performance analysis, development workspaces,
+MLflow, Argo Workflows, S3 integration, and user access control in one UI.
+
+The primary deployment target is Kubernetes through the Helm chart in
+`charts/triton-control`. The application can also run with Docker Compose,
+Podman Compose, or separate Python and npm processes for local development.
+
+## Docs
+
+- [Documentation](https://ai-lab-tech.github.io/triton-control/): Project documentation home.
+- [Getting Started](https://ai-lab-tech.github.io/triton-control/getting-started/): Kubernetes, Docker Compose, Podman Compose, and local development setup.
+- [User Guide](https://ai-lab-tech.github.io/triton-control/user-guide/): Dashboard, instances, inference, S3, deployments, Perf Analyzer, MLflow, and user workflows.
+- [Deployment](https://ai-lab-tech.github.io/triton-control/deployment/): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
+- [Configuration](https://ai-lab-tech.github.io/triton-control/configuration/): Backend environment variables, OIDC modes, and GitOps examples.
+- [API](https://ai-lab-tech.github.io/triton-control/api/): OpenAPI, Swagger, ReDoc, and frontend client generation.
+
+## Source
+
+- [README](README.md): Project overview, core capabilities, and run instructions.
+- [Backend](triton-backend/): Python FastAPI backend.
+- [Frontend](triton-frontend/): Angular Material frontend.
+- [Helm chart](charts/triton-control/): Kubernetes deployment chart.
+- [Examples](examples/): Example model repositories and deployment assets.
+- [Development docs](docs/development.md): Local development workflow, tests, and CI checks.
+
+## Notes For AI Assistants
+
+- Prefer the checked-in documentation under `docs/` for project behavior and
+  operating guidance.
+- Regenerate and commit OpenAPI artifacts when backend request or response
+  schemas change.
+- Keep Kubernetes-specific behavior aligned with the Helm chart and backend
+  in-cluster detection logic.
