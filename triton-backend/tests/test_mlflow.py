@@ -21,7 +21,7 @@ class MlflowTests(unittest.TestCase):
     def _request(self) -> InstallMlflowRequest:
         return InstallMlflowRequest(
             installation_name="mlflow",
-            image="ghcr.io/mlflow/mlflow:v2.15.1",
+            image="ghcr.io/mlflow/mlflow:v3.14.0",
         )
 
     def test_InstallMlflow_NameProvided_AppliesNamedResources(self) -> None:
@@ -226,6 +226,9 @@ class MlflowTests(unittest.TestCase):
                 "capabilities": {"drop": ["ALL"]},
             },
         )
+        command = " ".join(container["args"])
+        self.assertIn("--allowed-hosts", command)
+        self.assertIn("mlflow-service.mlflow.svc.cluster.local:5000", command)
 
     def test_ApiStatus_ViewerIsRejected(self) -> None:
         with self.assertRaises(HTTPException) as raised:
@@ -243,7 +246,7 @@ class MlflowTests(unittest.TestCase):
                 namespace="triton-control",
                 deployment_name="mlflow",
                 service_name="mlflow-service",
-                image="ghcr.io/mlflow/mlflow:v2.15.1",
+                image="ghcr.io/mlflow/mlflow:v3.14.0",
                 applied_resources=["Deployment/mlflow"],
             ),
         )
@@ -257,7 +260,7 @@ class MlflowTests(unittest.TestCase):
             namespace="triton-control",
             deployment_name="mlflow",
             service_name="mlflow-service",
-            image="ghcr.io/mlflow/mlflow:v2.15.1",
+            image="ghcr.io/mlflow/mlflow:v3.14.0",
             applied_resources=["Deployment/mlflow"],
         )
         with patch("app.api.mlflow_api.installer.install_mlflow", return_value=expected) as mocked:
@@ -423,3 +426,5 @@ class MlflowTests(unittest.TestCase):
     def test_ProxyRequestSkipHeaders_StripsConditionalCacheHeaders(self) -> None:
         self.assertIn("if-none-match", proxy._REQUEST_SKIP_HEADERS)
         self.assertIn("if-modified-since", proxy._REQUEST_SKIP_HEADERS)
+        self.assertIn("origin", proxy._REQUEST_SKIP_HEADERS)
+        self.assertIn("referer", proxy._REQUEST_SKIP_HEADERS)

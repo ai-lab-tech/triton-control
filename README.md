@@ -1,14 +1,42 @@
 ﻿# Triton Control
 
-Triton Control is a web application for managing and operating NVIDIA Triton
-Inference Server environments. The primary deployment target is Kubernetes
-through the Helm chart in `charts/triton-control`.
-The same application can also run with Docker Compose or Podman Compose for
-local evaluation (with reduced Kubernetes-specific functionality, for example
-no self-deployed Triton deployment workflows), and with separate Python/npm
-processes for development.
+[![Release](https://img.shields.io/github/v/release/ai-lab-tech/triton-control)](https://github.com/ai-lab-tech/triton-control/releases/latest)
+[![Backend CI](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/ai-lab-tech/triton-control/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/ai-lab-tech/triton-control/actions/workflows/frontend-ci.yml)
+[![Docs](https://github.com/ai-lab-tech/triton-control/actions/workflows/docs-pages.yml/badge.svg)](https://ai-lab-tech.github.io/triton-control/)
+[![License](https://img.shields.io/github/license/ai-lab-tech/triton-control)](LICENSE)
 
-Documentation: https://ai-lab-tech.github.io/triton-control/
+**Operate NVIDIA Triton on Kubernetes from one open-source control plane.**
+
+Triton Control brings deployment, model repositories, inference testing,
+performance analysis, development workspaces, MLflow, and Argo Workflows into
+one open-source UI for NVIDIA Triton on Kubernetes.
+
+[Documentation](https://ai-lab-tech.github.io/triton-control/) ·
+[Quickstart](https://ai-lab-tech.github.io/triton-control/getting-started/) ·
+[Examples](examples) ·
+[Roadmap](https://ai-lab-tech.github.io/triton-control/roadmap/)
+
+<p>
+  <img src="assets/readme/triton-control-demo.gif" alt="Triton Control Add Deployment demo showing form entry, S3 repository settings, Deploy click, pod startup, ready model, and inference metrics" />
+</p>
+
+The primary deployment target is Kubernetes through the Helm chart in
+`charts/triton-control`. The same application can also run with Docker Compose
+or Podman Compose for local evaluation, with reduced Kubernetes-specific
+functionality such as no self-deployed Triton deployment workflows.
+
+Published container image:
+[`ailabtechtriton/triton-control:v1.2.2`](https://hub.docker.com/r/ailabtechtriton/triton-control)
+
+## Why Triton Control?
+
+NVIDIA Triton is a powerful inference server, but the workflow around it is
+often fragmented. Teams coordinate model repositories, S3 credentials,
+Kubernetes resources, model configuration, endpoint tests, performance runs,
+development environments, and access control across separate tools. Triton
+Control connects those steps without replacing Triton or hiding the underlying
+model engineering.
 
 Core capabilities include:
 
@@ -24,93 +52,59 @@ Core capabilities include:
   authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
 
-## Repository Layout
-
-- `triton-frontend/` - Angular Material frontend.
-- `triton-backend/` - Python FastAPI backend.
-- `charts/triton-control/` - Helm chart for Kubernetes deployment.
-- `compose.yaml` - Docker Compose stack for Triton Control and PostgreSQL.
-- `podman-compose.yaml` - Podman Compose equivalent of the Docker Compose stack.
-- `Dockerfile` - Builds a combined runtime image with frontend, backend, and Nginx.
-
 ## Run With Docker Compose
 
-Prerequisite: Docker Desktop or another Docker engine. Host Node.js, npm, and
-Java are not required for the Docker image build; the Dockerfile installs the
-frontend build tools inside the `node:22-alpine` build stage and regenerates the
-Swagger/OpenAPI client before building Angular.
+With Docker installed, start the published image:
+
+```bash
+docker pull ailabtechtriton/triton-control:v1.2.2
+docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
+docker compose up --no-build
+```
+
+After the stack starts, open `http://localhost:8080` in your browser.
+
+To build from source instead:
 
 ```bash
 docker compose up --build
 ```
 
-The Compose stack exposes:
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-- PostgreSQL: `127.0.0.1:5433`
+Docker Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
-The app container uses:
-
-```text
-postgresql://triton:tritonpw@postgres:5432/triton_backend
-```
-
-Backend logging is quiet by default. Set `BACKEND_VERBOSE=true` to enable
-info-level backend logs and Uvicorn access logs. Set `DATABASE_ECHO=1` only
-when SQL statement logging is needed.
-Set `CLIENT_MAX_BODY_SIZE` (for example `256m` or `1g`) to allow larger file
-uploads through the container nginx reverse proxy.
-
-For local development this is ready to run. Before using Compose outside local
-development, replace `SESSION_SECRET`, `JWT_SECRET`, `S3_SECRET_ENCRYPTION_KEY`,
-and `POSTGRES_PASSWORD`.
-
-If a Triton server is running in another Docker Compose project, `127.0.0.1`
-inside Triton Control points to the Triton Control container itself. Use one of
-these instead:
-
-```text
-http://host.docker.internal:<published-triton-http-port>
-```
-
-or attach the Triton container to the `triton-control` network and
-use the Triton container name:
-
-```bash
-docker network connect triton-control tritonserver-explicit
-```
-
-```text
-http://tritonserver-explicit:8000
-```
-
-For metrics, the backend automatically appends `/metrics` when the metrics URL
-has no path.
-
-TLS certificate note:
-
-- With SSL verification enabled, Triton and S3 HTTPS endpoints are validated
-  against the system trust store by default.
-- A pasted CA certificate is optional and only needed for private,
-  self-signed, or internal CA chains.
+For Triton running on the host, use
+`http://host.docker.internal:<published-http-port>` instead of `127.0.0.1`.
+Before a non-development deployment, replace the secrets and database password
+defined in `compose.yaml`.
 
 ## Run With Podman Compose
 
-Prerequisite: Podman and `podman-compose`.
+With Podman and `podman-compose` installed, start the published image:
+
+```bash
+podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
+podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
+  localhost/triton-control:compose
+podman-compose -f podman-compose.yaml up --no-build
+```
+
+After the stack starts, open `http://localhost:8080` in your browser.
+
+To build from source instead:
 
 ```bash
 podman-compose -f podman-compose.yaml up --build
 ```
 
-The exposed URLs are the same as Docker Compose:
+The backend API is available at `http://localhost:8000` and PostgreSQL at
+`127.0.0.1:5433`.
 
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-- PostgreSQL: `127.0.0.1:5433`
-
-The Podman file uses fully qualified image names such as
-`docker.io/library/postgres:16-alpine` and `localhost/triton-control:compose`.
+Podman Compose does not provide Kubernetes. Deployments, Development
+workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Run On Kubernetes
 
@@ -126,24 +120,17 @@ OIDC login has been tested with Microsoft Entra ID, Keycloak, and Dex. The
 Kubernetes deployment has also been tested with Argo CD managing the Helm
 release in a GitOps workflow.
 
-Build and push the image to a registry first:
-
-```bash
-docker build -t registry.example.com/triton-control:0.1.0 .
-docker push registry.example.com/triton-control:0.1.0
-```
-
-Only Docker is required on the build host for this image build. The build needs
-network access to install npm packages and, if the Swagger generator jar is not
-already cached in the build context, to download `swagger-codegen-cli.jar`.
+The Helm deployment can use the published image directly; users do not need to
+build, pull, or push it on the machine running Helm. Kubernetes pulls the image
+from Docker Hub when it creates the application pod.
 
 Create a values file, for example `values-prod.yaml`:
 
 ```yaml
 app:
   image:
-    repository: registry.example.com/triton-control
-    tag: "0.1.0"
+    repository: ailabtechtriton/triton-control
+    tag: "v1.2.2"
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
@@ -370,6 +357,29 @@ npm run format:check
 npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 npm run test:smoke
 ```
+
+## Screenshots
+
+<p>
+  <img src="assets/readme/triton-control-dashboard-hero.png" alt="Triton Control dashboard showing healthy Triton instances" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instances-list.png" alt="Triton Control instances page showing three healthy Triton deployments" />
+</p>
+
+<p>
+  <img src="assets/readme/triton-control-instance-qwen3-models.png" alt="Triton Control Qwen3 instance page showing the deployed qwen3_4b_instruct model as ready" />
+</p>
+
+## Repository Layout
+
+- `triton-frontend/` - Angular Material frontend.
+- `triton-backend/` - Python FastAPI backend.
+- `charts/triton-control/` - Helm chart for Kubernetes deployment.
+- `compose.yaml` - Docker Compose stack for Triton Control and PostgreSQL.
+- `podman-compose.yaml` - Podman Compose equivalent of the Docker Compose stack.
+- `Dockerfile` - Builds a combined runtime image with frontend, backend, and Nginx.
 
 ## More Documentation
 

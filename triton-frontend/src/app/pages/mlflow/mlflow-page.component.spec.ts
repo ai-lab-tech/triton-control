@@ -1,5 +1,5 @@
 import { NO_ERRORS_SCHEMA } from "@angular/core";
-import { TestBed } from "@angular/core/testing";
+import { TestBed, fakeAsync, tick } from "@angular/core/testing";
 import { HttpClientTestingModule, HttpTestingController } from "@angular/common/http/testing";
 import { provideRouter } from "@angular/router";
 
@@ -19,6 +19,21 @@ describe("MlflowPageComponent", () => {
     status_message: "",
     base_path: "/api/mlflow/proxy/",
     installation: null,
+  };
+  const creatingStatus = {
+    installed: true,
+    status: "creating",
+    ready: false,
+    status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",
+    base_path: "/api/mlflow/proxy/",
+    service_url: "http://mlflow-service.triton-control.svc.cluster.local:5000",
+    installation: {
+      namespace: "triton-control",
+      deployment_name: "mlflow",
+      service_name: "mlflow-service",
+      image: "ghcr.io/mlflow/mlflow:v3.14.0",
+      applied_resources: ["Deployment/mlflow"],
+    },
   };
 
   beforeEach(async () => {
@@ -71,7 +86,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });
@@ -97,7 +112,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });
@@ -127,7 +142,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });
@@ -153,7 +168,7 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
     flushInitialStatus();
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v2.15.1";
+    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
 
     expect(component.canInstall()).toBeTrue();
   });
@@ -194,7 +209,7 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v2.15.1";
+    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     expect(component.canInstall()).toBeTrue();
     const installPromise = component.install();
     await flushMicrotasks();
@@ -206,7 +221,7 @@ describe("MlflowPageComponent", () => {
       namespace: "triton-control",
       deployment_name: "mlflow",
       service_name: "mlflow-service",
-      image: "ghcr.io/mlflow/mlflow:v2.15.1",
+      image: "ghcr.io/mlflow/mlflow:v3.14.0",
       applied_resources: ["Deployment/mlflow"],
     });
     await flushMicrotasks();
@@ -221,7 +236,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });
@@ -239,7 +254,7 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v2.15.1";
+    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     expect(component.canInstall()).toBeTrue();
     const installPromise = component.install();
     await flushMicrotasks();
@@ -249,6 +264,52 @@ describe("MlflowPageComponent", () => {
 
     expect(component.messageTone()).toBe("error");
   });
+
+  it("recovers status after install transport failure", async () => {
+    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
+    await flushMicrotasks();
+    flushInitialStatus();
+    await flushMicrotasks();
+
+    component.installationName = "mlflow";
+    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
+    const installPromise = component.install();
+    await flushMicrotasks();
+
+    const installReq = http.expectOne("/api/mlflow");
+    installReq.error(new ProgressEvent("error"));
+    await flushMicrotasks();
+
+    const statusReq = http.expectOne("/api/mlflow");
+    statusReq.flush(creatingStatus);
+    await flushMicrotasks();
+    await installPromise;
+
+    expect(component.status()?.installed).toBeTrue();
+    expect(component.messageTone()).toBe("info");
+    expect(component.message()).toContain("Installation exists");
+  });
+
+  it("polls status while installed but not ready", fakeAsync(() => {
+    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
+
+    tick();
+    http.expectOne("/api/mlflow").flush(creatingStatus);
+    tick();
+
+    tick(5000);
+    const pollReq = http.expectOne("/api/mlflow");
+    expect(pollReq.request.method).toBe("GET");
+    pollReq.flush({
+      ...creatingStatus,
+      status: "ready",
+      ready: true,
+      status_message: "MLflow pod is Running.",
+    });
+    tick();
+
+    expect(component.status()?.ready).toBeTrue();
+  }));
 
   it("reloads frame when status is ready", async () => {
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
@@ -263,7 +324,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });
@@ -290,7 +351,7 @@ describe("MlflowPageComponent", () => {
         namespace: "triton-control",
         deployment_name: "mlflow",
         service_name: "mlflow-service",
-        image: "ghcr.io/mlflow/mlflow:v2.15.1",
+        image: "ghcr.io/mlflow/mlflow:v3.14.0",
         applied_resources: ["Deployment/mlflow"],
       },
     });

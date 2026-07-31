@@ -25,31 +25,7 @@ Goal:
 - Replace the singleton model with isolated Kubernetes Jobs per run.
 - Support multiple concurrent runs across different instance/model targets.
 
-#### Perf Analyzer Profile Page Links
 
-Goal:
-
-- Link Perf Analyzer status and run history directly to the related model Profile pages.
-- Make it easier to reopen an active or completed profiling run from dashboard and Perf Analyzer views.
-
-#### Kubernetes Events in Dashboard
-
-Goal:
-
-- Show relevant Kubernetes events for self-deployed Triton instances in the dashboard.
-- Surface deployment, pod scheduling, image pull, readiness, and failure events without requiring users to open raw cluster tooling.
-
-#### Central Backend Logs in Dashboard
-
-Goal:
-
-- Provide a central backend log view directly from the dashboard.
-- Help administrators inspect backend errors, warnings, authentication events, and operational activity without opening container or cluster logs manually.
-
-Scope:
-
-- Show recent backend log entries with timestamp, level, source, and message.
-- Avoid exposing secrets, credentials, tokens, or sensitive request payloads in the UI.
 
 #### Resource Management for Triton Instances
 
@@ -84,12 +60,6 @@ Scope:
 
 - Both authentication options apply to ingress endpoints of self-deployed Triton serving instances created via Triton Control.
 
-#### OIDC Provider Examples
-
-Goal:
-
-- Keep OIDC documentation and architecture provider-neutral.
-- Add tested setup examples for common OIDC providers without making one provider part of the product architecture.
 
 #### Local Email/Password Account Lifecycle
 
@@ -131,13 +101,6 @@ Goal:
 - Extend user management with groups.
 - Establish a foundation for role- and team-based administration.
 
-#### code-server Integration
-
-Goal:
-
-- Integrate a browser-based development environment directly into the workspace.
-- Provide every user with their own isolated development environment.
-
 
 
 #### Enhanced S3 Browser
@@ -151,13 +114,9 @@ Goal:
 
 ### Next
 
-- code-server integration
 
 - Perf Analyzer parallel execution
-- Perf Analyzer profile page links
-- Kubernetes events in dashboard
 - TLS configuration in the Add Deployment flow
-- OIDC provider examples
 - Local email/password invite and password reset flow
 - OpenAI API integration for Triton Server
 

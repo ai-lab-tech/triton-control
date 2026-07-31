@@ -11,7 +11,9 @@ import os
 from datetime import datetime
 from threading import Lock
 from typing import Any
+from urllib.parse import quote, urlsplit, urlunsplit
 
+import httpx
 from sqlmodel import Session
 
 from app.db.entities import PerfAnalyzerEntity, PerfAnalyzerRunEntity
@@ -184,7 +186,12 @@ def _run_perf_analyzer_locked(
     if entity is None:
         raise BadRequestError("Perf Analyzer is not installed")
     instance = get_instance_or_404(session, request.instance_id, claims)
-    prepared_input_data = _prepare_input_data_for_perf_analyzer(request.input_data)
+    decoupled = _requires_decoupled_perf_analyzer_mode(
+        instance,
+        model_name=request.model_name,
+        model_version=request.model_version,
+    )
+    prepared_input_data = _prepare_input_data_for_perf_analyzer(request.input_data, decoupled=decoupled)
     input_data_arg: str | None = None
     if prepared_input_data:
         direct_input = _direct_perf_input_argument(prepared_input_data)
@@ -201,6 +208,7 @@ def _run_perf_analyzer_locked(
         instance,
         perf_analyzer_namespace=entity.namespace,
         input_data_arg=input_data_arg,
+        decoupled=decoupled,
     )
     output = k8s.exec_running_pod(entity.namespace, command)
     run = perf_analyzer.get_latest_run(
@@ -215,7 +223,7 @@ def _run_perf_analyzer_locked(
             model_name=request.model_name,
             model_version=request.model_version,
         )
-    run.batch_size = request.batch_size
+    run.batch_size = _effective_perf_analyzer_batch_size(request, decoupled=decoupled)
     run.concurrency_range = request.concurrency_range
     run.measurement_request_count = request.measurement_request_count
     run.input_data = prepared_input_data
@@ -232,13 +240,20 @@ def _run_command(
     *,
     perf_analyzer_namespace: str = "",
     input_data_arg: str | None = None,
+    decoupled: bool | None = None,
 ) -> list[str]:
     target = _perf_analyzer_target(instance, perf_analyzer_namespace=perf_analyzer_namespace)
     protocol = _perf_analyzer_protocol(instance, target=target)
-    decoupled = _requires_decoupled_perf_analyzer_mode(instance)
+    if decoupled is None:
+        decoupled = _requires_decoupled_perf_analyzer_mode(
+            instance,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
     if decoupled:
         target = _grpc_perf_analyzer_target(target)
         protocol = "grpc"
+    batch_size = _effective_perf_analyzer_batch_size(request, decoupled=decoupled)
     cmd = [
         "perf_analyzer",
         "-m",
@@ -250,7 +265,7 @@ def _run_command(
         "-i",
         protocol,
         "-b",
-        str(request.batch_size),
+        str(batch_size),
         "--concurrency-range",
         request.concurrency_range,
         "--measurement-mode",
@@ -263,6 +278,12 @@ def _run_command(
     if input_data_arg:
         cmd.extend(["--input-data", input_data_arg])
     return cmd
+
+
+def _effective_perf_analyzer_batch_size(request: RunPerfAnalyzerRequest, *, decoupled: bool) -> int:
+    if decoupled:
+        return 1
+    return request.batch_size
 
 
 def _perf_analyzer_target(instance: Any, *, perf_analyzer_namespace: str = "") -> str:
@@ -330,12 +351,21 @@ def _perf_analyzer_protocol(instance: Any, *, target: str) -> str:
     return "HTTP"
 
 
-def _requires_decoupled_perf_analyzer_mode(instance: Any) -> bool:
+def _requires_decoupled_perf_analyzer_mode(
+    instance: Any,
+    *,
+    model_name: str | None = None,
+    model_version: str | None = None,
+) -> bool:
     """Return true for vLLM-backed Triton deployments.
 
     The Triton vLLM backend exposes decoupled models. Perf Analyzer requires
     decoupled models to run with async streaming over gRPC.
     """
+    config = _fetch_triton_model_config(instance, model_name=model_name, model_version=model_version)
+    if _model_config_requires_decoupled_perf_analyzer_mode(config):
+        return True
+
     parts: list[str] = []
     for attr in ("deployment_log", "url"):
         parts.append(str(getattr(instance, attr, "") or ""))
@@ -346,6 +376,55 @@ def _requires_decoupled_perf_analyzer_mode(instance: Any) -> bool:
         if isinstance(model, dict):
             parts.extend(str(value) for value in model.values())
     return "vllm" in " ".join(parts).lower()
+
+
+def _fetch_triton_model_config(
+    instance: Any,
+    *,
+    model_name: str | None,
+    model_version: str | None,
+) -> dict[str, Any] | None:
+    if not model_name:
+        return None
+    raw_url = str(getattr(instance, "url", "") or "").strip()
+    if not raw_url:
+        return None
+
+    split = urlsplit(raw_url if "://" in raw_url else f"http://{raw_url}")
+    scheme = "https" if split.scheme == "grpcs" else "http"
+    netloc = split.netloc or split.path
+    host, sep, port = netloc.rpartition(":")
+    if sep and port in {"18001", "8001"}:
+        netloc = f"{host}:{'18000' if port == '18001' else '8000'}"
+    version_path = ""
+    if model_version and model_version != "1":
+        version_path = f"/versions/{quote(model_version, safe='')}"
+    path = f"/v2/models/{quote(model_name, safe='')}{version_path}/config"
+    config_url = urlunsplit((scheme, netloc, path, "", ""))
+    try:
+        with httpx.Client(timeout=5, follow_redirects=False, trust_env=False) as client:
+            response = client.get(config_url)
+            response.raise_for_status()
+            payload = response.text
+    except (httpx.HTTPError, ValueError):
+        return None
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _model_config_requires_decoupled_perf_analyzer_mode(config: dict[str, Any] | None) -> bool:
+    if not config:
+        return False
+    backend = str(config.get("backend") or "").strip().lower()
+    if backend == "vllm":
+        return True
+    policy = config.get("model_transaction_policy")
+    if isinstance(policy, dict) and policy.get("decoupled") is True:
+        return True
+    return False
 
 
 def _grpc_perf_analyzer_target(target: str) -> str:
@@ -359,7 +438,7 @@ def _grpc_perf_analyzer_target(target: str) -> str:
     return target
 
 
-def _prepare_input_data_for_perf_analyzer(input_data: str | None) -> str | None:
+def _prepare_input_data_for_perf_analyzer(input_data: str | None, *, decoupled: bool = False) -> str | None:
     if input_data is None:
         return None
 
@@ -379,6 +458,10 @@ def _prepare_input_data_for_perf_analyzer(input_data: str | None) -> str | None:
 
     if isinstance(parsed, dict) and isinstance(parsed.get("inputs"), list):
         converted = _convert_inference_payload_to_perf_input(parsed)
+        return json.dumps(converted, ensure_ascii=False)
+
+    if decoupled and isinstance(parsed, dict) and "text_input" in parsed:
+        converted = _convert_vllm_generate_payload_to_perf_input(parsed)
         return json.dumps(converted, ensure_ascii=False)
 
     return input_data
@@ -416,3 +499,27 @@ def _convert_inference_payload_to_perf_input(payload: dict[str, Any]) -> dict[st
         request_item[name] = data
 
     return {"data": [request_item]}
+
+
+def _convert_vllm_generate_payload_to_perf_input(payload: dict[str, Any]) -> dict[str, Any]:
+    text_input = payload.get("text_input")
+    if isinstance(text_input, str):
+        prompt = text_input
+    elif isinstance(text_input, list) and len(text_input) == 1 and isinstance(text_input[0], str):
+        prompt = text_input[0]
+    else:
+        raise BadRequestError("vLLM Perf Analyzer input must include a string 'text_input'")
+
+    raw_parameters = payload.get("parameters")
+    sampling_parameters = dict(raw_parameters) if isinstance(raw_parameters, dict) else {}
+    sampling_parameters.pop("stream", None)
+
+    return {
+        "data": [
+            {
+                "text_input": [prompt],
+                "stream": [True],
+                "sampling_parameters": [json.dumps(sampling_parameters, ensure_ascii=False)],
+            }
+        ]
+    }

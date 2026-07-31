@@ -53,6 +53,7 @@ spec:
               exec mlflow server
               --host 0.0.0.0
               --port 5000
+              --allowed-hosts {allowed_hosts}
               --backend-store-uri sqlite:////mlflow-data/mlflow.db
               --default-artifact-root /mlflow-data/artifacts
           ports:

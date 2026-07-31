@@ -1,5 +1,6 @@
 """Unit tests for Kubernetes Perf Analyzer installation behavior."""
 
+import json
 import unittest
 from types import SimpleNamespace
 from typing import Any
@@ -370,7 +371,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         )
         instance = SimpleNamespace(url="https://triton.example.local:8443", is_self_deployed=False)
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="perf")
+        command = installer._run_command(request, instance, perf_analyzer_namespace="perf", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -389,7 +390,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin")
+        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -408,7 +409,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin")
+        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -418,6 +419,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             instance_id=3,
             model_name="opt125m",
             model_version="1",
+            batch_size=4,
             concurrency_range="1",
         )
         instance = SimpleNamespace(
@@ -425,13 +427,18 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             is_self_deployed=True,
             deployment_service_name="opt125m-service",
             deployment_namespace="triton-control",
-            deployment_log="Image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3",
+            deployment_log="Image: nvcr.io/nvidia/tritonserver:26.06-py3",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+        with patch(
+            "app.services.perf_analyzer.installer._fetch_triton_model_config",
+            return_value={"backend": "vllm"},
+        ):
+            command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
 
         self.assertEqual(command[command.index("-u") + 1], "opt125m-service.triton-control.svc.cluster.local:18001")
         self.assertEqual(command[command.index("-i") + 1], "grpc")
+        self.assertEqual(command[command.index("-b") + 1], "1")
         self.assertIn("--async", command)
         self.assertIn("--streaming", command)
 
@@ -450,7 +457,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_log="Image: nvcr.io/nvidia/tritonserver:25.12-trtllm-python-py3",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control", decoupled=False)
 
         self.assertEqual(command[command.index("-u") + 1], "trtllm-service.triton-control.svc.cluster.local:18000")
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -462,6 +469,25 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         self.assertEqual(installer._direct_perf_input_argument("random"), "random")
         self.assertEqual(installer._direct_perf_input_argument("/tmp/pa_input.json"), "/tmp/pa_input.json")
         self.assertIsNone(installer._direct_perf_input_argument('{"data":[]}'))
+
+    def test_PrepareInputData_DecoupledVllmGeneratePayload_ConvertsToPerfAnalyzerData(self) -> None:
+        raw = (
+            '{"text_input":"Reason step by step","parameters":'
+            '{"stream":false,"max_tokens":512,"temperature":0.6,"top_p":0.95}}'
+        )
+
+        prepared = installer._prepare_input_data_for_perf_analyzer(raw, decoupled=True)
+
+        self.assertIsNotNone(prepared)
+        parsed = json.loads(prepared or "{}")
+        item = parsed["data"][0]
+        self.assertEqual(item["text_input"], ["Reason step by step"])
+        self.assertEqual(item["stream"], [True])
+        sampling = json.loads(item["sampling_parameters"][0])
+        self.assertEqual(sampling["max_tokens"], 512)
+        self.assertEqual(sampling["temperature"], 0.6)
+        self.assertEqual(sampling["top_p"], 0.95)
+        self.assertNotIn("stream", sampling)
 
     def test_RunCommand_InputDataArgument_UsesProvidedArgument(self) -> None:
         request = RunPerfAnalyzerRequest(
@@ -477,6 +503,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             instance,
             perf_analyzer_namespace="perf",
             input_data_arg="/tmp/pa_input.json",
+            decoupled=False,
         )
 
         self.assertIn("--input-data", command)

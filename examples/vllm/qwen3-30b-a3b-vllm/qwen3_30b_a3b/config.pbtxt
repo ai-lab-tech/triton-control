@@ -1,0 +1,117 @@
+name: "qwen3_30b_a3b"
+backend: "vllm"
+max_batch_size: 0
+
+model_transaction_policy {
+  decoupled: true
+}
+
+input [
+  {
+    name: "text_input"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "image"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+    optional: true
+  },
+  {
+    name: "stream"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "sampling_parameters"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "exclude_input_in_output"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_finish_reason"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_cumulative_logprob"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_logprobs"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_num_input_tokens"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "return_num_output_tokens"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "embedding_request"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "text_output"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "finish_reason"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "cumulative_logprob"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "logprobs"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  },
+  {
+    name: "num_input_tokens"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+  },
+  {
+    name: "num_output_tokens"
+    data_type: TYPE_UINT32
+    dims: [ -1 ]
+  }
+]
+
+# vLLM owns GPU placement. KIND_MODEL keeps Triton from creating a separate
+# framework instance group and matches NVIDIA's vLLM backend sample layout.
+instance_group [
+  {
+    count: 1
+    kind: KIND_MODEL
+  }
+]

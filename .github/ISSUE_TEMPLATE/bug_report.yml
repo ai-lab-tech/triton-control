@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible problem with Triton Control
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Triton Control. Do not include credentials,
+        tokens, private URLs, or other sensitive information. Report security
+        vulnerabilities through the private process described in SECURITY.md.
+
+  - type: input
+    id: version
+    attributes:
+      label: Triton Control version
+      description: Provide the release, image tag, chart version, or commit SHA.
+      placeholder: v1.2.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - Helm / Kubernetes
+        - Docker Compose
+        - Podman Compose
+        - Local development
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant Kubernetes, browser, operating system, Python, Node.js, and NVIDIA Triton versions.
+      placeholder: |
+        Kubernetes:
+        Browser:
+        Operating system:
+        NVIDIA Triton:
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem description
+      description: Describe what happened and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure ...
+        2. Open ...
+        3. Select ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove secrets and other sensitive data before pasting logs, configuration, or screenshots.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+        - label: I removed credentials, tokens, private URLs, and other sensitive data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

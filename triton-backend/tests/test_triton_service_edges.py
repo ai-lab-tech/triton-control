@@ -352,6 +352,20 @@ class TritonModelEdgeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(BadRequestError):
             await triton_models.infer_model(SimpleNamespace(), {}, 1, "m", "1", b"", "application/json")
 
+    def test_TritonInferenceTimeoutSeconds_DefaultAndEnvOverride(self):
+        # Act / Assert
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(triton_models.triton_inference_timeout_seconds(), 600.0)
+
+        with patch.dict("os.environ", {"TRITON_INFERENCE_TIMEOUT_SECONDS": "240"}, clear=True):
+            self.assertEqual(triton_models.triton_inference_timeout_seconds(), 240.0)
+
+        with patch.dict("os.environ", {"TRITON_INFERENCE_TIMEOUT_SECONDS": "bad"}, clear=True):
+            self.assertEqual(triton_models.triton_inference_timeout_seconds(), 600.0)
+
+        with patch.dict("os.environ", {"TRITON_INFERENCE_TIMEOUT_SECONDS": "0"}, clear=True):
+            self.assertEqual(triton_models.triton_inference_timeout_seconds(), 600.0)
+
     def test_EncodeMetricsHeader_ProducesUrlSafeJsonPayload(self):
         # Act
         encoded = triton_models._encode_metrics_header({"available": True, "models": []})

@@ -147,7 +147,8 @@ curl -X POST "http://localhost:8000/v2/models/qwen3_4b_instruct/generate" \
     "text_input": "Explain Triton Control in two sentences.",
     "parameters": {
       "stream": false,
-      "max_tokens": 128,
+      "max_tokens": 2048,
+      "ignore_eos": false,
       "temperature": 0.2,
       "top_p": 0.95
     }
