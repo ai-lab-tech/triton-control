@@ -400,6 +400,23 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("--allow-metrics=false", start_script)
         self.assertIn("--load-model=simple_identity", start_script)
 
+    def test_Manifests_GpuRuntimeClassAvailable_AddsRuntimeClassName(self) -> None:
+        request = self._request().model_copy(update={"gpu_count": 1})
+
+        manifests = k8s._manifests(
+            request,
+            "triton-minio",
+            "triton-minio",
+            "triton-minio-service",
+            "triton-minio-s3-credentials",
+            "triton-image",
+            runtime_class_name="nvidia",
+        )
+
+        pod_spec = manifests[1]["spec"]["template"]["spec"]
+        self.assertEqual(pod_spec["runtimeClassName"], "nvidia")
+        self.assertEqual(pod_spec["containers"][0]["resources"]["limits"]["nvidia.com/gpu"], "1")
+
     def test_Manifests_VllmInitSync_UsesStableLocalRepository(self) -> None:
         request = self._request().model_copy(update={"repository_sync_mode": "init"})
 

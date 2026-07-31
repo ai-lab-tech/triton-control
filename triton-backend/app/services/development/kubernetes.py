@@ -16,7 +16,12 @@ from typing import Any
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
-from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
+from app.services.kubernetes_client import (
+    api_client,
+    gpu_runtime_class_name,
+    in_cluster_namespace,
+    is_running_in_cluster,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +65,16 @@ def apply_code_server_resources(
         )
         api = api_client()
         _ensure_namespace(api, namespace)
+        runtime_class_name = gpu_runtime_class_name(api, request.gpu_count)
         applied = []
-        for manifest in _manifests(request, namespace, statefulset_name, service_name, secret_name):
+        for manifest in _manifests(
+            request,
+            namespace,
+            statefulset_name,
+            service_name,
+            secret_name,
+            runtime_class_name=runtime_class_name,
+        ):
             from kubernetes import utils  # type: ignore[import-untyped]
 
             meta = manifest.get("metadata") or {}
@@ -192,12 +205,21 @@ def _manifests(
     statefulset_name: str,
     service_name: str,
     secret_name: str,
+    *,
+    runtime_class_name: str | None = None,
 ) -> list[dict[str, Any]]:
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
         _secret_manifest(namespace, secret_name),
         _triton_deploy_extension_configmap(namespace, statefulset_name),
-        _statefulset_manifest(request, namespace, statefulset_name, service_name, labels),
+        _statefulset_manifest(
+            request,
+            namespace,
+            statefulset_name,
+            service_name,
+            labels,
+            runtime_class_name=runtime_class_name,
+        ),
         _service_manifest(namespace, service_name, labels),
     ]
     if request.dockerconfigjson:
@@ -221,6 +243,8 @@ def _statefulset_manifest(
     statefulset_name: str,
     service_name: str,
     labels: dict[str, str],
+    *,
+    runtime_class_name: str | None = None,
 ) -> dict[str, Any]:
     if request.image_has_code_server:
         binary_setup = (
@@ -405,6 +429,8 @@ def _statefulset_manifest(
     image_pull_secret = _image_pull_secret_name(statefulset_name)
     if request.dockerconfigjson:
         pod_spec["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]
+    if runtime_class_name:
+        pod_spec["template"]["spec"]["runtimeClassName"] = runtime_class_name
     resources = _resources(request)
     if resources:
         pod_spec["template"]["spec"]["containers"][0]["resources"] = resources

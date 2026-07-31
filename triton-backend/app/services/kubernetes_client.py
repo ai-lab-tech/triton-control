@@ -7,9 +7,12 @@ Python client loads the pod service-account credentials instead.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def api_client() -> Any:
@@ -45,3 +48,31 @@ def in_cluster_namespace() -> str:
         return ns_file.read_text(encoding="utf-8").strip()
     except Exception:
         return ""
+
+
+def gpu_runtime_class_name(api: Any, gpu_count: int | None) -> str | None:
+    """Return the configured NVIDIA RuntimeClass when a GPU pod can use it.
+
+    RuntimeClass is cluster-scoped and optional. GPU workloads continue to rely
+    on the ``nvidia.com/gpu`` resource limit when the class is absent or cannot
+    be inspected.
+    """
+    if gpu_count is None or gpu_count <= 0:
+        return None
+
+    from kubernetes import client  # type: ignore[import-untyped]
+    from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+
+    name = (os.getenv("NVIDIA_RUNTIME_CLASS_NAME") or "nvidia").strip()
+    if not name:
+        return None
+
+    try:
+        client.NodeV1Api(api).read_runtime_class(name=name)
+        return name
+    except ApiException as exc:
+        if exc.status not in {403, 404}:
+            logger.warning("Could not inspect RuntimeClass/%s: %s", name, exc)
+    except Exception as exc:
+        logger.warning("Could not inspect RuntimeClass/%s: %s", name, exc)
+    return None

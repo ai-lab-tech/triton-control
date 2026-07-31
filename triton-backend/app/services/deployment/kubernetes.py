@@ -27,7 +27,12 @@ import yaml  # type: ignore[import-untyped]
 from app.exceptions import BadGatewayError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
-from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
+from app.services.kubernetes_client import (
+    api_client,
+    gpu_runtime_class_name,
+    in_cluster_namespace,
+    is_running_in_cluster,
+)
 
 _TEMPLATE = Path(__file__).with_name("triton_deployment.yaml")
 
@@ -87,8 +92,17 @@ def apply_deployment_resources(
     try:
         api = _client()
         _ensure_namespace(api, namespace)
+        runtime_class_name = gpu_runtime_class_name(api, request.gpu_count)
         applied = []
-        for manifest in _manifests(request, namespace, deployment_name, service_name, secret_name, image):
+        for manifest in _manifests(
+            request,
+            namespace,
+            deployment_name,
+            service_name,
+            secret_name,
+            image,
+            runtime_class_name=runtime_class_name,
+        ):
             from kubernetes import utils  # type: ignore[import-untyped]
 
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
@@ -411,6 +425,8 @@ def _manifests(
     service_name: str,
     secret_name: str,
     image: str,
+    *,
+    runtime_class_name: str | None = None,
 ) -> list[dict[str, Any]]:
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
@@ -448,8 +464,11 @@ def _manifests(
     )
     manifests = [m for m in yaml.safe_load_all(rendered) if m]
     for manifest in manifests:
-        if manifest.get("kind") == "Deployment" and request.repository_sync_mode != "direct":
-            _add_local_s3_repository(manifest, request, secret_name)
+        if manifest.get("kind") == "Deployment":
+            if runtime_class_name:
+                manifest["spec"]["template"]["spec"]["runtimeClassName"] = runtime_class_name
+            if request.repository_sync_mode != "direct":
+                _add_local_s3_repository(manifest, request, secret_name)
     # Ingress is optional; avoid creating catch-all ingress entries when no host is provided.
     if not (request.ingress_host or "").strip():
         manifests = [m for m in manifests if str(m.get("kind", "")).lower() != "ingress"]

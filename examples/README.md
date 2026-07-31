@@ -72,6 +72,7 @@ s3_upload/
 | `tensorrt/distilbert-squad-question-answering-tensorrt` | Text question answering optimized as a TensorRT plan | `ensemble`, `python`, `tensorrt_plan` |
 | `tensorrt_llm/qwen2.5-0.5b-instruct-trtllm` | Small raw TensorRT-LLM backend smoke test | `tensorrtllm` |
 | `tensorrt_llm/qwen2.5-0.5b-instruct-llmapi-s3` | Small TensorRT-LLM LLM API smoke test via Triton S3 | `python`, TensorRT-LLM LLM API |
+| `tensorrt_llm/qwen2.5-0.5b-instruct-llmapi-engine-s3` | Qwen2.5 engine saved through LLM API and served through native TensorRT-LLM backend via Triton S3 | `tensorrtllm`, TensorRT-LLM LLM API engine |
 | `tensorrt_llm/qwen3-30b-a3b-llmapi-s3` | Qwen3 30B A3B via TensorRT-LLM LLM API for 128 GB VRAM | `python`, TensorRT-LLM LLM API |
 | `vllm/phi3-mini-4k-instruct-vllm` | Smaller vLLM LLM smoke test | `vllm` |
 | `vllm/qwen3-4b-instruct-vllm` | Qwen3 4B LLM on a 16 GB GPU | `vllm` |
