@@ -44,6 +44,8 @@ Preset ensembles:
 
 - Python -> ONNX Runtime -> Python
 - Python -> TensorRT -> Python
+- Python -> TensorRT-LLM -> Python
+- Python -> vLLM -> Python
 
 Custom ensembles can use templates marked as ensemble-step eligible. The
 generated ensemble `config.pbtxt` contains `platform: "ensemble"` and editable
