@@ -1,4 +1,4 @@
-﻿# Triton Control
+﻿# Triton Control – Web UI for NVIDIA Triton Inference Server
 
 [![Release](https://img.shields.io/github/v/release/ai-lab-tech/triton-control)](https://github.com/ai-lab-tech/triton-control/releases/latest)
 [![Backend CI](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/ai-lab-tech/triton-control/actions/workflows/backend-ci.yml)
