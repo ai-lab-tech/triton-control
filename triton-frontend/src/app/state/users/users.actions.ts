@@ -21,6 +21,7 @@ export const createUserRequested = createAction(
     role: string;
     auth: "local" | "oidc";
     password?: string;
+    creationMode?: "password" | "inactive";
     instances: string[];
   }>(),
 );

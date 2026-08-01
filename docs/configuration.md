@@ -75,6 +75,21 @@ enter a new value to replace it.
 | `TLS_CERT_FILE` | If direct backend HTTPS is enabled | `./tls/cert.pem` | Uvicorn TLS certificate path. |
 | `JWT_SECRET` | Yes | `change-me-jwt` | Signing secret for local auth JWTs. Use a strong random value in production. |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | No | `60` | Lifetime of local email/password JWT access tokens in minutes. |
+| `EMAIL_CONFIG_SOURCE` | No | `env` | `env` makes email settings read-only and GitOps-managed; `db` enables admin management in Settings. |
+| `EMAIL_DELIVERY_MODE` | No | `disabled` | Optional account delivery: `disabled`, `manual-link`, or `smtp`. |
+| `EMAIL_PUBLIC_APP_URL` | For manual/SMTP | `https://triton-control.example.com` | Explicit browser origin used to build lifecycle links. Request host headers are never used. |
+| `EMAIL_SMTP_HOST` / `EMAIL_SMTP_PORT` | For SMTP | unset / `587` | External SMTP relay address. Triton Control does not include a mail server. |
+| `EMAIL_SMTP_TLS_MODE` | For SMTP | `starttls` | `starttls`, implicit `tls`, or `none`. |
+| `EMAIL_SMTP_ALLOW_INSECURE` | For plain SMTP | `false` | Must be explicitly true when TLS mode is `none`. Do not use over untrusted networks. |
+| `EMAIL_SMTP_USERNAME` / `EMAIL_SMTP_PASSWORD` | No | unset | Optional relay authentication. Store the password in a secret. |
+| `EMAIL_SENDER_EMAIL` / `EMAIL_SENDER_NAME` | For SMTP | unset / `Triton Control` | Message sender identity. |
+| `EMAIL_SMTP_CA_CERTIFICATE` | No | unset | PEM CA certificate appended to system trust for a private relay. |
+| `EMAIL_CONNECT_TIMEOUT_SECONDS` / `EMAIL_OPERATION_TIMEOUT_SECONDS` | No | `10` / `15` | Bounded SMTP connection and operation timeouts. |
+| `EMAIL_INVITE_EXPIRY_MINUTES` / `EMAIL_RESET_EXPIRY_MINUTES` | No | `1440` / `30` | Single-use token lifetimes. |
+| `EMAIL_RECOVERY_RATE_LIMIT` | No | `5` | Hourly public recovery limit per normalized email digest; client limits are also applied. |
+| `EMAIL_SECRET_ENCRYPTION_KEY` | In DB mode with SMTP password | unset | Secret used for authenticated encryption of the database-managed SMTP password. |
+| `EMAIL_INVITE_SUBJECT`, `EMAIL_INVITE_TEXT_TEMPLATE`, `EMAIL_INVITE_HTML_TEMPLATE` | No | built in | Invitation templates. Text and HTML templates must contain `{link}`. |
+| `EMAIL_RESET_SUBJECT`, `EMAIL_RESET_TEXT_TEMPLATE`, `EMAIL_RESET_HTML_TEMPLATE` | No | built in | Reset templates. Supported placeholders are `{display_name}`, `{product_name}`, `{link}`, and `{expiry_minutes}`. |
 | `S3_SECRET_ENCRYPTION_KEY` | Yes | `change-me-s3` | Fernet key used to encrypt stored S3 secret keys for instance S3 settings and reusable S3 deployment profiles. |
 | `CORS_ORIGINS` | No | local Angular dev origins | Comma-separated list of allowed frontend origins. |
 

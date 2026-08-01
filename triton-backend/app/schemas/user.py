@@ -87,6 +87,7 @@ class UserDTO(SQLModel):
     oidc_subject: Optional[str] = None
     assigned_instances: List[str]
     is_active: bool
+    credential_version: int = 0
     created_at: datetime
 
 
@@ -98,6 +99,7 @@ class CreateUserRequest(SQLModel):
     password: Optional[str] = None
     oidc_subject: Optional[str] = None
     assigned_instances: List[str] = Field(default_factory=list)
+    creation_mode: str = "password"  # password | inactive
 
     @field_validator("name")
     @classmethod
@@ -126,7 +128,9 @@ class CreateUserRequest(SQLModel):
     @model_validator(mode="after")
     def validate_password_if_local(self) -> "CreateUserRequest":
         if self.auth_provider == "local":
-            validate_password_policy(self.password, required=False)
+            if self.creation_mode not in {"password", "inactive"}:
+                raise ValueError("creation_mode must be password or inactive")
+            validate_password_policy(self.password, required=self.creation_mode == "password")
         return self
 
 

@@ -7,10 +7,12 @@ import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
+import { firstValueFrom } from "rxjs";
+import { UsersService } from "../../../api/generated";
 
 import { Store } from "@ngrx/store";
 import { type UserRow } from "../../../state/users/users.reducer";
-import { createUserRequested } from "../../../state/users/users.actions";
+import { createUserRequested, usersPageOpened } from "../../../state/users/users.actions";
 import {
   selectUsers,
   selectUsersInstances,
@@ -40,6 +42,7 @@ import {
 export class NewUserDialogComponent {
   private readonly store = inject(Store);
   private readonly dialogRef = inject(MatDialogRef<NewUserDialogComponent>);
+  private readonly usersApi = inject(UsersService);
 
   readonly instances = toSignal(this.store.select(selectUsersInstances), {
     initialValue: [] as string[],
@@ -58,8 +61,12 @@ export class NewUserDialogComponent {
     auth: "local" as "local" | "oidc",
     password: "",
     instances: [] as string[],
+    creationMode: "password" as "password" | "invite" | "inactive",
   };
   error = "";
+  manualLink = "";
+  notice = "";
+  saving = false;
 
   constructor() {
     // Set auth method once oidcEnabled is known (may already be in store)
@@ -79,6 +86,14 @@ export class NewUserDialogComponent {
     }
     if (
       !this.oidcEnabled() &&
+      this.newUser.creationMode === "password" &&
+      this.newUser.password.length === 0
+    ) {
+      return false;
+    }
+    if (
+      !this.oidcEnabled() &&
+      this.newUser.creationMode === "password" &&
       this.newUser.password.length > 0 &&
       !isValidPassword(this.newUser.password)
     ) {
@@ -104,6 +119,7 @@ export class NewUserDialogComponent {
       }
       if (
         !this.oidcEnabled() &&
+        this.newUser.creationMode === "password" &&
         this.newUser.password.length > 0 &&
         !isValidPassword(this.newUser.password)
       ) {
@@ -112,17 +128,58 @@ export class NewUserDialogComponent {
       return;
     }
     const oidc = this.oidcEnabled();
+    if (!oidc && this.newUser.creationMode === "invite") {
+      void this.invite();
+      return;
+    }
     this.store.dispatch(
       createUserRequested({
         name: this.newUser.name.trim(),
         email: this.newUser.email.trim(),
         role: this.newUser.role,
         auth: oidc ? "oidc" : "local",
-        password: !oidc && this.newUser.password.length > 0 ? this.newUser.password : undefined,
+        password:
+          !oidc && this.newUser.creationMode === "password" ? this.newUser.password : undefined,
+        creationMode: !oidc
+          ? this.newUser.creationMode === "inactive"
+            ? "inactive"
+            : "password"
+          : undefined,
         instances: [...this.newUser.instances],
       }),
     );
     this.dialogRef.close();
+  }
+
+  async copyManualLink(): Promise<void> {
+    if (!this.manualLink) return;
+    await navigator.clipboard.writeText(this.manualLink);
+    this.notice = "Activation link copied. It will not be shown after this dialog closes.";
+  }
+
+  private async invite(): Promise<void> {
+    this.saving = true;
+    this.error = "";
+    try {
+      const response = await firstValueFrom(
+        this.usersApi.inviteUserEndpointApiAuthInvitationsPost({
+          name: this.newUser.name.trim(),
+          email: this.newUser.email.trim(),
+          role: this.newUser.role,
+          assigned_instances: [...this.newUser.instances],
+        }),
+      );
+      this.manualLink = response.manual_link ?? "";
+      this.notice = response.delivered
+        ? "Invitation email accepted by the SMTP server."
+        : "Invitation created. Transfer the activation link through a trusted channel.";
+      this.store.dispatch(usersPageOpened());
+    } catch (error: unknown) {
+      const detail = (error as { error?: { detail?: string } })?.error?.detail;
+      this.error = detail || "Failed to invite user.";
+    } finally {
+      this.saving = false;
+    }
   }
 
   private emailExists(email: string): boolean {

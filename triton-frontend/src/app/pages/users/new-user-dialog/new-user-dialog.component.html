@@ -57,7 +57,19 @@
     </div>
     @if (!oidcEnabled()) {
       <div class="form-row">
-        <label class="field-label" for="dialog-user-password">Password (optional)</label>
+        <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
+        <mat-form-field appearance="outline">
+          <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
+            <mat-option value="password">Set initial password</mat-option>
+            <mat-option value="invite">Invite user</mat-option>
+            <mat-option value="inactive">Create inactive account</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+    }
+    @if (!oidcEnabled() && newUser.creationMode === "password") {
+      <div class="form-row">
+        <label class="field-label" for="dialog-user-password">Initial password</label>
         <mat-form-field appearance="outline">
           <input
             id="dialog-user-password"
@@ -67,7 +79,7 @@
             autocomplete="new-password"
             minlength="12"
             maxlength="128"
-            placeholder="Leave empty to require self-registration"
+            placeholder="Initial password"
           />
         </mat-form-field>
         <div class="field-note">
@@ -89,12 +101,27 @@
   </mat-dialog-content>
 
   <mat-dialog-actions class="dialog-actions" align="end">
+    @if (notice) {
+      <span>{{ notice }}</span>
+    }
     @if (error) {
       <span class="dialog-error">{{ error }}</span>
     }
+    @if (manualLink) {
+      <mat-form-field appearance="outline">
+        <input matInput [value]="manualLink" readonly aria-label="One-time activation link" />
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
+    }
     <button mat-stroked-button type="button" (click)="close()">Cancel</button>
-    <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!canSave">
-      Add user
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      (click)="save()"
+      [disabled]="!canSave || saving || !!manualLink"
+    >
+      {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
     </button>
   </mat-dialog-actions>
 </div>

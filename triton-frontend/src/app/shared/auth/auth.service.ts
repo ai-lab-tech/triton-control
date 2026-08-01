@@ -181,14 +181,20 @@ export class AuthService {
     return token;
   }
 
-  async getAuthOptions(): Promise<{ oidcEnabled: boolean; kubernetesEnabled: boolean }> {
+  async getAuthOptions(): Promise<{
+    oidcEnabled: boolean;
+    kubernetesEnabled: boolean;
+    forgotPasswordAvailable: boolean;
+  }> {
     const res = (await firstValueFrom(this.usersApi.authOptionsEndpointApiAuthOptionsGet())) as {
       oidc_enabled?: boolean;
       kubernetes_enabled?: boolean;
+      forgot_password_available?: boolean;
     };
     return {
       oidcEnabled: !!res?.oidc_enabled,
       kubernetesEnabled: !!res?.kubernetes_enabled,
+      forgotPasswordAvailable: !!res?.forgot_password_available,
     };
   }
 

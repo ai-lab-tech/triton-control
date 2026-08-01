@@ -103,6 +103,7 @@ describe("NewUserDialogComponent", () => {
     component.newUser.name = "Alice";
     component.newUser.email = "alice@example.com";
     component.newUser.role = "viewer";
+    component.newUser.password = "Validpass123!";
     spyOn(mockStore, "dispatch");
 
     // Act
@@ -231,6 +232,7 @@ describe("NewUserDialogComponent", () => {
     component.newUser.name = "Alice";
     component.newUser.email = "alice@example.com";
     component.newUser.role = "viewer";
+    component.newUser.password = "Validpass123!";
 
     // Act + Assert
     expect(component.canSave).toBeTrue();

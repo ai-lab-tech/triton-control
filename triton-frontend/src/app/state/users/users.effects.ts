@@ -70,13 +70,14 @@ export class UsersEffects {
   readonly createUser$ = createEffect(() =>
     this.actions$.pipe(
       ofType(createUserRequested),
-      switchMap(({ name, email, role, auth, password, instances }) => {
+      switchMap(({ name, email, role, auth, password, creationMode, instances }) => {
         const payload: CreateUserRequest = {
           name,
           email,
           role,
           auth_provider: auth,
           password,
+          creation_mode: creationMode ?? "password",
           assigned_instances: instances,
         };
         return from(this.usersApi.registerUserEndpointApiAuthRegisterPost(payload)).pipe(

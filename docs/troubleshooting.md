@@ -224,3 +224,18 @@ Examples:
 http://triton:8002 -> http://triton:8002/metrics
 triton:8002/       -> http://triton:8002/metrics
 ```
+
+## Invitation or Password Reset Email Fails
+
+- Confirm `EMAIL_DELIVERY_MODE=smtp`, `EMAIL_PUBLIC_APP_URL`, sender address,
+  relay host, port, and TLS mode.
+- Use the Settings test-email action. It does not create a lifecycle token and
+  reports a sanitized failure category.
+- For port 587 use `starttls`; for port 465 usually use `tls`.
+- For a private CA, configure `EMAIL_SMTP_CA_CERTIFICATE` with the issuing PEM
+  certificate. Do not disable certificate validation.
+- Check relay allowlists and sender restrictions. Triton Control intentionally
+  omits upstream SMTP response bodies and credentials from errors.
+- Public forgot-password is hidden unless SMTP is configured. In `manual-link`
+  mode, an administrator must issue the reset from Users and transfer the link.
+- If outbound mail is impossible, use `manual-link`; no mail server is needed.

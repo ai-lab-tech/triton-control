@@ -127,6 +127,7 @@ def login(request: LoginRequest, session: Session) -> LoginResponse:
             "name": user.name,
             "role": user.role,
             "auth_provider": user.auth_provider,
+            "credential_version": user.credential_version,
         },
         expires_minutes=_parse_access_token_expiry_minutes(),
     )
@@ -141,17 +142,7 @@ def self_register(request: SelfRegisterRequest, session: Session) -> UserDTO:
     if existing:
         if existing.auth_provider != "local":
             raise ConflictError("User is configured for OIDC login")
-        has_empty_password_placeholder = bool(
-            existing.password_hash and verify_password("", existing.password_hash)
-        )
-        if existing.password_hash and not has_empty_password_placeholder:
-            raise ConflictError("User is already registered")
-
-        existing.password_hash = hash_password(request.password)
-        if (request.name or "").strip():
-            existing.name = (request.name or "").strip()
-        existing.is_active = True
-        return user_entity_to_dto(users.save(session, existing))
+        raise ConflictError("User is already registered")
 
     name = (request.name or "").strip() or (email.split("@", 1)[0] or "User")
     created = users.create(
@@ -178,8 +169,7 @@ def register_user(
 
     email = request.email
     provider = request.auth_provider
-    raw_password = request.password or ""
-    normalized_password = raw_password if raw_password else None
+    normalized_password = request.password if request.creation_mode == "password" else None
 
     if provider == "oidc" and not oidc_enabled(session):
         raise BadRequestError("OIDC is disabled")
@@ -201,6 +191,6 @@ def register_user(
         ),
         oidc_subject=(request.oidc_subject or "").strip() or None,
         assigned_instances=request.assigned_instances,
-        is_active=True,
+        is_active=provider == "oidc" or request.creation_mode == "password",
     )
     return user_entity_to_dto(entity)

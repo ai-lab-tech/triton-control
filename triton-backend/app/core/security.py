@@ -32,6 +32,12 @@ async def _get_claims_with_access_policy(
             user = _identity.resolve_user(session, source_claims, auto_create_oidc=True)
             if not user:
                 raise UnauthorizedError("User mapping not found")
+            if (
+                (source_claims.get("auth_provider") or "").strip().lower() == "local"
+                and int(source_claims.get("credential_version", 0)) != user.credential_version
+            ):
+                request.session.clear()
+                raise UnauthorizedError("Local credentials have changed")
             claims = _identity.claims_from_user(user, source_claims)
             if not allow_pending and not claims["access_allowed"]:
                 raise ForbiddenError("Account pending admin approval")

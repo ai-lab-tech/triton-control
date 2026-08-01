@@ -22,5 +22,6 @@ def user_entity_to_dto(entity: UserEntity) -> UserDTO:
         oidc_subject=entity.oidc_subject,
         assigned_instances=entity.assigned_instances or [],
         is_active=entity.is_active,
+        credential_version=entity.credential_version,
         created_at=entity.created_at,
     )

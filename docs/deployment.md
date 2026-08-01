@@ -2,6 +2,36 @@
 
 Triton Control can run as a local Compose stack or as a Kubernetes deployment.
 
+## Optional Email Delivery
+
+Email is not required. The safe default is `EMAIL_DELIVERY_MODE=disabled`, so
+closed environments need no SMTP service. Use `manual-link` to let an
+administrator generate a one-time invitation or reset URL and transfer it over
+an already trusted channel. Use `smtp` with an external relay to enable
+automatic invitations and the public forgot-password flow.
+
+Both enabled modes require `EMAIL_PUBLIC_APP_URL`, for example
+`https://triton-control.example.com`. It is the trusted link origin and must
+match the URL users can open. SMTP passwords and
+`EMAIL_SECRET_ENCRYPTION_KEY` belong in Compose secrets, Kubernetes Secrets, an
+external secret operator, or Helm `app.secretEnv`; never commit production
+values. The chart exposes safe defaults under `app.env` and secret placeholders
+under `app.secretEnv` and does not deploy a mail server.
+
+Common relay patterns (replace every placeholder with deployment-owned values):
+
+```text
+# Submission relay
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_TLS_MODE=starttls
+
+# Implicit TLS relay
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=465
+EMAIL_SMTP_TLS_MODE=tls
+```
+
 ## Docker Compose
 
 Prerequisite: Docker Desktop or another Docker engine. Host Node.js, npm, and

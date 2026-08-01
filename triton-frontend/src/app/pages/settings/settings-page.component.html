@@ -187,4 +187,295 @@
       </div>
     }
   </mat-card>
+
+  <mat-card class="card">
+    <div class="card-title">Email delivery</div>
+    <p>
+      Account invitations and password recovery are optional. Configuration source:
+      <strong>{{ emailSettings.configSource }}</strong
+      >.
+    </p>
+
+    <div class="form-row">
+      <label class="field-label" for="email-delivery-mode">Delivery mode</label>
+      <mat-form-field appearance="outline">
+        <mat-select
+          id="email-delivery-mode"
+          [(ngModel)]="emailSettings.deliveryMode"
+          [disabled]="!canEditEmailSettings()"
+        >
+          <mat-option value="disabled">Disabled</mat-option>
+          <mat-option value="manual-link">Manual links</mat-option>
+          <mat-option value="smtp">SMTP</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    @if (emailSettings.deliveryMode !== "disabled") {
+      <div class="form-row">
+        <label class="field-label" for="email-public-url">Public application URL</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="email-public-url"
+            matInput
+            [(ngModel)]="emailSettings.publicAppUrl"
+            placeholder="https://triton-control.example.com"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+    }
+
+    @if (emailSettings.deliveryMode === "smtp") {
+      <div class="form-row">
+        <label class="field-label" for="smtp-host">SMTP host</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="smtp-host"
+            matInput
+            [(ngModel)]="emailSettings.smtpHost"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="smtp-port">SMTP port</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="smtp-port"
+            matInput
+            type="number"
+            [(ngModel)]="emailSettings.smtpPort"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="smtp-tls">TLS mode</label>
+        <mat-form-field appearance="outline">
+          <mat-select
+            id="smtp-tls"
+            [(ngModel)]="emailSettings.smtpTlsMode"
+            [disabled]="!canEditEmailSettings()"
+          >
+            <mat-option value="starttls">STARTTLS</mat-option>
+            <mat-option value="tls">Implicit TLS</mat-option>
+            <mat-option value="none">None (insecure)</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      @if (emailSettings.smtpTlsMode === "none") {
+        <label>
+          <input
+            type="checkbox"
+            [(ngModel)]="emailSettings.smtpAllowInsecure"
+            [disabled]="!canEditEmailSettings()"
+          />
+          I explicitly accept unencrypted SMTP transport.
+        </label>
+      }
+      <div class="form-row">
+        <label class="field-label" for="smtp-user">SMTP username</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="smtp-user"
+            matInput
+            [(ngModel)]="emailSettings.smtpUsername"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="smtp-password">SMTP password</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="smtp-password"
+            matInput
+            type="password"
+            [(ngModel)]="smtpPassword"
+            [placeholder]="
+              emailSettings.smtpPasswordConfigured ? 'Stored secret configured' : 'SMTP password'
+            "
+            [readonly]="!canEditEmailSettings()"
+          />
+          @if (emailSettings.smtpPasswordConfigured) {
+            <mat-hint>Leave empty to keep the stored secret.</mat-hint>
+          }
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="sender-email">Sender email</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="sender-email"
+            matInput
+            type="email"
+            [(ngModel)]="emailSettings.senderEmail"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="sender-name">Sender name</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="sender-name"
+            matInput
+            [(ngModel)]="emailSettings.senderName"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="smtp-ca">Custom CA certificate</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="smtp-ca"
+            matInput
+            rows="4"
+            [(ngModel)]="emailSettings.caCertificate"
+            [readonly]="!canEditEmailSettings()"
+          ></textarea>
+        </mat-form-field>
+      </div>
+    }
+
+    <div class="form-row">
+      <label class="field-label" for="invite-expiry">Invite lifetime (minutes)</label>
+      <mat-form-field appearance="outline">
+        <input
+          id="invite-expiry"
+          matInput
+          type="number"
+          [(ngModel)]="emailSettings.inviteExpiryMinutes"
+          [readonly]="!canEditEmailSettings()"
+        />
+      </mat-form-field>
+    </div>
+    <div class="form-row">
+      <label class="field-label" for="reset-expiry">Reset lifetime (minutes)</label>
+      <mat-form-field appearance="outline">
+        <input
+          id="reset-expiry"
+          matInput
+          type="number"
+          [(ngModel)]="emailSettings.resetExpiryMinutes"
+          [readonly]="!canEditEmailSettings()"
+        />
+      </mat-form-field>
+    </div>
+
+    <details>
+      <summary>Email templates</summary>
+      <p>
+        Supported placeholders: <code>&#123;display_name&#125;</code>,
+        <code>&#123;product_name&#125;</code>, <code>&#123;expiry_minutes&#125;</code>, and required
+        <code>&#123;link&#125;</code>.
+      </p>
+      <div class="form-row">
+        <label class="field-label" for="invite-subject">Invitation subject</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="invite-subject"
+            matInput
+            [(ngModel)]="emailSettings.inviteSubject"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="invite-text-template">Invitation text template</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="invite-text-template"
+            matInput
+            rows="5"
+            [(ngModel)]="emailSettings.inviteTextTemplate"
+            [readonly]="!canEditEmailSettings()"
+          ></textarea>
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="invite-html-template">Invitation HTML template</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="invite-html-template"
+            matInput
+            rows="5"
+            [(ngModel)]="emailSettings.inviteHtmlTemplate"
+            [readonly]="!canEditEmailSettings()"
+          ></textarea>
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="reset-subject">Password reset subject</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="reset-subject"
+            matInput
+            [(ngModel)]="emailSettings.resetSubject"
+            [readonly]="!canEditEmailSettings()"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="reset-text-template">Password reset text template</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="reset-text-template"
+            matInput
+            rows="5"
+            [(ngModel)]="emailSettings.resetTextTemplate"
+            [readonly]="!canEditEmailSettings()"
+          ></textarea>
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="reset-html-template">Password reset HTML template</label>
+        <mat-form-field appearance="outline">
+          <textarea
+            id="reset-html-template"
+            matInput
+            rows="5"
+            [(ngModel)]="emailSettings.resetHtmlTemplate"
+            [readonly]="!canEditEmailSettings()"
+          ></textarea>
+        </mat-form-field>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        (click)="saveEmailSettings()"
+        [disabled]="!canEditEmailSettings() || emailSaving"
+      >
+        Save email settings
+      </button>
+    </div>
+
+    @if (emailSettings.deliveryMode === "smtp") {
+      <div class="form-row">
+        <label class="field-label" for="test-recipient">Test recipient</label>
+        <mat-form-field appearance="outline">
+          <input id="test-recipient" matInput type="email" [(ngModel)]="testRecipient" />
+        </mat-form-field>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="sendTestEmail()"
+          [disabled]="emailSaving || !testRecipient"
+        >
+          Send test email
+        </button>
+      </div>
+    }
+
+    <p>Status: {{ emailSettings.lastStatus }} {{ emailSettings.lastStatusMessage }}</p>
+    @if (emailMessage) {
+      <div class="settings-message">{{ emailMessage }}</div>
+    }
+  </mat-card>
 </div>

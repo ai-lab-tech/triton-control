@@ -8,6 +8,8 @@ Replace local defaults before using the app outside local development:
 
 - `SESSION_SECRET`
 - `JWT_SECRET`
+- `EMAIL_SECRET_ENCRYPTION_KEY`
+- SMTP credentials
 - `S3_SECRET_ENCRYPTION_KEY`
 - `POSTGRES_PASSWORD`
 - OIDC client secrets
@@ -46,6 +48,27 @@ For local email/password mode, enforce strong passwords:
 - at least one digit
 - at least one special character
 - no whitespace
+
+## Invitations and Password Recovery
+
+Email lifecycle features apply only to local accounts. OIDC account
+invitations and recovery remain the identity provider's responsibility.
+Invitation and reset links are bearer credentials: they are random,
+purpose-specific, expiring, single-use, revocable, and stored only as hashes.
+A completed password reset also invalidates existing local tokens through the
+account credential version.
+
+Links are built only from `EMAIL_PUBLIC_APP_URL`, never from a request host.
+Administrators must verify a person's identity before transferring a manual
+link or initiating recovery. Copy a manual link once and send it through an
+approved confidential channel; do not place it in tickets, logs, or chat
+archives. Public forgot-password responses are deliberately identical for
+known, unknown, inactive, and OIDC addresses and are rate limited.
+
+SMTP defaults to certificate-validated STARTTLS. Implicit TLS is supported.
+Plain SMTP requires an explicit insecure opt-in and should be limited to a
+trusted isolated network. Stored SMTP passwords are encrypted and API responses
+only expose whether a credential is configured.
 
 ## TLS
 

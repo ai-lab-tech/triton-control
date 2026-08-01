@@ -13,6 +13,17 @@
       </button>
     </div>
   </div>
+  @if (lifecycleMessage) {
+    <mat-card class="card">
+      <p>{{ lifecycleMessage }}</p>
+      @if (manualLink) {
+        <mat-form-field appearance="outline">
+          <input matInput [value]="manualLink" readonly aria-label="One-time account link" />
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
+      }
+    </mat-card>
+  }
 
   <mat-card class="card table-card">
     <div class="card-title">Active users</div>
@@ -125,6 +136,18 @@
             <button mat-flat-button color="primary" type="button" (click)="approveUser(row)">
               <span class="material-icons">verified_user</span>
               Approve
+            </button>
+            @if (row.auth === "local") {
+              <button mat-stroked-button type="button" (click)="reissueInvitation(row)">
+                Reissue invite
+              </button>
+              <button mat-stroked-button type="button" (click)="revokeInvitation(row)">
+                Revoke invite
+              </button>
+            }
+          } @else if (row.auth === "local") {
+            <button mat-stroked-button type="button" (click)="issuePasswordReset(row)">
+              Reset password
             </button>
           }
           <button mat-stroked-button color="warn" type="button" (click)="deleteUser(row)">

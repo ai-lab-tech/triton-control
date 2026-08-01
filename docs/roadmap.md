@@ -67,14 +67,14 @@ Today:
 
 - Local email/password authentication supports bootstrap, admin-created users, and self-registration.
 - New self-registered users remain pending until an admin approves them.
-- There is no built-in email invite flow.
-- There is no built-in password reset or forgot-password flow.
+- Optional local-account invitations are available through manual links or SMTP.
+- Optional administrator and SMTP self-service password recovery is available.
 - There is no email verification step for local accounts.
 
 
 Goal:
 
-- Add optional email-based invite and account recovery flows for local users.
+- Continue hardening and extending optional email-based local account lifecycle flows.
 - Reduce admin overhead when onboarding users and handling password loss.
 
 

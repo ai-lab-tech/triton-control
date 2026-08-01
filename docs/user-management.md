@@ -49,9 +49,20 @@ To add a local user:
 6. Assign one or more Triton instances for non-admin users.
 7. Save the user.
 
-If a password is provided, the user can sign in with email/password. Passwords
-must have 12-128 characters, at least one uppercase letter, one lowercase
-letter, one digit, one special character, and must not contain whitespace.
+Choose one explicit creation mode:
+
+- **Set password** creates an active account with the supplied initial password.
+- **Invite user** creates an inactive account and issues a single-use activation
+  link. SMTP sends it automatically; manual-link mode shows it once for secure
+  out-of-band transfer.
+- **Create inactive** creates an account that cannot sign in and is not
+  claimable through self-registration.
+
+Passwords must have 12-128 characters, at least one uppercase letter, one
+lowercase letter, one digit, one special character, and must not contain
+whitespace. Admins can reissue or revoke an invitation for an inactive local
+account, or issue a reset for an active local account. OIDC lifecycle operations
+remain with the configured identity provider.
 
 Password validation uses this practical baseline:
 

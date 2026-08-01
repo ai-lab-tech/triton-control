@@ -17,9 +17,21 @@ import { LoginPageComponent } from "./pages/login/login-page.component";
 import { S3ProfilesPageComponent } from "./pages/s3-profiles/s3-profiles-page.component";
 import { WorkflowsPageComponent } from "./pages/workflows/workflows-page.component";
 import { MlflowPageComponent } from "./pages/mlflow/mlflow-page.component";
+import { AccountLifecyclePageComponent } from "./pages/account-lifecycle/account-lifecycle-page.component";
 
 export const APP_ROUTES: Routes = [
   { path: "signin", component: LoginPageComponent },
+  { path: "forgot-password", component: AccountLifecyclePageComponent, data: { mode: "forgot" } },
+  {
+    path: "activate-account",
+    component: AccountLifecyclePageComponent,
+    data: { mode: "activate" },
+  },
+  {
+    path: "reset-password",
+    component: AccountLifecyclePageComponent,
+    data: { mode: "reset" },
+  },
   {
     path: "",
     component: ShellComponent,

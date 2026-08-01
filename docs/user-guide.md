@@ -26,6 +26,20 @@ Members and admins can additionally perform write workflows.
 If an expected instance is missing, an administrator must assign that instance
 to the user account.
 
+## Account Activation and Password Recovery
+
+For local authentication, an administrator can create a user with a password,
+create an explicitly inactive account, or issue an invitation. An invitation
+opens `/activate-account`, where the recipient sets a policy-compliant
+password. Expired, revoked, consumed, and invalid links display the same safe
+message and cannot be reused.
+
+When SMTP recovery is operational, the login page shows **Forgot password**.
+Submitting the form always displays the same confirmation, whether or not the
+address is eligible. In installations without outbound email, contact an
+administrator. They can issue a one-time reset link in manual-link mode after
+verifying your identity.
+
 ## Navigation Map
 
 Main sidebar entries:

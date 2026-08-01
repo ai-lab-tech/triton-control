@@ -10,10 +10,13 @@ import { MatChipsModule } from "@angular/material/chips";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatSelectModule } from "@angular/material/select";
+import { MatInputModule } from "@angular/material/input";
 
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
 import { toSignal } from "@angular/core/rxjs-interop";
+import { firstValueFrom } from "rxjs";
+import { UsersService } from "../../api/generated";
 
 import { NewUserDialogComponent } from "./new-user-dialog/new-user-dialog.component";
 import { type UserRow } from "../../state/users/users.reducer";
@@ -48,6 +51,7 @@ import {
     MatDialogModule,
     MatFormFieldModule,
     MatSelectModule,
+    MatInputModule,
   ],
   styleUrl: "./users-page.component.scss",
   templateUrl: "./users-page.component.html",
@@ -55,6 +59,7 @@ import {
 export class UsersPageComponent {
   private readonly store = inject(Store);
   private readonly dialog = inject(MatDialog);
+  private readonly usersApi = inject(UsersService);
 
   readonly users = toSignal(this.store.select(selectUsers), { initialValue: [] as UserRow[] });
   readonly instances = toSignal(this.store.select(selectUsersInstances), {
@@ -78,6 +83,8 @@ export class UsersPageComponent {
   // Local per-row form state ([(ngModel)] per row)
   pendingInstanceByEmail: Record<string, string> = {};
   pendingRoleByUserId: Record<number, string> = {};
+  lifecycleMessage = "";
+  manualLink = "";
 
   constructor() {
     const actions$ = inject(Actions);
@@ -151,5 +158,62 @@ export class UsersPageComponent {
   approveUser(user: UserRow): void {
     const role = this.pendingRoleByUserId[user.id] || user.role || "viewer";
     this.updateRole(user, role);
+  }
+
+  async reissueInvitation(user: UserRow): Promise<void> {
+    await this.runLifecycleAction(async () => {
+      const response = await firstValueFrom(
+        this.usersApi.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost(user.id),
+      );
+      this.showLifecycleResponse(response, "Invitation reissued.");
+    });
+  }
+
+  async revokeInvitation(user: UserRow): Promise<void> {
+    await this.runLifecycleAction(async () => {
+      await firstValueFrom(
+        this.usersApi.revokeInvitationEndpointApiAuthInvitationsUserIdDelete(user.id),
+      );
+      this.lifecycleMessage = "Invitation revoked.";
+      this.manualLink = "";
+    });
+  }
+
+  async issuePasswordReset(user: UserRow): Promise<void> {
+    await this.runLifecycleAction(async () => {
+      const response = await firstValueFrom(
+        this.usersApi.adminResetEndpointApiAuthPasswordResetsPost({ user_id: user.id }),
+      );
+      this.showLifecycleResponse(response, "Password reset issued.");
+    });
+  }
+
+  async copyManualLink(): Promise<void> {
+    if (!this.manualLink) return;
+    await navigator.clipboard.writeText(this.manualLink);
+    this.lifecycleMessage = "One-time link copied.";
+  }
+
+  private showLifecycleResponse(
+    response: { manual_link?: string | null; delivered?: boolean },
+    fallback: string,
+  ): void {
+    this.manualLink = response.manual_link ?? "";
+    this.lifecycleMessage = response.delivered
+      ? "Email accepted by the SMTP server."
+      : this.manualLink
+        ? "Copy this link now and transfer it through a trusted channel."
+        : fallback;
+  }
+
+  private async runLifecycleAction(action: () => Promise<void>): Promise<void> {
+    this.lifecycleMessage = "";
+    this.manualLink = "";
+    try {
+      await action();
+    } catch (error: unknown) {
+      this.lifecycleMessage =
+        (error as { error?: { detail?: string } })?.error?.detail ?? "Lifecycle action failed.";
+    }
   }
 }

@@ -10,10 +10,18 @@ services:
     environment:
       DATABASE_URL: postgresql://triton:tritonpw@postgres:5432/triton_backend
       OIDC_CONFIG_SOURCE: env
+      EMAIL_CONFIG_SOURCE: env
+      EMAIL_DELIVERY_MODE: disabled
+      EMAIL_PUBLIC_APP_URL: http://localhost:8080
+      EMAIL_SMTP_HOST: ""
+      EMAIL_SMTP_PORT: "587"
+      EMAIL_SMTP_TLS_MODE: starttls
+      EMAIL_SENDER_EMAIL: ""
       OIDC_ENABLED: "false"
       CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,https://localhost:8080,https://127.0.0.1:8080,http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200
       CLIENT_MAX_BODY_SIZE: 256m
       SESSION_SECRET: change-me-compose-session
+      EMAIL_SECRET_ENCRYPTION_KEY: change-me-compose-email-encryption
       JWT_SECRET: change-me-compose-jwt
       S3_SECRET_ENCRYPTION_KEY: change-me-compose-s3
     ports:

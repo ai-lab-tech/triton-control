@@ -24,14 +24,17 @@ from app.exceptions import BadRequestError
 from app.mappers import user_entity_to_dto
 from app.repositories import users
 from app.schemas import BootstrapRegisterRequest, BootstrapStatusResponse, UserDTO
+from app.services.auth.email_settings import get_runtime_config
 from app.services.oidc.config import get_settings
 
 
 def auth_options(session: Session) -> dict[str, object]:
     settings = get_settings(session)
+    email = get_runtime_config(session)
     return {
         "oidc_enabled": bool(getattr(settings, "oidc_enabled", False)),
         "kubernetes_enabled": bool(getattr(settings, "kubernetes_enabled", False)),
+        "forgot_password_available": email.delivery_mode == "smtp" and bool(email.smtp_host),
     }
 
 

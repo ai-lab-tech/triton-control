@@ -6,6 +6,8 @@ import { SettingsPageComponent } from "./settings-page.component";
 import { AuthService } from "../../shared/auth/auth.service";
 import { SettingsEffects } from "../../state/settings/settings.effects";
 import { SETTINGS_FEATURE_KEY, settingsReducer } from "../../state/settings/settings.reducer";
+import { UsersService } from "../../api/generated";
+import { of } from "rxjs";
 
 describe("SettingsPageComponent", () => {
   let authServiceMock: {
@@ -43,6 +45,17 @@ describe("SettingsPageComponent", () => {
         provideState(SETTINGS_FEATURE_KEY, settingsReducer),
         provideEffects([SettingsEffects]),
         { provide: AuthService, useValue: authServiceMock },
+        {
+          provide: UsersService,
+          useValue: {
+            getEmailSettingsEndpointApiAuthEmailSettingsGet: () =>
+              of({
+                config_source: "env",
+                delivery_mode: "disabled",
+                read_only: true,
+              }),
+          },
+        },
       ],
     }).compileComponents();
   });
