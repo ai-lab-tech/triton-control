@@ -85,6 +85,8 @@ export class UsersPageComponent {
   pendingRoleByUserId: Record<number, string> = {};
   lifecycleMessage = "";
   manualLink = "";
+  emailLifecycleAvailable = false;
+  emailLifecycleStatus: "loading" | "disabled" | "enabled" | "unavailable" = "loading";
 
   constructor() {
     const actions$ = inject(Actions);
@@ -111,6 +113,20 @@ export class UsersPageComponent {
       });
 
     this.store.dispatch(usersPageOpened());
+    void this.loadEmailLifecycleAvailability();
+  }
+
+  get resetPasswordDisabledReason(): string {
+    switch (this.emailLifecycleStatus) {
+      case "loading":
+        return "Checking account email lifecycle availability.";
+      case "disabled":
+        return "Enable manual-link or SMTP email lifecycle in Settings to reset passwords.";
+      case "unavailable":
+        return "Account email lifecycle availability could not be loaded.";
+      default:
+        return "";
+    }
   }
 
   openNewUserDialog(): void {
@@ -180,6 +196,9 @@ export class UsersPageComponent {
   }
 
   async issuePasswordReset(user: UserRow): Promise<void> {
+    if (!this.emailLifecycleAvailable) {
+      return;
+    }
     await this.runLifecycleAction(async () => {
       const response = await firstValueFrom(
         this.usersApi.adminResetEndpointApiAuthPasswordResetsPost({ user_id: user.id }),
@@ -214,6 +233,20 @@ export class UsersPageComponent {
     } catch (error: unknown) {
       this.lifecycleMessage =
         (error as { error?: { detail?: string } })?.error?.detail ?? "Lifecycle action failed.";
+    }
+  }
+
+  private async loadEmailLifecycleAvailability(): Promise<void> {
+    try {
+      const settings = await firstValueFrom(
+        this.usersApi.getEmailSettingsEndpointApiAuthEmailSettingsGet(),
+      );
+      this.emailLifecycleAvailable =
+        settings.delivery_mode === "manual-link" || settings.delivery_mode === "smtp";
+      this.emailLifecycleStatus = this.emailLifecycleAvailable ? "enabled" : "disabled";
+    } catch {
+      this.emailLifecycleAvailable = false;
+      this.emailLifecycleStatus = "unavailable";
     }
   }
 }

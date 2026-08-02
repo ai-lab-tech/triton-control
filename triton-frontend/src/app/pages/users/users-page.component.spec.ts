@@ -8,7 +8,7 @@ import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { InstancesService, UsersService } from "../../api/generated/index";
 import { UsersPageComponent } from "./users-page.component";
-import { selectUsersInstances } from "../../state/users/users.selectors";
+import { selectUsers, selectUsersInstances } from "../../state/users/users.selectors";
 import {
   addInstanceToUserRequested,
   deleteUserRequested,
@@ -29,10 +29,12 @@ describe("UsersPageComponent", () => {
     usersApiMock = jasmine.createSpyObj<UsersService>("UsersService", [
       "listUsersApiAuthUsersGet",
       "authOptionsEndpointApiAuthOptionsGet",
+      "getEmailSettingsEndpointApiAuthEmailSettingsGet",
       "registerUserEndpointApiAuthRegisterPost",
       "updateUserInstancesApiAuthUsersUserIdInstancesPut",
       "deleteUserApiAuthUsersUserIdDelete",
       "updateUserRoleApiAuthUsersUserIdRolePut",
+      "adminResetEndpointApiAuthPasswordResetsPost",
     ]);
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "listInstancesApiInstancesGet",
@@ -42,6 +44,9 @@ describe("UsersPageComponent", () => {
 
     usersApiMock.authOptionsEndpointApiAuthOptionsGet.and.returnValue(
       of({ oidc_enabled: true } as any),
+    );
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "disabled" } as any),
     );
     usersApiMock.listUsersApiAuthUsersGet.and.returnValue(of([] as any));
     instancesApiMock.listInstancesApiInstancesGet.and.returnValue(of([] as any));
@@ -60,6 +65,7 @@ describe("UsersPageComponent", () => {
     }).compileComponents();
 
     mockStore = TestBed.inject(MockStore);
+    mockStore.overrideSelector(selectUsersInstances, []);
   });
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
@@ -322,4 +328,69 @@ describe("UsersPageComponent", () => {
     // Assert
     expect(dialogMock.open).toHaveBeenCalled();
   });
+
+  it("ResetPassword_EmailLifecycleDisabled_DisablesActionWithExplanation", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectUsers, [
+      {
+        id: 9,
+        name: "Local User",
+        email: "local@example.com",
+        role: "viewer",
+        isActive: true,
+        auth: "local",
+        instances: [],
+      },
+    ]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="reset-password-action"]',
+    ) as HTMLButtonElement;
+
+    // Assert
+    expect(button.disabled).toBeTrue();
+    expect(button.title).toContain("Enable manual-link or SMTP");
+    button.click();
+    expect(usersApiMock.adminResetEndpointApiAuthPasswordResetsPost).not.toHaveBeenCalled();
+  });
+
+  for (const deliveryMode of ["manual-link", "smtp"]) {
+    it(`ResetPassword_EmailLifecycle${deliveryMode}_EnablesAction`, async () => {
+      // Arrange
+      usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+        of({ delivery_mode: deliveryMode } as any),
+      );
+      mockStore.overrideSelector(selectUsers, [
+        {
+          id: 10,
+          name: "Local User",
+          email: "local@example.com",
+          role: "viewer",
+          isActive: true,
+          auth: "local",
+          instances: [],
+        },
+      ]);
+      mockStore.refreshState();
+      const fixture = TestBed.createComponent(UsersPageComponent);
+
+      // Act
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const button = fixture.nativeElement.querySelector(
+        '[data-testid="reset-password-action"]',
+      ) as HTMLButtonElement;
+
+      // Assert
+      expect(button.disabled).toBeFalse();
+      expect(button.title).toBe("");
+    });
+  }
 });

@@ -146,7 +146,14 @@
               </button>
             }
           } @else if (row.auth === "local") {
-            <button mat-stroked-button type="button" (click)="issuePasswordReset(row)">
+            <button
+              mat-stroked-button
+              type="button"
+              data-testid="reset-password-action"
+              (click)="issuePasswordReset(row)"
+              [disabled]="!emailLifecycleAvailable"
+              [attr.title]="resetPasswordDisabledReason || null"
+            >
               Reset password
             </button>
           }
