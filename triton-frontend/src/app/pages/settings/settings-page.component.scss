@@ -8,6 +8,10 @@
   padding: 1.6rem;
 }
 
+.tab-content {
+  padding-top: 1.5rem;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -100,6 +104,31 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: #334155;
+}
+
+.field-error,
+.validation-error-text {
+  color: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.email-field-invalid {
+  --mdc-outlined-text-field-outline-color: #b91c1c;
+  --mdc-outlined-text-field-hover-outline-color: #b91c1c;
+  --mdc-outlined-text-field-focus-outline-color: #b91c1c;
+  --mat-form-field-error-text-color: #b91c1c;
+}
+
+.form-row:has(.email-field-invalid) .field-label {
+  color: #b91c1c;
+}
+
+:host ::ng-deep .email-field-invalid .mdc-notched-outline__leading,
+:host ::ng-deep .email-field-invalid .mdc-notched-outline__notch,
+:host ::ng-deep .email-field-invalid .mdc-notched-outline__trailing {
+  border-color: #b91c1c !important;
+  border-width: 2px !important;
 }
 
 .oidc-form .mat-mdc-form-field {

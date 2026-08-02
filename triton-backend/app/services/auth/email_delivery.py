@@ -21,7 +21,7 @@ DEFAULT_INVITE_TEXT = (
 )
 DEFAULT_INVITE_HTML = (
     "<p>Hello {display_name},</p><p>You are invited to {product_name}.</p>"
-    "<p><a href=\"{link}\">Set your password</a> within {expiry_minutes} minutes.</p>"
+    '<p><a href="{link}">Set your password</a> within {expiry_minutes} minutes.</p>'
     "<p>If you did not expect this invitation, ignore this message.</p>"
 )
 DEFAULT_RESET_TEXT = (
@@ -30,7 +30,7 @@ DEFAULT_RESET_TEXT = (
     "If you did not request this reset, ignore this message."
 )
 DEFAULT_RESET_HTML = (
-    "<p>Hello {display_name},</p><p><a href=\"{link}\">Reset your "
+    '<p>Hello {display_name},</p><p><a href="{link}">Reset your '
     "{product_name} password</a> within {expiry_minutes} minutes.</p>"
     "<p>If you did not request this reset, ignore this message.</p>"
 )
@@ -94,6 +94,24 @@ def _ssl_context(config: EmailConfigEntity) -> ssl.SSLContext:
     return context
 
 
+def _smtp_failure_message(exc: BaseException) -> str:
+    error_type = type(exc).__name__
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        guidance = "authentication failed; verify the SMTP username and password"
+    elif isinstance(exc, smtplib.SMTPServerDisconnected):
+        guidance = (
+            "the server disconnected; verify the SMTP host, port, and TLS mode "
+            "and ensure this is an SMTP endpoint, not IMAP"
+        )
+    elif isinstance(exc, ssl.SSLError):
+        guidance = "TLS negotiation failed; verify the TLS mode and certificate trust"
+    elif isinstance(exc, TimeoutError):
+        guidance = "the connection timed out; verify the SMTP host, port, and network access"
+    else:
+        guidance = "verify the SMTP host, port, TLS mode, credentials, and recipient"
+    return f"SMTP delivery failed ({error_type}): {guidance}"
+
+
 def send_smtp(
     config: EmailConfigEntity,
     recipient: str,
@@ -125,17 +143,15 @@ def send_smtp(
                 context=context,
             )
         else:
-            client = smtp_factory(
-                config.smtp_host, config.smtp_port, timeout=config.connect_timeout_seconds
-            )
+            client = smtp_factory(config.smtp_host, config.smtp_port, timeout=config.connect_timeout_seconds)
         with client:
+            sock = getattr(client, "sock", None)
+            if sock is not None:
+                sock.settimeout(config.operation_timeout_seconds)
             if config.smtp_tls_mode == "starttls":
                 client.starttls(context=context)
             if config.smtp_username:
                 client.login(config.smtp_username, smtp_password(config))
-            sock = getattr(client, "sock", None)
-            if sock is not None:
-                sock.settimeout(config.operation_timeout_seconds)
             client.send_message(mail)
     except (OSError, smtplib.SMTPException, ssl.SSLError) as exc:
-        raise BadRequestError(f"SMTP delivery failed ({type(exc).__name__})") from exc
+        raise BadRequestError(_smtp_failure_message(exc)) from exc

@@ -31,7 +31,9 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth_api import protected_router as protected_auth_router
@@ -89,6 +91,13 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def sanitized_request_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Return actionable validation details without echoing request values."""
+    details = [{key: value for key, value in error.items() if key in {"type", "loc", "msg"}} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": details})
+
+
 def _parse_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
@@ -139,6 +148,7 @@ async def capture_unhandled_backend_errors(request: Request, call_next: Any) -> 
             except Exception:  # nosec B110
                 pass
         raise
+
 
 cors_origins = _parse_csv(
     os.getenv(

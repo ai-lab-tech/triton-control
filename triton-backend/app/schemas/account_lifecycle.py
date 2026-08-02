@@ -142,6 +142,8 @@ class UpdateEmailSettingsRequest(SQLModel):
         if self.delivery_mode == "smtp":
             if not self.smtp_host.strip() or not self.sender_email.strip():
                 raise ValueError("smtp_host and sender_email are required for smtp delivery")
+            if self.smtp_port == 465 and self.smtp_tls_mode != "tls":
+                raise ValueError("SMTP port 465 requires implicit TLS")
             if self.smtp_tls_mode == "none" and not self.smtp_allow_insecure:
                 raise ValueError("plain SMTP requires smtp_allow_insecure=true")
         return self
@@ -155,4 +157,3 @@ class EmailOperationResponse(SQLModel):
     accepted: bool
     status: str
     message: str
-

@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { TestBed } from "@angular/core/testing";
+import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { By } from "@angular/platform-browser";
+import { MatTabGroup } from "@angular/material/tabs";
+import { NoopAnimationsModule } from "@angular/platform-browser/animations";
 import { provideStore, provideState } from "@ngrx/store";
 import { provideEffects } from "@ngrx/effects";
 import { SettingsPageComponent } from "./settings-page.component";
@@ -7,15 +10,28 @@ import { AuthService } from "../../shared/auth/auth.service";
 import { SettingsEffects } from "../../state/settings/settings.effects";
 import { SETTINGS_FEATURE_KEY, settingsReducer } from "../../state/settings/settings.reducer";
 import { UsersService } from "../../api/generated";
-import { of } from "rxjs";
+import { of, Subject, throwError } from "rxjs";
 
 describe("SettingsPageComponent", () => {
   let emailSettingsResponse: Record<string, unknown>;
+  let getEmailSettingsSpy: jasmine.Spy;
+  let updateEmailSettingsSpy: jasmine.Spy;
   let testEmailSpy: jasmine.Spy;
   let authServiceMock: {
     getOidcSettings: jasmine.Spy;
     saveOidcSettings: jasmine.Spy;
   };
+
+  async function openEmailTab(fixture: ComponentFixture<SettingsPageComponent>): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const tabGroup = fixture.debugElement.query(By.directive(MatTabGroup))
+      .componentInstance as MatTabGroup;
+    tabGroup.selectedIndex = 1;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
 
   beforeEach(() => {
     emailSettingsResponse = {
@@ -23,6 +39,19 @@ describe("SettingsPageComponent", () => {
       delivery_mode: "disabled",
       read_only: true,
     };
+    getEmailSettingsSpy = jasmine
+      .createSpy("getEmailSettings")
+      .and.callFake(() => of(emailSettingsResponse));
+    updateEmailSettingsSpy = jasmine
+      .createSpy("updateEmailSettings")
+      .and.callFake((request: Record<string, unknown>) =>
+        of({
+          config_source: "db",
+          ...request,
+          smtp_password_configured: !!request["smtp_password"],
+          read_only: false,
+        }),
+      );
     testEmailSpy = jasmine
       .createSpy("testEmail")
       .and.returnValue(of({ message: "SMTP server accepted the test message." }));
@@ -49,7 +78,7 @@ describe("SettingsPageComponent", () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SettingsPageComponent],
+      imports: [SettingsPageComponent, NoopAnimationsModule],
       providers: [
         provideStore(),
         provideState(SETTINGS_FEATURE_KEY, settingsReducer),
@@ -58,7 +87,8 @@ describe("SettingsPageComponent", () => {
         {
           provide: UsersService,
           useValue: {
-            getEmailSettingsEndpointApiAuthEmailSettingsGet: () => of(emailSettingsResponse),
+            getEmailSettingsEndpointApiAuthEmailSettingsGet: getEmailSettingsSpy,
+            updateEmailSettingsEndpointApiAuthEmailSettingsPut: updateEmailSettingsSpy,
             testEmailEndpointApiAuthEmailSettingsTestPost: testEmailSpy,
           },
         },
@@ -86,6 +116,21 @@ describe("SettingsPageComponent", () => {
 
     // Assert
     expect(component.oidcEnabled).toBeTrue();
+  });
+
+  it("SettingsNavigation_Rendered_ShowsOidcAndEmailTabs", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const tabLabels = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).map((tab) => tab.textContent?.trim());
+
+    // Assert
+    expect(tabLabels).toEqual(["OIDC", "Email"]);
   });
 
   it("SaveSettings_SaveSucceeds_ShowsSuccessMessage", async () => {
@@ -222,9 +267,7 @@ describe("SettingsPageComponent", () => {
     component.emailSettings.deliveryMode = "disabled";
 
     // Act
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await openEmailTab(fixture);
     const native = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -248,9 +291,7 @@ describe("SettingsPageComponent", () => {
     component.emailSettings.deliveryMode = "manual-link";
 
     // Act
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await openEmailTab(fixture);
     const native = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -278,7 +319,7 @@ describe("SettingsPageComponent", () => {
     component.testRecipient = "admin@example.com";
 
     // Act
-    fixture.detectChanges();
+    await openEmailTab(fixture);
     await component.sendTestEmail();
     const native = fixture.nativeElement as HTMLElement;
     const sendButton = Array.from(native.querySelectorAll("button")).find((button) =>
@@ -298,6 +339,8 @@ describe("SettingsPageComponent", () => {
     emailSettingsResponse = {
       config_source: "db",
       delivery_mode: "smtp",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
       read_only: false,
     };
     const fixture = TestBed.createComponent(SettingsPageComponent);
@@ -311,5 +354,240 @@ describe("SettingsPageComponent", () => {
     // Assert
     expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
     expect(component.canSendTestEmail()).toBeTrue();
+  });
+
+  it("TestEmail_SmtpServerDisconnects_ShowsActionableBackendMessage", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    testEmailSpy.and.returnValue(
+      throwError(() => ({
+        error: {
+          detail:
+            "SMTP delivery failed (SMTPServerDisconnected): verify the SMTP endpoint, port, and TLS mode.",
+        },
+      })),
+    );
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await openEmailTab(fixture);
+    component.testRecipient = "admin@example.com";
+
+    // Act
+    await component.sendTestEmail();
+    fixture.detectChanges();
+
+    // Assert
+    expect(component.emailMessageTone).toBe("error");
+    expect(component.emailMessage).toContain("SMTPServerDisconnected");
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent,
+    ).toContain("verify the SMTP endpoint");
+  });
+
+  it("TestEmail_RequestPending_ShowsTestingStateWithoutShowingSavingState", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    const pendingTest = new Subject<{ message?: string }>();
+    testEmailSpy.and.returnValue(pendingTest);
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await openEmailTab(fixture);
+    component.testRecipient = "admin@example.com";
+
+    // Act
+    const request = component.sendTestEmail();
+    fixture.detectChanges();
+    const buttons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll("button"),
+    ).map((button) => button.textContent?.trim());
+
+    // Assert
+    expect(component.emailTesting).toBeTrue();
+    expect(component.emailSaving).toBeFalse();
+    expect(buttons).toContain("Sending test…");
+    expect(buttons).toContain("Save email settings");
+    expect(buttons).not.toContain("Saving…");
+
+    pendingTest.next({ message: "SMTP server accepted the test message." });
+    pendingTest.complete();
+    await request;
+  });
+
+  it("LoadEmailSettings_Port465WithStartTls_CorrectsToImplicitTlsBeforeSaving", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      smtp_host: "smtp.example.test",
+      smtp_port: 465,
+      smtp_tls_mode: "starttls",
+      sender_email: "noreply@example.test",
+      public_app_url: "https://control.example.test",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+
+    // Act
+    await component.saveEmailSettings();
+
+    // Assert
+    expect(component.emailSettings.smtpTlsMode).toBe("tls");
+    expect(updateEmailSettingsSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        smtp_port: 465,
+        smtp_tls_mode: "tls",
+      }),
+    );
+  });
+
+  it("LoadEmailSettings_BlankSubjects_AppliesAndSavesBuiltInDefaults", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      public_app_url: "https://control.example.test",
+      smtp_host: "smtp.example.test",
+      sender_email: "noreply@example.test",
+      invite_subject: "",
+      reset_subject: "   ",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    expect(component.emailSettingsHaveUnsavedChanges()).toBeTrue();
+
+    // Act
+    await component.saveEmailSettings();
+
+    // Assert
+    expect(component.emailSettings.inviteSubject).toBe("You are invited to Triton Control");
+    expect(component.emailSettings.resetSubject).toBe("Reset your Triton Control password");
+    expect(updateEmailSettingsSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        invite_subject: "You are invited to Triton Control",
+        reset_subject: "Reset your Triton Control password",
+      }),
+    );
+    expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
+    expect(component.emailMessage).toBe("Email settings saved.");
+  });
+
+  it("SaveEmailSettings_RequiredFieldsMissing_HighlightsFieldsAndDoesNotCallApi", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await openEmailTab(fixture);
+    component.emailSettings.inviteSubject = "";
+
+    // Act
+    await component.saveEmailSettings();
+    fixture.detectChanges();
+
+    // Assert
+    const publicUrlField = (fixture.nativeElement as HTMLElement)
+      .querySelector("#email-public-url")
+      ?.parentElement?.closest("mat-form-field");
+    const publicUrlOutline = publicUrlField?.querySelector<HTMLElement>(
+      ".mdc-notched-outline__leading",
+    );
+    const publicUrlLabel = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'label[for="email-public-url"]',
+    );
+    expect(updateEmailSettingsSpy).not.toHaveBeenCalled();
+    expect(publicUrlField?.classList.contains("email-field-invalid")).toBeTrue();
+    expect(getComputedStyle(publicUrlOutline!).borderColor).toBe("rgb(185, 28, 28)");
+    expect(getComputedStyle(publicUrlLabel!).color).toBe("rgb(185, 28, 28)");
+    expect(component.emailTemplatesExpanded).toBeTrue();
+    expect(component.emailMessageTone).toBe("error");
+    expect(component.emailMessage).toBe("Complete the highlighted email settings before saving.");
+  });
+
+  it("SaveEmailSettings_ApiRejects_ShowsBackendValidationMessage", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      public_app_url: "https://control.example.test",
+      smtp_host: "smtp.example.test",
+      sender_email: "noreply@example.test",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    updateEmailSettingsSpy.and.returnValue(
+      throwError(() => ({
+        error: { detail: [{ msg: "SMTP configuration was rejected." }] },
+      })),
+    );
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await openEmailTab(fixture);
+    component.emailSettings.senderName = "Updated sender";
+
+    // Act
+    await component.saveEmailSettings();
+    fixture.detectChanges();
+
+    // Assert
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]');
+    expect(updateEmailSettingsSpy).toHaveBeenCalled();
+    expect(component.emailMessageTone).toBe("error");
+    expect(component.emailMessage).toBe("SMTP configuration was rejected.");
+    expect(alert?.textContent).toContain("SMTP configuration was rejected.");
+    expect(component.emailSaveAttempted).toBeTrue();
+  });
+
+  it("SaveEmailSettings_DbManagedSmtp_RemainsEnabledForExplicitResave", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "disabled",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    component.emailSettings.deliveryMode = "smtp";
+    component.emailSettings.smtpHost = "smtp.example.com";
+    component.emailSettings.senderEmail = "noreply@example.com";
+    component.emailSettings.publicAppUrl = "https://control.example.com";
+    component.smtpPassword = "secret";
+    component.testRecipient = "admin@example.com";
+
+    // Act
+    await component.saveEmailSettings();
+    await component.saveEmailSettings();
+
+    // Assert
+    expect(updateEmailSettingsSpy).toHaveBeenCalledTimes(2);
+    expect(getEmailSettingsSpy).toHaveBeenCalledTimes(1);
+    expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
+    expect(component.canSaveEmailSettings()).toBeTrue();
+    expect(component.canSendTestEmail()).toBeTrue();
+    expect(component.emailMessage).toBe("Email settings saved.");
   });
 });

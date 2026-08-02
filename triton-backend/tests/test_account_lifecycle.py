@@ -22,7 +22,7 @@ from app.db.entities import (
 from app.exceptions import BadRequestError
 from app.repositories import account_lifecycle, users
 from app.schemas import CompleteLifecycleRequest, InviteUserRequest
-from app.schemas.account_lifecycle import ForgotPasswordRequest
+from app.schemas.account_lifecycle import ForgotPasswordRequest, UpdateEmailSettingsRequest
 from app.services.auth.account_lifecycle import (
     activate_invitation,
     complete_password_reset,
@@ -177,10 +177,13 @@ class AccountLifecycleTests(unittest.TestCase):
 
     def test_SecurityEventsContainNoBearerToken(self) -> None:
         self._admin()
-        with patch(
-            "app.services.auth.account_lifecycle.get_runtime_config",
-            return_value=self.config,
-        ), patch("app.services.auth.account_lifecycle.ensure_local_auth_allowed"):
+        with (
+            patch(
+                "app.services.auth.account_lifecycle.get_runtime_config",
+                return_value=self.config,
+            ),
+            patch("app.services.auth.account_lifecycle.ensure_local_auth_allowed"),
+        ):
             response = invite_user(
                 InviteUserRequest(email="safe@example.test", name="Safe"),
                 self.session,
@@ -229,12 +232,15 @@ class AccountLifecycleTests(unittest.TestCase):
             public_app_url="https://control.example.test",
         )
         responses: list[str] = []
-        with patch(
-            "app.services.auth.account_lifecycle.get_runtime_config",
-            return_value=smtp_config,
-        ), patch(
-            "app.services.auth.account_lifecycle.send_smtp",
-            side_effect=BadRequestError("SMTP delivery failed (SMTPAuthenticationError)"),
+        with (
+            patch(
+                "app.services.auth.account_lifecycle.get_runtime_config",
+                return_value=smtp_config,
+            ),
+            patch(
+                "app.services.auth.account_lifecycle.send_smtp",
+                side_effect=BadRequestError("SMTP delivery failed (SMTPAuthenticationError)"),
+            ),
         ):
             for email in (
                 active.email,
@@ -250,9 +256,7 @@ class AccountLifecycleTests(unittest.TestCase):
                     ).message
                 )
         self.assertEqual(len(set(responses)), 1)
-        event_text = " ".join(
-            event.detail for event in self.session.exec(select(SecurityEventEntity)).all()
-        )
+        event_text = " ".join(event.detail for event in self.session.exec(select(SecurityEventEntity)).all())
         self.assertNotIn("SMTPAuthenticationError", event_text)
         self.assertNotIn(active.email, event_text)
 
@@ -288,6 +292,17 @@ class EmailDeliveryTests(unittest.TestCase):
                 display_name="Admin",
                 link="https://example.test/",
                 expiry_minutes=60,
+            )
+
+    def test_UpdateSettings_Port465WithoutImplicitTls_IsRejectedImmediately(self) -> None:
+        with self.assertRaisesRegex(ValueError, "port 465 requires implicit TLS"):
+            UpdateEmailSettingsRequest(
+                delivery_mode="smtp",
+                smtp_host="smtp.example.test",
+                smtp_port=465,
+                smtp_tls_mode="starttls",
+                sender_email="noreply@example.test",
+                public_app_url="https://control.example.test",
             )
 
     def test_SendSmtp_StartTlsAuthAndSubmission(self) -> None:
@@ -345,9 +360,7 @@ class EmailDeliveryTests(unittest.TestCase):
         failures = (
             TimeoutError("smtp-password secret"),
             smtplib.SMTPAuthenticationError(535, b"credential rejected"),
-            smtplib.SMTPRecipientsRefused(
-                {"recipient@example.test": (550, b"sensitive upstream response")}
-            ),
+            smtplib.SMTPRecipientsRefused({"recipient@example.test": (550, b"sensitive upstream response")}),
         )
         for failure in failures:
             with self.subTest(failure=type(failure).__name__):
@@ -368,6 +381,29 @@ class EmailDeliveryTests(unittest.TestCase):
                 self.assertIn(type(failure).__name__, message)
                 self.assertNotIn("smtp-password", message)
                 self.assertNotIn("upstream", message)
+
+    def test_SendSmtp_ServerDisconnected_ExplainsEndpointConfiguration(self) -> None:
+        with self.assertRaises(BadRequestError) as raised:
+            send_smtp(
+                self.config,
+                "recipient@example.test",
+                render_message(
+                    self.config,
+                    purpose="password_reset",
+                    display_name="User",
+                    link="https://example.test/reset",
+                    expiry_minutes=15,
+                ),
+                smtp_factory=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    smtplib.SMTPServerDisconnected("connection closed")
+                ),
+            )
+
+        message = str(raised.exception)
+        self.assertIn("SMTPServerDisconnected", message)
+        self.assertIn("verify the SMTP host, port, and TLS mode", message)
+        self.assertIn("not IMAP", message)
+        self.assertNotIn("connection closed", message)
 
     def test_SendSmtp_PlainWithoutOptInIsRejected(self) -> None:
         self.config.smtp_tls_mode = "none"
