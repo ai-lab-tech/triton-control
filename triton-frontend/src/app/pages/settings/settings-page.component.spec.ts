@@ -206,4 +206,55 @@ describe("SettingsPageComponent", () => {
     expect(native.textContent).toContain("Managed by OIDC_CONFIG_SOURCE=env.");
     expect(authServiceMock.saveOidcSettings).not.toHaveBeenCalled();
   });
+
+  it("EmailDeliveryDisabled_DbManaged_DisablesDependentConfiguration", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    component.emailSettings.configSource = "db";
+    component.emailSettings.deliveryMode = "disabled";
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(component.canEditEmailSettings()).toBeTrue();
+    expect(component.canEditEmailLifecycleConfiguration()).toBeFalse();
+    expect(native.querySelector<HTMLInputElement>("#invite-expiry")?.disabled).toBeTrue();
+    expect(native.querySelector<HTMLInputElement>("#reset-expiry")?.disabled).toBeTrue();
+    expect(native.querySelector<HTMLInputElement>("#invite-subject")?.disabled).toBeTrue();
+    expect(native.querySelector<HTMLTextAreaElement>("#invite-html-template")?.disabled).toBeTrue();
+    expect(native.textContent).toContain(
+      "Enable manual links or SMTP to configure account email lifecycle settings.",
+    );
+  });
+
+  it("EmailDeliveryEnabled_DbManaged_EnablesDependentConfiguration", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    component.emailSettings.configSource = "db";
+    component.emailSettings.deliveryMode = "manual-link";
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(component.canEditEmailLifecycleConfiguration()).toBeTrue();
+    expect(native.querySelector<HTMLInputElement>("#email-public-url")?.disabled).toBeFalse();
+    expect(native.querySelector<HTMLInputElement>("#invite-expiry")?.disabled).toBeFalse();
+    expect(native.querySelector<HTMLInputElement>("#reset-expiry")?.disabled).toBeFalse();
+    expect(native.querySelector<HTMLInputElement>("#invite-subject")?.disabled).toBeFalse();
+    expect(
+      native.querySelector<HTMLTextAreaElement>("#invite-html-template")?.disabled,
+    ).toBeFalse();
+  });
 });

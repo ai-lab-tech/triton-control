@@ -159,6 +159,10 @@ export class SettingsPageComponent {
     return this.emailSettings.configSource === "db";
   }
 
+  canEditEmailLifecycleConfiguration(): boolean {
+    return this.canEditEmailSettings() && this.emailSettings.deliveryMode !== "disabled";
+  }
+
   async saveEmailSettings(): Promise<void> {
     if (!this.canEditEmailSettings()) return;
     this.emailSaving = true;

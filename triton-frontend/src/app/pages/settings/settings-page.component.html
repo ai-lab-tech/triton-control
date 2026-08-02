@@ -211,6 +211,10 @@
       </mat-form-field>
     </div>
 
+    @if (emailSettings.deliveryMode === "disabled") {
+      <p>Enable manual links or SMTP to configure account email lifecycle settings.</p>
+    }
+
     @if (emailSettings.deliveryMode !== "disabled") {
       <div class="form-row">
         <label class="field-label" for="email-public-url">Public application URL</label>
@@ -220,7 +224,7 @@
             matInput
             [(ngModel)]="emailSettings.publicAppUrl"
             placeholder="https://triton-control.example.com"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -234,7 +238,7 @@
             id="smtp-host"
             matInput
             [(ngModel)]="emailSettings.smtpHost"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -246,7 +250,7 @@
             matInput
             type="number"
             [(ngModel)]="emailSettings.smtpPort"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -256,7 +260,7 @@
           <mat-select
             id="smtp-tls"
             [(ngModel)]="emailSettings.smtpTlsMode"
-            [disabled]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           >
             <mat-option value="starttls">STARTTLS</mat-option>
             <mat-option value="tls">Implicit TLS</mat-option>
@@ -269,7 +273,7 @@
           <input
             type="checkbox"
             [(ngModel)]="emailSettings.smtpAllowInsecure"
-            [disabled]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
           I explicitly accept unencrypted SMTP transport.
         </label>
@@ -281,7 +285,7 @@
             id="smtp-user"
             matInput
             [(ngModel)]="emailSettings.smtpUsername"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -296,7 +300,7 @@
             [placeholder]="
               emailSettings.smtpPasswordConfigured ? 'Stored secret configured' : 'SMTP password'
             "
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
           @if (emailSettings.smtpPasswordConfigured) {
             <mat-hint>Leave empty to keep the stored secret.</mat-hint>
@@ -311,7 +315,7 @@
             matInput
             type="email"
             [(ngModel)]="emailSettings.senderEmail"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -322,7 +326,7 @@
             id="sender-name"
             matInput
             [(ngModel)]="emailSettings.senderName"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -334,7 +338,7 @@
             matInput
             rows="4"
             [(ngModel)]="emailSettings.caCertificate"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           ></textarea>
         </mat-form-field>
       </div>
@@ -348,7 +352,7 @@
           matInput
           type="number"
           [(ngModel)]="emailSettings.inviteExpiryMinutes"
-          [readonly]="!canEditEmailSettings()"
+          [disabled]="!canEditEmailLifecycleConfiguration()"
         />
       </mat-form-field>
     </div>
@@ -360,7 +364,7 @@
           matInput
           type="number"
           [(ngModel)]="emailSettings.resetExpiryMinutes"
-          [readonly]="!canEditEmailSettings()"
+          [disabled]="!canEditEmailLifecycleConfiguration()"
         />
       </mat-form-field>
     </div>
@@ -379,7 +383,7 @@
             id="invite-subject"
             matInput
             [(ngModel)]="emailSettings.inviteSubject"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -391,7 +395,7 @@
             matInput
             rows="5"
             [(ngModel)]="emailSettings.inviteTextTemplate"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           ></textarea>
         </mat-form-field>
       </div>
@@ -403,7 +407,7 @@
             matInput
             rows="5"
             [(ngModel)]="emailSettings.inviteHtmlTemplate"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           ></textarea>
         </mat-form-field>
       </div>
@@ -414,7 +418,7 @@
             id="reset-subject"
             matInput
             [(ngModel)]="emailSettings.resetSubject"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           />
         </mat-form-field>
       </div>
@@ -426,7 +430,7 @@
             matInput
             rows="5"
             [(ngModel)]="emailSettings.resetTextTemplate"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           ></textarea>
         </mat-form-field>
       </div>
@@ -438,7 +442,7 @@
             matInput
             rows="5"
             [(ngModel)]="emailSettings.resetHtmlTemplate"
-            [readonly]="!canEditEmailSettings()"
+            [disabled]="!canEditEmailLifecycleConfiguration()"
           ></textarea>
         </mat-form-field>
       </div>
