@@ -73,7 +73,15 @@
         <th mat-header-cell *matHeaderCellDef>Status</th>
         <td mat-cell *matCellDef="let row">
           <span class="chip" [attr.data-tone]="row.isActive ? 'ok' : 'warn'">
-            {{ row.isActive ? "active" : "pending" }}
+            @if (row.accountStatus === "invitation_pending") {
+              invitation pending
+            } @else if (row.accountStatus === "approval_pending") {
+              approval pending
+            } @else if (row.isActive) {
+              active
+            } @else {
+              inactive
+            }
           </span>
         </td>
       </ng-container>
@@ -133,16 +141,26 @@
         <th mat-header-cell *matHeaderCellDef>Actions</th>
         <td mat-cell *matCellDef="let row" class="actions-cell">
           @if (!row.isActive) {
-            <button mat-flat-button color="primary" type="button" (click)="approveUser(row)">
-              <span class="material-icons">verified_user</span>
-              Approve
-            </button>
-            @if (row.auth === "local") {
+            @if (row.accountStatus === "approval_pending") {
+              <button mat-flat-button color="primary" type="button" (click)="approveUser(row)">
+                <span class="material-icons">verified_user</span>
+                Approve
+              </button>
+            } @else if (row.accountStatus === "invitation_pending") {
               <button mat-stroked-button type="button" (click)="reissueInvitation(row)">
                 Reissue invite
               </button>
               <button mat-stroked-button type="button" (click)="revokeInvitation(row)">
-                Revoke invite
+                Cancel invitation
+              </button>
+            } @else if (row.auth === "local") {
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="reissueInvitation(row)"
+                [disabled]="!emailLifecycleAvailable"
+              >
+                Send invitation
               </button>
             }
           } @else if (row.auth === "local") {

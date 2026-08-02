@@ -32,6 +32,7 @@ from app.services.auth.account_lifecycle import (
     issue_admin_reset,
 )
 from app.services.auth.email_delivery import render_message, send_smtp
+from app.services.users import delete_user, list_users
 
 
 class _Socket:
@@ -127,6 +128,46 @@ class AccountLifecycleTests(unittest.TestCase):
                 CompleteLifecycleRequest(token=raw, password="Anotherpass123!"),
                 self.session,
             )
+
+    @patch("app.services.auth.account_lifecycle.ensure_local_auth_allowed")
+    def test_InvitedUser_CanBeDeletedWithOutstandingToken(self, _allowed: object) -> None:
+        admin = self._admin()
+        with patch(
+            "app.services.auth.account_lifecycle.get_runtime_config",
+            return_value=self.config,
+        ):
+            response = invite_user(
+                InviteUserRequest(
+                    email="delete-me@example.test",
+                    name="Delete Me",
+                    role="viewer",
+                ),
+                self.session,
+                {"role": "admin", "email": admin.email},
+            )
+        invited = next(
+            user
+            for user in list_users(
+                self.session,
+                {"role": "admin", "email": admin.email},
+            )
+            if user.id == response.user_id
+        )
+
+        delete_user(
+            self.session,
+            {"role": "admin", "email": admin.email},
+            response.user_id,
+        )
+
+        self.assertEqual(invited.account_status, "invitation_pending")
+        self.assertIsNone(users.find_by_id(self.session, response.user_id))
+        self.assertEqual(
+            self.session.exec(
+                select(AccountLifecycleTokenEntity).where(AccountLifecycleTokenEntity.user_id == response.user_id)
+            ).all(),
+            [],
+        )
 
     def test_AdminReset_ReissueRevokesOldAndResetIncrementsCredentialVersion(self) -> None:
         admin = self._admin()

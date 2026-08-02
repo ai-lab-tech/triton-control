@@ -329,6 +329,40 @@ describe("UsersPageComponent", () => {
     expect(dialogMock.open).toHaveBeenCalled();
   });
 
+  it("InvitationPending_ShowsInvitationActionsWithoutApprove", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectUsers, [
+      {
+        id: 8,
+        name: "Invited User",
+        email: "invited@example.com",
+        role: "viewer",
+        isActive: false,
+        accountStatus: "invitation_pending",
+        auth: "local",
+        instances: [],
+      },
+    ]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const actions = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        ".actions-cell button",
+      ),
+    ).map((button) => button.textContent?.trim());
+
+    // Assert
+    expect(actions).toContain("Reissue invite");
+    expect(actions).toContain("Cancel invitation");
+    expect(actions).not.toContain("Approve");
+    expect(actions.some((action) => action?.includes("Delete"))).toBeTrue();
+  });
+
   it("ResetPassword_EmailLifecycleDisabled_DisablesActionWithExplanation", async () => {
     // Arrange
     mockStore.overrideSelector(selectUsers, [

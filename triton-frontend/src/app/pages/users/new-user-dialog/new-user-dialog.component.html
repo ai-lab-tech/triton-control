@@ -60,32 +60,10 @@
         <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
         <mat-form-field appearance="outline">
           <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
-            <mat-option value="password">Set initial password</mat-option>
             <mat-option value="invite">Invite user</mat-option>
             <mat-option value="inactive">Create inactive account</mat-option>
           </mat-select>
         </mat-form-field>
-      </div>
-    }
-    @if (!oidcEnabled() && newUser.creationMode === "password") {
-      <div class="form-row">
-        <label class="field-label" for="dialog-user-password">Initial password</label>
-        <mat-form-field appearance="outline">
-          <input
-            id="dialog-user-password"
-            matInput
-            [(ngModel)]="newUser.password"
-            type="password"
-            autocomplete="new-password"
-            minlength="12"
-            maxlength="128"
-            placeholder="Initial password"
-          />
-        </mat-form-field>
-        <div class="field-note">
-          If provided, passwords must be 12-128 characters, include uppercase, lowercase, digit, and
-          special character, and must not contain whitespace.
-        </div>
       </div>
     }
     <div class="form-row">

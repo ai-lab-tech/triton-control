@@ -1,4 +1,4 @@
-import { TestBed } from "@angular/core/testing";
+import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { ActivatedRoute } from "@angular/router";
 import { of, throwError } from "rxjs";
 
@@ -6,11 +6,11 @@ import { UsersService } from "../../api/generated";
 import { AccountLifecyclePageComponent } from "./account-lifecycle-page.component";
 
 describe("AccountLifecyclePageComponent", () => {
-  function setup(
+  function setupFixture(
     mode: "forgot" | "activate" | "reset",
     token = "",
     overrides: Partial<jasmine.SpyObj<UsersService>> = {},
-  ): AccountLifecyclePageComponent {
+  ): ComponentFixture<AccountLifecyclePageComponent> {
     const api = jasmine.createSpyObj<UsersService>("UsersService", [
       "inspectInvitationEndpointApiAuthInvitationsInspectPost",
       "inspectResetEndpointApiAuthPasswordResetsInspectPost",
@@ -34,7 +34,15 @@ describe("AccountLifecyclePageComponent", () => {
         },
       ],
     });
-    return TestBed.createComponent(AccountLifecyclePageComponent).componentInstance;
+    return TestBed.createComponent(AccountLifecyclePageComponent);
+  }
+
+  function setup(
+    mode: "forgot" | "activate" | "reset",
+    token = "",
+    overrides: Partial<jasmine.SpyObj<UsersService>> = {},
+  ): AccountLifecyclePageComponent {
+    return setupFixture(mode, token, overrides).componentInstance;
   }
 
   afterEach(() => TestBed.resetTestingModule());
@@ -49,8 +57,8 @@ describe("AccountLifecyclePageComponent", () => {
 
     await component.requestReset();
 
-    expect(component.completed).toBeTrue();
-    expect(component.message).toContain("If the account is eligible");
+    expect(component.completed()).toBeTrue();
+    expect(component.message()).toContain("If the account is eligible");
   });
 
   it("Invitation_InvalidToken_ShowsSafeMessage", async () => {
@@ -62,8 +70,8 @@ describe("AccountLifecyclePageComponent", () => {
 
     await component.ngOnInit();
 
-    expect(component.validLink).toBeFalse();
-    expect(component.error).toBe("This link is invalid or expired.");
+    expect(component.validLink()).toBeFalse();
+    expect(component.error()).toBe("This link is invalid or expired.");
   });
 
   it("Reset_ValidTokenAndPassword_CompletesAndClearsSecrets", async () => {
@@ -81,7 +89,7 @@ describe("AccountLifecyclePageComponent", () => {
 
     await component.submitPassword();
 
-    expect(component.completed).toBeTrue();
+    expect(component.completed()).toBeTrue();
     expect(component.token).toBe("");
     expect(component.password).toBe("");
   });
@@ -96,7 +104,24 @@ describe("AccountLifecyclePageComponent", () => {
 
     await component.requestReset();
 
-    expect(component.completed).toBeFalse();
-    expect(component.error).toContain("unavailable");
+    expect(component.completed()).toBeFalse();
+    expect(component.error()).toContain("unavailable");
+  });
+
+  it("Reset_InspectionCompletes_RendersPasswordFormInsteadOfLoading", async () => {
+    const fixture = setupFixture("reset", "bearer-token", {
+      inspectResetEndpointApiAuthPasswordResetsInspectPost: jasmine
+        .createSpy()
+        .and.returnValue(of({ valid: true, email: "person@example.test" })),
+    });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const native = fixture.nativeElement as HTMLElement;
+    expect(native.textContent).not.toContain("Loading…");
+    expect(native.textContent).toContain("Set a new password for");
+    expect(native.querySelector('input[autocomplete="new-password"]')).not.toBeNull();
   });
 });

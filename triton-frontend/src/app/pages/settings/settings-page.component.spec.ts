@@ -265,6 +265,8 @@ describe("SettingsPageComponent", () => {
     await fixture.whenStable();
     component.emailSettings.configSource = "db";
     component.emailSettings.deliveryMode = "disabled";
+    component.emailAdvancedExpanded = true;
+    component.emailTemplatesExpanded = true;
 
     // Act
     await openEmailTab(fixture);
@@ -289,6 +291,8 @@ describe("SettingsPageComponent", () => {
     await fixture.whenStable();
     component.emailSettings.configSource = "db";
     component.emailSettings.deliveryMode = "manual-link";
+    component.emailAdvancedExpanded = true;
+    component.emailTemplatesExpanded = true;
 
     // Act
     await openEmailTab(fixture);
@@ -303,6 +307,61 @@ describe("SettingsPageComponent", () => {
     expect(
       native.querySelector<HTMLTextAreaElement>("#invite-html-template")?.disabled,
     ).toBeFalse();
+  });
+
+  it("EmailAdvancedSettings_InitiallyCollapsed_ExpandsOnDemand", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    await openEmailTab(fixture);
+    const native = fixture.nativeElement as HTMLElement;
+    const advanced = native.querySelector<HTMLDetailsElement>("details.email-collapsible");
+    const wasInitiallyOpen = advanced?.open;
+    const fieldsWereInitiallyRendered =
+      native.querySelector("#smtp-ca") !== null ||
+      native.querySelector("#invite-expiry") !== null ||
+      native.querySelector("#reset-expiry") !== null;
+
+    // Act
+    if (advanced) {
+      advanced.open = true;
+      advanced.dispatchEvent(new Event("toggle"));
+    }
+    fixture.detectChanges();
+
+    // Assert
+    expect(advanced).not.toBeNull();
+    expect(wasInitiallyOpen).toBeFalse();
+    expect(fieldsWereInitiallyRendered).toBeFalse();
+    expect(advanced?.open).toBeTrue();
+    expect(native.querySelector("#smtp-ca")).not.toBeNull();
+    expect(native.querySelector("#invite-expiry")).not.toBeNull();
+    expect(native.querySelector("#reset-expiry")).not.toBeNull();
+    expect(advanced?.textContent).toContain("Security and link expiry");
+    expect(advanced?.textContent).toContain("1440 minutes equals 24 hours.");
+  });
+
+  it("EmailOptionalPanels_UseClearConsistentDescriptions", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+
+    // Act
+    await openEmailTab(fixture);
+    const native = fixture.nativeElement as HTMLElement;
+    const panels = native.querySelectorAll<HTMLDetailsElement>("details.email-collapsible");
+
+    // Assert
+    expect(panels.length).toBe(2);
+    expect(panels[0].textContent).toContain("Security and link expiry");
+    expect(panels[0].textContent).toContain("invitation and password reset links remain valid");
+    expect(panels[1].textContent).toContain("Email content");
+    expect(panels[1].textContent).toContain("invitations and password resets");
   });
 
   it("TestEmail_DbManagedUnsavedSmtpSettings_DisablesTestUntilSaved", async () => {
@@ -383,8 +442,8 @@ describe("SettingsPageComponent", () => {
     fixture.detectChanges();
 
     // Assert
-    expect(component.emailMessageTone).toBe("error");
-    expect(component.emailMessage).toContain("SMTPServerDisconnected");
+    expect(component.emailMessageTone()).toBe("error");
+    expect(component.emailMessage()).toContain("SMTPServerDisconnected");
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent,
     ).toContain("verify the SMTP endpoint");
@@ -414,8 +473,8 @@ describe("SettingsPageComponent", () => {
     ).map((button) => button.textContent?.trim());
 
     // Assert
-    expect(component.emailTesting).toBeTrue();
-    expect(component.emailSaving).toBeFalse();
+    expect(component.emailTesting()).toBeTrue();
+    expect(component.emailSaving()).toBeFalse();
     expect(buttons).toContain("Sending test…");
     expect(buttons).toContain("Save email settings");
     expect(buttons).not.toContain("Saving…");
@@ -486,7 +545,7 @@ describe("SettingsPageComponent", () => {
       }),
     );
     expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
-    expect(component.emailMessage).toBe("Email settings saved.");
+    expect(component.emailMessage()).toBe("Email settings saved.");
   });
 
   it("SaveEmailSettings_RequiredFieldsMissing_HighlightsFieldsAndDoesNotCallApi", async () => {
@@ -502,6 +561,7 @@ describe("SettingsPageComponent", () => {
     const component = fixture.componentInstance;
     await openEmailTab(fixture);
     component.emailSettings.inviteSubject = "";
+    component.emailSettings.resetExpiryMinutes = 1;
 
     // Act
     await component.saveEmailSettings();
@@ -521,9 +581,10 @@ describe("SettingsPageComponent", () => {
     expect(publicUrlField?.classList.contains("email-field-invalid")).toBeTrue();
     expect(getComputedStyle(publicUrlOutline!).borderColor).toBe("rgb(185, 28, 28)");
     expect(getComputedStyle(publicUrlLabel!).color).toBe("rgb(185, 28, 28)");
+    expect(component.emailAdvancedExpanded).toBeTrue();
     expect(component.emailTemplatesExpanded).toBeTrue();
-    expect(component.emailMessageTone).toBe("error");
-    expect(component.emailMessage).toBe("Complete the highlighted email settings before saving.");
+    expect(component.emailMessageTone()).toBe("error");
+    expect(component.emailMessage()).toBe("Complete the highlighted email settings before saving.");
   });
 
   it("SaveEmailSettings_ApiRejects_ShowsBackendValidationMessage", async () => {
@@ -555,10 +616,10 @@ describe("SettingsPageComponent", () => {
     // Assert
     const alert = (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]');
     expect(updateEmailSettingsSpy).toHaveBeenCalled();
-    expect(component.emailMessageTone).toBe("error");
-    expect(component.emailMessage).toBe("SMTP configuration was rejected.");
+    expect(component.emailMessageTone()).toBe("error");
+    expect(component.emailMessage()).toBe("SMTP configuration was rejected.");
     expect(alert?.textContent).toContain("SMTP configuration was rejected.");
-    expect(component.emailSaveAttempted).toBeTrue();
+    expect(component.emailSaveAttempted()).toBeTrue();
   });
 
   it("SaveEmailSettings_DbManagedSmtp_RemainsEnabledForExplicitResave", async () => {
@@ -588,6 +649,38 @@ describe("SettingsPageComponent", () => {
     expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
     expect(component.canSaveEmailSettings()).toBeTrue();
     expect(component.canSendTestEmail()).toBeTrue();
-    expect(component.emailMessage).toBe("Email settings saved.");
+    expect(component.emailMessage()).toBe("Email settings saved.");
+  });
+
+  it("SaveEmailSettings_RequestCompletes_ImmediatelyRestoresReactiveState", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      smtp_host: "smtp.example.com",
+      sender_email: "noreply@example.com",
+      public_app_url: "https://control.example.com",
+      invite_subject: "You are invited to Triton Control",
+      reset_subject: "Reset your Triton Control password",
+      read_only: false,
+    };
+    const pendingSave = new Subject<any>();
+    updateEmailSettingsSpy.and.returnValue(pendingSave);
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await openEmailTab(fixture);
+    component.emailSettings.senderName = "Updated sender";
+
+    // Act
+    const request = component.saveEmailSettings();
+    expect(component.emailSaving()).toBeTrue();
+    pendingSave.next({ ...emailSettingsResponse, sender_name: "Updated sender" });
+    pendingSave.complete();
+    await request;
+
+    // Assert
+    expect(component.emailSaving()).toBeFalse();
+    expect(component.canSaveEmailSettings()).toBeTrue();
+    expect(component.emailMessage()).toBe("Email settings saved.");
   });
 });

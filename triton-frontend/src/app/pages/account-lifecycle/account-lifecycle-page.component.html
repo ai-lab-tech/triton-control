@@ -14,20 +14,20 @@
     </mat-card-header>
 
     <mat-card-content>
-      @if (loading) {
+      @if (loading()) {
         <p>Loading…</p>
-      } @else if (completed) {
-        <div class="notice success">{{ message }}</div>
+      } @else if (completed()) {
+        <div class="notice success">{{ message() }}</div>
       } @else if (mode === "forgot") {
         <p>Enter your email address. Eligible accounts receive a single-use reset link.</p>
         <mat-form-field appearance="outline">
           <mat-label>Email</mat-label>
           <input matInput [(ngModel)]="email" type="email" autocomplete="email" />
         </mat-form-field>
-      } @else if (validLink) {
-        @if (targetEmail) {
+      } @else if (validLink()) {
+        @if (targetEmail()) {
           <p>
-            Set a new password for <strong>{{ targetEmail }}</strong
+            Set a new password for <strong>{{ targetEmail() }}</strong
             >.
           </p>
         }
@@ -58,19 +58,19 @@
         </p>
       }
 
-      @if (error) {
-        <div class="notice error">{{ error }}</div>
+      @if (error()) {
+        <div class="notice error">{{ error() }}</div>
       }
     </mat-card-content>
 
     <mat-card-actions align="end">
       <a mat-stroked-button routerLink="/signin">Back to sign in</a>
-      @if (!completed && mode === "forgot") {
-        <button mat-flat-button color="primary" (click)="requestReset()" [disabled]="loading">
+      @if (!completed() && mode === "forgot") {
+        <button mat-flat-button color="primary" (click)="requestReset()" [disabled]="loading()">
           Send reset link
         </button>
-      } @else if (!completed && validLink) {
-        <button mat-flat-button color="primary" (click)="submitPassword()" [disabled]="loading">
+      } @else if (!completed() && validLink()) {
+        <button mat-flat-button color="primary" (click)="submitPassword()" [disabled]="loading()">
           {{ mode === "activate" ? "Activate account" : "Reset password" }}
         </button>
       }

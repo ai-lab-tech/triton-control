@@ -132,8 +132,24 @@ class UserApiHelperTests(unittest.TestCase):
 
         # Arrange
         users = [
-            UserEntity(email="a@a.com", name="A", role="admin", auth_provider="local", password_hash="x", assigned_instances=[], is_active=True),
-            UserEntity(email="b@b.com", name="B", role="viewer", auth_provider="oidc", password_hash=None, assigned_instances=[], is_active=True),
+            UserEntity(
+                email="a@a.com",
+                name="A",
+                role="admin",
+                auth_provider="local",
+                password_hash="x",
+                assigned_instances=[],
+                is_active=True,
+            ),
+            UserEntity(
+                email="b@b.com",
+                name="B",
+                role="viewer",
+                auth_provider="oidc",
+                password_hash=None,
+                assigned_instances=[],
+                is_active=True,
+            ),
         ]
         session = _FakeSession(exec_results=[_ExecResult(all_rows=users)])
 
@@ -189,8 +205,9 @@ class UserApiHelperTests(unittest.TestCase):
         req = BootstrapRegisterRequest(email="admin@example.com", password="Validpass123!", name="Admin")
 
         # Act
-        with patch("app.services.auth.bootstrap.get_settings", return_value=SimpleNamespace(oidc_enabled=False)), patch(
-            "app.services.auth.bootstrap.hash_password", return_value="hashed"
+        with (
+            patch("app.services.auth.bootstrap.get_settings", return_value=SimpleNamespace(oidc_enabled=False)),
+            patch("app.services.auth.bootstrap.hash_password", return_value="hashed"),
         ):
             dto = bootstrap_register(req, session)
 
@@ -236,25 +253,32 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
                 await put_oidc_settings(update_req, req, _FakeSession(), {"role": "admin"})
 
         # Act
-        with patch("app.services.auth.oidc_settings.is_env_config_source", return_value=False), patch(
-            "app.services.auth.oidc_settings.get_settings", return_value=settings
-        ), patch("app.services.auth.oidc_settings.validate_oidc_connection"), patch(
-            "app.services.auth.oidc_settings.build_oidc_preflight_context", return_value={"settings": {}}
-        ), patch(
-            "app.services.auth.oidc_settings.start_preflight_redirect",
-            AsyncMock(return_value={"preflight_required": True}),
+        with (
+            patch("app.services.auth.oidc_settings.is_env_config_source", return_value=False),
+            patch("app.services.auth.oidc_settings.get_settings", return_value=settings),
+            patch("app.services.auth.oidc_settings.validate_oidc_connection"),
+            patch("app.services.auth.oidc_settings.build_oidc_preflight_context", return_value={"settings": {}}),
+            patch(
+                "app.services.auth.oidc_settings.start_preflight_redirect",
+                AsyncMock(return_value={"preflight_required": True}),
+            ),
         ):
-            response = await put_oidc_settings(update_req, req, _FakeSession(), {"role": "admin", "email": "admin@example.com"})
+            response = await put_oidc_settings(
+                update_req, req, _FakeSession(), {"role": "admin", "email": "admin@example.com"}
+            )
 
         # Assert
         self.assertTrue(response["preflight_required"])
 
         # Act
-        with patch("app.services.auth.oidc_preflight.is_env_config_source", return_value=False), patch(
-            "app.services.auth.oidc_preflight.validate_oidc_connection"
-        ), patch("app.services.auth.oidc_preflight.build_oidc_preflight_context", return_value={"settings": {}}), patch(
-            "app.services.auth.oidc_preflight.start_preflight_redirect",
-            AsyncMock(return_value={"preflight_required": True}),
+        with (
+            patch("app.services.auth.oidc_preflight.is_env_config_source", return_value=False),
+            patch("app.services.auth.oidc_preflight.validate_oidc_connection"),
+            patch("app.services.auth.oidc_preflight.build_oidc_preflight_context", return_value={"settings": {}}),
+            patch(
+                "app.services.auth.oidc_preflight.start_preflight_redirect",
+                AsyncMock(return_value={"preflight_required": True}),
+            ),
         ):
             started = await start_oidc_preflight(update_req, req, {"role": "admin", "email": "admin@example.com"})
 
@@ -302,11 +326,12 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
             )
 
         # Act
-        with patch("app.services.auth.oidc_settings.is_env_config_source", return_value=False), patch(
-            "app.services.auth.oidc_settings.get_settings", return_value=current
-        ), patch("app.services.auth.oidc_settings.validate_oidc_connection") as validate, patch(
-            "app.services.auth.oidc_settings.update_settings", side_effect=_save
-        ) as save:
+        with (
+            patch("app.services.auth.oidc_settings.is_env_config_source", return_value=False),
+            patch("app.services.auth.oidc_settings.get_settings", return_value=current),
+            patch("app.services.auth.oidc_settings.validate_oidc_connection") as validate,
+            patch("app.services.auth.oidc_settings.update_settings", side_effect=_save) as save,
+        ):
             response = await put_oidc_settings(
                 update_req,
                 _Req(),
@@ -354,11 +379,12 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
         )
 
         # Act
-        with patch("app.services.auth.oidc_preflight.get_frontend_redirect_url", return_value="http://frontend/"), patch(
-            "app.services.auth.oidc_preflight.load_server_metadata", new_callable=AsyncMock, return_value={}
-        ), patch(
-            "app.services.auth.oidc_preflight.get_oauth", return_value=oauth
-        ), patch("app.services.auth.oidc_preflight.update_settings"):
+        with (
+            patch("app.services.auth.oidc_preflight.get_frontend_redirect_url", return_value="http://frontend/"),
+            patch("app.services.auth.oidc_preflight.load_server_metadata", new_callable=AsyncMock, return_value={}),
+            patch("app.services.auth.oidc_preflight.get_oauth", return_value=oauth),
+            patch("app.services.auth.oidc_preflight.update_settings"),
+        ):
             res = await oidc_preflight_callback(request, session)
 
         # Assert
@@ -372,12 +398,19 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
 
         # Arrange
         request = _Req()
-        request.session[OIDC_PREFLIGHT_SESSION_KEY] = {"expected_email": "admin@example.com", "local_name": "Admin", "settings": {}}
-        oauth_err = SimpleNamespace(keycloak=SimpleNamespace(authorize_access_token=AsyncMock(side_effect=OAuthError(error="bad"))))
+        request.session[OIDC_PREFLIGHT_SESSION_KEY] = {
+            "expected_email": "admin@example.com",
+            "local_name": "Admin",
+            "settings": {},
+        }
+        oauth_err = SimpleNamespace(
+            keycloak=SimpleNamespace(authorize_access_token=AsyncMock(side_effect=OAuthError(error="bad")))
+        )
 
         # Act
-        with patch("app.services.auth.oidc_preflight.get_frontend_redirect_url", return_value="http://frontend/"), patch(
-            "app.services.auth.oidc_preflight.get_oauth", return_value=oauth_err
+        with (
+            patch("app.services.auth.oidc_preflight.get_frontend_redirect_url", return_value="http://frontend/"),
+            patch("app.services.auth.oidc_preflight.get_oauth", return_value=oauth_err),
         ):
             res = await oidc_preflight_callback(request, session)
 
@@ -392,22 +425,34 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
             name="New",
             role="viewer",
             auth_provider="local",
-            password="Validpass123!",
+            creation_mode="inactive",
             assigned_instances=["a"],
         )
         session = _FakeSession(exec_results=[_ExecResult(first=None)])
 
         # Act
-        with patch("app.services.auth.local_auth.oidc_enabled", return_value=False), patch(
-            "app.services.auth.local_auth.hash_password", return_value="hashed"
-        ):
+        with patch("app.services.auth.local_auth.oidc_enabled", return_value=False):
             dto = register_user(create_req, session, admin_claims)
 
         # Assert
         self.assertEqual(dto.email, "new@example.com")
+        self.assertFalse(dto.is_active)
 
         # Arrange
-        bad_session = _FakeSession(exec_results=[_ExecResult(first=UserEntity(email="new@example.com", name="N", role="viewer", auth_provider="local", assigned_instances=[], is_active=True))])
+        bad_session = _FakeSession(
+            exec_results=[
+                _ExecResult(
+                    first=UserEntity(
+                        email="new@example.com",
+                        name="N",
+                        role="viewer",
+                        auth_provider="local",
+                        assigned_instances=[],
+                        is_active=True,
+                    )
+                )
+            ]
+        )
 
         # Act / Assert
         with patch("app.services.auth.local_auth.oidc_enabled", return_value=False):
@@ -418,30 +463,41 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
         sr_session = _FakeSession(exec_results=[_ExecResult(first=None)])
 
         # Act
-        with patch("app.services.auth.local_auth.ensure_local_auth_allowed"), patch(
-            "app.services.auth.local_auth.hash_password", return_value="hashed"
+        with (
+            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
+            patch("app.services.auth.local_auth.hash_password", return_value="hashed"),
         ):
-            dto = self_register(SelfRegisterRequest(email="self@example.com", password="Validpass123!", name="Self"), sr_session)
+            dto = self_register(
+                SelfRegisterRequest(email="self@example.com", password="Validpass123!", name="Self"), sr_session
+            )
 
         # Assert
         self.assertEqual(dto.email, "self@example.com")
 
         # Arrange
-        login_session = _FakeSession(exec_results=[_ExecResult(all_rows=[]), _ExecResult(first=UserEntity(
-            email="self@example.com",
-            name="Self",
-            role="viewer",
-            auth_provider="local",
-            password_hash="hashed",
-            assigned_instances=[],
-            is_active=True,
-        ))])
+        login_session = _FakeSession(
+            exec_results=[
+                _ExecResult(all_rows=[]),
+                _ExecResult(
+                    first=UserEntity(
+                        email="self@example.com",
+                        name="Self",
+                        role="viewer",
+                        auth_provider="local",
+                        password_hash="hashed",
+                        assigned_instances=[],
+                        is_active=True,
+                    )
+                ),
+            ]
+        )
 
         # Act
-        with patch("app.services.auth.local_auth.oidc_enabled", return_value=False), patch(
-            "app.services.auth.local_auth.hash_password", return_value="hashed"
-        ), patch("app.services.auth.local_auth.verify_password", return_value=True), patch(
-            "app.services.auth.local_auth.issue_access_token", return_value="token"
+        with (
+            patch("app.services.auth.local_auth.oidc_enabled", return_value=False),
+            patch("app.services.auth.local_auth.hash_password", return_value="hashed"),
+            patch("app.services.auth.local_auth.verify_password", return_value=True),
+            patch("app.services.auth.local_auth.issue_access_token", return_value="token"),
         ):
             lr = login(LoginRequest(email="self@example.com", password="Validpass123!"), login_session)
 
@@ -458,7 +514,12 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
             assigned_instances=[],
             is_active=True,
         )
-        list_session = _FakeSession(exec_results=[_ExecResult(all_rows=[admin])])
+        list_session = _FakeSession(
+            exec_results=[
+                _ExecResult(all_rows=[]),
+                _ExecResult(all_rows=[admin]),
+            ]
+        )
 
         # Act
         users = list_users(list_session, admin_claims)
@@ -467,9 +528,14 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(users), 1)
 
         # Arrange / Act
-        op_session = _FakeSession(get_map={1: admin})
+        op_session = _FakeSession(
+            get_map={1: admin},
+            exec_results=[_ExecResult(), _ExecResult()],
+        )
         deleted = delete_user(1, op_session, admin_claims)
-        updated = update_user_instances(1, UpdateUserInstancesRequest(assigned_instances=["x"]), op_session, admin_claims)
+        updated = update_user_instances(
+            1, UpdateUserInstancesRequest(assigned_instances=["x"]), op_session, admin_claims
+        )
         role_updated = update_user_role(1, UpdateUserRoleRequest(role="member"), op_session, admin_claims)
 
         # Assert

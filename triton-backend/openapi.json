@@ -4096,17 +4096,6 @@
             "title": "Auth Provider",
             "default": "local"
           },
-          "password": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Password"
-          },
           "oidc_subject": {
             "anyOf": [
               {
@@ -4128,7 +4117,7 @@
           "creation_mode": {
             "type": "string",
             "title": "Creation Mode",
-            "default": "password"
+            "default": "inactive"
           }
         },
         "type": "object",
@@ -6550,6 +6539,11 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "account_status": {
+            "type": "string",
+            "title": "Account Status",
+            "default": "active"
           },
           "credential_version": {
             "type": "integer",

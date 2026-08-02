@@ -18,12 +18,7 @@ import {
   selectUsersInstances,
   selectUsersOidcEnabled,
 } from "../../../state/users/users.selectors";
-import {
-  EMAIL_POLICY_MESSAGE,
-  isValidEmail,
-  isValidPassword,
-  PASSWORD_POLICY_MESSAGE,
-} from "../../../shared/password-policy";
+import { EMAIL_POLICY_MESSAGE, isValidEmail } from "../../../shared/password-policy";
 
 @Component({
   selector: "app-new-user-dialog",
@@ -59,9 +54,8 @@ export class NewUserDialogComponent {
     email: "",
     role: "viewer",
     auth: "local" as "local" | "oidc",
-    password: "",
     instances: [] as string[],
-    creationMode: "password" as "password" | "invite" | "inactive",
+    creationMode: "invite" as "invite" | "inactive",
   };
   error = "";
   manualLink = "";
@@ -84,21 +78,6 @@ export class NewUserDialogComponent {
     if (this.emailExists(this.newUser.email)) {
       return false;
     }
-    if (
-      !this.oidcEnabled() &&
-      this.newUser.creationMode === "password" &&
-      this.newUser.password.length === 0
-    ) {
-      return false;
-    }
-    if (
-      !this.oidcEnabled() &&
-      this.newUser.creationMode === "password" &&
-      this.newUser.password.length > 0 &&
-      !isValidPassword(this.newUser.password)
-    ) {
-      return false;
-    }
     return this.newUser.role.trim().length > 0;
   }
 
@@ -117,14 +96,6 @@ export class NewUserDialogComponent {
         this.error = "Email already exists.";
         return;
       }
-      if (
-        !this.oidcEnabled() &&
-        this.newUser.creationMode === "password" &&
-        this.newUser.password.length > 0 &&
-        !isValidPassword(this.newUser.password)
-      ) {
-        this.error = PASSWORD_POLICY_MESSAGE;
-      }
       return;
     }
     const oidc = this.oidcEnabled();
@@ -138,13 +109,7 @@ export class NewUserDialogComponent {
         email: this.newUser.email.trim(),
         role: this.newUser.role,
         auth: oidc ? "oidc" : "local",
-        password:
-          !oidc && this.newUser.creationMode === "password" ? this.newUser.password : undefined,
-        creationMode: !oidc
-          ? this.newUser.creationMode === "inactive"
-            ? "inactive"
-            : "password"
-          : undefined,
+        creationMode: !oidc ? "inactive" : undefined,
         instances: [...this.newUser.instances],
       }),
     );
@@ -174,6 +139,9 @@ export class NewUserDialogComponent {
         ? "Invitation email accepted by the SMTP server."
         : "Invitation created. Transfer the activation link through a trusted channel.";
       this.store.dispatch(usersPageOpened());
+      if (response.delivered) {
+        this.dialogRef.close();
+      }
     } catch (error: unknown) {
       const detail = (error as { error?: { detail?: string } })?.error?.detail;
       this.error = detail || "Failed to invite user.";

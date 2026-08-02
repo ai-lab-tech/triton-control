@@ -169,7 +169,6 @@ def register_user(
 
     email = request.email
     provider = request.auth_provider
-    normalized_password = request.password if request.creation_mode == "password" else None
 
     if provider == "oidc" and not oidc_enabled(session):
         raise BadRequestError("OIDC is disabled")
@@ -184,13 +183,9 @@ def register_user(
         name=request.name,
         role=request.role,
         auth_provider=provider,
-        password_hash=(
-            hash_password(normalized_password)
-            if provider == "local" and normalized_password
-            else None
-        ),
+        password_hash=None,
         oidc_subject=(request.oidc_subject or "").strip() or None,
         assigned_instances=request.assigned_instances,
-        is_active=provider == "oidc" or request.creation_mode == "password",
+        is_active=provider == "oidc",
     )
     return user_entity_to_dto(entity)

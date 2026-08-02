@@ -29,9 +29,7 @@ def find_token_by_hash(session: Session, token_hash: str) -> AccountLifecycleTok
     ).first()
 
 
-def list_active_tokens(
-    session: Session, user_id: int, purpose: str | None = None
-) -> list[AccountLifecycleTokenEntity]:
+def list_active_tokens(session: Session, user_id: int, purpose: str | None = None) -> list[AccountLifecycleTokenEntity]:
     statement = select(AccountLifecycleTokenEntity).where(
         AccountLifecycleTokenEntity.user_id == user_id,
         AccountLifecycleTokenEntity.consumed_at.is_(None),  # type: ignore[union-attr]
@@ -40,6 +38,17 @@ def list_active_tokens(
     if purpose:
         statement = statement.where(AccountLifecycleTokenEntity.purpose == purpose)
     return list(session.exec(statement).all())
+
+
+def list_user_ids_with_pending_invitations(session: Session) -> set[int]:
+    now = datetime.utcnow()
+    statement = select(AccountLifecycleTokenEntity.user_id).where(
+        AccountLifecycleTokenEntity.purpose == "invite",
+        AccountLifecycleTokenEntity.expires_at > now,
+        AccountLifecycleTokenEntity.consumed_at.is_(None),  # type: ignore[union-attr]
+        AccountLifecycleTokenEntity.revoked_at.is_(None),  # type: ignore[union-attr]
+    )
+    return set(session.exec(statement).all())
 
 
 def save_token(session: Session, entity: AccountLifecycleTokenEntity) -> AccountLifecycleTokenEntity:
@@ -74,9 +83,7 @@ def add_security_event(session: Session, **values: Any) -> SecurityEventEntity:
     return entity
 
 
-def increment_rate_bucket(
-    session: Session, bucket_key: str, window_started_at: datetime
-) -> int:
+def increment_rate_bucket(session: Session, bucket_key: str, window_started_at: datetime) -> int:
     entity = session.exec(
         select(RecoveryRateLimitEntity).where(
             RecoveryRateLimitEntity.bucket_key == bucket_key,
@@ -91,4 +98,3 @@ def increment_rate_bucket(
     session.commit()
     session.refresh(entity)
     return entity.request_count
-

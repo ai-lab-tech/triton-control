@@ -15,7 +15,7 @@ DeliveryMode = Literal["disabled", "manual-link", "smtp"]
 EmailConfigSource = Literal["db", "env"]
 SmtpTlsMode = Literal["starttls", "tls", "none"]
 TokenPurpose = Literal["invite", "password_reset"]
-AccountCreationMode = Literal["password", "invite", "inactive"]
+AccountCreationMode = Literal["invite", "inactive"]
 
 
 def _absolute_http_url(value: str) -> str:

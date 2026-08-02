@@ -190,8 +190,9 @@ export class UsersPageComponent {
       await firstValueFrom(
         this.usersApi.revokeInvitationEndpointApiAuthInvitationsUserIdDelete(user.id),
       );
-      this.lifecycleMessage = "Invitation revoked.";
+      this.lifecycleMessage = "Invitation canceled.";
       this.manualLink = "";
+      this.store.dispatch(usersPageOpened());
     });
   }
 

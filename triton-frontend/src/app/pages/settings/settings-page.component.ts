@@ -1,4 +1,4 @@
-import { Component, inject } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
 import { FormsModule } from "@angular/forms";
@@ -75,11 +75,12 @@ export class SettingsPageComponent {
 
   // Form draft — mutated directly by [(ngModel)]
   oidcEnabled = true;
-  emailSaving = false;
-  emailTesting = false;
-  emailMessage = "";
-  emailMessageTone: "success" | "error" | "info" = "info";
-  emailSaveAttempted = false;
+  readonly emailSaving = signal(false);
+  readonly emailTesting = signal(false);
+  readonly emailMessage = signal("");
+  readonly emailMessageTone = signal<"success" | "error" | "info">("info");
+  readonly emailSaveAttempted = signal(false);
+  emailAdvancedExpanded = false;
   emailTemplatesExpanded = false;
   testRecipient = "";
   smtpPassword = "";
@@ -185,7 +186,7 @@ export class SettingsPageComponent {
   }
 
   canSaveEmailSettings(): boolean {
-    return this.canEditEmailSettings() && !this.emailSaving;
+    return this.canEditEmailSettings() && !this.emailSaving();
   }
 
   emailSettingsHaveUnsavedChanges(): boolean {
@@ -199,20 +200,20 @@ export class SettingsPageComponent {
   canSendTestEmail(): boolean {
     return (
       this.emailSettings.deliveryMode === "smtp" &&
-      !this.emailSaving &&
-      !this.emailTesting &&
+      !this.emailSaving() &&
+      !this.emailTesting() &&
       this.testRecipient.trim().length > 0 &&
       !this.emailSettingsHaveUnsavedChanges()
     );
   }
 
   emailFieldError(field: EmailValidationField): string {
-    return this.emailSaveAttempted ? this.getEmailFieldError(field) : "";
+    return this.emailSaveAttempted() ? this.getEmailFieldError(field) : "";
   }
 
   smtpSecurityError(): string {
     if (
-      this.emailSaveAttempted &&
+      this.emailSaveAttempted() &&
       this.emailSettings.deliveryMode === "smtp" &&
       this.emailSettings.smtpTlsMode === "none" &&
       !this.emailSettings.smtpAllowInsecure
@@ -224,22 +225,25 @@ export class SettingsPageComponent {
 
   async saveEmailSettings(): Promise<void> {
     if (!this.canSaveEmailSettings()) return;
-    this.emailSaveAttempted = true;
+    this.emailSaveAttempted.set(true);
     const fieldErrors = new Map(
       EMAIL_VALIDATION_FIELDS.map((field) => [field, this.getEmailFieldError(field)]),
     );
     if (fieldErrors.get("inviteSubject") || fieldErrors.get("resetSubject")) {
       this.emailTemplatesExpanded = true;
     }
+    if (fieldErrors.get("inviteExpiryMinutes") || fieldErrors.get("resetExpiryMinutes")) {
+      this.emailAdvancedExpanded = true;
+    }
     const validationError = [...fieldErrors.values()].find(Boolean) || this.smtpSecurityError();
     if (validationError) {
-      this.emailMessage = "Complete the highlighted email settings before saving.";
-      this.emailMessageTone = "error";
+      this.emailMessage.set("Complete the highlighted email settings before saving.");
+      this.emailMessageTone.set("error");
       return;
     }
-    this.emailSaving = true;
-    this.emailMessage = "";
-    this.emailMessageTone = "info";
+    this.emailSaving.set(true);
+    this.emailMessage.set("");
+    this.emailMessageTone.set("info");
     try {
       const savedSettings = await firstValueFrom(
         this.usersApi.updateEmailSettingsEndpointApiAuthEmailSettingsPut({
@@ -266,14 +270,14 @@ export class SettingsPageComponent {
       );
       this.smtpPassword = "";
       this.applyEmailSettings(savedSettings);
-      this.emailMessage = "Email settings saved.";
-      this.emailMessageTone = "success";
-      this.emailSaveAttempted = false;
+      this.emailMessage.set("Email settings saved.");
+      this.emailMessageTone.set("success");
+      this.emailSaveAttempted.set(false);
     } catch (error: unknown) {
-      this.emailMessage = this.apiErrorMessage(error, "Failed to save email settings.");
-      this.emailMessageTone = "error";
+      this.emailMessage.set(this.apiErrorMessage(error, "Failed to save email settings."));
+      this.emailMessageTone.set("error");
     } finally {
-      this.emailSaving = false;
+      this.emailSaving.set(false);
     }
   }
 
@@ -281,22 +285,22 @@ export class SettingsPageComponent {
     if (!this.canSendTestEmail()) {
       return;
     }
-    this.emailTesting = true;
-    this.emailMessageTone = "info";
+    this.emailTesting.set(true);
+    this.emailMessageTone.set("info");
     try {
       const response = await firstValueFrom(
         this.usersApi.testEmailEndpointApiAuthEmailSettingsTestPost({
           recipient: this.testRecipient,
         }),
       );
-      this.emailMessage = response.message ?? "SMTP server accepted the test message.";
-      this.emailMessageTone = "success";
+      this.emailMessage.set(response.message ?? "SMTP server accepted the test message.");
+      this.emailMessageTone.set("success");
       await this.loadEmailSettings();
     } catch (error: unknown) {
-      this.emailMessage = this.apiErrorMessage(error, "Test email failed.");
-      this.emailMessageTone = "error";
+      this.emailMessage.set(this.apiErrorMessage(error, "Test email failed."));
+      this.emailMessageTone.set("error");
     } finally {
-      this.emailTesting = false;
+      this.emailTesting.set(false);
     }
   }
 
@@ -307,8 +311,8 @@ export class SettingsPageComponent {
       );
       this.applyEmailSettings(value);
     } catch {
-      this.emailMessage = "Failed to load email settings.";
-      this.emailMessageTone = "error";
+      this.emailMessage.set("Failed to load email settings.");
+      this.emailMessageTone.set("error");
     }
   }
 
