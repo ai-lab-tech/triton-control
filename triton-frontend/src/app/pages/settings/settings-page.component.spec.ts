@@ -10,12 +10,22 @@ import { UsersService } from "../../api/generated";
 import { of } from "rxjs";
 
 describe("SettingsPageComponent", () => {
+  let emailSettingsResponse: Record<string, unknown>;
+  let testEmailSpy: jasmine.Spy;
   let authServiceMock: {
     getOidcSettings: jasmine.Spy;
     saveOidcSettings: jasmine.Spy;
   };
 
   beforeEach(() => {
+    emailSettingsResponse = {
+      config_source: "env",
+      delivery_mode: "disabled",
+      read_only: true,
+    };
+    testEmailSpy = jasmine
+      .createSpy("testEmail")
+      .and.returnValue(of({ message: "SMTP server accepted the test message." }));
     authServiceMock = {
       getOidcSettings: jasmine.createSpy("getOidcSettings").and.resolveTo({
         oidcEnabled: true,
@@ -48,12 +58,8 @@ describe("SettingsPageComponent", () => {
         {
           provide: UsersService,
           useValue: {
-            getEmailSettingsEndpointApiAuthEmailSettingsGet: () =>
-              of({
-                config_source: "env",
-                delivery_mode: "disabled",
-                read_only: true,
-              }),
+            getEmailSettingsEndpointApiAuthEmailSettingsGet: () => of(emailSettingsResponse),
+            testEmailEndpointApiAuthEmailSettingsTestPost: testEmailSpy,
           },
         },
       ],
@@ -256,5 +262,54 @@ describe("SettingsPageComponent", () => {
     expect(
       native.querySelector<HTMLTextAreaElement>("#invite-html-template")?.disabled,
     ).toBeFalse();
+  });
+
+  it("TestEmail_DbManagedUnsavedSmtpSettings_DisablesTestUntilSaved", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "disabled",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    component.emailSettings.deliveryMode = "smtp";
+    component.testRecipient = "admin@example.com";
+
+    // Act
+    fixture.detectChanges();
+    await component.sendTestEmail();
+    const native = fixture.nativeElement as HTMLElement;
+    const sendButton = Array.from(native.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Send test email"),
+    );
+
+    // Assert
+    expect(component.emailSettingsHaveUnsavedChanges()).toBeTrue();
+    expect(component.canSendTestEmail()).toBeFalse();
+    expect(sendButton?.disabled).toBeTrue();
+    expect(native.textContent).toContain("Save SMTP settings before sending a test email.");
+    expect(testEmailSpy).not.toHaveBeenCalled();
+  });
+
+  it("TestEmail_DbManagedSavedSmtpSettings_EnablesTest", async () => {
+    // Arrange
+    emailSettingsResponse = {
+      config_source: "db",
+      delivery_mode: "smtp",
+      read_only: false,
+    };
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    const component = fixture.componentInstance;
+    await fixture.whenStable();
+    component.testRecipient = "admin@example.com";
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    expect(component.emailSettingsHaveUnsavedChanges()).toBeFalse();
+    expect(component.canSendTestEmail()).toBeTrue();
   });
 });

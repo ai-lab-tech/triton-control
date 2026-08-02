@@ -231,6 +231,9 @@
     }
 
     @if (emailSettings.deliveryMode === "smtp") {
+      @if (emailSettings.configSource === "db" && emailSettingsHaveUnsavedChanges()) {
+        <p>Save SMTP settings before sending a test email.</p>
+      }
       <div class="form-row">
         <label class="field-label" for="smtp-host">SMTP host</label>
         <mat-form-field appearance="outline">
@@ -470,7 +473,7 @@
           mat-stroked-button
           type="button"
           (click)="sendTestEmail()"
-          [disabled]="emailSaving || !testRecipient"
+          [disabled]="!canSendTestEmail()"
         >
           Send test email
         </button>

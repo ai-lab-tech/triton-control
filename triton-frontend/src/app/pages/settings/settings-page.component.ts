@@ -48,6 +48,7 @@ import {
 export class SettingsPageComponent {
   private readonly store = inject(Store);
   private readonly usersApi = inject(UsersService);
+  private savedEmailSettingsSnapshot = "";
 
   readonly loading = toSignal(this.store.select(selectSettingsLoading), { initialValue: false });
   readonly saving = toSignal(this.store.select(selectSettingsSaving), { initialValue: false });
@@ -163,6 +164,23 @@ export class SettingsPageComponent {
     return this.canEditEmailSettings() && this.emailSettings.deliveryMode !== "disabled";
   }
 
+  emailSettingsHaveUnsavedChanges(): boolean {
+    return (
+      !this.savedEmailSettingsSnapshot ||
+      this.savedEmailSettingsSnapshot !== JSON.stringify(this.emailSettings) ||
+      this.smtpPassword.length > 0
+    );
+  }
+
+  canSendTestEmail(): boolean {
+    return (
+      this.emailSettings.deliveryMode === "smtp" &&
+      !this.emailSaving &&
+      this.testRecipient.trim().length > 0 &&
+      !this.emailSettingsHaveUnsavedChanges()
+    );
+  }
+
   async saveEmailSettings(): Promise<void> {
     if (!this.canEditEmailSettings()) return;
     this.emailSaving = true;
@@ -204,6 +222,9 @@ export class SettingsPageComponent {
   }
 
   async sendTestEmail(): Promise<void> {
+    if (!this.canSendTestEmail()) {
+      return;
+    }
     this.emailSaving = true;
     try {
       const response = await firstValueFrom(
@@ -250,6 +271,7 @@ export class SettingsPageComponent {
         lastStatus: value.last_status ?? "not_tested",
         lastStatusMessage: value.last_status_message ?? "",
       };
+      this.savedEmailSettingsSnapshot = JSON.stringify(this.emailSettings);
     } catch {
       this.emailMessage = "Failed to load email settings.";
     }
