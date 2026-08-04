@@ -7,6 +7,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
+import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatSelectModule } from "@angular/material/select";
 import { MatTabsModule } from "@angular/material/tabs";
 import { firstValueFrom } from "rxjs";
@@ -55,6 +56,7 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
     MatIconModule,
     MatFormFieldModule,
     MatInputModule,
+    MatProgressSpinnerModule,
     MatSelectModule,
     MatTabsModule,
   ],
@@ -286,6 +288,9 @@ export class SettingsPageComponent {
       return;
     }
     this.emailTesting.set(true);
+    this.emailMessage.set(
+      "Sending test email… Connecting to the SMTP server can take a few seconds.",
+    );
     this.emailMessageTone.set("info");
     try {
       const response = await firstValueFrom(

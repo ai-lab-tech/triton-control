@@ -611,15 +611,32 @@
             <div class="form-row">
               <label class="field-label" for="test-recipient">Test recipient</label>
               <mat-form-field appearance="outline">
-                <input id="test-recipient" matInput type="email" [(ngModel)]="testRecipient" />
+                <input
+                  id="test-recipient"
+                  matInput
+                  type="email"
+                  [(ngModel)]="testRecipient"
+                  [disabled]="emailTesting()"
+                />
               </mat-form-field>
               <button
                 mat-stroked-button
+                class="test-email-button"
                 type="button"
                 (click)="sendTestEmail()"
                 [disabled]="!canSendTestEmail()"
+                [attr.aria-busy]="emailTesting()"
               >
-                {{ emailTesting() ? "Sending test…" : "Send test email" }}
+                @if (emailTesting()) {
+                  <mat-spinner
+                    class="test-email-spinner"
+                    diameter="18"
+                    aria-hidden="true"
+                  ></mat-spinner>
+                  <span>Sending test…</span>
+                } @else {
+                  <span>Send test email</span>
+                }
               </button>
             </div>
           }

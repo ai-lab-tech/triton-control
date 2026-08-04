@@ -468,9 +468,14 @@ describe("SettingsPageComponent", () => {
     // Act
     const request = component.sendTestEmail();
     fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
     const buttons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll("button"),
     ).map((button) => button.textContent?.trim());
+    const native = fixture.nativeElement as HTMLElement;
+    const testButton = native.querySelector<HTMLButtonElement>(".test-email-button");
+    const recipient = native.querySelector<HTMLInputElement>("#test-recipient");
 
     // Assert
     expect(component.emailTesting()).toBeTrue();
@@ -478,10 +483,25 @@ describe("SettingsPageComponent", () => {
     expect(buttons).toContain("Sending test…");
     expect(buttons).toContain("Save email settings");
     expect(buttons).not.toContain("Saving…");
+    expect(component.emailMessage()).toContain("Connecting to the SMTP server");
+    expect(testButton?.disabled).toBeTrue();
+    expect(testButton?.getAttribute("aria-busy")).toBe("true");
+    expect(testButton?.querySelector("mat-spinner")).not.toBeNull();
+    expect(recipient?.disabled).toBeTrue();
 
     pendingTest.next({ message: "SMTP server accepted the test message." });
     pendingTest.complete();
     await request;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const completedTestButton = native.querySelector<HTMLButtonElement>(".test-email-button");
+    const completedRecipient = native.querySelector<HTMLInputElement>("#test-recipient");
+
+    expect(component.emailTesting()).toBeFalse();
+    expect(completedTestButton?.getAttribute("aria-busy")).toBe("false");
+    expect(completedTestButton?.querySelector("mat-spinner")).toBeNull();
+    expect(completedRecipient?.disabled).toBeFalse();
   });
 
   it("LoadEmailSettings_Port465WithStartTls_CorrectsToImplicitTlsBeforeSaving", async () => {

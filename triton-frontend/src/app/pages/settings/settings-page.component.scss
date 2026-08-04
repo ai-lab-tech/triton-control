@@ -385,3 +385,15 @@
   color: #b91c1c;
   font-weight: 700;
 }
+
+.test-email-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 10.5rem;
+}
+
+.test-email-spinner {
+  --mdc-circular-progress-active-indicator-color: currentColor;
+}
