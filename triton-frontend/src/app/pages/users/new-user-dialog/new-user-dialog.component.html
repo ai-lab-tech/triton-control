@@ -80,7 +80,9 @@
 
   <mat-dialog-actions class="dialog-actions" align="end">
     @if (notice) {
-      <span>{{ notice }}</span>
+      <span [attr.role]="saving ? 'status' : null" [attr.aria-live]="saving ? 'polite' : null">
+        {{ notice }}
+      </span>
     }
     @if (error) {
       <span class="dialog-error">{{ error }}</span>
@@ -91,15 +93,24 @@
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
     }
-    <button mat-stroked-button type="button" (click)="close()">Cancel</button>
+    <button mat-stroked-button type="button" (click)="close()" [disabled]="saving">Cancel</button>
     <button
       mat-flat-button
+      class="dialog-submit-button"
       color="primary"
       type="button"
       (click)="save()"
       [disabled]="!canSave || saving || !!manualLink"
+      [attr.aria-busy]="saving"
     >
-      {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
+      @if (saving) {
+        <mat-spinner class="dialog-submit-spinner" diameter="18" aria-hidden="true"></mat-spinner>
+        <span>Sending invitation…</span>
+      } @else {
+        <span>
+          {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
+        </span>
+      }
     </button>
   </mat-dialog-actions>
 </div>

@@ -14,7 +14,11 @@
     </div>
   </div>
   @if (lifecycleMessage()) {
-    <mat-card class="card">
+    <mat-card
+      class="card"
+      [attr.role]="lifecycleActionRunning() ? 'status' : null"
+      [attr.aria-live]="lifecycleActionRunning() ? 'polite' : null"
+    >
       <p>{{ lifecycleMessage() }}</p>
       @if (manualLink()) {
         <mat-form-field appearance="outline">
@@ -150,16 +154,20 @@
               <button
                 mat-stroked-button
                 type="button"
+                data-testid="reissue-invitation-action"
                 (click)="reissueInvitation(row)"
-                [disabled]="lifecycleActionRunning()"
+                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                [attr.title]="lifecycleActionDisabledReason || null"
               >
                 {{ lifecycleActionRunning() ? "Creating link..." : "Reissue invite" }}
               </button>
               <button
                 mat-stroked-button
                 type="button"
+                data-testid="cancel-invitation-action"
                 (click)="revokeInvitation(row)"
-                [disabled]="lifecycleActionRunning()"
+                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                [attr.title]="lifecycleActionDisabledReason || null"
               >
                 Cancel invitation
               </button>
@@ -169,6 +177,7 @@
                 type="button"
                 (click)="reissueInvitation(row)"
                 [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                [attr.title]="lifecycleActionDisabledReason || null"
               >
                 {{ lifecycleActionRunning() ? "Creating link..." : "Send invitation" }}
               </button>
@@ -176,13 +185,24 @@
           } @else if (row.auth === "local") {
             <button
               mat-stroked-button
+              class="reset-password-action"
               type="button"
               data-testid="reset-password-action"
               (click)="issuePasswordReset(row)"
               [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
-              [attr.title]="resetPasswordDisabledReason || null"
+              [attr.title]="lifecycleActionDisabledReason || null"
+              [attr.aria-busy]="passwordResetUserId() === row.id"
             >
-              Reset password
+              @if (passwordResetUserId() === row.id) {
+                <mat-spinner
+                  class="reset-password-spinner"
+                  diameter="18"
+                  aria-hidden="true"
+                ></mat-spinner>
+                <span>Sending reset…</span>
+              } @else {
+                <span>Reset password</span>
+              }
             </button>
           }
           <button mat-stroked-button color="warn" type="button" (click)="deleteUser(row)">

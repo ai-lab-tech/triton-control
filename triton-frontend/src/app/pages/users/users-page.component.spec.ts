@@ -352,17 +352,36 @@ describe("UsersPageComponent", () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    const actions = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
-        ".actions-cell button",
-      ),
-    ).map((button) => button.textContent?.trim());
+    const native = fixture.nativeElement as HTMLElement;
+    const actionButtons = Array.from(
+      native.querySelectorAll<HTMLButtonElement>(".actions-cell button"),
+    );
+    const actions = actionButtons.map((button) => button.textContent?.trim());
+    const reissueButton = native.querySelector<HTMLButtonElement>(
+      '[data-testid="reissue-invitation-action"]',
+    );
+    const cancelButton = native.querySelector<HTMLButtonElement>(
+      '[data-testid="cancel-invitation-action"]',
+    );
 
     // Assert
     expect(actions).toContain("Reissue invite");
     expect(actions).toContain("Cancel invitation");
     expect(actions).not.toContain("Approve");
     expect(actions.some((action) => action?.includes("Delete"))).toBeTrue();
+    expect(reissueButton?.disabled).toBeTrue();
+    expect(cancelButton?.disabled).toBeTrue();
+    expect(reissueButton?.title).toContain("Enable manual-link or SMTP");
+    expect(cancelButton?.title).toContain("Enable manual-link or SMTP");
+
+    reissueButton?.click();
+    cancelButton?.click();
+    expect(
+      usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost,
+    ).not.toHaveBeenCalled();
+    expect(
+      usersApiMock.revokeInvitationEndpointApiAuthInvitationsUserIdDelete,
+    ).not.toHaveBeenCalled();
   });
 
   it("ResetPassword_EmailLifecycleDisabled_DisablesActionWithExplanation", async () => {
@@ -429,6 +448,57 @@ describe("UsersPageComponent", () => {
       expect(button.title).toBe("");
     });
   }
+
+  it("ResetPassword_SmtpDeliveryPending_ShowsProgressAndPreventsDuplicates", async () => {
+    // Arrange
+    const response$ = new Subject<any>();
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "smtp" } as any),
+    );
+    usersApiMock.adminResetEndpointApiAuthPasswordResetsPost.and.returnValue(response$);
+    const user = {
+      id: 12,
+      name: "Local User",
+      email: "local@example.com",
+      role: "viewer",
+      isActive: true,
+      auth: "local" as const,
+      instances: [],
+    };
+    mockStore.overrideSelector(selectUsers, [user]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act
+    const request = fixture.componentInstance.issuePasswordReset(user);
+    void fixture.componentInstance.issuePasswordReset(user);
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+    const button = native.querySelector<HTMLButtonElement>('[data-testid="reset-password-action"]');
+
+    // Assert
+    expect(usersApiMock.adminResetEndpointApiAuthPasswordResetsPost).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.passwordResetUserId()).toBe(user.id);
+    expect(button?.disabled).toBeTrue();
+    expect(button?.getAttribute("aria-busy")).toBe("true");
+    expect(button?.querySelector("mat-spinner")).not.toBeNull();
+    expect(button?.textContent).toContain("Sending reset");
+    expect(native.querySelector('[role="status"]')?.textContent).toContain("few seconds");
+
+    // Act
+    response$.next({ delivered: true, manual_link: null });
+    response$.complete();
+    await request;
+    fixture.detectChanges();
+
+    // Assert
+    expect(fixture.componentInstance.passwordResetUserId()).toBeNull();
+    expect(button?.querySelector("mat-spinner")).toBeNull();
+    expect(fixture.componentInstance.lifecycleMessage()).toContain("SMTP server");
+  });
 
   it("SendInvitation_ManualLinkResponse_RendersImmediatelyAndPreventsDuplicateRequests", async () => {
     // Arrange

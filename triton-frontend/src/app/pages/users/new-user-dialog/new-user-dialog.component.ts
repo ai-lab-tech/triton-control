@@ -6,6 +6,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
+import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatSelectModule } from "@angular/material/select";
 import { firstValueFrom } from "rxjs";
 import { UsersService } from "../../../api/generated";
@@ -29,6 +30,7 @@ import { EMAIL_POLICY_MESSAGE, isValidEmail } from "../../../shared/password-pol
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
+    MatProgressSpinnerModule,
     MatSelectModule,
   ],
   templateUrl: "./new-user-dialog.component.html",
@@ -92,6 +94,9 @@ export class NewUserDialogComponent {
   }
 
   save(): void {
+    if (this.saving) {
+      return;
+    }
     this.error = "";
     if (!this.canSave) {
       if (this.newUser.email.trim().length > 0 && !isValidEmail(this.newUser.email)) {
@@ -134,6 +139,7 @@ export class NewUserDialogComponent {
   private async invite(): Promise<void> {
     this.saving = true;
     this.error = "";
+    this.notice = "Sending invitation… The SMTP server may take a few seconds to respond.";
     try {
       const response = await firstValueFrom(
         this.usersApi.inviteUserEndpointApiAuthInvitationsPost({
@@ -153,6 +159,7 @@ export class NewUserDialogComponent {
       }
     } catch (error: unknown) {
       const detail = (error as { error?: { detail?: string } })?.error?.detail;
+      this.notice = "";
       this.error = detail || "Failed to invite user.";
     } finally {
       this.saving = false;

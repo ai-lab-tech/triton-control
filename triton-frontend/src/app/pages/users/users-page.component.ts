@@ -11,6 +11,7 @@ import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatSelectModule } from "@angular/material/select";
 import { MatInputModule } from "@angular/material/input";
+import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
@@ -52,6 +53,7 @@ import {
     MatFormFieldModule,
     MatSelectModule,
     MatInputModule,
+    MatProgressSpinnerModule,
   ],
   styleUrl: "./users-page.component.scss",
   templateUrl: "./users-page.component.html",
@@ -86,6 +88,7 @@ export class UsersPageComponent {
   readonly lifecycleMessage = signal("");
   readonly manualLink = signal("");
   readonly lifecycleActionRunning = signal(false);
+  readonly passwordResetUserId = signal<number | null>(null);
   readonly emailLifecycleAvailable = signal(false);
   readonly emailLifecycleStatus = signal<"loading" | "disabled" | "enabled" | "unavailable">(
     "loading",
@@ -119,12 +122,12 @@ export class UsersPageComponent {
     void this.loadEmailLifecycleAvailability();
   }
 
-  get resetPasswordDisabledReason(): string {
+  get lifecycleActionDisabledReason(): string {
     switch (this.emailLifecycleStatus()) {
       case "loading":
         return "Checking account email lifecycle availability.";
       case "disabled":
-        return "Enable manual-link or SMTP email lifecycle in Settings to reset passwords.";
+        return "Enable manual-link or SMTP email lifecycle in Settings.";
       case "unavailable":
         return "Account email lifecycle availability could not be loaded.";
       default:
@@ -183,6 +186,9 @@ export class UsersPageComponent {
   }
 
   async reissueInvitation(user: UserRow): Promise<void> {
+    if (!this.emailLifecycleAvailable() || this.lifecycleActionRunning()) {
+      return;
+    }
     await this.runLifecycleAction(async () => {
       const response = await firstValueFrom(
         this.usersApi.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost(user.id),
@@ -192,6 +198,9 @@ export class UsersPageComponent {
   }
 
   async revokeInvitation(user: UserRow): Promise<void> {
+    if (!this.emailLifecycleAvailable() || this.lifecycleActionRunning()) {
+      return;
+    }
     await this.runLifecycleAction(async () => {
       await firstValueFrom(
         this.usersApi.revokeInvitationEndpointApiAuthInvitationsUserIdDelete(user.id),
@@ -203,15 +212,23 @@ export class UsersPageComponent {
   }
 
   async issuePasswordReset(user: UserRow): Promise<void> {
-    if (!this.emailLifecycleAvailable()) {
+    if (!this.emailLifecycleAvailable() || this.lifecycleActionRunning()) {
       return;
     }
-    await this.runLifecycleAction(async () => {
-      const response = await firstValueFrom(
-        this.usersApi.adminResetEndpointApiAuthPasswordResetsPost({ user_id: user.id }),
-      );
-      this.showLifecycleResponse(response, "Password reset issued.");
-    });
+    this.passwordResetUserId.set(user.id);
+    try {
+      await this.runLifecycleAction(async () => {
+        this.lifecycleMessage.set(
+          "Issuing password reset… Delivery may take a few seconds to complete.",
+        );
+        const response = await firstValueFrom(
+          this.usersApi.adminResetEndpointApiAuthPasswordResetsPost({ user_id: user.id }),
+        );
+        this.showLifecycleResponse(response, "Password reset issued.");
+      });
+    } finally {
+      this.passwordResetUserId.set(null);
+    }
   }
 
   async copyManualLink(): Promise<void> {

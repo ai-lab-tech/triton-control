@@ -1,7 +1,7 @@
 import { MAT_DIALOG_DATA, MatDialogRef } from "@angular/material/dialog";
 import { TestBed } from "@angular/core/testing";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
-import { of, throwError } from "rxjs";
+import { of, Subject, throwError } from "rxjs";
 import { UsersService } from "../../../api/generated";
 import { NewUserDialogComponent } from "./new-user-dialog.component";
 import { selectUsers, selectUsersOidcEnabled } from "../../../state/users/users.selectors";
@@ -296,6 +296,46 @@ describe("NewUserDialogComponent", () => {
     await fixture.whenStable();
 
     // Assert
+    expect(dialogRefMock.close).toHaveBeenCalled();
+  });
+
+  it("Save_SmtpInvitationPending_ShowsProgressAndPreventsDuplicateSubmission", async () => {
+    // Arrange
+    const pendingInvitation = new Subject<{ delivered: boolean; manual_link: null }>();
+    usersApiMock.inviteUserEndpointApiAuthInvitationsPost.and.returnValue(
+      pendingInvitation.asObservable() as never,
+    );
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    component.newUser.creationMode = "invite";
+    fixture.detectChanges();
+
+    // Act
+    component.save();
+    component.save();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+    const submitButton = native.querySelector<HTMLButtonElement>(".dialog-submit-button");
+
+    // Assert
+    expect(component.saving).toBeTrue();
+    expect(component.notice).toContain("SMTP server");
+    expect(usersApiMock.inviteUserEndpointApiAuthInvitationsPost).toHaveBeenCalledTimes(1);
+    expect(submitButton?.disabled).toBeTrue();
+    expect(submitButton?.getAttribute("aria-busy")).toBe("true");
+    expect(submitButton?.querySelector("mat-spinner")).not.toBeNull();
+    expect(submitButton?.textContent).toContain("Sending invitation");
+    expect(native.querySelector('[role="status"]')).not.toBeNull();
+
+    pendingInvitation.next({ delivered: true, manual_link: null });
+    pendingInvitation.complete();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.saving).toBeFalse();
     expect(dialogRefMock.close).toHaveBeenCalled();
   });
 
