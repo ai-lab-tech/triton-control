@@ -34,7 +34,7 @@ local evaluation, and with separate Python/npm processes for development.
 Product:
 
 - [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and Add Instance.
-- [User Management](user-management.md): roles, local users, OIDC users, approvals, and instance assignment.
+- [User Management](user-management.md): roles, local and OIDC users, invitations, password resets, approvals, and instance assignment.
 - [Development Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
 - [Argo Workflows](argo-workflows.md): installation, authenticated proxy, Kubernetes layout, pod security, RBAC, and Workflow credentials.
 
@@ -46,9 +46,9 @@ Architecture:
 
 Operations:
 
-- [Configuration](configuration.md): backend environment variables, OIDC source modes, and GitOps examples.
+- [Configuration](configuration.md): backend environment variables, OIDC and email source modes, SMTP settings, and GitOps examples.
 - [Deployment](deployment.md): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
-- [Security](security.md): secrets, OIDC, TLS, S3 credentials, and proxy headers.
+- [Security](security.md): secrets, OIDC, lifecycle links, SMTP, TLS, S3 credentials, and proxy headers.
 - [Troubleshooting](troubleshooting.md): common Docker, database, and Triton issues.
 
 Reference:

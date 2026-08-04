@@ -34,7 +34,7 @@ app:
   env:
     - name: OIDC_CONFIG_SOURCE
       value: "env"
-    - name:  OIDC_ENABLED
+    - name: OIDC_ENABLED
       value: "false"
     - name: CORS_ORIGINS
       value: "http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200"
@@ -72,6 +72,8 @@ app:
       value: "10"
     - name: EMAIL_OPERATION_TIMEOUT_SECONDS
       value: "15"
+    - name: EMAIL_RECOVERY_RATE_LIMIT
+      value: "5"
     - name: EMAIL_INVITE_SUBJECT
       value: "You are invited to Triton Control"
     - name: EMAIL_INVITE_TEXT_TEMPLATE
@@ -357,7 +359,7 @@ podSecurityContext: {}
 # e.g.
 #   runAsNonRoot: true
 #   seccompProfile:
-#     type: RuntimeDefault 
+#     type: RuntimeDefault
 securityContext: {}
 # e.g.
 #   runAsUser: 10001

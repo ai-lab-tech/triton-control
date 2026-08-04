@@ -25,8 +25,6 @@ Goal:
 - Replace the singleton model with isolated Kubernetes Jobs per run.
 - Support multiple concurrent runs across different instance/model targets.
 
-
-
 #### Resource Management for Triton Instances
 
 Goal:
@@ -60,32 +58,6 @@ Scope:
 
 - Both authentication options apply to ingress endpoints of self-deployed Triton serving instances created via Triton Control.
 
-
-#### Local Email/Password Account Lifecycle
-
-Today:
-
-- Local email/password authentication supports bootstrap, admin-created users, and self-registration.
-- New self-registered users remain pending until an admin approves them.
-- Optional local-account invitations are available through manual links or SMTP.
-- Optional administrator and SMTP self-service password recovery is available.
-- There is no email verification step for local accounts.
-
-
-Goal:
-
-- Continue hardening and extending optional email-based local account lifecycle flows.
-- Reduce admin overhead when onboarding users and handling password loss.
-
-
-Scope:
-
-- Invite a user by email with a one-time activation link.
-- Let invited users set their initial password and complete account activation.
-- Add forgot-password and reset-password flows with expiring single-use tokens.
-- Add configurable SMTP delivery and email templates.
-.
-
 ### 3) Platform and Workspace
 
 #### OpenAI API Support for Triton Server
@@ -101,8 +73,6 @@ Goal:
 - Extend user management with groups.
 - Establish a foundation for role- and team-based administration.
 
-
-
 #### Enhanced S3 Browser
 
 Goal:
@@ -114,10 +84,8 @@ Goal:
 
 ### Next
 
-
 - Perf Analyzer parallel execution
 - TLS configuration in the Add Deployment flow
-- Local email/password invite and password reset flow
 - OpenAI API integration for Triton Server
 
 ### Later

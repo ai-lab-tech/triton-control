@@ -65,6 +65,13 @@ approved confidential channel; do not place it in tickets, logs, or chat
 archives. Public forgot-password responses are deliberately identical for
 known, unknown, inactive, and OIDC addresses and are rate limited.
 
+Disabling email delivery prevents new lifecycle operations in User Management,
+but it does not invalidate bearer links that were already issued. Before
+switching to `disabled`, cancel pending invitations that must no longer be
+usable. After delivery is disabled, the User Management reissue and cancel
+controls are unavailable; protected API revocation remains available for
+emergency invalidation.
+
 SMTP defaults to certificate-validated STARTTLS. Implicit TLS is supported.
 Plain SMTP requires an explicit insecure opt-in and should be limited to a
 trusted isolated network. Stored SMTP passwords are encrypted and API responses

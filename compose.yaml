@@ -16,7 +16,23 @@ services:
       EMAIL_SMTP_HOST: ""
       EMAIL_SMTP_PORT: "587"
       EMAIL_SMTP_TLS_MODE: starttls
+      EMAIL_SMTP_ALLOW_INSECURE: "false"
+      EMAIL_SMTP_USERNAME: ""
+      EMAIL_SMTP_PASSWORD: ""
       EMAIL_SENDER_EMAIL: ""
+      EMAIL_SENDER_NAME: Triton Control
+      EMAIL_SMTP_CA_CERTIFICATE: ""
+      EMAIL_INVITE_EXPIRY_MINUTES: "1440"
+      EMAIL_RESET_EXPIRY_MINUTES: "30"
+      EMAIL_CONNECT_TIMEOUT_SECONDS: "10"
+      EMAIL_OPERATION_TIMEOUT_SECONDS: "15"
+      EMAIL_RECOVERY_RATE_LIMIT: "5"
+      EMAIL_INVITE_SUBJECT: You are invited to Triton Control
+      EMAIL_INVITE_TEXT_TEMPLATE: ""
+      EMAIL_INVITE_HTML_TEMPLATE: ""
+      EMAIL_RESET_SUBJECT: Reset your Triton Control password
+      EMAIL_RESET_TEXT_TEMPLATE: ""
+      EMAIL_RESET_HTML_TEMPLATE: ""
       OIDC_ENABLED: "false"
       CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,https://localhost:8080,https://127.0.0.1:8080,http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200
       CLIENT_MAX_BODY_SIZE: 256m
@@ -28,7 +44,7 @@ services:
       - "8080:8080"
       - "8000:8000"
     healthcheck:
-      test: "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""
+      test: 'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/health'', timeout=3).read()"'
       interval: 10s
       timeout: 5s
       retries: 12

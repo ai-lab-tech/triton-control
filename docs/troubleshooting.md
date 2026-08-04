@@ -231,6 +231,9 @@ triton:8002/       -> http://triton:8002/metrics
   relay host, port, and TLS mode.
 - Use the Settings test-email action. It does not create a lifecycle token and
   reports a sanitized failure category.
+- With `EMAIL_CONFIG_SOURCE=db`, save all SMTP changes first. **Send test
+  email** remains disabled while the displayed settings have unsaved changes,
+  because the test endpoint uses the persisted configuration.
 - For port 587 use `starttls`; for port 465 usually use `tls`.
 - For a private CA, configure `EMAIL_SMTP_CA_CERTIFICATE` with the issuing PEM
   certificate. Do not disable certificate validation.
@@ -239,3 +242,7 @@ triton:8002/       -> http://triton:8002/metrics
 - Public forgot-password is hidden unless SMTP is configured. In `manual-link`
   mode, an administrator must issue the reset from Users and transfer the link.
 - If outbound mail is impossible, use `manual-link`; no mail server is needed.
+- If delivery was disabled while invitations were pending, previously issued
+  links remain valid until expiry, use, supersession, or revocation. Re-enable
+  lifecycle delivery to use the User Management cancel action, or use the
+  protected revocation API for emergency invalidation.

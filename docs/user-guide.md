@@ -28,11 +28,17 @@ to the user account.
 
 ## Account Activation and Password Recovery
 
-For local authentication, an administrator can create a user with a password,
-create an explicitly inactive account, or issue an invitation. An invitation
-opens `/activate-account`, where the recipient sets a policy-compliant
-password. Expired, revoked, consumed, and invalid links display the same safe
-message and cannot be reused.
+For local authentication, administrators do not assign an initial password.
+When email lifecycle delivery is enabled, an administrator can create an
+explicitly inactive account or issue an invitation. An invitation opens
+`/activate-account`, where the recipient sets a policy-compliant password.
+Expired, revoked, consumed, and invalid links display the same safe message and
+cannot be reused.
+
+When delivery is disabled, an administrator-precreated passwordless local
+account can be claimed through matching public self-registration. Registration
+sets the initial password and preserves the role and instance assignments
+chosen by the administrator.
 
 When SMTP recovery is operational, the login page shows **Forgot password**.
 Submitting the form always displays the same confirmation, whether or not the
@@ -357,25 +363,25 @@ files. Editing that S3 connection changes Triton Control's backend access to
 S3; it does not rewrite the S3 connection used by the already running Triton
 pod.
 
-| Field | Required | Purpose | Recommended usage |
-| --- | --- | --- | --- |
-| Deployment name | Yes | Base name for Kubernetes resources (deployment/service/secret) and, in external backend mode, namespace. | Keep stable and DNS-safe. |
-| Image | Yes | Triton server container image to run. | Pin explicit version tags in stage/prod. |
-| S3 profile | Yes | Saved S3 profile or manual S3 settings. | Prefer profiles for repeated deployments. |
-| S3 endpoint | Manual only | Object-store endpoint. | Do not include the repository prefix in this field. |
-| Bucket | Manual only | Object-store bucket. | Keep the bucket separate from the repository prefix. |
-| Repository prefix | Optional | S3 path prefix inside the selected bucket. | Leave empty when models are stored at the bucket root. |
-| Serving repository / Target path | Read-only | Preview of the final S3 repository URL. | Confirm before deploy, especially with manual S3 settings. |
-| S3 CA certificate | Optional | PEM CA certificate for HTTPS S3 endpoints. | Provide for private/self-signed/internal CAs. |
-| Access key / Secret key / Region | Manual only | Repository credentials and region. | Use least-privilege credentials. |
-| vLLM model backend | Optional | Enables vLLM repository handling for vLLM models. | Use only when deploying vLLM models. |
-| Model control mode | Yes | Triton behavior (`explicit` or `poll`). | Use mode based on model operation strategy. |
-| Startup model | Optional (`explicit`) | Model loaded at startup (`*` if empty). | Control startup footprint when needed. |
-| Poll interval | Optional (`poll`) | Seconds between repository checks. | Tune for change rate and API load. |
-| Ingress host/class | Optional | Expose deployment through ingress. | Use for external cluster access. |
-| `.dockerconfigjson` | Optional | Private registry pull credentials. | Required for private images. |
-| `requirements.txt` | Optional | Extra Python packages installed before Triton start. | Prefer dev/stage; bake into image for production. |
-| Resources (GPU/CPU/Memory) | Optional | Kubernetes GPU limit and CPU/memory resource settings. | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
+| Field                            | Required              | Purpose                                                                                                  | Recommended usage                                                                                                                                    |
+| -------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deployment name                  | Yes                   | Base name for Kubernetes resources (deployment/service/secret) and, in external backend mode, namespace. | Keep stable and DNS-safe.                                                                                                                            |
+| Image                            | Yes                   | Triton server container image to run.                                                                    | Pin explicit version tags in stage/prod.                                                                                                             |
+| S3 profile                       | Yes                   | Saved S3 profile or manual S3 settings.                                                                  | Prefer profiles for repeated deployments.                                                                                                            |
+| S3 endpoint                      | Manual only           | Object-store endpoint.                                                                                   | Do not include the repository prefix in this field.                                                                                                  |
+| Bucket                           | Manual only           | Object-store bucket.                                                                                     | Keep the bucket separate from the repository prefix.                                                                                                 |
+| Repository prefix                | Optional              | S3 path prefix inside the selected bucket.                                                               | Leave empty when models are stored at the bucket root.                                                                                               |
+| Serving repository / Target path | Read-only             | Preview of the final S3 repository URL.                                                                  | Confirm before deploy, especially with manual S3 settings.                                                                                           |
+| S3 CA certificate                | Optional              | PEM CA certificate for HTTPS S3 endpoints.                                                               | Provide for private/self-signed/internal CAs.                                                                                                        |
+| Access key / Secret key / Region | Manual only           | Repository credentials and region.                                                                       | Use least-privilege credentials.                                                                                                                     |
+| vLLM model backend               | Optional              | Enables vLLM repository handling for vLLM models.                                                        | Use only when deploying vLLM models.                                                                                                                 |
+| Model control mode               | Yes                   | Triton behavior (`explicit` or `poll`).                                                                  | Use mode based on model operation strategy.                                                                                                          |
+| Startup model                    | Optional (`explicit`) | Model loaded at startup (`*` if empty).                                                                  | Control startup footprint when needed.                                                                                                               |
+| Poll interval                    | Optional (`poll`)     | Seconds between repository checks.                                                                       | Tune for change rate and API load.                                                                                                                   |
+| Ingress host/class               | Optional              | Expose deployment through ingress.                                                                       | Use for external cluster access.                                                                                                                     |
+| `.dockerconfigjson`              | Optional              | Private registry pull credentials.                                                                       | Required for private images.                                                                                                                         |
+| `requirements.txt`               | Optional              | Extra Python packages installed before Triton start.                                                     | Prefer dev/stage; bake into image for production.                                                                                                    |
+| Resources (GPU/CPU/Memory)       | Optional              | Kubernetes GPU limit and CPU/memory resource settings.                                                   | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
 
 For private container registries, paste Docker registry authentication JSON into
 the image pull secret field (`.dockerconfigjson`). The following JSON is only
@@ -532,11 +538,11 @@ https://triton.example.com:8002/metrics
 
 SSL flag semantics:
 
-| SSL Flag | Meaning |
-| --- | --- |
-| Off | No certificate validation (only for local/trusted test environments). |
-| On, no certificate pasted | Validate with system trust store. |
-| On, certificate pasted | Validate with pasted PEM CA certificate. |
+| SSL Flag                  | Meaning                                                               |
+| ------------------------- | --------------------------------------------------------------------- |
+| Off                       | No certificate validation (only for local/trusted test environments). |
+| On, no certificate pasted | Validate with system trust store.                                     |
+| On, certificate pasted    | Validate with pasted PEM CA certificate.                              |
 
 The certificate field expects a PEM CA certificate, not a private key.
 
@@ -550,11 +556,11 @@ https://s3.example.com
 
 SSL flag semantics:
 
-| SSL Flag | Meaning |
-| --- | --- |
-| Off | No certificate validation (only for local/trusted test environments). |
-| On, no certificate pasted | Validate with system trust store. |
-| On, certificate pasted | Validate with pasted PEM CA certificate. |
+| SSL Flag                  | Meaning                                                               |
+| ------------------------- | --------------------------------------------------------------------- |
+| Off                       | No certificate validation (only for local/trusted test environments). |
+| On, no certificate pasted | Validate with system trust store.                                     |
+| On, certificate pasted    | Validate with pasted PEM CA certificate.                              |
 
 S3 configuration also requires bucket, access key, secret key, optional region,
 and optional repository prefix.
