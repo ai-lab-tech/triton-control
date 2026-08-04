@@ -3,7 +3,7 @@ import { toSignal } from "@angular/core/rxjs-interop";
 
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
-import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
@@ -38,6 +38,9 @@ export class NewUserDialogComponent {
   private readonly store = inject(Store);
   private readonly dialogRef = inject(MatDialogRef<NewUserDialogComponent>);
   private readonly usersApi = inject(UsersService);
+  private readonly dialogData = inject<{ emailLifecycleAvailable?: boolean }>(MAT_DIALOG_DATA, {
+    optional: true,
+  });
 
   readonly instances = toSignal(this.store.select(selectUsersInstances), {
     initialValue: [] as string[],
@@ -61,11 +64,14 @@ export class NewUserDialogComponent {
   manualLink = "";
   notice = "";
   saving = false;
+  invitationAvailable = false;
 
   constructor() {
     // Set auth method once oidcEnabled is known (may already be in store)
     const oidc = this.oidcEnabled();
     this.newUser.auth = oidc ? "oidc" : "local";
+    this.invitationAvailable = !oidc && !!this.dialogData?.emailLifecycleAvailable;
+    this.newUser.creationMode = this.invitationAvailable ? "invite" : "inactive";
   }
 
   get canSave(): boolean {
@@ -100,8 +106,11 @@ export class NewUserDialogComponent {
     }
     const oidc = this.oidcEnabled();
     if (!oidc && this.newUser.creationMode === "invite") {
-      void this.invite();
-      return;
+      if (this.invitationAvailable) {
+        void this.invite();
+        return;
+      }
+      this.newUser.creationMode = "inactive";
     }
     this.store.dispatch(
       createUserRequested({

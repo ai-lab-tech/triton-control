@@ -55,7 +55,7 @@
         }
       </div>
     </div>
-    @if (!oidcEnabled()) {
+    @if (!oidcEnabled() && invitationAvailable) {
       <div class="form-row">
         <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
         <mat-form-field appearance="outline">

@@ -1,4 +1,4 @@
-import { Component, inject } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
 import { FormsModule } from "@angular/forms";
@@ -83,10 +83,13 @@ export class UsersPageComponent {
   // Local per-row form state ([(ngModel)] per row)
   pendingInstanceByEmail: Record<string, string> = {};
   pendingRoleByUserId: Record<number, string> = {};
-  lifecycleMessage = "";
-  manualLink = "";
-  emailLifecycleAvailable = false;
-  emailLifecycleStatus: "loading" | "disabled" | "enabled" | "unavailable" = "loading";
+  readonly lifecycleMessage = signal("");
+  readonly manualLink = signal("");
+  readonly lifecycleActionRunning = signal(false);
+  readonly emailLifecycleAvailable = signal(false);
+  readonly emailLifecycleStatus = signal<"loading" | "disabled" | "enabled" | "unavailable">(
+    "loading",
+  );
 
   constructor() {
     const actions$ = inject(Actions);
@@ -117,7 +120,7 @@ export class UsersPageComponent {
   }
 
   get resetPasswordDisabledReason(): string {
-    switch (this.emailLifecycleStatus) {
+    switch (this.emailLifecycleStatus()) {
       case "loading":
         return "Checking account email lifecycle availability.";
       case "disabled":
@@ -133,6 +136,9 @@ export class UsersPageComponent {
     this.dialog.open(NewUserDialogComponent, {
       width: "520px",
       panelClass: "custom-dialog",
+      data: {
+        emailLifecycleAvailable: this.emailLifecycleAvailable(),
+      },
     });
   }
 
@@ -190,14 +196,14 @@ export class UsersPageComponent {
       await firstValueFrom(
         this.usersApi.revokeInvitationEndpointApiAuthInvitationsUserIdDelete(user.id),
       );
-      this.lifecycleMessage = "Invitation canceled.";
-      this.manualLink = "";
+      this.lifecycleMessage.set("Invitation canceled.");
+      this.manualLink.set("");
       this.store.dispatch(usersPageOpened());
     });
   }
 
   async issuePasswordReset(user: UserRow): Promise<void> {
-    if (!this.emailLifecycleAvailable) {
+    if (!this.emailLifecycleAvailable()) {
       return;
     }
     await this.runLifecycleAction(async () => {
@@ -209,31 +215,42 @@ export class UsersPageComponent {
   }
 
   async copyManualLink(): Promise<void> {
-    if (!this.manualLink) return;
-    await navigator.clipboard.writeText(this.manualLink);
-    this.lifecycleMessage = "One-time link copied.";
+    const link = this.manualLink();
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    this.lifecycleMessage.set("One-time link copied.");
   }
 
   private showLifecycleResponse(
     response: { manual_link?: string | null; delivered?: boolean },
     fallback: string,
   ): void {
-    this.manualLink = response.manual_link ?? "";
-    this.lifecycleMessage = response.delivered
-      ? "Email accepted by the SMTP server."
-      : this.manualLink
-        ? "Copy this link now and transfer it through a trusted channel."
-        : fallback;
+    const link = response.manual_link ?? "";
+    this.manualLink.set(link);
+    this.lifecycleMessage.set(
+      response.delivered
+        ? "Email accepted by the SMTP server."
+        : link
+          ? "Copy this link now and transfer it through a trusted channel."
+          : fallback,
+    );
   }
 
   private async runLifecycleAction(action: () => Promise<void>): Promise<void> {
-    this.lifecycleMessage = "";
-    this.manualLink = "";
+    if (this.lifecycleActionRunning()) {
+      return;
+    }
+    this.lifecycleActionRunning.set(true);
+    this.lifecycleMessage.set("");
+    this.manualLink.set("");
     try {
       await action();
     } catch (error: unknown) {
-      this.lifecycleMessage =
-        (error as { error?: { detail?: string } })?.error?.detail ?? "Lifecycle action failed.";
+      this.lifecycleMessage.set(
+        (error as { error?: { detail?: string } })?.error?.detail ?? "Lifecycle action failed.",
+      );
+    } finally {
+      this.lifecycleActionRunning.set(false);
     }
   }
 
@@ -242,12 +259,13 @@ export class UsersPageComponent {
       const settings = await firstValueFrom(
         this.usersApi.getEmailSettingsEndpointApiAuthEmailSettingsGet(),
       );
-      this.emailLifecycleAvailable =
+      const available =
         settings.delivery_mode === "manual-link" || settings.delivery_mode === "smtp";
-      this.emailLifecycleStatus = this.emailLifecycleAvailable ? "enabled" : "disabled";
+      this.emailLifecycleAvailable.set(available);
+      this.emailLifecycleStatus.set(available ? "enabled" : "disabled");
     } catch {
-      this.emailLifecycleAvailable = false;
-      this.emailLifecycleStatus = "unavailable";
+      this.emailLifecycleAvailable.set(false);
+      this.emailLifecycleStatus.set("unavailable");
     }
   }
 }

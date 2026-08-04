@@ -10,6 +10,7 @@ describe("NewUserDialogComponent", () => {
   let dialogRefMock: jasmine.SpyObj<MatDialogRef<NewUserDialogComponent>>;
   let usersApiMock: jasmine.SpyObj<UsersService>;
   let mockStore: MockStore;
+  let dialogData: { emailLifecycleAvailable: boolean };
 
   beforeEach(async () => {
     dialogRefMock = jasmine.createSpyObj<MatDialogRef<NewUserDialogComponent>>("MatDialogRef", [
@@ -18,6 +19,7 @@ describe("NewUserDialogComponent", () => {
     usersApiMock = jasmine.createSpyObj<UsersService>("UsersService", [
       "inviteUserEndpointApiAuthInvitationsPost",
     ]);
+    dialogData = { emailLifecycleAvailable: true };
 
     await TestBed.configureTestingModule({
       imports: [NewUserDialogComponent],
@@ -25,7 +27,7 @@ describe("NewUserDialogComponent", () => {
         provideMockStore(),
         { provide: MatDialogRef, useValue: dialogRefMock },
         { provide: UsersService, useValue: usersApiMock },
-        { provide: MAT_DIALOG_DATA, useValue: { instances: ["a"], oidcEnabled: false } },
+        { provide: MAT_DIALOG_DATA, useValue: dialogData },
       ],
     }).compileComponents();
 
@@ -153,6 +155,55 @@ describe("NewUserDialogComponent", () => {
     expect(native.textContent).toContain("Invite user");
     expect(fixture.componentInstance.newUser.creationMode).toBe("invite");
     expect(native.querySelector("#dialog-user-oidc")).toBeNull();
+  });
+
+  it("Template_EmailLifecycleDisabled_UsesLegacyAddUserFlow", async () => {
+    // Arrange
+    dialogData.emailLifecycleAvailable = false;
+    mockStore.overrideSelector(selectUsersOidcEnabled, false);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(fixture.componentInstance.newUser.creationMode).toBe("inactive");
+    expect(native.textContent).not.toContain("Invite user");
+    expect(native.textContent).not.toContain("Email lifecycle");
+    expect(native.textContent).not.toContain("Account setup");
+    expect(native.textContent).not.toContain("Create inactive account");
+    expect(native.querySelector("#dialog-user-creation-mode")).toBeNull();
+    expect(native.textContent).toContain("Add user");
+  });
+
+  it("Save_EmailLifecycleDisabled_CreatesLocalUserWithoutInvitation", () => {
+    // Arrange
+    dialogData.emailLifecycleAvailable = false;
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    spyOn(mockStore, "dispatch");
+
+    // Act
+    component.save();
+
+    // Assert
+    expect(usersApiMock.inviteUserEndpointApiAuthInvitationsPost).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        name: "Alice",
+        email: "alice@example.com",
+        auth: "local",
+        creationMode: "inactive",
+      }),
+    );
+    expect(dialogRefMock.close).toHaveBeenCalled();
   });
 
   it("Save_InvalidInput_DoesNotDispatch", () => {

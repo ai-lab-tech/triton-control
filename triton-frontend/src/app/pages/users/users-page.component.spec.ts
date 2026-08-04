@@ -35,6 +35,8 @@ describe("UsersPageComponent", () => {
       "deleteUserApiAuthUsersUserIdDelete",
       "updateUserRoleApiAuthUsersUserIdRolePut",
       "adminResetEndpointApiAuthPasswordResetsPost",
+      "reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost",
+      "revokeInvitationEndpointApiAuthInvitationsUserIdDelete",
     ]);
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "listInstancesApiInstancesGet",
@@ -427,4 +429,67 @@ describe("UsersPageComponent", () => {
       expect(button.title).toBe("");
     });
   }
+
+  it("SendInvitation_ManualLinkResponse_RendersImmediatelyAndPreventsDuplicateRequests", async () => {
+    // Arrange
+    const response$ = new Subject<any>();
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "manual-link" } as any),
+    );
+    usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost.and.returnValue(
+      response$,
+    );
+    const user = {
+      id: 11,
+      name: "Inactive User",
+      email: "inactive@example.com",
+      role: "viewer",
+      isActive: false,
+      accountStatus: "inactive" as const,
+      auth: "local" as const,
+      instances: [],
+    };
+    mockStore.overrideSelector(selectUsers, [user]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        ".actions-cell button",
+      ),
+    ).find((candidate) => candidate.textContent?.includes("Send invitation"));
+    expect(button).toBeDefined();
+    expect(fixture.componentInstance.emailLifecycleAvailable()).toBeTrue();
+    expect(button!.disabled).toBeFalse();
+
+    // Act
+    const request = fixture.componentInstance.reissueInvitation(user);
+    void fixture.componentInstance.reissueInvitation(user);
+    fixture.detectChanges();
+
+    // Assert
+    expect(
+      usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost,
+    ).toHaveBeenCalledTimes(1);
+    expect(button!.disabled).toBeTrue();
+    expect(button!.textContent).toContain("Creating link...");
+
+    // Act
+    response$.next({
+      delivered: false,
+      manual_link: "https://example.test/activate-account?token=latest",
+    });
+    response$.complete();
+    await request;
+    fixture.detectChanges();
+
+    // Assert
+    const linkInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input[aria-label="One-time account link"]',
+    );
+    expect(linkInput?.value).toContain("token=latest");
+    expect(fixture.componentInstance.lifecycleActionRunning()).toBeFalse();
+  });
 });

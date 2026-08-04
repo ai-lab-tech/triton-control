@@ -16,22 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from authlib.integrations.base_client import OAuthError
-from fastapi import HTTPException
 
-from app.exceptions import BadRequestError, ConflictError, ForbiddenError
-
-from app.db.entities import UserEntity
-from app.schemas import (
-    BootstrapRegisterRequest,
-    CreateUserRequest,
-    LoginRequest,
-    SelfRegisterRequest,
-    OidcSettingsDTO,
-    UpdateOidcSettingsRequest,
-    UpdateUserInstancesRequest,
-    UpdateUserRoleRequest,
-    ROLE_ALIASES,
-)
 from app.api.auth_api import (
     auth_options,
     bootstrap_register,
@@ -43,17 +28,32 @@ from app.api.auth_api import (
     self_register,
     start_oidc_preflight,
 )
-from app.services.auth.oidc_preflight import (
-    OIDC_PREFLIGHT_SESSION_KEY,
-    build_oidc_preflight_context as _build_oidc_preflight_context,
-)
-from app.services.auth.local_auth import has_active_local_admin_login as _has_active_local_admin_login
-from app.core.access_control import require_admin, require_member_or_admin
 from app.api.user_api import (
     delete_user,
     list_users,
     update_user_instances,
     update_user_role,
+)
+from app.core.access_control import require_admin, require_member_or_admin
+from app.db.entities import UserEntity
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError
+from app.schemas import (
+    ROLE_ALIASES,
+    BootstrapRegisterRequest,
+    CreateUserRequest,
+    LoginRequest,
+    OidcSettingsDTO,
+    SelfRegisterRequest,
+    UpdateOidcSettingsRequest,
+    UpdateUserInstancesRequest,
+    UpdateUserRoleRequest,
+)
+from app.services.auth.local_auth import has_active_local_admin_login as _has_active_local_admin_login
+from app.services.auth.oidc_preflight import (
+    OIDC_PREFLIGHT_SESSION_KEY,
+)
+from app.services.auth.oidc_preflight import (
+    build_oidc_preflight_context as _build_oidc_preflight_context,
 )
 
 
@@ -114,6 +114,114 @@ class _Req:
 
 
 class UserApiHelperTests(unittest.TestCase):
+    def test_SelfRegister_PrecreatedPasswordlessAccount_ClaimsOnlyWhenEmailDeliveryDisabled(self):
+        # Arrange
+        existing = UserEntity(
+            id=7,
+            email="new@example.com",
+            name="Admin supplied name",
+            role="member",
+            auth_provider="local",
+            password_hash=None,
+            assigned_instances=["instance-a"],
+            is_active=False,
+        )
+        session = _FakeSession(exec_results=[_ExecResult(first=existing)])
+
+        # Act
+        with (
+            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
+            patch(
+                "app.services.auth.local_auth.get_runtime_config",
+                return_value=SimpleNamespace(delivery_mode="disabled"),
+            ),
+            patch("app.services.auth.local_auth.hash_password", return_value="hashed"),
+        ):
+            dto = self_register(
+                SelfRegisterRequest(
+                    email="new@example.com",
+                    password="Validpass123!",
+                    name="User supplied name",
+                ),
+                session,
+            )
+
+        # Assert
+        self.assertEqual(dto.email, "new@example.com")
+        self.assertEqual(existing.password_hash, "hashed")
+        self.assertEqual(existing.name, "User supplied name")
+        self.assertTrue(existing.is_active)
+        self.assertEqual(existing.role, "member")
+        self.assertEqual(existing.assigned_instances, ["instance-a"])
+        self.assertEqual(existing.credential_version, 1)
+        self.assertEqual(session.commit_count, 1)
+
+        # Arrange
+        protected = UserEntity(
+            id=8,
+            email="invited@example.com",
+            name="Invited",
+            role="viewer",
+            auth_provider="local",
+            password_hash=None,
+            assigned_instances=[],
+            is_active=False,
+        )
+        protected_session = _FakeSession(exec_results=[_ExecResult(first=protected)])
+
+        # Act / Assert
+        with (
+            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
+            patch(
+                "app.services.auth.local_auth.get_runtime_config",
+                return_value=SimpleNamespace(delivery_mode="manual-link"),
+            ),
+        ):
+            with self.assertRaises(ConflictError):
+                self_register(
+                    SelfRegisterRequest(
+                        email="invited@example.com",
+                        password="Validpass123!",
+                        name="Invited",
+                    ),
+                    protected_session,
+                )
+        self.assertIsNone(protected.password_hash)
+        self.assertFalse(protected.is_active)
+        self.assertEqual(protected_session.commit_count, 0)
+
+    def test_SelfRegister_PrecreatedAccountWithPassword_RemainsRegisteredWhenDeliveryDisabled(self):
+        # Arrange
+        existing = UserEntity(
+            id=9,
+            email="registered@example.com",
+            name="Registered",
+            role="viewer",
+            auth_provider="local",
+            password_hash="existing-hash",
+            assigned_instances=[],
+            is_active=True,
+        )
+        session = _FakeSession(exec_results=[_ExecResult(first=existing)])
+
+        # Act / Assert
+        with (
+            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
+            patch("app.services.auth.local_auth.get_runtime_config") as runtime_config,
+        ):
+            with self.assertRaises(ConflictError):
+                self_register(
+                    SelfRegisterRequest(
+                        email="registered@example.com",
+                        password="Validpass123!",
+                        name="Registered",
+                    ),
+                    session,
+                )
+        runtime_config.assert_not_called()
+        self.assertEqual(existing.password_hash, "existing-hash")
+        self.assertEqual(session.commit_count, 0)
+
     def test_UserApiHelpers_MixedInputs_ProduceExpectedNormalizationAndGuards(self):
         # Arrange / Act
         normalized_member = ROLE_ALIASES.get("ml engineer", "")

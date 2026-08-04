@@ -46,6 +46,7 @@ from app.schemas import (
     UserDTO,
     validate_password_policy,
 )
+from app.services.auth.email_settings import get_runtime_config
 from app.services.oidc.config import get_settings
 
 
@@ -142,7 +143,16 @@ def self_register(request: SelfRegisterRequest, session: Session) -> UserDTO:
     if existing:
         if existing.auth_provider != "local":
             raise ConflictError("User is configured for OIDC login")
-        raise ConflictError("User is already registered")
+        if existing.password_hash or get_runtime_config(session).delivery_mode != "disabled":
+            raise ConflictError("User is already registered")
+
+        existing.password_hash = hash_password(request.password)
+        requested_name = (request.name or "").strip()
+        if requested_name:
+            existing.name = requested_name
+        existing.is_active = True
+        existing.credential_version += 1
+        return user_entity_to_dto(users.save(session, existing))
 
     name = (request.name or "").strip() or (email.split("@", 1)[0] or "User")
     created = users.create(

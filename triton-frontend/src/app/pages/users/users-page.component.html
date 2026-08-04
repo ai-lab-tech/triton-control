@@ -13,12 +13,12 @@
       </button>
     </div>
   </div>
-  @if (lifecycleMessage) {
+  @if (lifecycleMessage()) {
     <mat-card class="card">
-      <p>{{ lifecycleMessage }}</p>
-      @if (manualLink) {
+      <p>{{ lifecycleMessage() }}</p>
+      @if (manualLink()) {
         <mat-form-field appearance="outline">
-          <input matInput [value]="manualLink" readonly aria-label="One-time account link" />
+          <input matInput [value]="manualLink()" readonly aria-label="One-time account link" />
         </mat-form-field>
         <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
       }
@@ -147,10 +147,20 @@
                 Approve
               </button>
             } @else if (row.accountStatus === "invitation_pending") {
-              <button mat-stroked-button type="button" (click)="reissueInvitation(row)">
-                Reissue invite
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="reissueInvitation(row)"
+                [disabled]="lifecycleActionRunning()"
+              >
+                {{ lifecycleActionRunning() ? "Creating link..." : "Reissue invite" }}
               </button>
-              <button mat-stroked-button type="button" (click)="revokeInvitation(row)">
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="revokeInvitation(row)"
+                [disabled]="lifecycleActionRunning()"
+              >
                 Cancel invitation
               </button>
             } @else if (row.auth === "local") {
@@ -158,9 +168,9 @@
                 mat-stroked-button
                 type="button"
                 (click)="reissueInvitation(row)"
-                [disabled]="!emailLifecycleAvailable"
+                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
               >
-                Send invitation
+                {{ lifecycleActionRunning() ? "Creating link..." : "Send invitation" }}
               </button>
             }
           } @else if (row.auth === "local") {
@@ -169,7 +179,7 @@
               type="button"
               data-testid="reset-password-action"
               (click)="issuePasswordReset(row)"
-              [disabled]="!emailLifecycleAvailable"
+              [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
               [attr.title]="resetPasswordDisabledReason || null"
             >
               Reset password
