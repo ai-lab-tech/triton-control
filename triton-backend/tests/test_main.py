@@ -1,5 +1,8 @@
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
+
+from fastapi.exceptions import RequestValidationError
 
 from app import main
 
@@ -35,15 +38,53 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         start.assert_called_once()
 
     async def test_Shutdown_StopsBackgroundWorkersAndClients(self) -> None:
-        with patch.object(main.instance_health_refresher, "stop", AsyncMock()) as stop, patch.object(
-            main.TritonService,
-            "close_all_clients",
-            AsyncMock(),
-        ) as close_all_clients:
+        with (
+            patch.object(main.instance_health_refresher, "stop", AsyncMock()) as stop,
+            patch.object(
+                main.TritonService,
+                "close_all_clients",
+                AsyncMock(),
+            ) as close_all_clients,
+        ):
             await main.on_shutdown()
 
         stop.assert_awaited_once()
         close_all_clients.assert_awaited_once()
+
+    async def test_RequestValidationError_ResponseDoesNotEchoSensitiveInput(self) -> None:
+        validation_error = RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body",),
+                    "msg": "Value error, public_app_url is required",
+                    "input": {
+                        "smtp_username": "admin@example.test",
+                        "smtp_password": "do-not-return",
+                    },
+                    "ctx": {"error": ValueError("invalid configuration")},
+                }
+            ]
+        )
+
+        response = await main.sanitized_request_validation_error(type("Request", (), {})(), validation_error)
+        payload = json.loads(response.body)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            payload,
+            {
+                "detail": [
+                    {
+                        "type": "value_error",
+                        "loc": ["body"],
+                        "msg": "Value error, public_app_url is required",
+                    }
+                ]
+            },
+        )
+        self.assertNotIn("do-not-return", response.body.decode())
+        self.assertNotIn("input", response.body.decode())
 
     def test_Run_HttpAndHttpsModes_PassExpectedUvicornConfig(self) -> None:
         with patch("uvicorn.run") as uvicorn_run, patch.object(main, "server_https_enabled", False):
@@ -54,12 +95,16 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(http_config["port"], 8000)
         self.assertNotIn("ssl_keyfile", http_config)
 
-        with patch("uvicorn.run") as uvicorn_run, patch.object(main, "server_https_enabled", True), patch(
-            "app.main.os.getenv",
-            side_effect=lambda key, default=None: {
-                "TLS_KEY_FILE": "/tls/key.pem",
-                "TLS_CERT_FILE": "/tls/cert.pem",
-            }.get(key, default),
+        with (
+            patch("uvicorn.run") as uvicorn_run,
+            patch.object(main, "server_https_enabled", True),
+            patch(
+                "app.main.os.getenv",
+                side_effect=lambda key, default=None: {
+                    "TLS_KEY_FILE": "/tls/key.pem",
+                    "TLS_CERT_FILE": "/tls/cert.pem",
+                }.get(key, default),
+            ),
         ):
             main.run()
 

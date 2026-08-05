@@ -57,6 +57,7 @@ def issue_access_token(user: Dict[str, Any], expires_minutes: int = 60) -> str:
         "name": user.get("name"),
         "role": user.get("role", "User"),
         "auth_provider": user.get("auth_provider", "local"),
+        "credential_version": int(user.get("credential_version", 0)),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
     }

@@ -170,6 +170,12 @@
             <span class="material-icons">person_add</span>
             Register with password
           </button>
+          @if (forgotPasswordAvailable()) {
+            <a mat-stroked-button class="action-btn action-btn-secondary" href="/forgot-password">
+              <span class="material-icons">key</span>
+              Forgot password
+            </a>
+          }
         } @else if (!needsBootstrap() && registerMode()) {
           <button
             mat-flat-button

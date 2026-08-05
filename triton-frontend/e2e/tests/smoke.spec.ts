@@ -108,6 +108,17 @@ test.describe.serial("smoke", () => {
     expect(healthResp.ok()).toBeTruthy();
   });
 
+  test("public local-account lifecycle routes render", async ({ page }) => {
+    await page.goto(`${frontendUrl}/forgot-password`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Forgot password", { exact: true })).toBeVisible();
+
+    await page.goto(`${frontendUrl}/activate-account`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("This link is invalid or expired.")).toBeVisible();
+
+    await page.goto(`${frontendUrl}/reset-password`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("This link is invalid or expired.")).toBeVisible();
+  });
+
   test("user create and delete", async ({ request }) => {
     await ensureBootstrap(request);
     const login = await loginAdmin(request);

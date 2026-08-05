@@ -19,6 +19,7 @@ export interface UserRow {
   email: string;
   role: string;
   isActive: boolean;
+  accountStatus?: "active" | "invitation_pending" | "approval_pending" | "inactive";
   auth: "local" | "oidc";
   instances: string[];
 }

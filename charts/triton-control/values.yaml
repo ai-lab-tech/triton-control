@@ -34,12 +34,58 @@ app:
   env:
     - name: OIDC_CONFIG_SOURCE
       value: "env"
-    - name:  OIDC_ENABLED
+    - name: OIDC_ENABLED
       value: "false"
     - name: CORS_ORIGINS
       value: "http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200"
     - name: BACKEND_VERBOSE
       value: "false"
+    # Optional local-account invitation and recovery. No mail server is
+    # required while disabled. Use "manual-link" for closed environments.
+    - name: EMAIL_CONFIG_SOURCE
+      value: "env"
+    - name: EMAIL_DELIVERY_MODE
+      value: "disabled"
+    - name: EMAIL_PUBLIC_APP_URL
+      value: ""
+    - name: EMAIL_SMTP_HOST
+      value: ""
+    - name: EMAIL_SMTP_PORT
+      value: "587"
+    - name: EMAIL_SMTP_TLS_MODE
+      value: "starttls"
+    - name: EMAIL_SMTP_ALLOW_INSECURE
+      value: "false"
+    - name: EMAIL_SMTP_USERNAME
+      value: ""
+    - name: EMAIL_SENDER_EMAIL
+      value: ""
+    - name: EMAIL_SENDER_NAME
+      value: "Triton Control"
+    - name: EMAIL_SMTP_CA_CERTIFICATE
+      value: ""
+    - name: EMAIL_INVITE_EXPIRY_MINUTES
+      value: "1440"
+    - name: EMAIL_RESET_EXPIRY_MINUTES
+      value: "30"
+    - name: EMAIL_CONNECT_TIMEOUT_SECONDS
+      value: "10"
+    - name: EMAIL_OPERATION_TIMEOUT_SECONDS
+      value: "15"
+    - name: EMAIL_RECOVERY_RATE_LIMIT
+      value: "5"
+    - name: EMAIL_INVITE_SUBJECT
+      value: "You are invited to Triton Control"
+    - name: EMAIL_INVITE_TEXT_TEMPLATE
+      value: ""
+    - name: EMAIL_INVITE_HTML_TEMPLATE
+      value: ""
+    - name: EMAIL_RESET_SUBJECT
+      value: "Reset your Triton Control password"
+    - name: EMAIL_RESET_TEXT_TEMPLATE
+      value: ""
+    - name: EMAIL_RESET_HTML_TEMPLATE
+      value: ""
   envFrom: []
   existingSecret: ""
   secretEnv:
@@ -47,6 +93,10 @@ app:
     SESSION_SECRET: ""
     JWT_SECRET: ""
     S3_SECRET_ENCRYPTION_KEY: ""
+    # Required only for EMAIL_CONFIG_SOURCE=db when saving an SMTP password.
+    EMAIL_SECRET_ENCRYPTION_KEY: ""
+    # Required only for authenticated SMTP in EMAIL_CONFIG_SOURCE=env mode.
+    EMAIL_SMTP_PASSWORD: ""
   resources:
     requests:
       cpu: 100m
@@ -309,7 +359,7 @@ podSecurityContext: {}
 # e.g.
 #   runAsNonRoot: true
 #   seccompProfile:
-#     type: RuntimeDefault 
+#     type: RuntimeDefault
 securityContext: {}
 # e.g.
 #   runAsUser: 10001

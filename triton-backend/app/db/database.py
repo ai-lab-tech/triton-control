@@ -78,25 +78,52 @@ def init_db() -> None:
     from sqlmodel import SQLModel
 
     from app.db.entities import (  # Import models to register them
+        AccountLifecycleTokenEntity,
         CodeServerEntity,
         DashboardAlertEntity,
+        EmailConfigEntity,
         ErrorEventEntity,
         MlflowEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
+        RecoveryRateLimitEntity,
         S3ProfileEntity,
+        SecurityEventEntity,
         TritonInstanceEntity,
         UserEntity,
         WorkflowS3CredentialEntity,
     )
 
     SQLModel.metadata.create_all(engine)
+    _migrate_users_account_lifecycle()
     _migrate_triton_instances_table()
     _migrate_oidc_config_table()
     _migrate_perf_analyzer_table()
     _migrate_s3_profiles_table()
     _migrate_mlflow_table()
+
+
+def _migrate_users_account_lifecycle() -> None:
+    """Add credential revocation state and make password-less local users inactive."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS users
+                ADD COLUMN IF NOT EXISTS credential_version INTEGER NOT NULL DEFAULT 0
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET is_active = FALSE
+                WHERE auth_provider = 'local' AND password_hash IS NULL
+                """
+            )
+        )
 
 
 def _migrate_oidc_config_table() -> None:

@@ -20,7 +20,7 @@ from sqlmodel import Session
 from app.core.access_control import require_admin
 from app.exceptions import NotFoundError
 from app.mappers import user_entity_to_dto
-from app.repositories import users
+from app.repositories import account_lifecycle, users
 from app.schemas import UpdateUserInstancesRequest, UpdateUserRoleRequest, UserDTO
 
 
@@ -33,7 +33,14 @@ def get_user_or_404(session: Session, user_id: int) -> Any:
 
 def list_users(session: Session, claims: dict[str, Any]) -> list[UserDTO]:
     require_admin(claims)
-    return [user_entity_to_dto(row) for row in users.list_all(session)]
+    pending_invitation_user_ids = account_lifecycle.list_user_ids_with_pending_invitations(session)
+    return [
+        user_entity_to_dto(
+            row,
+            invitation_pending=row.id in pending_invitation_user_ids,
+        )
+        for row in users.list_all(session)
+    ]
 
 
 def delete_user(session: Session, claims: dict[str, Any], user_id: int) -> None:

@@ -108,6 +108,7 @@ describe("loginSelectors", () => {
       error: "oops",
       notice: "hello",
       registerMode: true,
+      forgotPasswordAvailable: false,
     };
     const root = { login: featureState };
 

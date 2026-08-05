@@ -1,0 +1,79 @@
+<div class="lifecycle-wrap">
+  <mat-card class="lifecycle-card">
+    <mat-card-header>
+      <mat-card-title>
+        @if (mode === "activate") {
+          Activate your account
+        } @else if (mode === "reset") {
+          Reset your password
+        } @else {
+          Forgot password
+        }
+      </mat-card-title>
+      <mat-card-subtitle>Triton Control local account</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (loading()) {
+        <p>Loading…</p>
+      } @else if (completed()) {
+        <div class="notice success">{{ message() }}</div>
+      } @else if (mode === "forgot") {
+        <p>Enter your email address. Eligible accounts receive a single-use reset link.</p>
+        <mat-form-field appearance="outline">
+          <mat-label>Email</mat-label>
+          <input matInput [(ngModel)]="email" type="email" autocomplete="email" />
+        </mat-form-field>
+      } @else if (validLink()) {
+        @if (targetEmail()) {
+          <p>
+            Set a new password for <strong>{{ targetEmail() }}</strong
+            >.
+          </p>
+        }
+        <mat-form-field appearance="outline">
+          <mat-label>New password</mat-label>
+          <input
+            matInput
+            [(ngModel)]="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            maxlength="128"
+          />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Confirm password</mat-label>
+          <input
+            matInput
+            [(ngModel)]="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            minlength="12"
+            maxlength="128"
+          />
+        </mat-form-field>
+        <p class="hint">
+          Use 12–128 characters with uppercase, lowercase, a digit, and a special character.
+        </p>
+      }
+
+      @if (error()) {
+        <div class="notice error">{{ error() }}</div>
+      }
+    </mat-card-content>
+
+    <mat-card-actions align="end">
+      <a mat-stroked-button routerLink="/signin">Back to sign in</a>
+      @if (!completed() && mode === "forgot") {
+        <button mat-flat-button color="primary" (click)="requestReset()" [disabled]="loading()">
+          Send reset link
+        </button>
+      } @else if (!completed() && validLink()) {
+        <button mat-flat-button color="primary" (click)="submitPassword()" [disabled]="loading()">
+          {{ mode === "activate" ? "Activate account" : "Reset password" }}
+        </button>
+      }
+    </mat-card-actions>
+  </mat-card>
+</div>

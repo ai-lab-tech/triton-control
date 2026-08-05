@@ -8,7 +8,7 @@ import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { InstancesService, UsersService } from "../../api/generated/index";
 import { UsersPageComponent } from "./users-page.component";
-import { selectUsersInstances } from "../../state/users/users.selectors";
+import { selectUsers, selectUsersInstances } from "../../state/users/users.selectors";
 import {
   addInstanceToUserRequested,
   deleteUserRequested,
@@ -29,10 +29,14 @@ describe("UsersPageComponent", () => {
     usersApiMock = jasmine.createSpyObj<UsersService>("UsersService", [
       "listUsersApiAuthUsersGet",
       "authOptionsEndpointApiAuthOptionsGet",
+      "getEmailSettingsEndpointApiAuthEmailSettingsGet",
       "registerUserEndpointApiAuthRegisterPost",
       "updateUserInstancesApiAuthUsersUserIdInstancesPut",
       "deleteUserApiAuthUsersUserIdDelete",
       "updateUserRoleApiAuthUsersUserIdRolePut",
+      "adminResetEndpointApiAuthPasswordResetsPost",
+      "reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost",
+      "revokeInvitationEndpointApiAuthInvitationsUserIdDelete",
     ]);
     instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
       "listInstancesApiInstancesGet",
@@ -42,6 +46,9 @@ describe("UsersPageComponent", () => {
 
     usersApiMock.authOptionsEndpointApiAuthOptionsGet.and.returnValue(
       of({ oidc_enabled: true } as any),
+    );
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "disabled" } as any),
     );
     usersApiMock.listUsersApiAuthUsersGet.and.returnValue(of([] as any));
     instancesApiMock.listInstancesApiInstancesGet.and.returnValue(of([] as any));
@@ -60,6 +67,7 @@ describe("UsersPageComponent", () => {
     }).compileComponents();
 
     mockStore = TestBed.inject(MockStore);
+    mockStore.overrideSelector(selectUsersInstances, []);
   });
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
@@ -321,5 +329,237 @@ describe("UsersPageComponent", () => {
 
     // Assert
     expect(dialogMock.open).toHaveBeenCalled();
+  });
+
+  it("InvitationPending_ShowsInvitationActionsWithoutApprove", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectUsers, [
+      {
+        id: 8,
+        name: "Invited User",
+        email: "invited@example.com",
+        role: "viewer",
+        isActive: false,
+        accountStatus: "invitation_pending",
+        auth: "local",
+        instances: [],
+      },
+    ]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+    const actionButtons = Array.from(
+      native.querySelectorAll<HTMLButtonElement>(".actions-cell button"),
+    );
+    const actions = actionButtons.map((button) => button.textContent?.trim());
+    const reissueButton = native.querySelector<HTMLButtonElement>(
+      '[data-testid="reissue-invitation-action"]',
+    );
+    const cancelButton = native.querySelector<HTMLButtonElement>(
+      '[data-testid="cancel-invitation-action"]',
+    );
+
+    // Assert
+    expect(actions).toContain("Reissue invite");
+    expect(actions).toContain("Cancel invitation");
+    expect(actions).not.toContain("Approve");
+    expect(actions.some((action) => action?.includes("Delete"))).toBeTrue();
+    expect(reissueButton?.disabled).toBeTrue();
+    expect(cancelButton?.disabled).toBeTrue();
+    expect(reissueButton?.title).toContain("Enable manual-link or SMTP");
+    expect(cancelButton?.title).toContain("Enable manual-link or SMTP");
+
+    reissueButton?.click();
+    cancelButton?.click();
+    expect(
+      usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost,
+    ).not.toHaveBeenCalled();
+    expect(
+      usersApiMock.revokeInvitationEndpointApiAuthInvitationsUserIdDelete,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("ResetPassword_EmailLifecycleDisabled_DisablesActionWithExplanation", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectUsers, [
+      {
+        id: 9,
+        name: "Local User",
+        email: "local@example.com",
+        role: "viewer",
+        isActive: true,
+        auth: "local",
+        instances: [],
+      },
+    ]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="reset-password-action"]',
+    ) as HTMLButtonElement;
+
+    // Assert
+    expect(button.disabled).toBeTrue();
+    expect(button.title).toContain("Enable manual-link or SMTP");
+    button.click();
+    expect(usersApiMock.adminResetEndpointApiAuthPasswordResetsPost).not.toHaveBeenCalled();
+  });
+
+  for (const deliveryMode of ["manual-link", "smtp"]) {
+    it(`ResetPassword_EmailLifecycle${deliveryMode}_EnablesAction`, async () => {
+      // Arrange
+      usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+        of({ delivery_mode: deliveryMode } as any),
+      );
+      mockStore.overrideSelector(selectUsers, [
+        {
+          id: 10,
+          name: "Local User",
+          email: "local@example.com",
+          role: "viewer",
+          isActive: true,
+          auth: "local",
+          instances: [],
+        },
+      ]);
+      mockStore.refreshState();
+      const fixture = TestBed.createComponent(UsersPageComponent);
+
+      // Act
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const button = fixture.nativeElement.querySelector(
+        '[data-testid="reset-password-action"]',
+      ) as HTMLButtonElement;
+
+      // Assert
+      expect(button.disabled).toBeFalse();
+      expect(button.title).toBe("");
+    });
+  }
+
+  it("ResetPassword_SmtpDeliveryPending_ShowsProgressAndPreventsDuplicates", async () => {
+    // Arrange
+    const response$ = new Subject<any>();
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "smtp" } as any),
+    );
+    usersApiMock.adminResetEndpointApiAuthPasswordResetsPost.and.returnValue(response$);
+    const user = {
+      id: 12,
+      name: "Local User",
+      email: "local@example.com",
+      role: "viewer",
+      isActive: true,
+      auth: "local" as const,
+      instances: [],
+    };
+    mockStore.overrideSelector(selectUsers, [user]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Act
+    const request = fixture.componentInstance.issuePasswordReset(user);
+    void fixture.componentInstance.issuePasswordReset(user);
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+    const button = native.querySelector<HTMLButtonElement>('[data-testid="reset-password-action"]');
+
+    // Assert
+    expect(usersApiMock.adminResetEndpointApiAuthPasswordResetsPost).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.passwordResetUserId()).toBe(user.id);
+    expect(button?.disabled).toBeTrue();
+    expect(button?.getAttribute("aria-busy")).toBe("true");
+    expect(button?.querySelector("mat-spinner")).not.toBeNull();
+    expect(button?.textContent).toContain("Sending reset");
+    expect(native.querySelector('[role="status"]')?.textContent).toContain("few seconds");
+
+    // Act
+    response$.next({ delivered: true, manual_link: null });
+    response$.complete();
+    await request;
+    fixture.detectChanges();
+
+    // Assert
+    expect(fixture.componentInstance.passwordResetUserId()).toBeNull();
+    expect(button?.querySelector("mat-spinner")).toBeNull();
+    expect(fixture.componentInstance.lifecycleMessage()).toContain("SMTP server");
+  });
+
+  it("SendInvitation_ManualLinkResponse_RendersImmediatelyAndPreventsDuplicateRequests", async () => {
+    // Arrange
+    const response$ = new Subject<any>();
+    usersApiMock.getEmailSettingsEndpointApiAuthEmailSettingsGet.and.returnValue(
+      of({ delivery_mode: "manual-link" } as any),
+    );
+    usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost.and.returnValue(
+      response$,
+    );
+    const user = {
+      id: 11,
+      name: "Inactive User",
+      email: "inactive@example.com",
+      role: "viewer",
+      isActive: false,
+      accountStatus: "inactive" as const,
+      auth: "local" as const,
+      instances: [],
+    };
+    mockStore.overrideSelector(selectUsers, [user]);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        ".actions-cell button",
+      ),
+    ).find((candidate) => candidate.textContent?.includes("Send invitation"));
+    expect(button).toBeDefined();
+    expect(fixture.componentInstance.emailLifecycleAvailable()).toBeTrue();
+    expect(button!.disabled).toBeFalse();
+
+    // Act
+    const request = fixture.componentInstance.reissueInvitation(user);
+    void fixture.componentInstance.reissueInvitation(user);
+    fixture.detectChanges();
+
+    // Assert
+    expect(
+      usersApiMock.reissueInvitationEndpointApiAuthInvitationsUserIdReissuePost,
+    ).toHaveBeenCalledTimes(1);
+    expect(button!.disabled).toBeTrue();
+    expect(button!.textContent).toContain("Creating link...");
+
+    // Act
+    response$.next({
+      delivered: false,
+      manual_link: "https://example.test/activate-account?token=latest",
+    });
+    response$.complete();
+    await request;
+    fixture.detectChanges();
+
+    // Assert
+    const linkInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'input[aria-label="One-time account link"]',
+    );
+    expect(linkInput?.value).toContain("token=latest");
+    expect(fixture.componentInstance.lifecycleActionRunning()).toBeFalse();
   });
 });

@@ -97,7 +97,84 @@ class UserEntity(SQLModel, table=True):
     oidc_subject: Optional[str] = Field(default=None, index=True)
     assigned_instances: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     is_active: bool = Field(default=True)
+    credential_version: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AccountLifecycleTokenEntity(SQLModel, table=True):
+    """Hashed, single-use local-account invitation and reset tokens."""
+
+    __tablename__ = "account_lifecycle_tokens"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    purpose: str = Field(index=True)  # invite | password_reset
+    token_hash: str = Field(sa_column=Column(String, unique=True, index=True))
+    expires_at: datetime = Field(index=True)
+    created_by_user_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    consumed_at: Optional[datetime] = Field(default=None, index=True)
+    revoked_at: Optional[datetime] = Field(default=None, index=True)
+
+
+class EmailConfigEntity(SQLModel, table=True):
+    """Database-managed singleton email delivery configuration."""
+
+    __tablename__ = "email_config"
+
+    id: Optional[int] = Field(default=1, primary_key=True)
+    delivery_mode: str = Field(default="disabled")
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_tls_mode: str = Field(default="starttls")
+    smtp_allow_insecure: bool = Field(default=False)
+    smtp_username: str = Field(default="")
+    smtp_password_enc: str = Field(default="")
+    sender_email: str = Field(default="")
+    sender_name: str = Field(default="Triton Control")
+    public_app_url: str = Field(default="")
+    ca_certificate: str = Field(default="", sa_column=Column(Text))
+    invite_expiry_minutes: int = Field(default=1440)
+    reset_expiry_minutes: int = Field(default=30)
+    connect_timeout_seconds: int = Field(default=10)
+    operation_timeout_seconds: int = Field(default=15)
+    invite_subject: str = Field(default="You are invited to Triton Control")
+    invite_text_template: str = Field(default="", sa_column=Column(Text))
+    invite_html_template: str = Field(default="", sa_column=Column(Text))
+    reset_subject: str = Field(default="Reset your Triton Control password")
+    reset_text_template: str = Field(default="", sa_column=Column(Text))
+    reset_html_template: str = Field(default="", sa_column=Column(Text))
+    last_status: str = Field(default="not_tested")
+    last_status_message: str = Field(default="")
+    last_status_at: Optional[datetime] = None
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SecurityEventEntity(SQLModel, table=True):
+    """Sanitized local-account lifecycle security event."""
+
+    __tablename__ = "security_events"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_type: str = Field(index=True)
+    outcome: str = Field(index=True)
+    target_email: str = Field(default="", index=True)
+    actor_email: str = Field(default="", index=True)
+    purpose: str = Field(default="", index=True)
+    detail: str = Field(default="", sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class RecoveryRateLimitEntity(SQLModel, table=True):
+    """Database-backed forgot-password rate-limit bucket."""
+
+    __tablename__ = "recovery_rate_limits"
+    __table_args__ = (UniqueConstraint("bucket_key", "window_started_at", name="uq_recovery_rate_bucket"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bucket_key: str = Field(index=True)
+    window_started_at: datetime = Field(index=True)
+    request_count: int = Field(default=1)
 
 
 class OidcConfigEntity(SQLModel, table=True):

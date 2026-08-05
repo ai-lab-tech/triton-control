@@ -61,4 +61,22 @@ describe("authInterceptor", () => {
       },
     });
   });
+
+  it("AuthInterceptor_401OnSessionProbe_DoesNotRedirectPublicRoute", (done) => {
+    // Arrange
+    const req = new HttpRequest("GET", "http://localhost:8000/api/auth/me");
+    const next = () =>
+      throwError(() => new HttpErrorResponse({ status: 401, error: { detail: "unauthorized" } }));
+    Object.defineProperty(routerMock, "url", { get: () => "/forgot-password" });
+
+    // Act
+    TestBed.runInInjectionContext(() => authInterceptor(req, next)).subscribe({
+      error: () => {
+        // Assert
+        expect(authServiceMock.clearLocalSession).not.toHaveBeenCalled();
+        expect(routerMock.navigate).not.toHaveBeenCalled();
+        done();
+      },
+    });
+  });
 });

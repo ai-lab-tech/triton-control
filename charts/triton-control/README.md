@@ -66,7 +66,9 @@ postgresql://triton:tritonpw@postgres:5432/triton_backend
 ```
 
 Replace the default `SESSION_SECRET`, `JWT_SECRET`, `S3_SECRET_ENCRYPTION_KEY`,
-and `POSTGRES_PASSWORD` values before using compose outside local development.
+`EMAIL_SECRET_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` values before using
+compose outside local development. Store `EMAIL_SMTP_PASSWORD` as a secret when
+authenticated SMTP is enabled.
 
 Backend logging is quiet by default. Set `BACKEND_VERBOSE=true` in `app.env`
 for info-level backend logs and Uvicorn access logs. Set `DATABASE_ECHO=1`
@@ -127,6 +129,48 @@ ingress:
 If `postgresql.enabled` is `true`, the chart injects `DATABASE_URL` into the app from the generated PostgreSQL Secret. If you use an external database, set `postgresql.enabled=false` and provide `DATABASE_URL` through `app.existingSecret` or `app.env`.
 
 For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for example `256m` or `1g`).
+
+## Optional Email Lifecycle
+
+The chart defaults to `EMAIL_CONFIG_SOURCE=env` and
+`EMAIL_DELIVERY_MODE=disabled`. No mail server is deployed. Use `manual-link`
+for administrator-mediated invitation and reset links, or `smtp` with an
+external relay for automatic delivery and public forgot-password.
+
+Both enabled delivery modes require an externally reachable
+`EMAIL_PUBLIC_APP_URL`. SMTP transport, sender, expiry, timeout, rate-limit, and
+template settings are available in `app.env`. Put `EMAIL_SMTP_PASSWORD` in
+`app.secretEnv` or `app.existingSecret`. For `EMAIL_CONFIG_SOURCE=db`, also set
+`EMAIL_SECRET_ENCRYPTION_KEY` so stored SMTP passwords can be encrypted.
+
+Example:
+
+```yaml
+app:
+  env:
+    - name: EMAIL_CONFIG_SOURCE
+      value: "env"
+    - name: EMAIL_DELIVERY_MODE
+      value: "smtp"
+    - name: EMAIL_PUBLIC_APP_URL
+      value: "https://triton-control.example.com"
+    - name: EMAIL_SMTP_HOST
+      value: "smtp.example.com"
+    - name: EMAIL_SMTP_PORT
+      value: "587"
+    - name: EMAIL_SMTP_TLS_MODE
+      value: "starttls"
+    - name: EMAIL_SMTP_USERNAME
+      value: "triton-control@example.com"
+    - name: EMAIL_SENDER_EMAIL
+      value: "triton-control@example.com"
+  secretEnv:
+    EMAIL_SMTP_PASSWORD: "replace-with-smtp-secret"
+```
+
+Do not commit real SMTP credentials. See the main
+[configuration documentation](../../docs/configuration.md) for all variables
+and delivery-mode behavior.
 
 ## RBAC Scope
 

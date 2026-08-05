@@ -13,7 +13,7 @@ dependencies = [
     "psycopg2-binary==2.9.11",
     "python-dotenv==1.2.2",
     "httpx==0.28.1",
-    "cryptography==48.0.1",
+    "cryptography==50.0.0",
     "cachetools",
     "authlib==1.6.12",
     "itsdangerous==2.2.0",

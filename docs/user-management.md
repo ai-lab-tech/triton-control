@@ -6,11 +6,11 @@ change roles.
 
 ## Roles
 
-| Role     | Scope              | Current Behavior                                                                                                                                                    |
-| -------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `admin`  | Global             | Can see all Triton instances, add/delete instances, manage users, manage OIDC settings, and perform instance/model/S3 actions.                                       |
+| Role     | Scope              | Current Behavior                                                                                                                                                      |
+| -------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`  | Global             | Can see all Triton instances, add/delete instances, manage users, manage OIDC settings, and perform instance/model/S3 actions.                                        |
 | `member` | Assigned instances | Can add instances and use assigned instances, including metrics, model inspection, inference, model load/unload, instance connection updates, and S3 write workflows. |
-| `viewer` | Assigned instances | Read-only access to assigned instances. Can inspect dashboard, health, metrics, model state/config, inference, and S3 files, but cannot add or change configuration. |
+| `viewer` | Assigned instances | Read-only access to assigned instances. Can inspect dashboard, health, metrics, model state/config, inference, and S3 files, but cannot add or change configuration.  |
 
 Instance visibility is controlled by the user's assigned instances unless the
 user is an admin. If a non-admin user has no assigned instances, they can sign
@@ -47,11 +47,36 @@ To add a local user:
 4. Enter full name and email.
 5. Select `admin`, `member`, or `viewer`.
 6. Assign one or more Triton instances for non-admin users.
-7. Save the user.
+7. Select the available account-setup option and submit the form.
 
-If a password is provided, the user can sign in with email/password. Passwords
-must have 12-128 characters, at least one uppercase letter, one lowercase
-letter, one digit, one special character, and must not contain whitespace.
+The available account setup depends on email delivery:
+
+- With `manual-link` or `smtp`, **Invite user** creates an inactive account and
+  issues a single-use activation link. SMTP sends it automatically;
+  `manual-link` shows it once for secure out-of-band transfer.
+- With `manual-link` or `smtp`, **Create inactive account** creates an account
+  that cannot sign in and cannot be claimed through public self-registration.
+- With delivery `disabled`, the form uses the legacy **Add user** behavior. It
+  creates a passwordless inactive local account. Matching public
+  self-registration sets its initial password, activates it, and preserves the
+  role and instances selected by the administrator.
+
+Administrators never assign or transmit a user's initial password. Passwords
+chosen during registration, invitation activation, or reset must have 12-128
+characters, at least one uppercase letter, one lowercase letter, one digit, one
+special character, and must not contain whitespace.
+
+While delivery is `manual-link` or `smtp`, admins can reissue or cancel a
+pending invitation and issue a reset for an active local account. These
+lifecycle actions are disabled when delivery is `disabled`. Disable delivery
+only after canceling any pending invitations that should no longer be usable;
+an already-issued bearer link otherwise remains valid until it expires, is
+consumed, is superseded, or is revoked through the protected API. OIDC
+lifecycle operations remain with the configured identity provider.
+
+SMTP invitation and reset operations can take several seconds. The affected
+button shows progress and duplicate submissions remain disabled until the SMTP
+operation completes.
 
 Password validation uses this practical baseline:
 
@@ -98,12 +123,13 @@ comma-separated allowlist. If no admin exists yet, a matching OIDC user can be
 bootstrapped as the first active admin. Without that allowlist, OIDC users are
 created as non-admin users and need normal admin management.
 
-## Pending And Approved Users
+## Account Status
 
-The Users page shows each account as `active` or `pending`.
+The Users page distinguishes `active`, `inactive`, `invitation pending`, and
+`approval pending` accounts.
 
-Pending users cannot use assigned workflows until an admin approves them. To
-approve a user:
+Self-registered `approval pending` users cannot use assigned workflows until an
+admin approves them. To approve a user:
 
 1. Open **Users** as an admin.
 2. Choose the intended role.

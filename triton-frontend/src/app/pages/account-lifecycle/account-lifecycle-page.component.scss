@@ -1,0 +1,41 @@
+.lifecycle-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f7fb;
+}
+
+.lifecycle-card {
+  width: min(520px, 100%);
+}
+
+mat-card-content {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+.notice {
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.success {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.error {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
+.hint {
+  color: #5f6368;
+  font-size: 0.875rem;
+}
