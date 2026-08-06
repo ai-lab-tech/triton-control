@@ -16,7 +16,7 @@ body:
     attributes:
       label: Triton Control version
       description: Provide the release, image tag, chart version, or commit SHA.
-      placeholder: v1.2.2
+      placeholder: v1.2.3
     validations:
       required: true
 

@@ -27,7 +27,7 @@ or Podman Compose for local evaluation, with reduced Kubernetes-specific
 functionality such as no self-deployed Triton deployment workflows.
 
 Published container image:
-[`ailabtechtriton/triton-control:v1.2.2`](https://hub.docker.com/r/ailabtechtriton/triton-control)
+[`ailabtechtriton/triton-control:v1.2.3`](https://hub.docker.com/r/ailabtechtriton/triton-control)
 
 ## Why Triton Control?
 
@@ -57,8 +57,8 @@ Core capabilities include:
 With Docker installed, start the published image:
 
 ```bash
-docker pull ailabtechtriton/triton-control:v1.2.2
-docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
+docker pull ailabtechtriton/triton-control:v1.2.3
+docker tag ailabtechtriton/triton-control:v1.2.3 triton-control:compose
 docker compose up --no-build
 ```
 
@@ -86,8 +86,8 @@ defined in `compose.yaml`.
 With Podman and `podman-compose` installed, start the published image:
 
 ```bash
-podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
-podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
+podman pull docker.io/ailabtechtriton/triton-control:v1.2.3
+podman tag docker.io/ailabtechtriton/triton-control:v1.2.3 \
   localhost/triton-control:compose
 podman-compose -f podman-compose.yaml up --no-build
 ```
@@ -130,7 +130,7 @@ Create a values file, for example `values-prod.yaml`:
 app:
   image:
     repository: ailabtechtriton/triton-control
-    tag: "v1.2.2"
+    tag: "v1.2.3"
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"

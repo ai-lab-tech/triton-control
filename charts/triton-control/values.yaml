@@ -24,7 +24,7 @@ podLabels: {}
 app:
   image:
     repository: ailabtechtriton/triton-control
-    tag: v1.2.2
+    tag: v1.2.3
     pullPolicy: IfNotPresent
   ports:
     frontend: 8080

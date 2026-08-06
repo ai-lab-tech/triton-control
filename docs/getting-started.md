@@ -8,8 +8,8 @@ run the backend with Python and the frontend with npm.
 With Docker installed, start the published image:
 
 ```bash
-docker pull ailabtechtriton/triton-control:v1.2.2
-docker tag ailabtechtriton/triton-control:v1.2.2 triton-control:compose
+docker pull ailabtechtriton/triton-control:v1.2.3
+docker tag ailabtechtriton/triton-control:v1.2.3 triton-control:compose
 docker compose up --no-build
 ```
 
@@ -32,8 +32,8 @@ workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 With Podman and `podman-compose` installed, start the published image:
 
 ```bash
-podman pull docker.io/ailabtechtriton/triton-control:v1.2.2
-podman tag docker.io/ailabtechtriton/triton-control:v1.2.2 \
+podman pull docker.io/ailabtechtriton/triton-control:v1.2.3
+podman tag docker.io/ailabtechtriton/triton-control:v1.2.3 \
   localhost/triton-control:compose
 podman-compose -f podman-compose.yaml up --no-build
 ```
@@ -76,7 +76,7 @@ Create a values file for your cluster:
 app:
   image:
     repository: ailabtechtriton/triton-control
-    tag: "v1.2.2"
+    tag: "v1.2.3"
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
