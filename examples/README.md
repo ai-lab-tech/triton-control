@@ -82,7 +82,7 @@ workflows/
 | `libtorch/distilbert-sentiment-gpu` | GPU sentiment classification | `pytorch_libtorch` |
 | `python/iris-classifier` | Small scikit-learn tabular classifier | `python` |
 | `s3_upload/local-model-upload-s3-polling` | Upload a model to an existing polling instance | `python` |
-| `workflows/sklearn-iris-training` | Run a scikit-learn training script from a Triton Control workspace through Argo Workflows | Training workflow |
+| `workflows/sklearn-iris-training` | Run scikit-learn training through Argo with S3-backed source and result artifacts | Training workflow |
 
 ## Runtime Notes
 
