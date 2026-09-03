@@ -7,10 +7,16 @@ describe("APP_ROUTES", () => {
 
     // Act
     const hasLogin = paths.includes("signin");
+    const hasForgotPassword = paths.includes("forgot-password");
+    const hasActivation = paths.includes("activate-account");
+    const hasReset = paths.includes("reset-password");
     const hasWildcard = paths.includes("**");
 
     // Assert
     expect(hasLogin).toBeTrue();
+    expect(hasForgotPassword).toBeTrue();
+    expect(hasActivation).toBeTrue();
+    expect(hasReset).toBeTrue();
     expect(hasWildcard).toBeTrue();
   });
 

@@ -1,24 +1,33 @@
 import { MAT_DIALOG_DATA, MatDialogRef } from "@angular/material/dialog";
 import { TestBed } from "@angular/core/testing";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
+import { of, Subject, throwError } from "rxjs";
+import { UsersService } from "../../../api/generated";
 import { NewUserDialogComponent } from "./new-user-dialog.component";
 import { selectUsers, selectUsersOidcEnabled } from "../../../state/users/users.selectors";
 
 describe("NewUserDialogComponent", () => {
   let dialogRefMock: jasmine.SpyObj<MatDialogRef<NewUserDialogComponent>>;
+  let usersApiMock: jasmine.SpyObj<UsersService>;
   let mockStore: MockStore;
+  let dialogData: { emailLifecycleAvailable: boolean };
 
   beforeEach(async () => {
     dialogRefMock = jasmine.createSpyObj<MatDialogRef<NewUserDialogComponent>>("MatDialogRef", [
       "close",
     ]);
+    usersApiMock = jasmine.createSpyObj<UsersService>("UsersService", [
+      "inviteUserEndpointApiAuthInvitationsPost",
+    ]);
+    dialogData = { emailLifecycleAvailable: true };
 
     await TestBed.configureTestingModule({
       imports: [NewUserDialogComponent],
       providers: [
         provideMockStore(),
         { provide: MatDialogRef, useValue: dialogRefMock },
-        { provide: MAT_DIALOG_DATA, useValue: { instances: ["a"], oidcEnabled: false } },
+        { provide: UsersService, useValue: usersApiMock },
+        { provide: MAT_DIALOG_DATA, useValue: dialogData },
       ],
     }).compileComponents();
 
@@ -62,7 +71,7 @@ describe("NewUserDialogComponent", () => {
     component.newUser.email = "  alice@example.com  ";
     component.newUser.role = "viewer";
     component.newUser.auth = "local";
-    component.newUser.password = "Validpass123!";
+    component.newUser.creationMode = "inactive";
     component.newUser.instances = ["a"];
     spyOn(mockStore, "dispatch");
 
@@ -130,7 +139,7 @@ describe("NewUserDialogComponent", () => {
     expect(native.querySelector("#dialog-user-oidc")).toBeNull();
   });
 
-  it("Template_OidcDisabled_ShowsPasswordFieldAndHidesOidcSubject", () => {
+  it("Template_OidcDisabled_OffersInviteOrInactiveWithoutInitialPassword", () => {
     // Arrange
     mockStore.overrideSelector(selectUsersOidcEnabled, false);
     mockStore.refreshState();
@@ -141,8 +150,60 @@ describe("NewUserDialogComponent", () => {
     const native = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(native.querySelector("#dialog-user-password")).not.toBeNull();
+    expect(native.querySelector("#dialog-user-password")).toBeNull();
+    expect(native.textContent).not.toContain("Set initial password");
+    expect(native.textContent).toContain("Invite user");
+    expect(fixture.componentInstance.newUser.creationMode).toBe("invite");
     expect(native.querySelector("#dialog-user-oidc")).toBeNull();
+  });
+
+  it("Template_EmailLifecycleDisabled_UsesLegacyAddUserFlow", async () => {
+    // Arrange
+    dialogData.emailLifecycleAvailable = false;
+    mockStore.overrideSelector(selectUsersOidcEnabled, false);
+    mockStore.refreshState();
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(fixture.componentInstance.newUser.creationMode).toBe("inactive");
+    expect(native.textContent).not.toContain("Invite user");
+    expect(native.textContent).not.toContain("Email lifecycle");
+    expect(native.textContent).not.toContain("Account setup");
+    expect(native.textContent).not.toContain("Create inactive account");
+    expect(native.querySelector("#dialog-user-creation-mode")).toBeNull();
+    expect(native.textContent).toContain("Add user");
+  });
+
+  it("Save_EmailLifecycleDisabled_CreatesLocalUserWithoutInvitation", () => {
+    // Arrange
+    dialogData.emailLifecycleAvailable = false;
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    spyOn(mockStore, "dispatch");
+
+    // Act
+    component.save();
+
+    // Assert
+    expect(usersApiMock.inviteUserEndpointApiAuthInvitationsPost).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        name: "Alice",
+        email: "alice@example.com",
+        auth: "local",
+        creationMode: "inactive",
+      }),
+    );
+    expect(dialogRefMock.close).toHaveBeenCalled();
   });
 
   it("Save_InvalidInput_DoesNotDispatch", () => {
@@ -158,24 +219,6 @@ describe("NewUserDialogComponent", () => {
 
     // Assert
     expect(mockStore.dispatch).not.toHaveBeenCalled();
-  });
-
-  it("Save_LocalPasswordTooShort_DoesNotDispatchAndShowsPolicyError", () => {
-    // Arrange
-    const fixture = TestBed.createComponent(NewUserDialogComponent);
-    const component = fixture.componentInstance;
-    component.newUser.name = "Alice";
-    component.newUser.email = "alice@example.com";
-    component.newUser.role = "viewer";
-    component.newUser.password = "short";
-    spyOn(mockStore, "dispatch");
-
-    // Act
-    component.save();
-
-    // Assert
-    expect(mockStore.dispatch).not.toHaveBeenCalled();
-    expect(component.error).toContain("12-128");
   });
 
   it("Save_InvalidEmail_DoesNotDispatchAndShowsEmailError", () => {
@@ -234,5 +277,110 @@ describe("NewUserDialogComponent", () => {
 
     // Act + Assert
     expect(component.canSave).toBeTrue();
+  });
+
+  it("Save_SmtpInvitationDelivered_ClosesDialog", async () => {
+    // Arrange
+    usersApiMock.inviteUserEndpointApiAuthInvitationsPost.and.returnValue(
+      of({ delivered: true, manual_link: null }) as never,
+    );
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    component.newUser.creationMode = "invite";
+
+    // Act
+    component.save();
+    await fixture.whenStable();
+
+    // Assert
+    expect(dialogRefMock.close).toHaveBeenCalled();
+  });
+
+  it("Save_SmtpInvitationPending_ShowsProgressAndPreventsDuplicateSubmission", async () => {
+    // Arrange
+    const pendingInvitation = new Subject<{ delivered: boolean; manual_link: null }>();
+    usersApiMock.inviteUserEndpointApiAuthInvitationsPost.and.returnValue(
+      pendingInvitation.asObservable() as never,
+    );
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    component.newUser.creationMode = "invite";
+    fixture.detectChanges();
+
+    // Act
+    component.save();
+    component.save();
+    fixture.detectChanges();
+    const native = fixture.nativeElement as HTMLElement;
+    const submitButton = native.querySelector<HTMLButtonElement>(".dialog-submit-button");
+
+    // Assert
+    expect(component.saving).toBeTrue();
+    expect(component.notice).toContain("SMTP server");
+    expect(usersApiMock.inviteUserEndpointApiAuthInvitationsPost).toHaveBeenCalledTimes(1);
+    expect(submitButton?.disabled).toBeTrue();
+    expect(submitButton?.getAttribute("aria-busy")).toBe("true");
+    expect(submitButton?.querySelector("mat-spinner")).not.toBeNull();
+    expect(submitButton?.textContent).toContain("Sending invitation");
+    expect(native.querySelector('[role="status"]')).not.toBeNull();
+
+    pendingInvitation.next({ delivered: true, manual_link: null });
+    pendingInvitation.complete();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.saving).toBeFalse();
+    expect(dialogRefMock.close).toHaveBeenCalled();
+  });
+
+  it("Save_ManualInvitationCreated_KeepsDialogOpenForLinkCopy", async () => {
+    // Arrange
+    usersApiMock.inviteUserEndpointApiAuthInvitationsPost.and.returnValue(
+      of({
+        delivered: false,
+        manual_link: "https://example.test/activate?token=secret",
+      }) as never,
+    );
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    component.newUser.creationMode = "invite";
+
+    // Act
+    component.save();
+    await fixture.whenStable();
+
+    // Assert
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+    expect(component.manualLink).toContain("/activate");
+  });
+
+  it("Save_InvitationFails_KeepsDialogOpenAndShowsError", async () => {
+    // Arrange
+    usersApiMock.inviteUserEndpointApiAuthInvitationsPost.and.returnValue(
+      throwError(() => ({ error: { detail: "SMTP delivery failed." } })),
+    );
+    const fixture = TestBed.createComponent(NewUserDialogComponent);
+    const component = fixture.componentInstance;
+    component.newUser.name = "Alice";
+    component.newUser.email = "alice@example.com";
+    component.newUser.role = "viewer";
+    component.newUser.creationMode = "invite";
+
+    // Act
+    component.save();
+    await fixture.whenStable();
+
+    // Assert
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+    expect(component.error).toBe("SMTP delivery failed.");
   });
 });

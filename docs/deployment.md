@@ -2,6 +2,50 @@
 
 Triton Control can run as a local Compose stack or as a Kubernetes deployment.
 
+## Optional Email Delivery
+
+Email is not required. The safe default is `EMAIL_DELIVERY_MODE=disabled`, so
+closed environments need no SMTP service. Use `manual-link` to let an
+administrator generate a one-time invitation or reset URL and transfer it over
+an already trusted channel. Use `smtp` with an external relay to enable
+automatic invitations and the public forgot-password flow.
+
+Set `EMAIL_CONFIG_SOURCE=env` when Compose, Helm, or GitOps configuration is the
+source of truth; the Email settings tab is then read-only. Set it to `db` only
+when administrators should manage and persist email settings through the UI.
+
+Both enabled modes require `EMAIL_PUBLIC_APP_URL`, for example
+`https://triton-control.example.com`. It is the trusted link origin and must
+match the URL users can open. `EMAIL_SMTP_PASSWORD` belongs in Compose secrets,
+Kubernetes Secrets, an external secret operator, or Helm `app.secretEnv`.
+`EMAIL_SECRET_ENCRYPTION_KEY` is additionally required when
+`EMAIL_CONFIG_SOURCE=db` stores an SMTP password. Never commit production
+values. The chart exposes safe defaults under `app.env` and secret placeholders
+under `app.secretEnv` and does not deploy a mail server.
+
+Save database-managed SMTP settings before sending a test email. The test
+button is intentionally disabled while settings differ from the persisted
+configuration. SMTP test, invitation, and reset requests show progress because
+the bounded SMTP operation is synchronous and can take several seconds.
+
+Before switching an installation to `disabled`, cancel pending invitations that
+must no longer be usable. Disabling delivery prevents new lifecycle operations
+but does not invalidate links that were already issued.
+
+Common relay patterns (replace every placeholder with deployment-owned values):
+
+```text
+# Submission relay
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_TLS_MODE=starttls
+
+# Implicit TLS relay
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=465
+EMAIL_SMTP_TLS_MODE=tls
+```
+
 ## Docker Compose
 
 Prerequisite: Docker Desktop or another Docker engine. Host Node.js, npm, and
@@ -269,23 +313,23 @@ limited or unavailable.
 
 Minimum required for registering and health-monitoring an instance:
 
-| Triton path | Method | Requirement | Used for | If blocked |
-| --- | --- | --- | --- | --- |
-| `/v2/health/ready` | `GET` | Must have | Add/edit instance validation and readiness checks. | Saving a new or edited instance can fail, and readiness is unavailable. |
-| `/v2/health/live` | `GET` | Must have for health UI | Live health state on instance detail and dashboard. | Live status is unavailable or shown as unhealthy/unknown. |
+| Triton path        | Method | Requirement             | Used for                                            | If blocked                                                              |
+| ------------------ | ------ | ----------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `/v2/health/ready` | `GET`  | Must have               | Add/edit instance validation and readiness checks.  | Saving a new or edited instance can fail, and readiness is unavailable. |
+| `/v2/health/live`  | `GET`  | Must have for health UI | Live health state on instance detail and dashboard. | Live status is unavailable or shown as unhealthy/unknown.               |
 
 Feature-dependent paths:
 
-| Triton path | Method | Requirement | Used for | If blocked |
-| --- | --- | --- | --- | --- |
-| `/v2` | `GET` | Recommended | Triton server metadata, version, and extension summary. | Metadata and version details are unavailable. |
-| `/v2/repository/index` | `POST`, with `GET` fallback | Recommended | Model list, model state, and unavailable-model dashboard checks. | The models tab and model-state alerts are unavailable or incomplete. |
-| `/v2/models/<model>/versions/<version>/config` | `GET` | Optional | Show API/model config. | Config display is unavailable. |
-| `/v2/models/<model>/versions/<version>/infer` | `POST` | Required for inference | Inference requests from the UI/API. | Inference fails. |
-| `/v2/models/stats` | `GET` | Optional | Fallback inference timing metrics when Prometheus metrics are unavailable. | Inference metrics may show no timing source. |
-| `/v2/repository/models/<model>/load` | `POST` | Optional write action | Explicit model load. | Load action fails or should be hidden by policy. |
-| `/v2/repository/models/<model>/unload` | `POST` | Optional write action | Explicit model unload. | Unload action fails or should be hidden by policy. |
-| `/metrics` | `GET` | Optional metrics endpoint | CPU, RAM, GPU, and Prometheus inference metrics. This is often on Triton's metrics port. | Metrics show `N/A` or fall back to `/v2/models/stats` when possible. |
+| Triton path                                    | Method                      | Requirement               | Used for                                                                                 | If blocked                                                           |
+| ---------------------------------------------- | --------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `/v2`                                          | `GET`                       | Recommended               | Triton server metadata, version, and extension summary.                                  | Metadata and version details are unavailable.                        |
+| `/v2/repository/index`                         | `POST`, with `GET` fallback | Recommended               | Model list, model state, and unavailable-model dashboard checks.                         | The models tab and model-state alerts are unavailable or incomplete. |
+| `/v2/models/<model>/versions/<version>/config` | `GET`                       | Optional                  | Show API/model config.                                                                   | Config display is unavailable.                                       |
+| `/v2/models/<model>/versions/<version>/infer`  | `POST`                      | Required for inference    | Inference requests from the UI/API.                                                      | Inference fails.                                                     |
+| `/v2/models/stats`                             | `GET`                       | Optional                  | Fallback inference timing metrics when Prometheus metrics are unavailable.               | Inference metrics may show no timing source.                         |
+| `/v2/repository/models/<model>/load`           | `POST`                      | Optional write action     | Explicit model load.                                                                     | Load action fails or should be hidden by policy.                     |
+| `/v2/repository/models/<model>/unload`         | `POST`                      | Optional write action     | Explicit model unload.                                                                   | Unload action fails or should be hidden by policy.                   |
+| `/metrics`                                     | `GET`                       | Optional metrics endpoint | CPU, RAM, GPU, and Prometheus inference metrics. This is often on Triton's metrics port. | Metrics show `N/A` or fall back to `/v2/models/stats` when possible. |
 
 For a strict inference-only public Triton ingress, allow only:
 

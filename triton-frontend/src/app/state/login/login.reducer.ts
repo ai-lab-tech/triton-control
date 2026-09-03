@@ -23,6 +23,7 @@ export interface LoginState {
   error: string;
   notice: string;
   registerMode: boolean;
+  forgotPasswordAvailable: boolean;
 }
 
 const initialState: LoginState = {
@@ -32,6 +33,7 @@ const initialState: LoginState = {
   error: "",
   notice: "",
   registerMode: false,
+  forgotPasswordAvailable: false,
 };
 
 export const loginReducer = createReducer(
@@ -39,10 +41,11 @@ export const loginReducer = createReducer(
 
   on(loginPageOpened, (state) => ({ ...state, error: "", notice: "" })),
 
-  on(bootstrapStatusLoaded, (state, { oidcEnabled, needsBootstrap }) => ({
+  on(bootstrapStatusLoaded, (state, { oidcEnabled, needsBootstrap, forgotPasswordAvailable }) => ({
     ...state,
     oidcEnabled,
     needsBootstrap,
+    forgotPasswordAvailable: !!forgotPasswordAvailable,
   })),
 
   on(bootstrapStatusFailed, (state) => ({
@@ -50,6 +53,7 @@ export const loginReducer = createReducer(
     // Avoid stale OIDC UI state when bootstrap-status request fails.
     oidcEnabled: false,
     needsBootstrap: false,
+    forgotPasswordAvailable: false,
   })),
 
   on(loginWithPasswordRequested, (state) => ({ ...state, loading: true, error: "", notice: "" })),

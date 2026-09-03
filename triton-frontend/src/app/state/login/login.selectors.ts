@@ -7,4 +7,5 @@ export const {
   selectError: selectLoginError,
   selectNotice: selectLoginNotice,
   selectRegisterMode: selectLoginRegisterMode,
+  selectForgotPasswordAvailable: selectLoginForgotPasswordAvailable,
 } = loginFeature;

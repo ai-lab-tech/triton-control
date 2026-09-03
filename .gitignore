@@ -5,6 +5,7 @@ openspec/
 /values.yaml
 .agents/
 skills-lock.json
+agent/
 
 triton-backend/.venv/
 triton-backend/.env

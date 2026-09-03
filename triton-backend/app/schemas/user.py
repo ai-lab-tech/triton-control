@@ -87,6 +87,8 @@ class UserDTO(SQLModel):
     oidc_subject: Optional[str] = None
     assigned_instances: List[str]
     is_active: bool
+    account_status: str = "active"  # active | invitation_pending | approval_pending | inactive
+    credential_version: int = 0
     created_at: datetime
 
 
@@ -95,9 +97,9 @@ class CreateUserRequest(SQLModel):
     name: str
     role: str = "viewer"
     auth_provider: str = "local"
-    password: Optional[str] = None
     oidc_subject: Optional[str] = None
     assigned_instances: List[str] = Field(default_factory=list)
+    creation_mode: str = "inactive"
 
     @field_validator("name")
     @classmethod
@@ -124,9 +126,9 @@ class CreateUserRequest(SQLModel):
         return normalized
 
     @model_validator(mode="after")
-    def validate_password_if_local(self) -> "CreateUserRequest":
-        if self.auth_provider == "local":
-            validate_password_policy(self.password, required=False)
+    def validate_creation_mode(self) -> "CreateUserRequest":
+        if self.auth_provider == "local" and self.creation_mode != "inactive":
+            raise ValueError("administrator-created local users must be inactive")
         return self
 
 

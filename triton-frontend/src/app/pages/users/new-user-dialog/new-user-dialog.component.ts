@@ -3,25 +3,23 @@ import { toSignal } from "@angular/core/rxjs-interop";
 
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
-import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
+import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatSelectModule } from "@angular/material/select";
+import { firstValueFrom } from "rxjs";
+import { UsersService } from "../../../api/generated";
 
 import { Store } from "@ngrx/store";
 import { type UserRow } from "../../../state/users/users.reducer";
-import { createUserRequested } from "../../../state/users/users.actions";
+import { createUserRequested, usersPageOpened } from "../../../state/users/users.actions";
 import {
   selectUsers,
   selectUsersInstances,
   selectUsersOidcEnabled,
 } from "../../../state/users/users.selectors";
-import {
-  EMAIL_POLICY_MESSAGE,
-  isValidEmail,
-  isValidPassword,
-  PASSWORD_POLICY_MESSAGE,
-} from "../../../shared/password-policy";
+import { EMAIL_POLICY_MESSAGE, isValidEmail } from "../../../shared/password-policy";
 
 @Component({
   selector: "app-new-user-dialog",
@@ -32,6 +30,7 @@ import {
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
+    MatProgressSpinnerModule,
     MatSelectModule,
   ],
   templateUrl: "./new-user-dialog.component.html",
@@ -40,6 +39,10 @@ import {
 export class NewUserDialogComponent {
   private readonly store = inject(Store);
   private readonly dialogRef = inject(MatDialogRef<NewUserDialogComponent>);
+  private readonly usersApi = inject(UsersService);
+  private readonly dialogData = inject<{ emailLifecycleAvailable?: boolean }>(MAT_DIALOG_DATA, {
+    optional: true,
+  });
 
   readonly instances = toSignal(this.store.select(selectUsersInstances), {
     initialValue: [] as string[],
@@ -56,15 +59,21 @@ export class NewUserDialogComponent {
     email: "",
     role: "viewer",
     auth: "local" as "local" | "oidc",
-    password: "",
     instances: [] as string[],
+    creationMode: "invite" as "invite" | "inactive",
   };
   error = "";
+  manualLink = "";
+  notice = "";
+  saving = false;
+  invitationAvailable = false;
 
   constructor() {
     // Set auth method once oidcEnabled is known (may already be in store)
     const oidc = this.oidcEnabled();
     this.newUser.auth = oidc ? "oidc" : "local";
+    this.invitationAvailable = !oidc && !!this.dialogData?.emailLifecycleAvailable;
+    this.newUser.creationMode = this.invitationAvailable ? "invite" : "inactive";
   }
 
   get canSave(): boolean {
@@ -77,13 +86,6 @@ export class NewUserDialogComponent {
     if (this.emailExists(this.newUser.email)) {
       return false;
     }
-    if (
-      !this.oidcEnabled() &&
-      this.newUser.password.length > 0 &&
-      !isValidPassword(this.newUser.password)
-    ) {
-      return false;
-    }
     return this.newUser.role.trim().length > 0;
   }
 
@@ -92,6 +94,9 @@ export class NewUserDialogComponent {
   }
 
   save(): void {
+    if (this.saving) {
+      return;
+    }
     this.error = "";
     if (!this.canSave) {
       if (this.newUser.email.trim().length > 0 && !isValidEmail(this.newUser.email)) {
@@ -102,27 +107,63 @@ export class NewUserDialogComponent {
         this.error = "Email already exists.";
         return;
       }
-      if (
-        !this.oidcEnabled() &&
-        this.newUser.password.length > 0 &&
-        !isValidPassword(this.newUser.password)
-      ) {
-        this.error = PASSWORD_POLICY_MESSAGE;
-      }
       return;
     }
     const oidc = this.oidcEnabled();
+    if (!oidc && this.newUser.creationMode === "invite") {
+      if (this.invitationAvailable) {
+        void this.invite();
+        return;
+      }
+      this.newUser.creationMode = "inactive";
+    }
     this.store.dispatch(
       createUserRequested({
         name: this.newUser.name.trim(),
         email: this.newUser.email.trim(),
         role: this.newUser.role,
         auth: oidc ? "oidc" : "local",
-        password: !oidc && this.newUser.password.length > 0 ? this.newUser.password : undefined,
+        creationMode: !oidc ? "inactive" : undefined,
         instances: [...this.newUser.instances],
       }),
     );
     this.dialogRef.close();
+  }
+
+  async copyManualLink(): Promise<void> {
+    if (!this.manualLink) return;
+    await navigator.clipboard.writeText(this.manualLink);
+    this.notice = "Activation link copied. It will not be shown after this dialog closes.";
+  }
+
+  private async invite(): Promise<void> {
+    this.saving = true;
+    this.error = "";
+    this.notice = "Sending invitation… The SMTP server may take a few seconds to respond.";
+    try {
+      const response = await firstValueFrom(
+        this.usersApi.inviteUserEndpointApiAuthInvitationsPost({
+          name: this.newUser.name.trim(),
+          email: this.newUser.email.trim(),
+          role: this.newUser.role,
+          assigned_instances: [...this.newUser.instances],
+        }),
+      );
+      this.manualLink = response.manual_link ?? "";
+      this.notice = response.delivered
+        ? "Invitation email accepted by the SMTP server."
+        : "Invitation created. Transfer the activation link through a trusted channel.";
+      this.store.dispatch(usersPageOpened());
+      if (response.delivered) {
+        this.dialogRef.close();
+      }
+    } catch (error: unknown) {
+      const detail = (error as { error?: { detail?: string } })?.error?.detail;
+      this.notice = "";
+      this.error = detail || "Failed to invite user.";
+    } finally {
+      this.saving = false;
+    }
   }
 
   private emailExists(email: string): boolean {

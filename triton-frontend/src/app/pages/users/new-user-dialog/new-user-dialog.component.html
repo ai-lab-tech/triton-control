@@ -55,25 +55,15 @@
         }
       </div>
     </div>
-    @if (!oidcEnabled()) {
+    @if (!oidcEnabled() && invitationAvailable) {
       <div class="form-row">
-        <label class="field-label" for="dialog-user-password">Password (optional)</label>
+        <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
         <mat-form-field appearance="outline">
-          <input
-            id="dialog-user-password"
-            matInput
-            [(ngModel)]="newUser.password"
-            type="password"
-            autocomplete="new-password"
-            minlength="12"
-            maxlength="128"
-            placeholder="Leave empty to require self-registration"
-          />
+          <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
+            <mat-option value="invite">Invite user</mat-option>
+            <mat-option value="inactive">Create inactive account</mat-option>
+          </mat-select>
         </mat-form-field>
-        <div class="field-note">
-          If provided, passwords must be 12-128 characters, include uppercase, lowercase, digit, and
-          special character, and must not contain whitespace.
-        </div>
       </div>
     }
     <div class="form-row">
@@ -89,12 +79,38 @@
   </mat-dialog-content>
 
   <mat-dialog-actions class="dialog-actions" align="end">
+    @if (notice) {
+      <span [attr.role]="saving ? 'status' : null" [attr.aria-live]="saving ? 'polite' : null">
+        {{ notice }}
+      </span>
+    }
     @if (error) {
       <span class="dialog-error">{{ error }}</span>
     }
-    <button mat-stroked-button type="button" (click)="close()">Cancel</button>
-    <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!canSave">
-      Add user
+    @if (manualLink) {
+      <mat-form-field appearance="outline">
+        <input matInput [value]="manualLink" readonly aria-label="One-time activation link" />
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
+    }
+    <button mat-stroked-button type="button" (click)="close()" [disabled]="saving">Cancel</button>
+    <button
+      mat-flat-button
+      class="dialog-submit-button"
+      color="primary"
+      type="button"
+      (click)="save()"
+      [disabled]="!canSave || saving || !!manualLink"
+      [attr.aria-busy]="saving"
+    >
+      @if (saving) {
+        <mat-spinner class="dialog-submit-spinner" diameter="18" aria-hidden="true"></mat-spinner>
+        <span>Sending invitation…</span>
+      } @else {
+        <span>
+          {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
+        </span>
+      }
     </button>
   </mat-dialog-actions>
 </div>

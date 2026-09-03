@@ -20,7 +20,7 @@ export const createUserRequested = createAction(
     email: string;
     role: string;
     auth: "local" | "oidc";
-    password?: string;
+    creationMode?: "inactive";
     instances: string[];
   }>(),
 );

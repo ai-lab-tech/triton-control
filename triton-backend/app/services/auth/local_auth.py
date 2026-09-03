@@ -46,6 +46,7 @@ from app.schemas import (
     UserDTO,
     validate_password_policy,
 )
+from app.services.auth.email_settings import get_runtime_config
 from app.services.oidc.config import get_settings
 
 
@@ -127,6 +128,7 @@ def login(request: LoginRequest, session: Session) -> LoginResponse:
             "name": user.name,
             "role": user.role,
             "auth_provider": user.auth_provider,
+            "credential_version": user.credential_version,
         },
         expires_minutes=_parse_access_token_expiry_minutes(),
     )
@@ -141,16 +143,15 @@ def self_register(request: SelfRegisterRequest, session: Session) -> UserDTO:
     if existing:
         if existing.auth_provider != "local":
             raise ConflictError("User is configured for OIDC login")
-        has_empty_password_placeholder = bool(
-            existing.password_hash and verify_password("", existing.password_hash)
-        )
-        if existing.password_hash and not has_empty_password_placeholder:
+        if existing.password_hash or get_runtime_config(session).delivery_mode != "disabled":
             raise ConflictError("User is already registered")
 
         existing.password_hash = hash_password(request.password)
-        if (request.name or "").strip():
-            existing.name = (request.name or "").strip()
+        requested_name = (request.name or "").strip()
+        if requested_name:
+            existing.name = requested_name
         existing.is_active = True
+        existing.credential_version += 1
         return user_entity_to_dto(users.save(session, existing))
 
     name = (request.name or "").strip() or (email.split("@", 1)[0] or "User")
@@ -178,8 +179,6 @@ def register_user(
 
     email = request.email
     provider = request.auth_provider
-    raw_password = request.password or ""
-    normalized_password = raw_password if raw_password else None
 
     if provider == "oidc" and not oidc_enabled(session):
         raise BadRequestError("OIDC is disabled")
@@ -194,13 +193,9 @@ def register_user(
         name=request.name,
         role=request.role,
         auth_provider=provider,
-        password_hash=(
-            hash_password(normalized_password)
-            if provider == "local" and normalized_password
-            else None
-        ),
+        password_hash=None,
         oidc_subject=(request.oidc_subject or "").strip() or None,
         assigned_instances=request.assigned_instances,
-        is_active=True,
+        is_active=provider == "oidc",
     )
     return user_entity_to_dto(entity)

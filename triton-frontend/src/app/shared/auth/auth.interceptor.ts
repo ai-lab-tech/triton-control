@@ -22,6 +22,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     req.url.endsWith("/api/auth/login") ||
     req.url.endsWith("/api/auth/self-register") ||
     req.url.endsWith("/api/auth/bootstrap/register");
+  const isSessionProbeRequest = req.url.endsWith("/api/auth/me");
   const isAuthLogoutRequest = req.url.endsWith("/logout");
   const isErrorLogRequest = req.url.includes("/api/admin/error-logs");
 
@@ -40,6 +41,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         error instanceof HttpErrorResponse &&
         error.status === 401 &&
         !isAuthLoginLikeRequest &&
+        !isSessionProbeRequest &&
         !isAuthLogoutRequest
       ) {
         auth.clearLocalSession();

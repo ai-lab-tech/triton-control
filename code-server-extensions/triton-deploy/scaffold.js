@@ -80,7 +80,7 @@ const TEMPLATES = [
     configKind: "backend",
     configValue: "tensorrtllm",
     gpuHint: "Requires NVIDIA GPU resources and TensorRT-LLM engine artifacts.",
-    ensembleStepEligible: false,
+    ensembleStepEligible: true,
     files: [
       {
         relativePath: "1/README.md",
@@ -97,7 +97,7 @@ const TEMPLATES = [
     configKind: "backend",
     configValue: "vllm",
     gpuHint: "Requires GPU resources for typical vLLM deployments.",
-    ensembleStepEligible: false,
+    ensembleStepEligible: true,
     files: [
       {
         relativePath: "1/model.json",
@@ -146,6 +146,26 @@ const ENSEMBLE_PRESETS = [
     steps: [
       { name: "preprocess", templateId: "python" },
       { name: "model", templateId: "tensorrt" },
+      { name: "postprocess", templateId: "python" },
+    ],
+  },
+  {
+    id: "python-tensorrt-llm-python",
+    label: "Python -> TensorRT-LLM -> Python",
+    ensembleName: "pipeline",
+    steps: [
+      { name: "preprocess", templateId: "python" },
+      { name: "model", templateId: "tensorrt-llm" },
+      { name: "postprocess", templateId: "python" },
+    ],
+  },
+  {
+    id: "python-vllm-python",
+    label: "Python -> vLLM -> Python",
+    ensembleName: "pipeline",
+    steps: [
+      { name: "preprocess", templateId: "python" },
+      { name: "model", templateId: "vllm" },
       { name: "postprocess", templateId: "python" },
     ],
   },

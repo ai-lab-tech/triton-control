@@ -282,6 +282,219 @@
         }
       }
     },
+    "/api/auth/invitations/inspect": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Inspect Invitation Endpoint",
+        "operationId": "inspect_invitation_endpoint_api_auth_invitations_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenInspectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenInspectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/activate": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Activate Invitation Endpoint",
+        "operationId": "activate_invitation_endpoint_api_auth_invitations_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteLifecycleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Activate Invitation Endpoint Api Auth Invitations Activate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Forgot Password Endpoint",
+        "operationId": "forgot_password_endpoint_api_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeutralRecoveryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-resets/inspect": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Inspect Reset Endpoint",
+        "operationId": "inspect_reset_endpoint_api_auth_password_resets_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenInspectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenInspectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-resets/complete": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Complete Reset Endpoint",
+        "operationId": "complete_reset_endpoint_api_auth_password_resets_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteLifecycleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Complete Reset Endpoint Api Auth Password Resets Complete Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/settings": {
       "get": {
         "tags": [
@@ -422,6 +635,312 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/invitations": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Invite User Endpoint",
+        "operationId": "invite_user_endpoint_api_auth_invitations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleIssueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/invitations/{user_id}/reissue": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Reissue Invitation Endpoint",
+        "operationId": "reissue_invitation_endpoint_api_auth_invitations__user_id__reissue_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleIssueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/{user_id}": {
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Revoke Invitation Endpoint",
+        "operationId": "revoke_invitation_endpoint_api_auth_invitations__user_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Revoke Invitation Endpoint Api Auth Invitations  User Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-resets": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Admin Reset Endpoint",
+        "operationId": "admin_reset_endpoint_api_auth_password_resets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleIssueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/email-settings": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Email Settings Endpoint",
+        "operationId": "get_email_settings_endpoint_api_auth_email_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSettingsDTO"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update Email Settings Endpoint",
+        "operationId": "update_email_settings_endpoint_api_auth_email_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEmailSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSettingsDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/email-settings/test": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Test Email Endpoint",
+        "operationId": "test_email_endpoint_api_auth_email_settings_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailOperationResponse"
                 }
               }
             }
@@ -2890,6 +3409,19 @@
   },
   "components": {
     "schemas": {
+      "AdminResetRequest": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "AdminResetRequest"
+      },
       "ArgoWorkflowsStatusResponse": {
         "properties": {
           "enabled": {
@@ -3103,6 +3635,26 @@
         "type": "object",
         "title": "CodeServerDeploymentNavigationResponse",
         "description": "One-shot pending deployment navigation target for the current user."
+      },
+      "CompleteLifecycleRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 20,
+            "title": "Token"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "CompleteLifecycleRequest"
       },
       "CreateCodeServerRequest": {
         "properties": {
@@ -3544,17 +4096,6 @@
             "title": "Auth Provider",
             "default": "local"
           },
-          "password": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Password"
-          },
           "oidc_subject": {
             "anyOf": [
               {
@@ -3572,6 +4113,11 @@
             },
             "type": "array",
             "title": "Assigned Instances"
+          },
+          "creation_mode": {
+            "type": "string",
+            "title": "Creation Mode",
+            "default": "inactive"
           }
         },
         "type": "object",
@@ -3737,6 +4283,193 @@
         "title": "DeploymentResponse",
         "description": "Response after Kubernetes resources are applied."
       },
+      "EmailOperationResponse": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "status",
+          "message"
+        ],
+        "title": "EmailOperationResponse"
+      },
+      "EmailSettingsDTO": {
+        "properties": {
+          "config_source": {
+            "type": "string",
+            "enum": [
+              "db",
+              "env"
+            ],
+            "title": "Config Source"
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "manual-link",
+              "smtp"
+            ],
+            "title": "Delivery Mode",
+            "default": "disabled"
+          },
+          "smtp_host": {
+            "type": "string",
+            "title": "Smtp Host",
+            "default": ""
+          },
+          "smtp_port": {
+            "type": "integer",
+            "title": "Smtp Port",
+            "default": 587
+          },
+          "smtp_tls_mode": {
+            "type": "string",
+            "enum": [
+              "starttls",
+              "tls",
+              "none"
+            ],
+            "title": "Smtp Tls Mode",
+            "default": "starttls"
+          },
+          "smtp_allow_insecure": {
+            "type": "boolean",
+            "title": "Smtp Allow Insecure",
+            "default": false
+          },
+          "smtp_username": {
+            "type": "string",
+            "title": "Smtp Username",
+            "default": ""
+          },
+          "smtp_password_configured": {
+            "type": "boolean",
+            "title": "Smtp Password Configured",
+            "default": false
+          },
+          "sender_email": {
+            "type": "string",
+            "title": "Sender Email",
+            "default": ""
+          },
+          "sender_name": {
+            "type": "string",
+            "title": "Sender Name",
+            "default": "Triton Control"
+          },
+          "public_app_url": {
+            "type": "string",
+            "title": "Public App Url",
+            "default": ""
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "invite_expiry_minutes": {
+            "type": "integer",
+            "title": "Invite Expiry Minutes",
+            "default": 1440
+          },
+          "reset_expiry_minutes": {
+            "type": "integer",
+            "title": "Reset Expiry Minutes",
+            "default": 30
+          },
+          "connect_timeout_seconds": {
+            "type": "integer",
+            "title": "Connect Timeout Seconds",
+            "default": 10
+          },
+          "operation_timeout_seconds": {
+            "type": "integer",
+            "title": "Operation Timeout Seconds",
+            "default": 15
+          },
+          "invite_subject": {
+            "type": "string",
+            "title": "Invite Subject",
+            "default": "You are invited to Triton Control"
+          },
+          "invite_text_template": {
+            "type": "string",
+            "title": "Invite Text Template",
+            "default": ""
+          },
+          "invite_html_template": {
+            "type": "string",
+            "title": "Invite Html Template",
+            "default": ""
+          },
+          "reset_subject": {
+            "type": "string",
+            "title": "Reset Subject",
+            "default": "Reset your Triton Control password"
+          },
+          "reset_text_template": {
+            "type": "string",
+            "title": "Reset Text Template",
+            "default": ""
+          },
+          "reset_html_template": {
+            "type": "string",
+            "title": "Reset Html Template",
+            "default": ""
+          },
+          "last_status": {
+            "type": "string",
+            "title": "Last Status",
+            "default": "not_tested"
+          },
+          "last_status_message": {
+            "type": "string",
+            "title": "Last Status Message",
+            "default": ""
+          },
+          "last_status_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status At"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
+          "forgot_password_available": {
+            "type": "boolean",
+            "title": "Forgot Password Available",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "config_source"
+        ],
+        "title": "EmailSettingsDTO"
+      },
       "ErrorEventDTO": {
         "properties": {
           "id": {
@@ -3847,6 +4580,19 @@
           "created_at"
         ],
         "title": "ErrorEventDTO"
+      },
+      "ForgotPasswordRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ForgotPasswordRequest"
       },
       "FrontendErrorEventRequest": {
         "properties": {
@@ -4118,6 +4864,81 @@
         "type": "object",
         "title": "InstanceS3ConfigDTO"
       },
+      "InviteUserRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "viewer"
+          },
+          "assigned_instances": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assigned Instances"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "name"
+        ],
+        "title": "InviteUserRequest"
+      },
+      "LifecycleIssueResponse": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "manual-link",
+              "smtp"
+            ],
+            "title": "Delivery Mode"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "delivered": {
+            "type": "boolean",
+            "title": "Delivered",
+            "default": false
+          },
+          "manual_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "delivery_mode",
+          "expires_at"
+        ],
+        "title": "LifecycleIssueResponse"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -4291,6 +5112,17 @@
           "status"
         ],
         "title": "ModelRepositoryActionResponse"
+      },
+      "NeutralRecoveryResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "If the account is eligible, password reset instructions will be sent."
+          }
+        },
+        "type": "object",
+        "title": "NeutralRecoveryResponse"
       },
       "OidcSettingsDTO": {
         "properties": {
@@ -4824,6 +5656,85 @@
         ],
         "title": "SelfRegisterRequest"
       },
+      "TestEmailRequest": {
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipient"
+        ],
+        "title": "TestEmailRequest"
+      },
+      "TokenInspectionRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 20,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "TokenInspectionRequest"
+      },
+      "TokenInspectionResponse": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "invite",
+                  "password_reset"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid"
+        ],
+        "title": "TokenInspectionResponse"
+      },
       "TritonInstanceDTO": {
         "properties": {
           "id": {
@@ -5099,6 +6010,153 @@
           "name"
         ],
         "title": "TritonRepositoryModelDTO"
+      },
+      "UpdateEmailSettingsRequest": {
+        "properties": {
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "manual-link",
+              "smtp"
+            ],
+            "title": "Delivery Mode",
+            "default": "disabled"
+          },
+          "smtp_host": {
+            "type": "string",
+            "title": "Smtp Host",
+            "default": ""
+          },
+          "smtp_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Smtp Port",
+            "default": 587
+          },
+          "smtp_tls_mode": {
+            "type": "string",
+            "enum": [
+              "starttls",
+              "tls",
+              "none"
+            ],
+            "title": "Smtp Tls Mode",
+            "default": "starttls"
+          },
+          "smtp_allow_insecure": {
+            "type": "boolean",
+            "title": "Smtp Allow Insecure",
+            "default": false
+          },
+          "smtp_username": {
+            "type": "string",
+            "title": "Smtp Username",
+            "default": ""
+          },
+          "smtp_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Password"
+          },
+          "clear_smtp_password": {
+            "type": "boolean",
+            "title": "Clear Smtp Password",
+            "default": false
+          },
+          "sender_email": {
+            "type": "string",
+            "title": "Sender Email",
+            "default": ""
+          },
+          "sender_name": {
+            "type": "string",
+            "title": "Sender Name",
+            "default": "Triton Control"
+          },
+          "public_app_url": {
+            "type": "string",
+            "title": "Public App Url",
+            "default": ""
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
+          },
+          "invite_expiry_minutes": {
+            "type": "integer",
+            "maximum": 10080.0,
+            "minimum": 5.0,
+            "title": "Invite Expiry Minutes",
+            "default": 1440
+          },
+          "reset_expiry_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Reset Expiry Minutes",
+            "default": 30
+          },
+          "connect_timeout_seconds": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Connect Timeout Seconds",
+            "default": 10
+          },
+          "operation_timeout_seconds": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Operation Timeout Seconds",
+            "default": 15
+          },
+          "invite_subject": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Invite Subject",
+            "default": "You are invited to Triton Control"
+          },
+          "invite_text_template": {
+            "type": "string",
+            "title": "Invite Text Template",
+            "default": ""
+          },
+          "invite_html_template": {
+            "type": "string",
+            "title": "Invite Html Template",
+            "default": ""
+          },
+          "reset_subject": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Reset Subject",
+            "default": "Reset your Triton Control password"
+          },
+          "reset_text_template": {
+            "type": "string",
+            "title": "Reset Text Template",
+            "default": ""
+          },
+          "reset_html_template": {
+            "type": "string",
+            "title": "Reset Html Template",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "UpdateEmailSettingsRequest"
       },
       "UpdateInstanceS3Request": {
         "properties": {
@@ -5481,6 +6539,16 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "account_status": {
+            "type": "string",
+            "title": "Account Status",
+            "default": "active"
+          },
+          "credential_version": {
+            "type": "integer",
+            "title": "Credential Version",
+            "default": 0
           },
           "created_at": {
             "type": "string",

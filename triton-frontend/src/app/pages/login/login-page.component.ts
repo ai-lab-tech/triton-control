@@ -30,6 +30,7 @@ import {
 } from "../../shared/password-policy";
 import {
   selectLoginError,
+  selectLoginForgotPasswordAvailable,
   selectLoginLoading,
   selectLoginNeedsBootstrap,
   selectLoginNotice,
@@ -76,6 +77,10 @@ export class LoginPageComponent {
   readonly registerMode = toSignal(this.store.select(selectLoginRegisterMode), {
     initialValue: false,
   });
+  readonly forgotPasswordAvailable = toSignal(
+    this.store.select(selectLoginForgotPasswordAvailable),
+    { initialValue: false },
+  );
 
   // Computed from store signals + session signals
   readonly isPendingApproval = computed(() => this.isLoggedIn() && !this.accessAllowed());

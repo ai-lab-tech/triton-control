@@ -5,6 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  ENSEMBLE_PRESETS,
   TEMPLATES,
   normalizeTritonModelName,
   scaffoldEnsembleRepository,
@@ -32,6 +33,21 @@ test("template registry includes required model types and config metadata", () =
   assert.equal(byId.python.configValue, "python");
   assert.equal(byId.onnx.configKind, "platform");
   assert.equal(byId.onnx.configValue, "onnxruntime_onnx");
+  assert.equal(byId["tensorrt-llm"].ensembleStepEligible, true);
+  assert.equal(byId.vllm.ensembleStepEligible, true);
+});
+
+test("ensemble presets include TensorRT-LLM and vLLM pipelines", () => {
+  const byId = Object.fromEntries(ENSEMBLE_PRESETS.map((preset) => [preset.id, preset]));
+
+  assert.deepEqual(
+    byId["python-tensorrt-llm-python"].steps.map((step) => step.templateId),
+    ["python", "tensorrt-llm", "python"],
+  );
+  assert.deepEqual(
+    byId["python-vllm-python"].steps.map((step) => step.templateId),
+    ["python", "vllm", "python"],
+  );
 });
 
 test("single Python scaffold creates config and model.py in version folder", () => {
@@ -102,5 +118,25 @@ test("ensemble scaffold creates child models and ensemble scheduling references"
   assert.match(ensembleConfig, /model_name: "preprocess"/);
   assert.match(ensembleConfig, /model_name: "score"/);
   assert.match(ensembleConfig, /model_name: "postprocess"/);
-  assert.equal(templateById("vllm").ensembleStepEligible, false);
+  assert.equal(templateById("tensorrt-llm").ensembleStepEligible, true);
+  assert.equal(templateById("vllm").ensembleStepEligible, true);
+});
+
+test("ensemble scaffold accepts TensorRT-LLM and vLLM steps", () => {
+  for (const templateId of ["tensorrt-llm", "vllm"]) {
+    const targetFolder = path.join(tempRepository(`ensemble-${templateId}`), "repo");
+
+    scaffoldEnsembleRepository({
+      targetFolder,
+      ensembleName: `${templateId} pipeline`,
+      steps: [
+        { name: "preprocess", templateId: "python" },
+        { name: "model", templateId },
+        { name: "postprocess", templateId: "python" },
+      ],
+    });
+
+    const config = fs.readFileSync(path.join(targetFolder, "model", "config.pbtxt"), "utf8");
+    assert.match(config, new RegExp(`backend: "${templateById(templateId).configValue}"`));
+  }
 });

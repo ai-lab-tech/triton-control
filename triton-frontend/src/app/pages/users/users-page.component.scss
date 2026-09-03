@@ -155,6 +155,18 @@ table {
   justify-content: center;
 }
 
+.reset-password-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 9.5rem;
+}
+
+.reset-password-spinner {
+  --mdc-circular-progress-active-indicator-color: currentColor;
+}
+
 @media (max-width: 900px) {
   .span-two {
     grid-column: auto;

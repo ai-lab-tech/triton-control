@@ -17,9 +17,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import update
+from sqlmodel import Session, col, select
 
-from app.db.entities import UserEntity
+from app.db.entities import AccountLifecycleTokenEntity, UserEntity
 
 
 def count(session: Session) -> int:
@@ -70,6 +72,18 @@ def save(session: Session, user: UserEntity, *, refresh: bool = True) -> UserEnt
 
 
 def delete(session: Session, user: UserEntity) -> None:
+    user_id = user.id
+    if user_id is not None:
+        # Tokens issued for this account become meaningless once the account is
+        # removed and otherwise prevent deletion through their foreign key.
+        session.exec(sa_delete(AccountLifecycleTokenEntity).where(col(AccountLifecycleTokenEntity.user_id) == user_id))
+        # Keep tokens issued by this administrator valid, but detach their
+        # optional audit reference before removing the administrator.
+        session.exec(
+            update(AccountLifecycleTokenEntity)
+            .where(col(AccountLifecycleTokenEntity.created_by_user_id) == user_id)
+            .values(created_by_user_id=None)
+        )
     session.delete(user)
     session.commit()
 

@@ -213,6 +213,9 @@ data types before deploying. The scaffold defaults are intentionally generic.
 
 Ensemble scaffolding creates child model folders plus a separate ensemble model
 folder with `platform: "ensemble"` and editable `ensemble_scheduling` maps.
+Preset pipelines are available for ONNX Runtime, TensorRT, TensorRT-LLM, and
+vLLM models with Python preprocessing and postprocessing steps. All supported
+model templates can also be selected in a custom ordered pipeline.
 
 Example ensemble output:
 

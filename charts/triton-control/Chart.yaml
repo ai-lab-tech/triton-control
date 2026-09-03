@@ -2,8 +2,8 @@ apiVersion: v2
 name: triton-control
 description: Triton Control frontend and backend with optional Argo Workflows.
 type: application
-version: 1.2.2
-appVersion: "1.2.2"
+version: 1.2.3
+appVersion: "1.2.3"
 dependencies:
   - name: argo-workflows
     alias: argoWorkflows

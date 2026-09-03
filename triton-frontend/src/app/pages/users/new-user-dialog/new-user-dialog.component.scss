@@ -69,3 +69,15 @@
   font-size: 0.85rem;
   margin-right: auto;
 }
+
+.dialog-submit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 10.5rem;
+}
+
+.dialog-submit-spinner {
+  --mdc-circular-progress-active-indicator-color: currentColor;
+}
