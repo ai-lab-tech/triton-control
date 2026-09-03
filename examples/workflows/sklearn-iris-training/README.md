@@ -1,89 +1,124 @@
 # scikit-learn Iris Training Workflow
 
-Train a small scikit-learn Iris classifier with Argo Workflows and store the
-training script, trained model, and evaluation results in S3-compatible object
-storage. The workflow uses ephemeral container storage and does not mount a
-code-server workspace PVC.
+This example follows a small data-science loop in Triton Control: develop a
+training script in a Development workspace, upload it to S3-compatible object
+storage, then run it as an Argo Workflow. The workflow downloads the script,
+trains an Iris classifier, and stores the model and evaluation results back in
+the object store.
 
-## Files
-
-| File | Use |
-| --- | --- |
-| `train_iris.py` | Training script uploaded to S3 and downloaded by Argo |
-| `workflow.yaml` | Argo Workflow with native S3 input and output artifacts |
-| `screenshots/` | UI screenshots for workspace and Argo Workflow submission |
 
 ## Prerequisites
 
 - Argo Workflows is enabled in Triton Control.
-- An S3-compatible bucket already exists.
-- The S3 credentials can read the training-script object and write below the
-  selected output prefix.
-- `train_iris.py` is available in a development workspace or another machine
-  with an S3 client.
+- You have an existing S3-compatible bucket and credentials that can read the
+  uploaded training script and write below the selected output prefix.
 
-## 1. Configure the Workflow S3 Secret
+
+## 1. Create a Development Workspace
+
+In Triton Control, open **Development** and create a CPU-only workspace for
+writing and testing the training code:
+
+| Field | Value |
+| --- | --- |
+| Triton development image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Image already has Development installed | Disabled |
+| Workspace storage | At least `5Gi` |
+| GPU count | `0` |
+
+When the workspace is ready, open code-server from **Development**. Triton
+Control installs the Development runtime because the Python image does not
+include code-server.
+
+![Create a Triton Control workspace](screenshots/create-workspace-v2.png)
+
+## 2. Create the Training Code in the Workspace
+
+Copy or upload only `train_iris.py` and `workflow.yaml` from this example into
+`/workspace/sklearn-iris-training`, then open that directory in code-server.
+`train_iris.py` is the training code that the workflow will execute. It trains
+a `StandardScaler` plus `LogisticRegression` pipeline on
+`sklearn.datasets.load_iris` and writes these files to its output directory:
+
+```text
+iris-logreg-model.joblib
+metrics.json
+accuracy.txt
+labels.txt
+```
+
+Edit the script in the workspace to try a different model, feature processing,
+or training arguments. Keep the output files, or update the validation and
+artifact expectations in `workflow.yaml` to match your own script.
+
+## 3. Install, Configure, and Use an S3 Client
+
+The workspace needs an S3 client to upload the training script. You can install
+and configure the optional [S3/R2 Explorer](../../../docs/development-workspaces.md#optional-install-s3r2-explorer)
+extension, or use the AWS CLI from the code-server terminal.
+
+For the AWS CLI path, run:
+
+```bash
+python -m pip install --user awscli
+aws configure --profile workflow-training
+```
+
+At the prompts, enter the access key ID, secret access key, bucket region, and
+your preferred output format. For an S3-compatible provider such as Cloudflare
+R2, use that provider's S3 API credentials; the endpoint is supplied when you
+upload. Do not put these credential values in `workflow.yaml`.
+
+From the example directory in the workspace, upload the script. Replace the
+endpoint and bucket with your own values. In the command,
+`https://<your-s3-endpoint>` is the S3 API endpoint;
+`s3://<your-s3-bucket>/...` is the destination made of the bucket name and
+object key.
+
+```bash
+cd /workspace/sklearn-iris-training
+aws --profile workflow-training \
+  --endpoint-url https://<your-s3-endpoint> \
+  s3 cp train_iris.py \
+  s3://<your-s3-bucket>/workflows/sklearn-iris-training/train_iris.py
+```
+
+## 4. Configure the Workflow S3 Secret
 
 In Triton Control, open **Workflows**, select **Configure S3 Secrets**, and add
-the Access Key ID and Secret Access Key for the bucket. Triton Control creates
-an opaque Kubernetes Secret in the Argo Workflow namespace.
+the access key ID and secret access key that can read the script and write the
+workflow outputs. Triton Control creates an opaque Kubernetes Secret in the
+Argo Workflow namespace; this is separate from the AWS CLI profile saved in
+the Development workspace.
 
-Copy the generated **Secret** name shown in the credentials dialog. Only this
-name is placed in `workflow.yaml`; never put either credential value in the
-manifest.
-
-The generated Secret contains the keys expected by this example:
+Copy the generated **Secret** name shown in the credentials dialog. The
+workflow uses only this name; it never contains the credential values. The
+generated Secret has the keys expected by this example:
 
 ```text
 access-key-id
 secret-access-key
 ```
 
-## 2. Upload the Training Script
+## 5. Configure the Workflow in the Workspace
 
-Open code-server from **Development** and upload `train_iris.py` with your
-configured S3 client. For example, with the AWS CLI and credentials supplied by
-the client environment or profile:
-
-```bash
-aws --endpoint-url https://s3.example.com \
-  s3 cp train_iris.py \
-  s3://triton-artifacts/workflows/sklearn-iris-training/train_iris.py
-```
-
-The optional [S3/R2 Explorer](../../../docs/development-workspaces.md#optional-install-s3r2-explorer)
-can upload the file from the code-server Explorer instead. Whichever client is
-used, the object key must match the workflow's `s3-script-key` parameter.
-
-![Create a Triton Control workspace](screenshots/create-workspace.png)
-
-## 3. Configure the Workflow
-
-Update the parameters under `spec.arguments.parameters` in `workflow.yaml`:
+Back in code-server, open `/workspace/sklearn-iris-training/workflow.yaml` and
+update the parameters under `spec.arguments.parameters`:
 
 | Parameter | Example | Meaning |
 | --- | --- | --- |
 | `s3-endpoint` | `s3.example.com` | S3 API host, optionally with a port; omit `https://` |
 | `s3-region` | `us-east-1` | Bucket region |
 | `s3-bucket` | `triton-artifacts` | Existing bucket name |
-| `s3-credentials-secret` | `workflow-s3-training-a1b2c3` | Secret name displayed by Triton Control |
-| `s3-script-key` | `workflows/sklearn-iris-training/train_iris.py` | Uploaded source object |
+| `s3-credentials-secret` | `workflow-s3-training-a1b2c3` | Secret name from **Configure S3 Secrets** |
+| `s3-script-key` | `workflows/sklearn-iris-training/train_iris.py` | Object uploaded in step 3 |
 | `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
 
-The manifest uses TLS for S3 by default. For a private endpoint signed by a
-custom CA, create a Secret containing the CA certificate in the Workflow
-namespace and add this selector to both `s3` blocks:
-
-```yaml
-caSecret:
-  name: workflow-s3-ca
-  key: ca.crt
-```
 
 For an intentionally plain-HTTP development endpoint, add `insecure: true` to
 both `s3` blocks. Do not use that setting for an HTTPS endpoint.
 
-## 4. Submit the Workflow
+## 6. Submit the Workflow
 
 In Argo Workflows:
 
@@ -104,7 +139,7 @@ Python packages and writes all training results to `/tmp/outputs`. After the
 container exits, the executor uploads that directory to S3. A missing source
 object, invalid credentials, or a failed upload makes the Workflow fail.
 
-## 5. Check the Outputs
+## 7. Check the Outputs
 
 Each run gets its own prefix derived from the generated Workflow name:
 
@@ -121,13 +156,3 @@ The Argo Workflow also exposes `accuracy` as an output parameter and records
 the S3 location as the `training-results` output artifact.
 
 ![Successful Argo Workflow run](screenshots/argo-workflow-succeeded.png)
-
-## Optional Local Smoke Test
-
-The same training script can run locally without S3 or Argo:
-
-```bash
-python -m pip install scikit-learn==1.5.2 joblib==1.4.2
-python train_iris.py --output-dir /tmp/iris-training
-ls -l /tmp/iris-training
-```
