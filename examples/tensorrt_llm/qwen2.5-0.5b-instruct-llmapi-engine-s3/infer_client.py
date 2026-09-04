@@ -22,8 +22,6 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
     input_ids = tokenizer.encode(args.prompt, add_special_tokens=True)
-    end_id = tokenizer.eos_token_id
-    pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else end_id
 
     endpoint = (
         f"http://{args.url}/v2/models/qwen2_5_0_5b_instruct_llmapi_engine/infer"
@@ -47,18 +45,6 @@ def main():
                 "shape": [1, 1],
                 "datatype": "INT32",
                 "data": [[args.max_tokens]],
-            },
-            {
-                "name": "end_id",
-                "shape": [1, 1],
-                "datatype": "INT32",
-                "data": [[end_id]],
-            },
-            {
-                "name": "pad_id",
-                "shape": [1, 1],
-                "datatype": "INT32",
-                "data": [[pad_id]],
             },
         ],
         "outputs": [{"name": "output_ids"}, {"name": "sequence_length"}],
