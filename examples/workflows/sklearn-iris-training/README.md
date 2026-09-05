@@ -21,7 +21,7 @@ writing and testing the training code:
 
 | Field | Value |
 | --- | --- |
-| Triton development image | `nvcr.io/nvidia/tritonserver:25.02-py3` |
+| Triton development image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `5Gi` |
 | GPU count | `0` |
@@ -34,18 +34,14 @@ include code-server.
 
 ## 2. Create the Training Code in the Workspace
 
-Copy or upload only `train_iris.py` and `workflow.yaml` from this example into
-`/workspace/sklearn-iris-training`, then open that directory in code-server.
-`train_iris.py` is the training code that the workflow will execute. It trains
-a `StandardScaler` plus `LogisticRegression` pipeline on
-`sklearn.datasets.load_iris` and writes these files to its output directory:
+In the workspace, create a directory for the example: `/workspace/sklearn-iris-training`
 
-```text
-iris-logreg-model.joblib
-metrics.json
-accuracy.txt
-labels.txt
-```
+Then copy or upload `train_iris.py` and `workflow.yaml` from this example into
+that directory. `train_iris.py` is the training code that the workflow will execute. It trains
+a `StandardScaler` plus `LogisticRegression` pipeline on
+`sklearn.datasets.load_iris` and writes the training results to its output
+directory.
+
 
 Edit the script in the workspace to try a different model, feature processing,
 or training arguments. Keep the output files, or update the validation and
@@ -87,9 +83,7 @@ aws --profile workflow-training \
 
 In Triton Control, open **Workflows**, select **Configure S3 Secrets**, and add
 the access key ID and secret access key that can read the script and write the
-workflow outputs. Triton Control creates an opaque Kubernetes Secret in the
-Argo Workflow namespace; this is separate from the AWS CLI profile saved in
-the Development workspace.
+workflow outputs. Triton Control creates an Kubernetes Secret.
 
 Copy the generated **Secret** name shown in the credentials dialog. The
 workflow uses only this name; it never contains the credential values. The
