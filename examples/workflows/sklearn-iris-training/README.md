@@ -124,10 +124,9 @@ aws --profile workflow-training \
 
 ## 4. Configure the Workflow S3 Secret
 
-In **Workflows → Configure S3 Secrets → Add S3 Credentials**, choose an existing
-S3 profile under **Credential source**, enter a name, and save. Triton Control
-creates a linked Secret using the profile's credentials and CA certificate.
-Manual entry and optional CA upload/paste are also available; no kubectl is needed.
+In **Workflows → Configure S3 Secrets**, select a saved **S3 profile** and click
+**Link profile**. Triton Control creates the Secret using the profile's credentials
+and CA certificate; no manual credentials or kubectl access are needed.
 
 Profile changes automatically update linked Secrets without changing their names.
 The dialog shows the linked profile, last sync time, and any sync error; the profile
@@ -163,7 +162,7 @@ update the parameters under `spec.arguments.parameters`:
 | `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
 
 
-For HTTPS with a custom CA, add the certificate in step 4 and uncomment
+For HTTPS with a custom CA, save the certificate in the selected S3 profile and uncomment
 `caSecret` in **both** `s3` blocks in `workflow.yaml`:
 
 ```yaml
