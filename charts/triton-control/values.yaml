@@ -124,6 +124,10 @@ development:
   codeServer:
     # Pin code-server for reproducible Development workspaces.
     version: "4.125.0"
+    # ConfigMap in each workspace namespace containing a PEM CA bundle.
+    # Enables Node certificate verification when configured; applies to new workspaces.
+    extraCaConfigMap: ""
+    extraCaKey: rootCA.pem
 
 postgresql:
   enabled: true

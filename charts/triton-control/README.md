@@ -130,6 +130,61 @@ If `postgresql.enabled` is `true`, the chart injects `DATABASE_URL` into the app
 
 For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for example `256m` or `1g`).
 
+## Development Workspace HTTPS Certificates
+
+Code-server extensions can connect to any S3-compatible HTTPS endpoint. When
+an endpoint uses a private or custom certificate authority, provide its public
+CA certificate or PEM CA bundle. Certificates issued by an authority already
+trusted by Node do not require an extra CA bundle.
+
+Create a ConfigMap in the workspace namespace, replacing the file path with
+your CA bundle:
+
+```bash
+kubectl -n triton-control create configmap s3-custom-ca \
+  --from-file=ca-bundle.pem=/path/to/ca-bundle.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Configure your values file:
+
+```yaml
+development:
+  codeServer:
+    extraCaConfigMap: s3-custom-ca
+    extraCaKey: ca-bundle.pem
+```
+
+The backend mounts this ConfigMap read-only in newly created workspace pods and
+sets `NODE_EXTRA_CA_CERTS` to the mounted PEM file. With a CA configured, Node TLS
+certificate verification is enabled. Include every required private CA in the PEM
+bundle. The ConfigMap must exist in each namespace where workspaces are created.
+Use public CA certificates only; private keys are not needed.
+
+`NODE_EXTRA_CA_CERTS` applies only to Node.js applications, including the S3/R2
+Explorer extension. It does not configure the operating system trust store or
+other tools such as AWS CLI. To use the same mounted CA bundle with AWS CLI,
+set this variable in the code-server terminal:
+
+```bash
+export AWS_CA_BUNDLE=/etc/triton-control/code-server-ca/ca.pem
+```
+
+This export applies to the current shell and commands started from it. The chart
+does not set `AWS_CA_BUNDLE` automatically. AWS CLI uses the specified bundle for
+HTTPS verification, so it must contain the CA certificates needed by the endpoints
+you access.
+
+This requires an app image built with support for these settings as well as a
+Helm upgrade. Existing workspace StatefulSets are not updated by the Helm upgrade;
+they need the equivalent CA volume, mount and environment settings applied separately.
+After changing the CA bundle, restart workspace pods so Node reloads it.
+
+In S3/R2 Explorer, use the provider's S3 API endpoint, such as
+`https://s3.example.com`, without a bucket name. Configure path-style access
+according to the provider's requirements. The endpoint must be reachable from
+the workspace pod and its hostname must match the server certificate.
+
 ## Optional Email Lifecycle
 
 The chart defaults to `EMAIL_CONFIG_SOURCE=env` and
