@@ -124,7 +124,11 @@ development:
   codeServer:
     # Pin code-server for reproducible Development workspaces.
     version: "4.125.0"
-    # ConfigMap in each workspace namespace containing a PEM CA bundle.
+    # Public PEM CA bundle; Helm creates a ConfigMap in the release namespace.
+    # Supply inline or with --set-file development.codeServer.extraCaBundle=/path/to/ca.pem.
+    extraCaBundle: ""
+    # Alternatively, reference an existing ConfigMap in each workspace namespace.
+    # Do not combine extraCaConfigMap with extraCaBundle.
     # Enables Node certificate verification when configured; applies to new workspaces.
     extraCaConfigMap: ""
     extraCaKey: rootCA.pem

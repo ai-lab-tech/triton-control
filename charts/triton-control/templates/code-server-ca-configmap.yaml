@@ -1,0 +1,12 @@
+{{- if .Values.development.codeServer.extraCaBundle }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "triton-control.codeServerCaConfigMap" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+data:
+  {{ .Values.development.codeServer.extraCaKey | default "rootCA.pem" | quote }}: |
+    {{- .Values.development.codeServer.extraCaBundle | nindent 4 }}
+{{- end }}

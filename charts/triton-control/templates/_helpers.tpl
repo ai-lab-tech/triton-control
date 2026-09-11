@@ -47,3 +47,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "triton-control.codeServerCaConfigMap" -}}
+{{- if and .Values.development.codeServer.extraCaBundle .Values.development.codeServer.extraCaConfigMap -}}
+{{- fail "Set only one of development.codeServer.extraCaBundle or extraCaConfigMap" -}}
+{{- end -}}
+{{- if .Values.development.codeServer.extraCaBundle -}}
+{{- printf "%s-code-server-ca" (include "triton-control.fullname" . | trunc 48 | trimSuffix "-") -}}
+{{- else -}}
+{{- .Values.development.codeServer.extraCaConfigMap | default "" -}}
+{{- end -}}
+{{- end -}}

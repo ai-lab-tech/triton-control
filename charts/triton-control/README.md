@@ -137,23 +137,31 @@ an endpoint uses a private or custom certificate authority, provide its public
 CA certificate or PEM CA bundle. Certificates issued by an authority already
 trusted by Node do not require an extra CA bundle.
 
-Create a ConfigMap in the workspace namespace, replacing the file path with
-your CA bundle:
+Have Helm create the ConfigMap during installation or upgrade by passing your
+public CA bundle (keep your usual values file):
 
 ```bash
-kubectl -n triton-control create configmap s3-custom-ca \
-  --from-file=ca-bundle.pem=/path/to/ca-bundle.pem \
-  --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install triton-control ./charts/triton-control \
+  --namespace triton-control --create-namespace \
+  -f values.yaml \
+  --set-file development.codeServer.extraCaBundle=/path/to/ca-bundle.pem
 ```
 
-Configure your values file:
+Alternatively, put the PEM bundle directly in your values file:
 
 ```yaml
 development:
   codeServer:
-    extraCaConfigMap: s3-custom-ca
-    extraCaKey: ca-bundle.pem
+    extraCaBundle: |
+      -----BEGIN CERTIFICATE-----
+      ...your public CA certificate...
+      -----END CERTIFICATE-----
 ```
+
+Helm creates `<release-fullname>-code-server-ca` in the release namespace and
+configures the backend to use it. No separate `kubectl` command is needed.
+To use an existing ConfigMap instead, leave `extraCaBundle` empty and set
+`extraCaConfigMap` to its name and `extraCaKey` to its PEM data key.
 
 The backend mounts this ConfigMap read-only in newly created workspace pods and
 sets `NODE_EXTRA_CA_CERTS` to the mounted PEM file. With a CA configured, Node TLS
@@ -161,8 +169,8 @@ certificate verification is enabled. Include every required private CA in the PE
 bundle. The ConfigMap must exist in each namespace where workspaces are created.
 Use public CA certificates only; private keys are not needed.
 
-`NODE_EXTRA_CA_CERTS` applies only to Node.js applications, including the S3/R2
-Explorer extension. It does not configure the operating system trust store or
+`NODE_EXTRA_CA_CERTS` applies only to Node.js applications, including the More Connect
+extension. It does not configure the operating system trust store or
 other tools such as AWS CLI. To use the same mounted CA bundle with AWS CLI,
 set this variable in the code-server terminal:
 
@@ -180,7 +188,7 @@ Helm upgrade. Existing workspace StatefulSets are not updated by the Helm upgrad
 they need the equivalent CA volume, mount and environment settings applied separately.
 After changing the CA bundle, restart workspace pods so Node reloads it.
 
-In S3/R2 Explorer, use the provider's S3 API endpoint, such as
+In More Connect, use the provider's S3 API endpoint, such as
 `https://s3.example.com`, without a bucket name. Configure path-style access
 according to the provider's requirements. The endpoint must be reachable from
 the workspace pod and its hostname must match the server certificate.

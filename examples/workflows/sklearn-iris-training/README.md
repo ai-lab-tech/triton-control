@@ -102,18 +102,11 @@ for other compatible providers, select the addressing mode they require.
 More Connect supports HTTP and HTTPS. For HTTPS, the hostname must match the
 server certificate; the endpoint must be reachable from the workspace pod.
 
-For a private/custom CA, create a ConfigMap containing the public PEM CA bundle
-in the workspace namespace and configure these Helm values:
-
-```yaml
-development:
-  codeServer:
-    extraCaConfigMap: s3-custom-ca
-    extraCaKey: ca-bundle.pem
-```
-
-Follow the [workspace HTTPS certificate setup](../../../charts/triton-control/README.md#development-workspace-https-certificates)
-for the ConfigMap command and rollout requirements, including existing workspaces.
+For a private/custom CA, pass the public PEM bundle to Helm during installation
+or upgrade with `--set-file development.codeServer.extraCaBundle=/path/to/ca-bundle.pem`.
+Helm creates the ConfigMap and configures the workspace CA mount.
+See the [workspace HTTPS certificate setup](../../../charts/triton-control/README.md#development-workspace-https-certificates)
+for the full command and rollout requirements, including existing workspaces.
 The chart sets `NODE_EXTRA_CA_CERTS` for Node.js extensions at startup; exporting
 it in an already-open terminal does not update the running explorer. Endpoints
 with certificates already trusted by Node need no extra CA bundle.
