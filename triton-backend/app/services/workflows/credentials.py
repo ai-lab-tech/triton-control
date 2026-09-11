@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import datetime
 
+from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from app.core.crypto import decrypt_secret
@@ -44,8 +45,17 @@ def create_credential(
                 secret_access_key=decrypt_secret(profile.secret_key_enc),
                 ca_certificate=profile.ca_certificate or "",
             )
+        except ValidationError as exc:
+            if any(error["loc"] == ("ca_certificate",) for error in exc.errors(include_input=False)):
+                raise BadRequestError(
+                    "The S3 profile's CA certificate is not valid PEM. In S3 Profiles, check that it starts with "
+                    "-----BEGIN CERTIFICATE----- and ends with -----END CERTIFICATE----- (five dashes)."
+                ) from None
+            raise BadRequestError("The S3 profile requires a non-empty access key and secret key.") from None
         except ValueError:
-            raise BadRequestError("The S3 profile has invalid credentials or a malformed CA certificate") from None
+            raise BadRequestError(
+                "The S3 profile's secret key could not be read. Save it again in S3 Profiles."
+            ) from None
     namespace = _workflow_namespace()
     name = request.name.strip()
     secret_name = _secret_name(name)

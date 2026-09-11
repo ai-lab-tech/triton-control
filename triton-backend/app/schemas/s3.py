@@ -16,7 +16,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Literal, Optional
 
+from pydantic import field_validator
 from sqlmodel import SQLModel
+
+from app.schemas.certificates import validate_ca_certificate
 
 
 class S3EntryDTO(SQLModel):
@@ -71,6 +74,11 @@ class CreateS3ProfileRequest(SQLModel):
     force_path_style: bool = True
     ca_certificate: str = ""
 
+    @field_validator("ca_certificate")
+    @classmethod
+    def validate_ca(cls, value: str) -> str:
+        return validate_ca_certificate(value)
+
 
 class UpdateS3ProfileRequest(SQLModel):
     name: Optional[str] = None
@@ -82,3 +90,8 @@ class UpdateS3ProfileRequest(SQLModel):
     prefix: Optional[str] = None
     force_path_style: Optional[bool] = None
     ca_certificate: Optional[str] = None
+
+    @field_validator("ca_certificate")
+    @classmethod
+    def validate_ca(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else validate_ca_certificate(value)

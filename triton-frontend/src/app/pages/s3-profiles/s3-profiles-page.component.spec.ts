@@ -131,6 +131,42 @@ describe("S3ProfilesPageComponent", () => {
     expect(component.messageTone()).toBe("success");
   });
 
+  it("SaveProfile_ShowsCertificateValidationErrorAndPreservesDraft", async () => {
+    const fixture = createComponent();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    component.draft = {
+      id: 0,
+      name: "dev",
+      endpoint: "https://minio:9000",
+      bucket: "models",
+      region: "us-east-1",
+      access_key: "ak",
+      secret_key: "sk",
+      prefix: "",
+      force_path_style: true,
+      ca_certificate: "----BEGIN CERTIFICATE-----",
+    };
+    const saving = component.saveProfile();
+    TestBed.inject(HttpTestingController)
+      .expectOne("http://localhost:8000/api/s3-profiles")
+      .flush(
+        {
+          detail: [
+            {
+              loc: ["body", "ca_certificate"],
+              msg: "Invalid PEM CA certificate: use five dashes.",
+            },
+          ],
+        },
+        { status: 422, statusText: "Unprocessable Entity" },
+      );
+    await saving;
+    expect(component.message()).toContain("use five dashes");
+    expect(component.messageTone()).toBe("error");
+    expect(component.draft.ca_certificate).toBe("----BEGIN CERTIFICATE-----");
+  });
+
   it("DeleteProfile_SelectedProfile_DeletesAndReloadsProfiles", async () => {
     const fixture = createComponent([
       {

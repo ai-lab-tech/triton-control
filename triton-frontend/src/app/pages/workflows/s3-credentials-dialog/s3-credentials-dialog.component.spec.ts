@@ -37,7 +37,7 @@ describe("S3CredentialsDialogComponent", () => {
 
   it("shows an empty state without manual credential fields", async () => {
     const fixture = await setup();
-    expect(fixture.nativeElement.textContent).toContain("Create an S3 profile");
+    expect(fixture.nativeElement.textContent).toContain("Create a profile on the S3 Profiles page");
     expect(fixture.nativeElement.querySelector("input, textarea")).toBeNull();
     expect(fixture.componentInstance.canCreate()).toBeFalse();
   });
@@ -57,6 +57,27 @@ describe("S3CredentialsDialogComponent", () => {
     await saving;
     expect(component.selectedProfileId).toBeNull();
     expect(component.message()).toContain("linked");
+  });
+
+  it("shows the backend save error and keeps the profile selected for retry", async () => {
+    const fixture = await setup([profile]);
+    const component = fixture.componentInstance;
+    component.selectedProfileId = 9;
+    const saving = component.createCredential();
+    http
+      .expectOne("/api/workflows/s3-credentials")
+      .flush(
+        { detail: "The CA certificate is not valid PEM. Check the five dashes." },
+        { status: 400, statusText: "Bad Request" },
+      );
+    await saving;
+    fixture.detectChanges();
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    expect(alert.textContent).toContain("Check the five dashes");
+    expect(alert.classList.contains("feedback-error")).toBeTrue();
+    expect(component.selectedProfileId).toBe(9);
+    expect(component.canCreate()).toBeTrue();
+    expect(component.credentials()).toEqual([]);
   });
 
   it("prevents linking the same profile again and shows sync errors", async () => {

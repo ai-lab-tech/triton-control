@@ -38,6 +38,13 @@ class WorkflowsTests(unittest.TestCase):
         args = dict(name="test", access_key_id="key", secret_access_key="secret")
         self.assertEqual(request(**args).ca_certificate, "")
         bundle = cert + cert
+        from app.schemas.s3 import CreateS3ProfileRequest, UpdateS3ProfileRequest
+
+        self.assertEqual(CreateS3ProfileRequest(
+            name="test", endpoint="https://minio", bucket="models", access_key="key", secret_key="secret",
+            ca_certificate=bundle,
+        ).ca_certificate, bundle.strip())
+        self.assertEqual(UpdateS3ProfileRequest(ca_certificate=bundle).ca_certificate, bundle.strip())
         self.assertEqual(request(**args, ca_certificate=bundle).ca_certificate, bundle.strip())
         for invalid in ["not a certificate", "-----BEGIN CERTIFICATE-----\nbad\n-----END CERTIFICATE-----",
                         cert + "-----BEGIN PRIVATE KEY-----\nbad\n-----END PRIVATE KEY-----", "x" * 262145]:

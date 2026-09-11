@@ -56,6 +56,7 @@ export class S3CredentialsDialogComponent {
   readonly credentialsSaving = signal(false);
   readonly deletingCredentialId = signal<number | null>(null);
   readonly message = signal("");
+  readonly messageIsError = signal(false);
   readonly profilesLoading = signal(true);
   readonly profiles = signal<ProfileChoice[]>([]);
   readonly syncingCredentialId = signal<number | null>(null);
@@ -92,11 +93,13 @@ export class S3CredentialsDialogComponent {
 
   async createCredential(): Promise<void> {
     if (!this.canCreate()) {
+      this.messageIsError.set(true);
       this.message.set("Select an unlinked S3 profile.");
       return;
     }
 
     this.credentialsSaving.set(true);
+    this.messageIsError.set(false);
     this.message.set("");
     try {
       const profile = this.selectedProfile()!;
@@ -111,6 +114,7 @@ export class S3CredentialsDialogComponent {
       this.resetForm();
       await this.loadCredentials();
     } catch (error) {
+      this.messageIsError.set(true);
       this.message.set(mapApiErrorMessage(error, "Failed to create workflow S3 credential."));
     } finally {
       this.credentialsSaving.set(false);
@@ -119,6 +123,7 @@ export class S3CredentialsDialogComponent {
 
   async deleteCredential(credential: WorkflowS3CredentialDTO): Promise<void> {
     this.deletingCredentialId.set(Number(credential.id));
+    this.messageIsError.set(false);
     this.message.set("");
     try {
       await firstValueFrom(
@@ -127,6 +132,7 @@ export class S3CredentialsDialogComponent {
       this.message.set("Workflow S3 credential deleted.");
       await this.loadCredentials();
     } catch (error) {
+      this.messageIsError.set(true);
       this.message.set(mapApiErrorMessage(error, "Failed to delete workflow S3 credential."));
     } finally {
       this.deletingCredentialId.set(null);
@@ -146,9 +152,11 @@ export class S3CredentialsDialogComponent {
           {},
         ),
       );
+      this.messageIsError.set(!!result.sync_error);
       this.message.set(result.sync_error || "Workflow Secret synchronized.");
       await this.loadCredentials();
     } catch (error) {
+      this.messageIsError.set(true);
       this.message.set(mapApiErrorMessage(error, "Failed to synchronize workflow Secret."));
     } finally {
       this.syncingCredentialId.set(null);
@@ -164,6 +172,7 @@ export class S3CredentialsDialogComponent {
         ),
       );
     } catch {
+      this.messageIsError.set(true);
       this.message.set("Could not load S3 profiles. Please refresh.");
     } finally {
       this.profilesLoading.set(false);

@@ -9,7 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api import workflows_api
 from app.db.entities import S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
-from app.exceptions import ConflictError, NotFoundError
+from app.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.schemas import CreateS3ProfileRequest, UpdateS3ProfileRequest
 from app.schemas.workflows import CreateWorkflowS3CredentialRequest
 from app.services.storage import s3_profiles
@@ -200,6 +200,40 @@ class S3ProfileTests(unittest.TestCase):
                 with self.assertRaises(NotFoundError):
                     credentials.retry_sync(session, self._claims(), foreign_link.id)
                 sync.assert_not_called()
+
+    def test_LinkMalformedCaExplainsPemFormatWithoutCreatingSecret(self) -> None:
+        with self._session() as session:
+            self._create_user(session)
+            profile = s3_profiles.create_profile(session, self._claims(), CreateS3ProfileRequest(
+                name="bad-ca", endpoint="https://minio", bucket="models", access_key="key", secret_key="private-value",
+            ))
+            # Simulate a legacy profile saved before certificate validation existed.
+            row = session.get(S3ProfileEntity, profile.id)
+            row.ca_certificate = "----BEGIN CERTIFICATE-----\nbad\n-----END CERTIFICATE-----"
+            session.add(row)
+            session.commit()
+            with patch("app.services.workflows.credentials._apply_secret") as apply:
+                with self.assertRaises(BadRequestError) as raised:
+                    credentials.create_credential(CreateWorkflowS3CredentialRequest(
+                        name="bad-ca-link", s3_profile_id=profile.id,
+                    ), session, self._claims())
+                self.assertIn("five dashes", raised.exception.detail)
+                self.assertNotIn("private-value", raised.exception.detail)
+                apply.assert_not_called()
+
+    def test_ProfileRequestsRejectInvalidCertificatesAndAllowClearing(self) -> None:
+        for invalid in ["----BEGIN CERTIFICATE-----\nbad\n-----END CERTIFICATE-----",
+                        "-----BEGIN CERTIFICATE-----\nbad\n-----END CERTIFICATE-----",
+                        "-----BEGIN PRIVATE KEY-----\nbad\n-----END PRIVATE KEY-----", "x" * 262145]:
+            with self.subTest(certificate=invalid[:25]):
+                with self.assertRaises(ValueError):
+                    CreateS3ProfileRequest(name="test", endpoint="https://minio", bucket="models",
+                                           access_key="key", secret_key="secret", ca_certificate=invalid)
+                with self.assertRaises(ValueError):
+                    UpdateS3ProfileRequest(ca_certificate=invalid)
+        self.assertIsNone(UpdateS3ProfileRequest().ca_certificate)
+        self.assertIsNone(UpdateS3ProfileRequest(ca_certificate=None).ca_certificate)
+        self.assertEqual(UpdateS3ProfileRequest(ca_certificate="  ").ca_certificate, "")
 
     def test_SyncRejectsUnmanagedSecret(self) -> None:
         from kubernetes.client import V1ObjectMeta, V1Secret
