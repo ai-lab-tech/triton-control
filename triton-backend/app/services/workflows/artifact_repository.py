@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from app.db.entities import S3ProfileEntity, WorkflowS3CredentialEntity
 from app.exceptions import BadGatewayError
 from app.services.kubernetes_client import api_client
+
+if TYPE_CHECKING:
+    from kubernetes.client import V1ConfigMap  # type: ignore[import-untyped]
 
 REPOSITORY_KEY = "repository"
 _LABELS = {
@@ -36,15 +40,15 @@ def repository_data(profile: S3ProfileEntity, secret_name: str) -> str:
     return json.dumps({"s3": s3})
 
 
-def _check_owner(body) -> None:
+def _check_owner(body: V1ConfigMap) -> None:
     labels = body.metadata.labels or {}
     if any(labels.get(key) != value for key, value in _LABELS.items()):
         raise BadGatewayError("Refusing to modify an unmanaged artifact repository ConfigMap.")
 
 
 def sync_repository(row: WorkflowS3CredentialEntity, profile: S3ProfileEntity) -> None:
-    from kubernetes import client
-    from kubernetes.client.rest import ApiException
+    from kubernetes import client  # type: ignore[import-untyped]
+    from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
     data = repository_data(profile, row.secret_name)
     core = client.CoreV1Api(api_client())

@@ -117,8 +117,8 @@ class S3ProfileTests(unittest.TestCase):
         self.assertEqual(remaining, [])
 
     def test_LinkedCredentials_RotateRetryAndProtectDeletion(self) -> None:
-        from kubernetes.client import V1ConfigMap, V1ObjectMeta, V1Secret
-        from kubernetes.client.rest import ApiException
+        from kubernetes.client import V1ConfigMap, V1ObjectMeta, V1Secret  # type: ignore[import-untyped]
+        from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
         with self._session() as session:
             self._create_user(session)
             profile = s3_profiles.create_profile(session, self._claims(), CreateS3ProfileRequest(
@@ -131,14 +131,14 @@ class S3ProfileTests(unittest.TestCase):
                 "triton-control/component": "workflow-s3-credential",
             }), data={"ca.pem": "old-ca", "unrelated": "keep"})
             core.read_namespaced_secret.return_value = body
-            maps = {}
+            maps: dict[str, V1ConfigMap] = {}
 
-            def read_map(name, namespace):
+            def read_map(name: str, namespace: str) -> V1ConfigMap:
                 if name not in maps:
                     raise ApiException(status=404)
                 return maps[name]
 
-            def create_map(namespace, body):
+            def create_map(namespace: str, body: V1ConfigMap) -> None:
                 maps[body.metadata.name] = body
 
             core.read_namespaced_config_map.side_effect = read_map

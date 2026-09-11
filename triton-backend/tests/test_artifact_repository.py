@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from kubernetes.client import V1ConfigMap, V1ObjectMeta
+from kubernetes.client import V1ConfigMap, V1ObjectMeta  # type: ignore[import-untyped]
 
 from app.exceptions import BadGatewayError
 from app.services.workflows.artifact_repository import delete_repository, repository_data, sync_repository

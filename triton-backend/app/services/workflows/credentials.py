@@ -88,6 +88,7 @@ def create_credential(
         _delete_secret(namespace, secret_name)
         raise
     if profile:
+        assert profile.id is not None  # The linked profile was loaded from the database.
         sync_profile_credentials(session, profile.id)
         session.refresh(row)
     return _to_dto(row)
