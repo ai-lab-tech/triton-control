@@ -95,7 +95,7 @@ describe("WorkflowsPageComponent", () => {
     expect(dialog.open).toHaveBeenCalledWith(
       S3CredentialsDialogComponent,
       jasmine.objectContaining({
-        width: "900px",
+        width: "760px",
         maxWidth: "95vw",
       }),
     );
