@@ -426,6 +426,30 @@ def _statefulset_manifest(
             },
         ],
     }
+    extra_ca_config_map = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP", "").strip()
+    if extra_ca_config_map:
+        extra_ca_key = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY", "rootCA.pem").strip() or "rootCA.pem"
+        workspace_pod = pod_spec["template"]["spec"]
+        container = workspace_pod["containers"][0]
+        for env_var in container["env"]:
+            if env_var["name"] == "NODE_TLS_REJECT_UNAUTHORIZED":
+                env_var["value"] = "1"
+        container["env"].append({
+            "name": "NODE_EXTRA_CA_CERTS",
+            "value": "/etc/triton-control/code-server-ca/ca.pem",
+        })
+        container["volumeMounts"].append({
+            "name": "code-server-extra-ca",
+            "mountPath": "/etc/triton-control/code-server-ca",
+            "readOnly": True,
+        })
+        workspace_pod["volumes"].append({
+            "name": "code-server-extra-ca",
+            "configMap": {
+                "name": extra_ca_config_map,
+                "items": [{"key": extra_ca_key, "path": "ca.pem"}],
+            },
+        })
     image_pull_secret = _image_pull_secret_name(statefulset_name)
     if request.dockerconfigjson:
         pod_spec["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]

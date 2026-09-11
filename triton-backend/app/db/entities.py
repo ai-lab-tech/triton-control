@@ -333,6 +333,10 @@ class WorkflowS3CredentialEntity(SQLModel, table=True):
     namespace: str
     secret_name: str
     access_key_id: str
+    s3_profile_id: Optional[int] = Field(default=None, foreign_key="s3_profiles.id", index=True)
+    s3_profile_name: str = ""
+    sync_error: str = ""
+    last_synced_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

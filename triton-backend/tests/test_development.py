@@ -200,6 +200,28 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("--version 4.126.0", container["args"][0])
 
+    def test_Manifests_MountsConfiguredCaAndEnablesVerification(self) -> None:
+        for key in ("rootCA.pem", "custom.pem"):
+            with self.subTest(key=key), patch.dict("os.environ", {
+                "DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP": "minio-root-ca",
+                "DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY": key,
+            }):
+                manifests = k8s._manifests(
+                    self._request(), "triton-control", "code-7-dev-workspace",
+                    "code-7-dev-workspace-svc", "code-7-dev-workspace-secret",
+                )
+            pod = manifests[2]["spec"]["template"]["spec"]
+            container = pod["containers"][0]
+            env = {item["name"]: item["value"] for item in container["env"]}
+            self.assertEqual(env["NODE_TLS_REJECT_UNAUTHORIZED"], "1")
+            mount = next(m for m in container["volumeMounts"] if m["name"] == "code-server-extra-ca")
+            self.assertTrue(mount["readOnly"])
+            volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
+            self.assertEqual(volume["configMap"], {
+                "name": "minio-root-ca", "items": [{"key": key, "path": "ca.pem"}],
+            })
+            self.assertEqual(env["NODE_EXTRA_CA_CERTS"], mount["mountPath"] + "/ca.pem")
+
     def test_Manifests_ImageAlreadyHasCodeServer_SkipsInstallScript(self) -> None:
         request = self._request().model_copy(update={"image_has_code_server": True})
 

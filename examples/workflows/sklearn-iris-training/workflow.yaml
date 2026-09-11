@@ -1,0 +1,95 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: sklearn-iris-training-
+  labels:
+    app.kubernetes.io/name: sklearn-iris-training
+    app.kubernetes.io/part-of: triton-control-examples
+spec:
+  entrypoint: train
+  artifactRepositoryRef:
+    configMap: workflow-s3-training-a1b2c3 # Copy from Configure S3 Secrets.
+    key: repository
+  podGC:
+    strategy: OnPodCompletion
+  ttlStrategy:
+    secondsAfterCompletion: 86400
+    secondsAfterFailure: 86400
+  arguments:
+    parameters:
+      - name: s3-script-key
+        value: workflows/sklearn-iris-training/train_iris.py
+      - name: s3-output-prefix
+        value: workflows/sklearn-iris-training/runs
+      - name: test-size
+        value: "0.2"
+      - name: random-state
+        value: "42"
+      - name: max-iter
+        value: "200"
+  templates:
+    - name: train
+      inputs:
+        parameters:
+          - name: s3-script-key
+          - name: s3-output-prefix
+          - name: test-size
+          - name: random-state
+          - name: max-iter
+        artifacts:
+          - name: training-script
+            path: /tmp/train_iris.py
+            archive:
+              none: {}
+            s3:
+              key: "{{inputs.parameters.s3-script-key}}"
+      container:
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-ec"]
+        args:
+          - |
+            mkdir -p /tmp/outputs
+            printf 'nan\n' > /tmp/outputs/accuracy.txt
+
+            export HOME=/tmp
+            unset PYTHONUSERBASE
+            unset PIP_USER
+            python -m pip install --no-cache-dir --target /tmp/python-packages \
+              scikit-learn==1.5.2 joblib==1.4.2
+            export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
+
+            python /tmp/train_iris.py \
+              --test-size "{{inputs.parameters.test-size}}" \
+              --random-state "{{inputs.parameters.random-state}}" \
+              --max-iter "{{inputs.parameters.max-iter}}" \
+              --output-dir /tmp/outputs
+
+            test -s /tmp/outputs/iris-logreg-model.joblib
+            test -s /tmp/outputs/metrics.json
+            test -s /tmp/outputs/accuracy.txt
+            test -s /tmp/outputs/labels.txt
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+      outputs:
+        parameters:
+          - name: accuracy
+            valueFrom:
+              path: /tmp/outputs/accuracy.txt
+        artifacts:
+          - name: training-results
+            path: /tmp/outputs
+            archive:
+              none: {}
+            s3:
+              key: "{{inputs.parameters.s3-output-prefix}}/{{workflow.name}}"

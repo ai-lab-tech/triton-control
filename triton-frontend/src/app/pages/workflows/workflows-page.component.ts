@@ -118,7 +118,7 @@ export class WorkflowsPageComponent implements OnDestroy {
 
   openCredentialsDialog(): void {
     this.dialog.open(S3CredentialsDialogComponent, {
-      width: "900px",
+      width: "760px",
       maxWidth: "95vw",
       panelClass: "custom-dialog",
     });

@@ -123,16 +123,72 @@ user-submitted Workflow YAML are handled separately (see above).
 
 ## S3 Credentials
 
-Members and administrators can manage Workflow S3 credentials through Triton
-Control. The Secret Access Key is stored only in an opaque Kubernetes Secret in
-the Workflow namespace. The application database stores only management
-metadata: display name, namespace, Kubernetes Secret name, Access Key ID,
-creator, and timestamps.
+### Link an S3 Profile
 
-Workflow templates must reference the generated Secret rather than embedding
-the Access Key ID or Secret Access Key directly. Triton Control displays the
-stored Access Key ID so users can identify each configured credential; the
-Secret Access Key is never returned by the API or displayed again.
+Members and administrators can open **Workflows → Configure S3 Secrets**, select
+one of their saved **S3 profiles**, and click **Link profile**. No manual credential
+entry or `kubectl` access is needed. Create or edit the source profile through
+**S3 Profiles** in the account menu.
+
+The source profile remains in the application database. Linking stores its profile
+ID and synchronization metadata, and creates two resources in the configured
+workflow namespace (normally `triton-control`):
+
+| Resource | Contents |
+| --- | --- |
+| ConfigMap | Endpoint host and port, bucket, region, HTTPS settings, and references to the Secret, under the `repository` key. |
+| Secret | `access-key-id`, `secret-access-key`, and optional public CA bundle `ca.pem`. |
+
+Both resources use the same generated name, such as `workflow-s3-dev-1-a1b2c3`.
+The dialog shows the name, namespace, workflow reference, and synchronization status.
+The workflow credential API returns metadata, not the secret key or CA contents.
+Linking makes these credentials available to workflows in the shared workflow
+namespace; the source profile itself remains owner-scoped.
+
+### Use the Profile in a Workflow
+
+Copy the dialog's reference under workflow `spec`:
+
+```yaml
+spec:
+  artifactRepositoryRef:
+    configMap: workflow-s3-dev-1-a1b2c3 # Use the name shown in your dialog.
+    key: repository
+```
+
+Submit the workflow in the namespace shown in the dialog. Input and output
+artifacts need only their S3 object key, for example:
+
+```yaml
+s3:
+  key: workflows/sklearn-iris-training/train_iris.py
+```
+
+Do not repeat endpoint, bucket, region, credentials, or `caSecret` in these artifact
+blocks. Object keys are full bucket paths; the profile's browsing prefix is not
+added automatically.
+
+For HTTPS with a custom CA, save the public PEM certificate bundle in the S3
+profile. Triton Control adds `caSecret` to the repository configuration automatically.
+Publicly trusted HTTPS endpoints need no custom CA. The profile's endpoint scheme
+controls HTTPS versus plain HTTP. These settings configure Argo artifact transfers;
+code-server extensions and AWS CLI have their own certificate trust configuration.
+
+### Updates and Synchronization
+
+Saving the source profile synchronizes its endpoint, bucket, region, credentials,
+and CA settings to all linked workflow resources without changing their names.
+New runs use the updated configuration; running workflows may retain values
+already loaded. The dialog shows the last successful sync and any sync error.
+The profile owner can click **Sync now** to retry. Existing links created before
+repository support need **Sync now** once after upgrading to create their ConfigMap.
+
+Removing a link deletes its workflow ConfigMap and Secret, so workflows using that
+reference can no longer access them. Remove all links before deleting the source
+profile.
+
+See the [Iris training example](https://github.com/ai-lab-tech/triton-control/tree/main/examples/workflows/sklearn-iris-training)
+for a complete workflow and instructions for uploading scripts and checking results.
 
 ## Internal Transport
 

@@ -102,6 +102,7 @@ def init_db() -> None:
     _migrate_perf_analyzer_table()
     _migrate_s3_profiles_table()
     _migrate_mlflow_table()
+    _migrate_workflow_s3_profile_links()
 
 
 def _migrate_users_account_lifecycle() -> None:
@@ -436,3 +437,18 @@ def _migrate_mlflow_table() -> None:
                 """
             )
         )
+
+
+def _migrate_workflow_s3_profile_links() -> None:
+    with engine.begin() as conn:
+        conn.execute(text("""
+            ALTER TABLE workflow_s3_credentials
+            ADD COLUMN IF NOT EXISTS s3_profile_id INTEGER REFERENCES s3_profiles(id),
+            ADD COLUMN IF NOT EXISTS s3_profile_name VARCHAR NOT NULL DEFAULT '',
+            ADD COLUMN IF NOT EXISTS sync_error VARCHAR NOT NULL DEFAULT '',
+            ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMP
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_workflow_s3_credentials_s3_profile_id
+            ON workflow_s3_credentials (s3_profile_id)
+        """))

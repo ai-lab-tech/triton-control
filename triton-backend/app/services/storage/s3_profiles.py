@@ -13,8 +13,9 @@ from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secr
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.repositories import s3_profiles
+from app.repositories import s3_profiles, workflow_s3_credentials
 from app.schemas import CreateS3ProfileRequest, S3ProfileDTO, UpdateS3ProfileRequest
+from app.services.workflows.credentials import sync_profile_credentials
 
 
 def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO]:
@@ -86,13 +87,21 @@ def update_profile(
     if request.ca_certificate is not None:
         profile.ca_certificate = request.ca_certificate.strip()
     profile.updated_at = datetime.utcnow()
-    return _to_dto(s3_profiles.save(session, profile))
+    # Persist pending status with the profile, so interrupted syncs remain visible.
+    for linked in workflow_s3_credentials.list_for_profile(session, profile_id):
+        linked.sync_error = "Profile updated; S3 configuration synchronization pending."
+        session.add(linked)
+    profile = s3_profiles.save(session, profile)
+    sync_profile_credentials(session, profile_id)
+    return _to_dto(profile)
 
 
 def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) -> dict[str, str]:
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
     profile = _get_profile(session, owner.id or 0, profile_id)
+    if workflow_s3_credentials.list_for_profile(session, profile_id):
+        raise ConflictError("Delete linked workflow S3 credentials before deleting this profile")
     s3_profiles.delete(session, profile)
     return {"status": "deleted"}
 
