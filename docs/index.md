@@ -36,7 +36,7 @@ Product:
 - [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and Add Instance.
 - [User Management](user-management.md): roles, local and OIDC users, invitations, password resets, approvals, and instance assignment.
 - [Development Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
-- [Argo Workflows](argo-workflows.md): installation, authenticated proxy, Kubernetes layout, pod security, RBAC, and Workflow credentials.
+- [Argo Workflows](argo-workflows.md): installation, authenticated proxy, Kubernetes layout, pod security, RBAC, and S3 profile linking for workflow artifacts.
 
 Architecture:
 

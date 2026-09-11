@@ -506,6 +506,12 @@ Workflows run in the same Kubernetes namespace as Triton Control. Images
 referenced by uploaded Workflow YAML are separate from the public Argo system
 images. Private Workflow images require a pull Secret in that namespace.
 
+Use **Configure S3 Secrets** to link a saved S3 profile for workflow artifacts.
+Triton Control synchronizes connection settings into a ConfigMap and credentials
+and the optional CA into a Secret. Copy the displayed `artifactRepositoryRef` into
+your workflow; only object paths remain in its artifact definitions.
+See [S3 profile linking and synchronization](argo-workflows.md#s3-credentials).
+
 ## Add Instance (Sidebar Action)
 
 **Add Instance** is a dedicated sidebar action (shown as the last nav action).
