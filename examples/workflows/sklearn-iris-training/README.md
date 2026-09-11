@@ -53,11 +53,42 @@ The workspace needs an S3 client to upload the training script. You can install
 and configure the optional [S3/R2 Explorer](../../../docs/development-workspaces.md#optional-install-s3r2-explorer)
 extension, or use the AWS CLI from the code-server terminal.
 
+S3/R2 Explorer requires an **HTTPS** S3 API endpoint, as documented by the
+[extension publisher](https://marketplace.visualstudio.com/items?itemName=lvdn.s3x-explorer).
+Set `s3x.endpointUrl` to `https://<your-s3-endpoint>` without a bucket name,
+enter your credentials and region, and enable `s3x.forcePathStyle` if your
+provider requires it. The hostname must be reachable from the workspace pod
+and match the server certificate.
+
+For a private/custom CA, create a ConfigMap containing the public PEM CA bundle
+in the workspace namespace and configure these Helm values:
+
+```yaml
+development:
+  codeServer:
+    extraCaConfigMap: s3-custom-ca
+    extraCaKey: ca-bundle.pem
+```
+
+Follow the [workspace HTTPS certificate setup](../../../charts/triton-control/README.md#development-workspace-https-certificates)
+for the ConfigMap command and rollout requirements, including existing workspaces.
+The chart sets `NODE_EXTRA_CA_CERTS` for Node.js extensions at startup; exporting
+it in an already-open terminal does not update the running explorer. Endpoints
+with certificates already trusted by Node need no extra CA bundle.
+
 For the AWS CLI path, run:
 
 ```bash
 python -m pip install --user awscli
 aws configure --profile workflow-training
+```
+
+If you configured the custom CA mount above, AWS CLI needs its own
+[`AWS_CA_BUNDLE`](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)
+setting in the terminal before uploading:
+
+```bash
+export AWS_CA_BUNDLE=/etc/triton-control/code-server-ca/ca.pem
 ```
 
 At the prompts, enter the access key ID, secret access key, bucket region, and
@@ -110,7 +141,10 @@ update the parameters under `spec.arguments.parameters`:
 
 
 For an intentionally plain-HTTP development endpoint, add `insecure: true` to
-both `s3` blocks. Do not use that setting for an HTTPS endpoint.
+both `s3` blocks and use AWS CLI for the upload; S3/R2 Explorer requires HTTPS.
+Do not use that setting for an HTTPS endpoint. Workspace CA settings do not
+configure the separate Argo executor pods; those also need to trust a custom CA
+when downloading or uploading workflow artifacts.
 
 ## 6. Submit the Workflow
 
