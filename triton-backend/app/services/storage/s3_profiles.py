@@ -89,7 +89,7 @@ def update_profile(
     profile.updated_at = datetime.utcnow()
     # Persist pending status with the profile, so interrupted syncs remain visible.
     for linked in workflow_s3_credentials.list_for_profile(session, profile_id):
-        linked.sync_error = "Profile updated; Secret synchronization pending."
+        linked.sync_error = "Profile updated; S3 configuration synchronization pending."
         session.add(linked)
     profile = s3_profiles.save(session, profile)
     sync_profile_credentials(session, profile_id)

@@ -6720,6 +6720,28 @@
             "type": "string",
             "title": "Secret Name"
           },
+          "artifact_repository_config_map": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Repository Config Map"
+          },
+          "artifact_repository_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Repository Key"
+          },
           "access_key_id": {
             "type": "string",
             "title": "Access Key Id"

@@ -122,59 +122,42 @@ aws --profile workflow-training \
   s3://<your-s3-bucket>/workflows/sklearn-iris-training/train_iris.py
 ```
 
-## 4. Configure the Workflow S3 Secret
+## 4. Link the S3 Profile
 
-In **Workflows → Configure S3 Secrets**, select a saved **S3 profile** and click
-**Link profile**. Triton Control creates the Secret using the profile's credentials
-and CA certificate; no manual credentials or kubectl access are needed.
+In **Workflows → Configure S3 Secrets**, select your **S3 profile** and click
+**Link profile**. Triton Control creates a Secret and an Argo repository ConfigMap
+in the workflow namespace. Endpoint, bucket, region, credentials, and the optional
+HTTPS CA certificate sync automatically when the profile is saved.
 
-Profile changes automatically update linked Secrets without changing their names.
-The dialog shows the linked profile, last sync time, and any sync error; the profile
-owner can use **Sync now** to retry. Remove linked workflow credentials before
-deleting their source profile.
-
-New runs use the updated credentials; running workflows may retain previously
-loaded values. Endpoint, bucket, region, and object paths remain workflow parameters
-and must be updated separately. If you remove the profile's CA, also remove any
-`caSecret` reference that requires it from your workflow.
-
-Copy the generated **Secret** name shown in the credentials dialog. The
-workflow uses only this name; it never contains the credential values. The
-generated Secret has the keys expected by this example:
-
-```text
-access-key-id
-secret-access-key
-```
+For an existing link, click **Sync now** once after upgrading to create its repository.
+The dialog shows sync errors and lets the profile owner retry. Remove the link before
+deleting its source profile. New runs use updated settings; running workflows may
+retain previously loaded values.
 
 ## 5. Configure the Workflow in the Workspace
 
-Back in code-server, open `/workspace/sklearn-iris-training/workflow.yaml` and
-update the parameters under `spec.arguments.parameters`:
+Open `/workspace/sklearn-iris-training/workflow.yaml`. Copy the
+`artifactRepositoryRef` shown in the dialog under `spec`:
+
+```yaml
+artifactRepositoryRef:
+  configMap: workflow-s3-training-a1b2c3 # Use your generated name.
+  key: repository
+```
+
+Submit in the namespace shown in the dialog. No endpoint, bucket, region, credentials,
+or certificate settings need to be repeated in the workflow.
+Argo uses [key-only artifacts](https://argo-workflows.readthedocs.io/en/latest/key-only-artifacts/)
+with the linked repository. Set only the object paths in `spec.arguments.parameters`:
 
 | Parameter | Example | Meaning |
 | --- | --- | --- |
-| `s3-endpoint` | `s3.example.com` | S3 API host, optionally with a port; omit `https://` |
-| `s3-region` | `us-east-1` | Bucket region |
-| `s3-bucket` | `triton-artifacts` | Existing bucket name |
-| `s3-credentials-secret` | `workflow-s3-training-a1b2c3` | Secret name from **Configure S3 Secrets** |
 | `s3-script-key` | `workflows/sklearn-iris-training/train_iris.py` | Object uploaded in step 3 |
 | `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
 
-
-For HTTPS with a custom CA, save the certificate in the selected S3 profile and uncomment
-`caSecret` in **both** `s3` blocks in `workflow.yaml`:
-
-```yaml
-insecure: false
-caSecret:
-  name: "{{inputs.parameters.s3-credentials-secret}}"
-  key: ca.pem
-```
-
-Argo uses the certificate from the same S3 credentials Secret to verify artifact
-downloads and uploads. For publicly trusted certificates, leave `caSecret` omitted.
-See [Argo's CA configuration](https://argo-workflows.readthedocs.io/en/release-4.0/configure-artifact-repository/#configuring-minio).
+Object paths are full bucket keys; the profile's browsing prefix is not added.
+For HTTPS with a custom CA, save the public CA certificate in the S3 profile;
+Triton Control adds Argo's certificate reference automatically.
 
 ## 6. Submit the Workflow
 

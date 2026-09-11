@@ -1,6 +1,7 @@
 """Tests for reusable S3 deployment profiles."""
 
 import base64
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -116,7 +117,8 @@ class S3ProfileTests(unittest.TestCase):
         self.assertEqual(remaining, [])
 
     def test_LinkedCredentials_RotateRetryAndProtectDeletion(self) -> None:
-        from kubernetes.client import V1ObjectMeta, V1Secret
+        from kubernetes.client import V1ConfigMap, V1ObjectMeta, V1Secret
+        from kubernetes.client.rest import ApiException
         with self._session() as session:
             self._create_user(session)
             profile = s3_profiles.create_profile(session, self._claims(), CreateS3ProfileRequest(
@@ -129,13 +131,33 @@ class S3ProfileTests(unittest.TestCase):
                 "triton-control/component": "workflow-s3-credential",
             }), data={"ca.pem": "old-ca", "unrelated": "keep"})
             core.read_namespaced_secret.return_value = body
+            maps = {}
+
+            def read_map(name, namespace):
+                if name not in maps:
+                    raise ApiException(status=404)
+                return maps[name]
+
+            def create_map(namespace, body):
+                maps[body.metadata.name] = body
+
+            core.read_namespaced_config_map.side_effect = read_map
+            core.create_namespaced_config_map.side_effect = create_map
             with (patch("app.services.workflows.credentials._secret_exists", return_value=False),
                   patch("app.services.workflows.credentials.api_client"),
+                  patch("app.services.workflows.artifact_repository.api_client"),
                   patch("kubernetes.client.CoreV1Api", return_value=core)):
                 created = credentials.create_credential(CreateWorkflowS3CredentialRequest(
                     name="linked-secret", s3_profile_id=profile.id,
                 ), session, self._claims())
                 self.assertEqual(created.s3_profile_id, profile.id)
+                self.assertEqual(created.artifact_repository_config_map, created.secret_name)
+                repository = maps[created.secret_name]
+                self.assertIsInstance(repository, V1ConfigMap)
+                config = json.loads(repository.data["repository"])["s3"]
+                self.assertEqual(config["endpoint"], "minio:9000")
+                self.assertFalse(config["insecure"])
+                self.assertNotIn("old-secret", repository.data["repository"])
                 self.assertIsNotNone(created.last_synced_at)
                 self.assertEqual(created.sync_error, "")
                 self.assertNotIn("ca.pem", body.data)
@@ -146,6 +168,7 @@ class S3ProfileTests(unittest.TestCase):
                 self.assertEqual(base64.b64decode(body.data["ca.pem"]), b"public-ca")
                 s3_profiles.update_profile(session, self._claims(), profile.id, UpdateS3ProfileRequest(
                     access_key="new-access", secret_key="new-secret", name="renamed",
+                    endpoint="https://other:9443", bucket="new-bucket", region="eu-west-1",
                 ))
                 self.assertEqual(base64.b64decode(body.data["secret-access-key"]), b"new-secret")
                 row = session.get(WorkflowS3CredentialEntity, created.id)
@@ -153,7 +176,17 @@ class S3ProfileTests(unittest.TestCase):
                 self.assertEqual(row.secret_name, created.secret_name)
                 self.assertEqual(row.access_key_id, "new-access")
                 self.assertEqual(row.s3_profile_name, "renamed")
+                config = json.loads(repository.data["repository"])["s3"]
+                self.assertEqual(config["endpoint"], "other:9443")
+                self.assertEqual(config["bucket"], "new-bucket")
+                self.assertEqual(config["region"], "eu-west-1")
                 synced_at = row.last_synced_at
+                core.replace_namespaced_config_map.side_effect = RuntimeError("DO-NOT-LEAK-secret")
+                result = credentials.retry_sync(session, self._claims(), created.id)
+                self.assertTrue(result.sync_error)
+                self.assertNotIn("DO-NOT-LEAK", result.sync_error)
+                self.assertEqual(result.last_synced_at, synced_at)
+                core.replace_namespaced_config_map.side_effect = None
                 core.replace_namespaced_secret.side_effect = RuntimeError("DO-NOT-LEAK-secret")
                 s3_profiles.update_profile(session, self._claims(), profile.id, UpdateS3ProfileRequest(
                     secret_key="retry-secret",
@@ -169,6 +202,7 @@ class S3ProfileTests(unittest.TestCase):
                 with self.assertRaises(ConflictError):
                     s3_profiles.delete_profile(session, self._claims(), profile.id)
                 credentials.delete_credential(session, created.id)
+                core.delete_namespaced_config_map.assert_called_once()
                 self.assertEqual(s3_profiles.delete_profile(session, self._claims(), profile.id), {"status": "deleted"})
 
     def test_ProfileChoices_OwnedMetadataOnlyAndForeignLinkRejected(self) -> None:

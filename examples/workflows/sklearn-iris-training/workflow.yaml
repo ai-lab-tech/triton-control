@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/part-of: triton-control-examples
 spec:
   entrypoint: train
+  artifactRepositoryRef:
+    configMap: workflow-s3-training-a1b2c3 # Copy from Configure S3 Secrets.
+    key: repository
   podGC:
     strategy: OnPodCompletion
   ttlStrategy:
@@ -14,14 +17,6 @@ spec:
     secondsAfterFailure: 86400
   arguments:
     parameters:
-      - name: s3-endpoint
-        value: s3.example.com
-      - name: s3-region
-        value: us-east-1
-      - name: s3-bucket
-        value: triton-artifacts
-      - name: s3-credentials-secret
-        value: workflow-s3-credentials
       - name: s3-script-key
         value: workflows/sklearn-iris-training/train_iris.py
       - name: s3-output-prefix
@@ -36,10 +31,6 @@ spec:
     - name: train
       inputs:
         parameters:
-          - name: s3-endpoint
-          - name: s3-region
-          - name: s3-bucket
-          - name: s3-credentials-secret
           - name: s3-script-key
           - name: s3-output-prefix
           - name: test-size
@@ -51,21 +42,7 @@ spec:
             archive:
               none: {}
             s3:
-              insecure: false
-              # For a custom CA, add it in Configure S3 Secrets, then uncomment.
-              # caSecret:
-              #   name: "{{inputs.parameters.s3-credentials-secret}}"
-              #   key: ca.pem
-              endpoint: "{{inputs.parameters.s3-endpoint}}"
-              region: "{{inputs.parameters.s3-region}}"
-              bucket: "{{inputs.parameters.s3-bucket}}"
               key: "{{inputs.parameters.s3-script-key}}"
-              accessKeySecret:
-                name: "{{inputs.parameters.s3-credentials-secret}}"
-                key: access-key-id
-              secretKeySecret:
-                name: "{{inputs.parameters.s3-credentials-secret}}"
-                key: secret-access-key
       container:
         image: python:3.11-slim
         imagePullPolicy: IfNotPresent
@@ -115,18 +92,4 @@ spec:
             archive:
               none: {}
             s3:
-              insecure: false
-              # For a custom CA, add it in Configure S3 Secrets, then uncomment.
-              # caSecret:
-              #   name: "{{inputs.parameters.s3-credentials-secret}}"
-              #   key: ca.pem
-              endpoint: "{{inputs.parameters.s3-endpoint}}"
-              region: "{{inputs.parameters.s3-region}}"
-              bucket: "{{inputs.parameters.s3-bucket}}"
               key: "{{inputs.parameters.s3-output-prefix}}/{{workflow.name}}"
-              accessKeySecret:
-                name: "{{inputs.parameters.s3-credentials-secret}}"
-                key: access-key-id
-              secretKeySecret:
-                name: "{{inputs.parameters.s3-credentials-secret}}"
-                key: secret-access-key

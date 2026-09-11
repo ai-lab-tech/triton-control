@@ -72,6 +72,8 @@ class WorkflowS3CredentialDTO(SQLModel):
     name: str
     namespace: str
     secret_name: str
+    artifact_repository_config_map: str | None = None
+    artifact_repository_key: str | None = None
     access_key_id: str
     created_at: datetime
     updated_at: datetime

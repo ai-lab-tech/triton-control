@@ -18,6 +18,8 @@ type WorkflowS3CredentialDTO = {
   name: string;
   namespace: string;
   secret_name: string;
+  artifact_repository_config_map?: string | null;
+  artifact_repository_key?: string | null;
   access_key_id: string;
   created_at: string;
   updated_at: string;
@@ -104,13 +106,14 @@ export class S3CredentialsDialogComponent {
     try {
       const profile = this.selectedProfile()!;
       const payload = { name: `${profile.name} (${profile.id})`, s3_profile_id: profile.id };
-      await firstValueFrom(
+      const result = await firstValueFrom(
         this.http.post<WorkflowS3CredentialDTO>(
           `${this.basePath}/api/workflows/s3-credentials`,
           payload,
         ),
       );
-      this.message.set("S3 profile linked.");
+      this.messageIsError.set(!!result.sync_error);
+      this.message.set(result.sync_error || "S3 profile linked.");
       this.resetForm();
       await this.loadCredentials();
     } catch (error) {
@@ -153,7 +156,7 @@ export class S3CredentialsDialogComponent {
         ),
       );
       this.messageIsError.set(!!result.sync_error);
-      this.message.set(result.sync_error || "Workflow Secret synchronized.");
+      this.message.set(result.sync_error || "Workflow S3 configuration synchronized.");
       await this.loadCredentials();
     } catch (error) {
       this.messageIsError.set(true);

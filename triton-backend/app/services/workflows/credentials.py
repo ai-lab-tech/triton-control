@@ -20,6 +20,7 @@ from app.schemas import (
     WorkflowS3CredentialDTO,
 )
 from app.services.kubernetes_client import api_client, in_cluster_namespace
+from app.services.workflows.artifact_repository import REPOSITORY_KEY, delete_repository, sync_repository
 from app.services.workflows.config import get_config
 
 
@@ -78,7 +79,8 @@ def create_credential(
             access_key_id=request.access_key_id,
             s3_profile_id=profile.id if profile else None,
             s3_profile_name=profile.name if profile else "",
-            last_synced_at=datetime.utcnow() if profile else None,
+            sync_error="S3 configuration synchronization pending." if profile else "",
+            last_synced_at=None,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -95,6 +97,8 @@ def delete_credential(session: Session, credential_id: int) -> WorkflowS3Credent
     row = workflow_s3_credentials.find_by_id(session, credential_id)
     if not row:
         raise NotFoundError("Workflow S3 credential not found")
+    if getattr(row, "s3_profile_id", None):
+        delete_repository(row)
     _delete_secret(row.namespace, row.secret_name)
     workflow_s3_credentials.delete(session, row)
     return WorkflowS3CredentialDeleteResponse(
@@ -110,6 +114,8 @@ def _to_dto(row: WorkflowS3CredentialEntity) -> WorkflowS3CredentialDTO:
         name=row.name,
         namespace=row.namespace,
         secret_name=row.secret_name,
+        artifact_repository_config_map=row.secret_name if getattr(row, "s3_profile_id", None) else None,
+        artifact_repository_key=REPOSITORY_KEY if getattr(row, "s3_profile_id", None) else None,
         access_key_id=row.access_key_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -226,9 +232,12 @@ def sync_profile_credentials(session: Session, profile_id: int) -> None:
                 ca_certificate=profile.ca_certificate or "",
             )
             _replace_secret(row, request)
+            sync_repository(row, profile)
         except Exception:
             # Never persist exception text: API errors can contain Secret data.
-            row.sync_error = "Secret sync failed. Check the profile certificate and Kubernetes access, then retry."
+            row.sync_error = (
+                "S3 sync failed. Check the profile endpoint, certificate, and Kubernetes access, then retry."
+            )
         else:
             row.access_key_id = request.access_key_id
             row.sync_error = ""

@@ -90,6 +90,8 @@ describe("S3CredentialsDialogComponent", () => {
           s3_profile_id: 9,
           s3_profile_name: "dev",
           secret_name: "workflow-s3-dev",
+          artifact_repository_config_map: "workflow-s3-dev",
+          artifact_repository_key: "repository",
           namespace: "triton-control",
           sync_error: "Secret sync failed",
         },
@@ -100,5 +102,8 @@ describe("S3CredentialsDialogComponent", () => {
     expect(fixture.nativeElement.textContent).toContain("Needs attention");
     expect(fixture.nativeElement.textContent).toContain("Secret sync failed");
     expect(fixture.nativeElement.textContent).toContain("Sync now");
+    const reference = fixture.nativeElement.querySelector(".repository-reference").textContent;
+    expect(reference).toContain("configMap: workflow-s3-dev");
+    expect(reference).toContain("key: repository");
   });
 });
