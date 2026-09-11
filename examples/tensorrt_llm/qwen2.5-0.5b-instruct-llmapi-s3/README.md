@@ -8,7 +8,7 @@ Triton's S3 model repository path.
 
 - Model: `Qwen/Qwen2.5-0.5B-Instruct`
 - Triton backend: `python`
-- Runtime: TensorRT-LLM LLM API
+- Runtime: TensorRT-LLM public LLM API with its default PyTorch backend
 - Model directory: `qwen2_5_0_5b_instruct_llmapi/`
 - Artifact directory: `qwen2_5_0_5b_instruct_llmapi/1/model/`
 - Input: `text_input`, `BYTES`, shape `[1]`
@@ -42,6 +42,11 @@ The prepare notebook only downloads Hugging Face files and installs Python
 runtime dependencies. It does not build a TensorRT engine, so the development
 workspace does not need to use the same GPU as serving and can run without a
 GPU. The deployed Triton instance still needs a GPU.
+
+With TensorRT-LLM 1.2.1, `from tensorrt_llm import LLM` selects the public
+PyTorch implementation by default. The deployed Python model loads the
+Hugging Face checkpoint and initializes that runtime; it does not create
+`rank0.engine` during startup.
 
 ## 2. Create the Repository and Artifact
 

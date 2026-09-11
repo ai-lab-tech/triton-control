@@ -1,9 +1,10 @@
 # Qwen2.5 0.5B Instruct with Native TensorRT-LLM Backend and Triton S3
 
 Production-style variant for Qwen2.5. The notebook downloads the Hugging Face
-model, selects the TensorRT engine implementation of the LLM API, and saves it
-with `LLM.save()` inside the checked-in Triton repository. Triton loads the
-saved engine instead of rebuilding Hugging Face weights during startup.
+model, selects the private TensorRT engine implementation of the LLM API, and
+saves it with `_TrtLLM.save()` inside the prepared Triton model repository. Triton then
+loads the saved engine directly, so engine construction is not part of the
+deployment startup.
 
 ## Model
 
@@ -117,7 +118,7 @@ Use these deployment settings:
 | Image | `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3` |
 | GPU count | `1` |
 | Memory | At least `12Gi`; use `16Gi` if available |
-| Repository sync | Direct/native Triton S3 |
+| Repository sync | Sidecar sync to `/models` |
 | Model control mode | Explicit |
 
 1. In the opened code-server Explorer, right-click the repository folder for
@@ -127,6 +128,10 @@ Use these deployment settings:
 3. Select S3 settings.
 4. Enter the deployment settings shown above.
 5. Deploy.
+
+The code-server deployment extension detects the native `tensorrtllm` backend
+and selects sidecar repository sync. Triton Control downloads the repository to
+the stable `/models` mount used by the absolute `engine_dir` in `config.pbtxt`.
 
 Build GPU architecture and deploy GPU architecture must match. Rebuild the
 engine when the image tag, TensorRT-LLM version, GPU architecture, or engine
