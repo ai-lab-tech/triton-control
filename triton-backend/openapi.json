@@ -3211,6 +3211,83 @@
         ]
       }
     },
+    "/api/workflows/s3-profile-choices": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "List S3 Profile Choices",
+        "operationId": "list_s3_profile_choices_api_workflows_s3_profile_choices_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowS3ProfileChoice"
+                  },
+                  "type": "array",
+                  "title": "Response List S3 Profile Choices Api Workflows S3 Profile Choices Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/workflows/s3-credentials/{credential_id}/sync": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Sync Workflow S3 Credential",
+        "operationId": "sync_workflow_s3_credential_api_workflows_s3_credentials__credential_id__sync_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "credential_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Credential Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowS3CredentialDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/s3-credentials": {
       "get": {
         "tags": [
@@ -4135,18 +4212,34 @@
           },
           "access_key_id": {
             "type": "string",
-            "title": "Access Key Id"
+            "title": "Access Key Id",
+            "default": ""
           },
           "secret_access_key": {
             "type": "string",
-            "title": "Secret Access Key"
+            "title": "Secret Access Key",
+            "default": ""
+          },
+          "s3_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Profile Id"
+          },
+          "ca_certificate": {
+            "type": "string",
+            "title": "Ca Certificate",
+            "default": ""
           }
         },
         "type": "object",
         "required": [
-          "name",
-          "access_key_id",
-          "secret_access_key"
+          "name"
         ],
         "title": "CreateWorkflowS3CredentialRequest",
         "description": "Request body for creating workflow-scoped S3 credentials."
@@ -6640,6 +6733,39 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "s3_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Profile Id"
+          },
+          "s3_profile_name": {
+            "type": "string",
+            "title": "S3 Profile Name",
+            "default": ""
+          },
+          "sync_error": {
+            "type": "string",
+            "title": "Sync Error",
+            "default": ""
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
           }
         },
         "type": "object",
@@ -6678,6 +6804,39 @@
         ],
         "title": "WorkflowS3CredentialDeleteResponse",
         "description": "Result of deleting a workflow S3 credential."
+      },
+      "WorkflowS3ProfileChoice": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "region": {
+            "type": "string",
+            "title": "Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpoint",
+          "bucket",
+          "region"
+        ],
+        "title": "WorkflowS3ProfileChoice"
       }
     },
     "securitySchemes": {

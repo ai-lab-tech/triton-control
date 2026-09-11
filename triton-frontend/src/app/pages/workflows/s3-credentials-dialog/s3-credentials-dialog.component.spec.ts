@@ -26,6 +26,7 @@ describe("S3CredentialsDialogComponent", () => {
   });
 
   afterEach(() => {
+    http.match("/api/workflows/s3-profile-choices").forEach((req) => req.flush([]));
     http.verify();
   });
 
@@ -71,9 +72,11 @@ describe("S3CredentialsDialogComponent", () => {
     component.accessKeyId = "AKIA123";
     component.secretAccessKey = "SECRET123";
 
+    component.caCertificate = "  public-ca  ";
     const createPromise = component.createCredential();
     const createReq = http.expectOne("/api/workflows/s3-credentials");
     expect(createReq.request.method).toBe("POST");
+    expect(createReq.request.body.ca_certificate).toBe("public-ca");
     createReq.flush({
       id: 2,
       name: "finance",
@@ -90,6 +93,66 @@ describe("S3CredentialsDialogComponent", () => {
     await createPromise;
 
     expect(component.message()).toContain("created");
+    expect(component.caCertificate).toBe("");
+  });
+
+  it("creates linked credentials using only a profile ID and displays sync errors", async () => {
+    const fixture = TestBed.createComponent(S3CredentialsDialogComponent);
+    const component = fixture.componentInstance;
+    http.expectOne("/api/workflows/s3-credentials").flush([]);
+    http.expectOne("/api/workflows/s3-profile-choices").flush([
+      {
+        id: 9,
+        name: "MinIO",
+        endpoint: "https://minio:9000",
+        bucket: "models",
+        region: "us-east-1",
+      },
+    ]);
+    await flushMicrotasks();
+    component.selectedProfileId = 9;
+    component.selectProfile();
+    component.secretAccessKey = "old manual secret";
+    expect(component.canCreate()).toBeTrue();
+    const saving = component.createCredential();
+    const req = http.expectOne("/api/workflows/s3-credentials");
+    expect(req.request.body).toEqual({ name: "MinIO", s3_profile_id: 9 });
+    req.flush({ id: 1 });
+    await flushMicrotasks();
+    http.expectOne("/api/workflows/s3-credentials").flush([
+      {
+        id: 1,
+        name: "MinIO",
+        s3_profile_id: 9,
+        s3_profile_name: "MinIO",
+        sync_error: "Secret sync failed",
+      },
+    ]);
+    await saving;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain("Linked profile: MinIO");
+    expect(fixture.nativeElement.textContent).toContain("Secret sync failed");
+    expect(fixture.nativeElement.textContent).toContain("Sync now");
+  });
+
+  it("loads a certificate file and rejects oversized uploads", async () => {
+    const fixture = TestBed.createComponent(S3CredentialsDialogComponent);
+    const component = fixture.componentInstance;
+    http.expectOne("/api/workflows/s3-credentials").flush([]);
+    const input = document.createElement("input");
+    input.type = "file";
+    const files = new DataTransfer();
+    files.items.add(new File(["public-ca"], "ca.pem"));
+    input.files = files.files;
+    await component.loadCaCertificate({ target: input } as unknown as Event);
+    expect(component.caCertificate).toBe("public-ca");
+
+    const oversized = new DataTransfer();
+    oversized.items.add(new File(["x".repeat(262145)], "large.pem"));
+    input.files = oversized.files;
+    await component.loadCaCertificate({ target: input } as unknown as Event);
+    expect(component.message()).toContain("256 KiB");
+    expect(component.caCertificate).toBe("public-ca");
   });
 
   it("toggles and resets the form before closing the dialog", async () => {

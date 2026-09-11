@@ -56,3 +56,9 @@ def create(session: Session, **values: Any) -> WorkflowS3CredentialEntity:
 def delete(session: Session, credential: WorkflowS3CredentialEntity) -> None:
     session.delete(credential)
     session.commit()
+
+
+def list_for_profile(session: Session, profile_id: int) -> list[WorkflowS3CredentialEntity]:
+    return list(session.exec(select(WorkflowS3CredentialEntity).where(
+        WorkflowS3CredentialEntity.s3_profile_id == profile_id,
+    )).all())

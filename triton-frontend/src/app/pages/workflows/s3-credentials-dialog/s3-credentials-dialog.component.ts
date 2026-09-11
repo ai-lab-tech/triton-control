@@ -1,4 +1,6 @@
 import { Component, inject, signal } from "@angular/core";
+import { DatePipe } from "@angular/common";
+import { MatSelectModule } from "@angular/material/select";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
@@ -20,19 +22,29 @@ type WorkflowS3CredentialDTO = {
   access_key_id: string;
   created_at: string;
   updated_at: string;
+  s3_profile_id?: number | null;
+  s3_profile_name?: string;
+  sync_error?: string;
+  last_synced_at?: string | null;
 };
 
 type CreateWorkflowS3CredentialRequest = {
   name: string;
-  access_key_id: string;
-  secret_access_key: string;
+  access_key_id?: string;
+  secret_access_key?: string;
+  s3_profile_id?: number;
+  ca_certificate?: string;
 };
+
+type ProfileChoice = { id: number; name: string; endpoint: string; bucket: string; region: string };
 
 @Component({
   selector: "app-s3-credentials-dialog",
   standalone: true,
   imports: [
     FormsModule,
+    MatSelectModule,
+    DatePipe,
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -55,12 +67,39 @@ export class S3CredentialsDialogComponent {
   readonly deletingCredentialId = signal<number | null>(null);
   readonly message = signal("");
   readonly showForm = signal(false);
+  readonly profiles = signal<ProfileChoice[]>([]);
+  readonly syncingCredentialId = signal<number | null>(null);
+  selectedProfileId: number | null = null;
   credentialName = "";
   accessKeyId = "";
   secretAccessKey = "";
+  caCertificate = "";
+
+  async loadCaCertificate(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 262144) {
+        this.message.set("CA certificate bundle must be at most 256 KiB.");
+        return;
+      }
+      this.caCertificate = await file.text();
+      this.message.set("");
+    } catch {
+      this.message.set("Could not read the certificate file.");
+    } finally {
+      input.value = "";
+    }
+  }
 
   constructor() {
     void this.loadCredentials();
+    void this.loadProfiles();
+  }
+
+  async refresh(): Promise<void> {
+    await Promise.all([this.loadCredentials(), this.loadProfiles()]);
   }
 
   close(): void {
@@ -79,14 +118,14 @@ export class S3CredentialsDialogComponent {
     return (
       !this.credentialsSaving() &&
       this.credentialName.trim().length > 0 &&
-      this.accessKeyId.trim().length > 0 &&
-      this.secretAccessKey.trim().length > 0
+      (this.selectedProfileId !== null ||
+        (this.accessKeyId.trim().length > 0 && this.secretAccessKey.trim().length > 0))
     );
   }
 
   async createCredential(): Promise<void> {
     if (!this.canCreate()) {
-      this.message.set("Name, Access Key ID and Secret Access Key are required.");
+      this.message.set("Enter a name and select an S3 profile or provide access keys.");
       return;
     }
 
@@ -95,8 +134,13 @@ export class S3CredentialsDialogComponent {
     try {
       const payload: CreateWorkflowS3CredentialRequest = {
         name: this.credentialName.trim(),
-        access_key_id: this.accessKeyId.trim(),
-        secret_access_key: this.secretAccessKey.trim(),
+        ...(this.selectedProfileId !== null
+          ? { s3_profile_id: this.selectedProfileId }
+          : {
+              access_key_id: this.accessKeyId.trim(),
+              secret_access_key: this.secretAccessKey.trim(),
+              ...(this.caCertificate.trim() ? { ca_certificate: this.caCertificate.trim() } : {}),
+            }),
       };
       await firstValueFrom(
         this.http.post<WorkflowS3CredentialDTO>(
@@ -131,6 +175,45 @@ export class S3CredentialsDialogComponent {
     }
   }
 
+  canSync(credential: WorkflowS3CredentialDTO): boolean {
+    return this.profiles().some((p) => p.id === credential.s3_profile_id);
+  }
+
+  selectProfile(): void {
+    const profile = this.profiles().find((p) => p.id === this.selectedProfileId);
+    if (profile && !this.credentialName.trim()) this.credentialName = profile.name;
+  }
+
+  async syncCredential(credential: WorkflowS3CredentialDTO): Promise<void> {
+    this.syncingCredentialId.set(credential.id);
+    try {
+      const result = await firstValueFrom(
+        this.http.post<WorkflowS3CredentialDTO>(
+          `${this.basePath}/api/workflows/s3-credentials/${credential.id}/sync`,
+          {},
+        ),
+      );
+      this.message.set(result.sync_error || "Workflow Secret synchronized.");
+      await this.loadCredentials();
+    } catch (error) {
+      this.message.set(mapApiErrorMessage(error, "Failed to synchronize workflow Secret."));
+    } finally {
+      this.syncingCredentialId.set(null);
+    }
+  }
+
+  private async loadProfiles(): Promise<void> {
+    try {
+      this.profiles.set(
+        await firstValueFrom(
+          this.http.get<ProfileChoice[]>(`${this.basePath}/api/workflows/s3-profile-choices`),
+        ),
+      );
+    } catch {
+      this.message.set("Could not load S3 profiles. Manual entry is still available.");
+    }
+  }
+
   private async loadCredentials(): Promise<void> {
     this.credentialsLoading.set(true);
     try {
@@ -147,8 +230,10 @@ export class S3CredentialsDialogComponent {
   }
 
   private resetForm(): void {
+    this.selectedProfileId = null;
     this.credentialName = "";
     this.accessKeyId = "";
     this.secretAccessKey = "";
+    this.caCertificate = "";
   }
 }

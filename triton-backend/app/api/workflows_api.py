@@ -7,14 +7,17 @@ from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
 from app.core.access_control import is_member_or_admin, require_member_or_admin
+from app.core.identity import require_user_entity
 from app.core.security import get_claims
 from app.db.database import get_session
+from app.repositories import s3_profiles
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
     CreateWorkflowS3CredentialRequest,
     WorkflowS3CredentialDeleteResponse,
     WorkflowS3CredentialDTO,
 )
+from app.schemas.workflows import WorkflowS3ProfileChoice
 from app.services.workflows import credentials, proxy, status
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
@@ -28,6 +31,30 @@ def get_argo_workflows_status(
     """Return readiness for the global Helm-managed Argo Workflows server."""
     require_member_or_admin(claims)
     return status.get_status()
+
+
+@router.get("/s3-profile-choices", response_model=list[WorkflowS3ProfileChoice])
+@translate_app_errors
+def list_s3_profile_choices(
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> list[WorkflowS3ProfileChoice]:
+    require_member_or_admin(claims)
+    owner = require_user_entity(session, claims)
+    return [WorkflowS3ProfileChoice(
+        id=p.id, name=p.name, endpoint=p.endpoint, bucket=p.bucket, region=p.region,
+    ) for p in s3_profiles.list_for_owner(session, owner.id or 0)]
+
+
+@router.post("/s3-credentials/{credential_id}/sync", response_model=WorkflowS3CredentialDTO)
+@translate_app_errors
+def sync_workflow_s3_credential(
+    credential_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> WorkflowS3CredentialDTO:
+    require_member_or_admin(claims)
+    return credentials.retry_sync(session, claims, credential_id)
 
 
 @router.get("/s3-credentials", response_model=list[WorkflowS3CredentialDTO])

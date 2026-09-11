@@ -51,6 +51,11 @@ spec:
             archive:
               none: {}
             s3:
+              insecure: false
+              # For a custom CA, add it in Configure S3 Secrets, then uncomment.
+              # caSecret:
+              #   name: "{{inputs.parameters.s3-credentials-secret}}"
+              #   key: ca.pem
               endpoint: "{{inputs.parameters.s3-endpoint}}"
               region: "{{inputs.parameters.s3-region}}"
               bucket: "{{inputs.parameters.s3-bucket}}"
@@ -110,6 +115,11 @@ spec:
             archive:
               none: {}
             s3:
+              insecure: false
+              # For a custom CA, add it in Configure S3 Secrets, then uncomment.
+              # caSecret:
+              #   name: "{{inputs.parameters.s3-credentials-secret}}"
+              #   key: ca.pem
               endpoint: "{{inputs.parameters.s3-endpoint}}"
               region: "{{inputs.parameters.s3-region}}"
               bucket: "{{inputs.parameters.s3-bucket}}"

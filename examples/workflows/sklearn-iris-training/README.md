@@ -124,9 +124,20 @@ aws --profile workflow-training \
 
 ## 4. Configure the Workflow S3 Secret
 
-In Triton Control, open **Workflows**, select **Configure S3 Secrets**, and add
-the access key ID and secret access key that can read the script and write the
-workflow outputs. Triton Control creates an Kubernetes Secret.
+In **Workflows → Configure S3 Secrets → Add S3 Credentials**, choose an existing
+S3 profile under **Credential source**, enter a name, and save. Triton Control
+creates a linked Secret using the profile's credentials and CA certificate.
+Manual entry and optional CA upload/paste are also available; no kubectl is needed.
+
+Profile changes automatically update linked Secrets without changing their names.
+The dialog shows the linked profile, last sync time, and any sync error; the profile
+owner can use **Sync now** to retry. Remove linked workflow credentials before
+deleting their source profile.
+
+New runs use the updated credentials; running workflows may retain previously
+loaded values. Endpoint, bucket, region, and object paths remain workflow parameters
+and must be updated separately. If you remove the profile's CA, also remove any
+`caSecret` reference that requires it from your workflow.
 
 Copy the generated **Secret** name shown in the credentials dialog. The
 workflow uses only this name; it never contains the credential values. The
@@ -152,11 +163,19 @@ update the parameters under `spec.arguments.parameters`:
 | `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
 
 
-For an intentionally plain-HTTP development endpoint, add `insecure: true` to
-both `s3` blocks and use an `http://` endpoint in More Connect or AWS CLI.
-Do not use that setting for an HTTPS endpoint. Workspace CA settings do not
-configure the separate Argo executor pods; those also need to trust a custom CA
-when downloading or uploading workflow artifacts.
+For HTTPS with a custom CA, add the certificate in step 4 and uncomment
+`caSecret` in **both** `s3` blocks in `workflow.yaml`:
+
+```yaml
+insecure: false
+caSecret:
+  name: "{{inputs.parameters.s3-credentials-secret}}"
+  key: ca.pem
+```
+
+Argo uses the certificate from the same S3 credentials Secret to verify artifact
+downloads and uploads. For publicly trusted certificates, leave `caSecret` omitted.
+See [Argo's CA configuration](https://argo-workflows.readthedocs.io/en/release-4.0/configure-artifact-repository/#configuring-minio).
 
 ## 6. Submit the Workflow
 

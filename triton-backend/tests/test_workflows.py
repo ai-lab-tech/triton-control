@@ -16,6 +16,34 @@ from app.services.workflows import config, credentials, proxy, status
 
 
 class WorkflowsTests(unittest.TestCase):
+    def test_CaCertificate_ValidatesPemBundle(self) -> None:
+        from datetime import timedelta
+
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")])
+        cert = (
+            x509.CertificateBuilder().subject_name(name).issuer_name(name)
+            .public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now() - timedelta(days=1))
+            .not_valid_after(datetime.now() + timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(key, hashes.SHA256())
+        ).public_bytes(serialization.Encoding.PEM).decode()
+        request = workflows_api.CreateWorkflowS3CredentialRequest
+        args = dict(name="test", access_key_id="key", secret_access_key="secret")
+        self.assertEqual(request(**args).ca_certificate, "")
+        bundle = cert + cert
+        self.assertEqual(request(**args, ca_certificate=bundle).ca_certificate, bundle.strip())
+        for invalid in ["not a certificate", "-----BEGIN CERTIFICATE-----\nbad\n-----END CERTIFICATE-----",
+                        cert + "-----BEGIN PRIVATE KEY-----\nbad\n-----END PRIVATE KEY-----", "x" * 262145]:
+            with self.subTest(invalid=invalid[:25]), self.assertRaises(ValueError):
+                request(**args, ca_certificate=invalid)
+
     def test_Config_NormalizesBasePath(self) -> None:
         with patch.dict(
             "os.environ",
@@ -242,6 +270,7 @@ class WorkflowsTests(unittest.TestCase):
             "workflow-s3-finance-prod-abc123",
             "AKIA123",
             "SECRET123",
+            "",
         )
         stored_values = create.call_args.kwargs
         self.assertEqual(stored_values["access_key_id"], "AKIA123")
@@ -402,6 +431,10 @@ class WorkflowsTests(unittest.TestCase):
             credentials._apply_secret("ns", "secret", "key", "value")
             body = core.create_namespaced_secret.call_args.kwargs["body"]
             self.assertEqual(body.string_data["access-key-id"], "key")
+            self.assertNotIn("ca.pem", body.string_data)
+            credentials._apply_secret("ns", "secret", "key", "value", "public-ca")
+            body = core.create_namespaced_secret.call_args.kwargs["body"]
+            self.assertEqual(body.string_data["ca.pem"], "public-ca")
 
             core.create_namespaced_secret.side_effect = ApiException(status=409)
             with self.assertRaises(ConflictError):
