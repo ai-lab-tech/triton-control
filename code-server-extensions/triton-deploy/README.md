@@ -127,6 +127,43 @@ s3://<endpoint>/<bucket>/prefix/model-repository-path
 It does not point at `.../model-name`, because that would make Triton start one
 directory too deep.
 
+## S3 Browser and Workspace Drag-and-Drop
+
+Open **Triton Control → S3 Browser → Connect S3 Profiles**. The connection tab
+uses your signed-in Triton Control session; no endpoint or credentials need to
+be entered again. Keep that tab open (you can switch to another editor).
+Closing it disconnects the browser and cancels an active upload.
+
+1. Expand your profile to browse its configured bucket and optional prefix.
+2. Drag files or folders from the **workspace Explorer** onto the target bucket
+   or S3 folder. Alternatively, right-click the target and select **Upload Files
+   or Folder to S3**.
+3. Existing files offer **Replace**, **Replace All**, or **Skip**. Dismissing the
+   prompt cancels the upload. Changed objects are protected by conditional writes.
+4. Watch upload progress in the notification; use **Cancel** to stop. Completed
+   files remain in S3. Refresh the tree to see changes made by other clients.
+
+Dragging `training/` into `workflows/` uploads `workflows/training/` and all its
+files, including subdirectories. Empty directories are omitted. Listings use
+**Load more…** for additional pages.
+
+Profiles are fetched again before each file, so ownership and credential updates
+are checked against the current browser session. The browser does not store S3
+credentials in workspace settings or extension storage. TLS verification is
+always enabled for HTTPS; a profile's public CA bundle is used directly, without
+requiring the global Node CA mount. The endpoint must be reachable from the pod.
+The profile needs permission to list the bucket, read object metadata, and upload
+objects (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`).
+
+This version supports workspace files only, up to 5 GiB per file and 10,000 files
+per upload. Symbolic links are rejected. Computer-to-browser drag-and-drop,
+multipart uploads, downloads, and deleting S3 objects are not included.
+Open code-server through Triton Control over trusted HTTPS (or localhost) so the
+profile connection webview can run.
+
+New workspaces include the browser after deploying the updated backend image.
+For existing workspaces, install the updated extension VSIX and reload code-server.
+
 ## S3 Profiles
 
 Members and admins can manage reusable S3 profiles in Triton Control from the

@@ -111,7 +111,7 @@ Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server
 does not prompt users to mark the folder as trusted on each new workspace.
 
-## S3 Profiles and Optional S3/R2 Explorer
+## S3 Profiles and S3 Browser
 
 The **Triton Control Deploy** extension works best with an S3 profile. Members
 and admins can create profiles from the Triton Control account menu under
@@ -125,6 +125,31 @@ key, path-style mode, and optional CA certificate.
 Manual S3 settings are still available inside the extension in a collapsed
 section. Use them for one-off deployments or to save a new profile from inside
 code-server.
+
+### Browse and Upload with Triton Control
+
+Open **Triton Control → S3 Browser → Connect S3 Profiles** in code-server.
+Keep the connection tab open; it uses your current Triton Control browser session.
+Expand a profile to browse its bucket and configured prefix, then drag workspace
+files or folders from Explorer onto an S3 destination. The target's context menu
+also offers **Upload Files or Folder to S3**.
+
+Folder uploads preserve the outer folder name and recursively upload its contents.
+Existing objects prompt for replacement or skipping. Upload notifications show
+progress and provide cancellation; files already uploaded remain in S3.
+Use **Refresh S3 Browser** after external changes and **Load more…** for large listings.
+
+The browser uses the selected profile's endpoint, region, credentials, path-style
+setting, and optional public CA bundle. HTTPS verification stays enabled. Credentials
+are fetched through the signed-in session before each file and are not saved by the
+browser. Changing a profile's destination during an upload stops the transfer.
+
+The initial version supports workspace uploads up to 5 GiB per file and 10,000 files
+per operation. Empty folders are omitted and symbolic links are rejected. Downloads,
+S3 deletion, multipart uploads, and drops from your computer are not included.
+The connection webview requires trusted HTTPS or localhost. New workspaces receive
+this browser with the updated backend image; existing workspaces need the updated
+extension VSIX installed and code-server reloaded.
 
 ### Optional: Install S3/R2 Explorer
 

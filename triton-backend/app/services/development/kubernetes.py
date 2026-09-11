@@ -496,6 +496,9 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
+        "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),
+        "extension/s3-files.js": (extension_dir / "s3-files.js").read_text(encoding="utf-8"),
         "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
         "extension/workspace-repositories.js": (
             extension_dir / "workspace-repositories.js"

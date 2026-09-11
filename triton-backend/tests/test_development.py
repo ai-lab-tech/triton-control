@@ -295,6 +295,9 @@ class CodeServerTests(unittest.TestCase):
             names = set(archive.namelist())
 
         self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/s3-browser.js", names)
+        self.assertIn("extension/s3-client.js", names)
+        self.assertIn("extension/s3-files.js", names)
         self.assertIn("extension/scaffold.js", names)
         self.assertIn("extension/workspace-repositories.js", names)
         self.assertIn("extension/resources/triton-control.svg", names)
@@ -305,9 +308,11 @@ class CodeServerTests(unittest.TestCase):
 
         contributes = package_json["contributes"]
 
-        self.assertEqual(package_json["version"], "0.1.1")
+        self.assertEqual(package_json["version"], "0.2.0")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
+        self.assertIn("onView:tritonControl.s3Browser", package_json["activationEvents"])
+        self.assertIn("tritonControl.s3Browser", [view["id"] for view in contributes["views"]["tritonControl"]])
         self.assertIn("onView:tritonControl.workspaceActions", package_json["activationEvents"])
         self.assertIn("onCommand:tritonControl.openRepositorySetup", package_json["activationEvents"])
         self.assertIn("onCommand:tritonControl.refreshRepositories", package_json["activationEvents"])

@@ -1,8 +1,8 @@
 {
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
-  "description": "Upload Triton model repositories from code-server to S3-compatible storage; the webview flow can also create a Triton Control deployment.",
-  "version": "0.1.1",
+  "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
+  "version": "0.2.0",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -18,7 +18,8 @@
     "onCommand:tritonControl.revealRepository",
     "onCommand:tritonControl.refreshRepositories",
     "onView:tritonControl.workspaceActions",
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:tritonControl.s3Browser"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -50,6 +51,26 @@
         "command": "tritonControl.refreshRepositories",
         "title": "Triton Control: Refresh Repositories",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "tritonControl.connectS3",
+        "title": "Triton Control: Connect S3 Profiles",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "tritonControl.refreshS3",
+        "title": "Triton Control: Refresh S3 Browser",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tritonControl.uploadS3",
+        "title": "Triton Control: Upload Files or Folder to S3",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tritonControl.moreS3",
+        "title": "Triton Control: Load More S3 Objects",
+        "icon": "$(more)"
       }
     ],
     "viewsContainers": {
@@ -66,6 +87,10 @@
         {
           "id": "tritonControl.workspaceActions",
           "name": "Workspace"
+        },
+        {
+          "id": "tritonControl.s3Browser",
+          "name": "S3 Browser"
         }
       ]
     },
@@ -80,6 +105,16 @@
           "command": "tritonControl.refreshRepositories",
           "when": "view == tritonControl.workspaceActions",
           "group": "navigation@90"
+        },
+        {
+          "command": "tritonControl.connectS3",
+          "when": "view == tritonControl.s3Browser",
+          "group": "navigation"
+        },
+        {
+          "command": "tritonControl.refreshS3",
+          "when": "view == tritonControl.s3Browser",
+          "group": "navigation"
         }
       ],
       "explorer/context": [
@@ -114,6 +149,11 @@
           "command": "tritonControl.deployModelRepository",
           "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
           "group": "navigation@90"
+        },
+        {
+          "command": "tritonControl.uploadS3",
+          "when": "view == tritonControl.s3Browser && viewItem == tritonS3folder",
+          "group": "navigation"
         }
       ]
     },
@@ -169,5 +209,11 @@
   "scripts": {
     "test": "node --test",
     "package": "vsce package"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "S3 access requires a trusted workspace."
+    }
   }
 }

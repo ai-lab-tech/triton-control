@@ -22,6 +22,7 @@ const VLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3";
 const TRTLLM_TRITON_IMAGE = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
 
 function activate(context) {
+  require("./s3-browser").registerS3Browser(context);
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
   actionsProvider = new TritonControlActionsProvider();
