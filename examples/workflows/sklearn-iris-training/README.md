@@ -198,6 +198,34 @@ s3://<bucketname>/workflows/sklearn-iris-training/runs/
     `-- metrics.json
 ```
 
+Use the client you chose in step 3 to check these files.
+
+### AWS CLI
+
+Use the same profile, endpoint, and custom CA setting from step 3. Replace the
+placeholders with your bucket, output prefix, and actual Argo Workflow name:
+
+```bash
+aws --profile workflow-training \
+  --endpoint-url "https://<your-s3-endpoint>" \
+  s3 ls "s3://<bucketname>/<s3-output-prefix>/<workflow-name>/" --recursive
+```
+
+Print the evaluation metrics:
+
+```bash
+aws --profile workflow-training \
+  --endpoint-url "https://<your-s3-endpoint>" \
+  s3 cp "s3://<bucketname>/<s3-output-prefix>/<workflow-name>/metrics.json" -
+```
+
+### More Connect
+
+In **More Connect → S3 Browser**, refresh the connection from step 3 and open
+`<bucketname> → <s3-output-prefix> → <workflow-name>`. Check that the four files
+shown above exist, then open or download `metrics.json` and `accuracy.txt` to
+inspect the results.
+
 The Argo Workflow also exposes `accuracy` as an output parameter and records
 the S3 location as the `training-results` output artifact.
 
