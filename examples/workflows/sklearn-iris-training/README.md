@@ -49,16 +49,16 @@ artifact expectations in `workflow.yaml` to match your own script.
 
 ## 3. Install, Configure, and Use an S3 Client
 
-The workspace needs an S3 client to upload the training script. You can install
-and configure the optional [S3/R2 Explorer](../../../docs/development-workspaces.md#optional-install-s3r2-explorer)
-extension, or use the AWS CLI from the code-server terminal.
+The workspace needs an S3 client to upload the training script. In code-server's
+Extensions view, install [More Connect](https://open-vsx.org/extension/ucodkr/more-connect)
+(`ucodkr.more-connect`), or use the AWS CLI from the terminal.
 
-S3/R2 Explorer requires an **HTTPS** S3 API endpoint, as documented by the
-[extension publisher](https://marketplace.visualstudio.com/items?itemName=lvdn.s3x-explorer).
-Set `s3x.endpointUrl` to `https://<your-s3-endpoint>` without a bucket name,
-enter your credentials and region, and enable `s3x.forcePathStyle` if your
-provider requires it. The hostname must be reachable from the workspace pod
-and match the server certificate.
+In **More Connect → S3 Browser**, add an S3 host and select **AWS S3**, **MinIO**,
+or **S3 Compatible**. Enter the S3 API endpoint without a bucket name, region,
+access key ID, and secret access key. MinIO automatically uses path-style access;
+for other compatible providers, select the addressing mode they require.
+More Connect supports HTTP and HTTPS. For HTTPS, the hostname must match the
+server certificate; the endpoint must be reachable from the workspace pod.
 
 For a private/custom CA, create a ConfigMap containing the public PEM CA bundle
 in the workspace namespace and configure these Helm values:
@@ -75,6 +75,18 @@ for the ConfigMap command and rollout requirements, including existing workspace
 The chart sets `NODE_EXTRA_CA_CERTS` for Node.js extensions at startup; exporting
 it in an already-open terminal does not update the running explorer. Endpoints
 with certificates already trusted by Node need no extra CA bundle.
+
+To upload the example folder with More Connect:
+
+1. In your bucket, create/open the destination `workflows/sklearn-iris-training/`.
+2. Click the **cloud-upload icon beside that S3 folder**, then choose **Upload Folder**.
+3. Select `/workspace/sklearn-iris-training/` and click **Upload**.
+
+More Connect uploads the folder's **contents**, including subdirectories, into
+the selected S3 destination; it does not add the outer folder name. Version 0.1.31
+supports **Upload Folder**, but not drag-and-drop.
+
+Use **More Connect** for folder uploads; **S3/R2 Explorer** does not support them.
 
 For the AWS CLI path, run:
 
@@ -141,7 +153,7 @@ update the parameters under `spec.arguments.parameters`:
 
 
 For an intentionally plain-HTTP development endpoint, add `insecure: true` to
-both `s3` blocks and use AWS CLI for the upload; S3/R2 Explorer requires HTTPS.
+both `s3` blocks and use an `http://` endpoint in More Connect or AWS CLI.
 Do not use that setting for an HTTPS endpoint. Workspace CA settings do not
 configure the separate Argo executor pods; those also need to trust a custom CA
 when downloading or uploading workflow artifacts.
