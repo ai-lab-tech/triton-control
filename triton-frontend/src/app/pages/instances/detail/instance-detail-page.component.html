@@ -86,15 +86,6 @@
         </div>
       </div>
     }
-    @if (perfProfileRunning()) {
-      <div class="deployment-progress-panel" role="status" aria-live="polite">
-        <span class="deployment-spinner" aria-hidden="true"></span>
-        <div class="deployment-progress-copy">
-          <div class="deployment-progress-title">Perf Analyzer</div>
-          <div class="deployment-progress-text">{{ activeProfileRunLabel() }}</div>
-        </div>
-      </div>
-    }
     <div class="detail-stats">
       <div class="stat-block">
         <span class="label">CPU</span>
@@ -411,7 +402,7 @@
                           <span class="material-icons">rocket_launch</span>
                           Infer
                         </button>
-                        @if (canWriteInstances() && perfAnalyzerInstalled()) {
+                        @if (canWriteInstances()) {
                           <button
                             mat-stroked-button
                             type="button"
@@ -429,7 +420,7 @@
                             [disabled]="!canOpenProfile(model.name, model.state, model.version)"
                           >
                             <span class="material-icons">speed</span>
-                            Profile
+                            Perf
                           </button>
                         }
                       </div>

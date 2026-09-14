@@ -82,12 +82,6 @@ export class ShellComponent {
         disabledReason: kubernetesActionDisabledReason,
       },
       {
-        label: "Perf Analyzer",
-        icon: "speed",
-        path: "/perf-analyzers",
-        disabledReason: kubernetesActionDisabledReason,
-      },
-      {
         label: "Workflows",
         icon: "account_tree",
         path: "/workflows",

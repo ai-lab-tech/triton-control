@@ -877,7 +877,9 @@ class DeploymentServiceTests(unittest.TestCase):
         # Assert
         self.assertEqual(response["status"], "deleted")
 
-    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self) -> None:
+    @patch("app.services.deployment.deployment.prepare_instance_deletion")
+    @patch("app.services.deployment.records.prepare_instance_deletion")
+    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self, _record_perf, _deployment_perf) -> None:
         # Arrange
         instance = SimpleNamespace(
             id=2,

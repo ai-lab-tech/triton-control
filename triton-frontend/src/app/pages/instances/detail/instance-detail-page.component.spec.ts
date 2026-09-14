@@ -79,15 +79,13 @@ describe("InstanceDetailPageComponent", () => {
       "deleteDeploymentApiDeploymentsInstanceIdDelete",
     ]);
     perfAnalyzersApiMock = jasmine.createSpyObj<PerfAnalyzersService>("PerfAnalyzersService", [
-      "getPerfAnalyzerStatusApiPerfAnalyzersGet",
+      "getModelPerfStatus",
     ]);
 
     instancesApiMock.getInstanceModelsApiInstancesInstanceIdModelsGet.and.returnValue(
       of([] as any),
     );
-    perfAnalyzersApiMock.getPerfAnalyzerStatusApiPerfAnalyzersGet.and.returnValue(
-      of({ installed: false } as any),
-    );
+    perfAnalyzersApiMock.getModelPerfStatus.and.returnValue(of({ installed: false } as any));
     usersApiMock.listUsersApiAuthUsersGet.and.returnValue(of([] as any));
 
     spyOn(navigator.clipboard, "writeText").and.resolveTo();

@@ -183,8 +183,9 @@ For an external database, set `postgresql.enabled=false` and provide
 
 ### Self-Deployed Triton And Perf Analyzer Namespace Behavior
 
-When you use Triton Control to install a self-deployed Triton instance or
-Perf Analyzer, namespace behavior depends on backend runtime context:
+When you create a self-deployed Triton instance or run a model performance
+Job, namespace behavior depends on backend runtime context. Performance Jobs
+run as non-root with one active run per model; see [Model performance Jobs](docs/model-performance-jobs.md).
 
 - Triton Control backend running in Kubernetes (in-cluster detection):
   self-deployed Triton and Perf Analyzer are created in the same namespace as

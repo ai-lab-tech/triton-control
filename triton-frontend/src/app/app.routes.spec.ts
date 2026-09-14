@@ -33,7 +33,7 @@ describe("APP_ROUTES", () => {
     expect(childPaths).toContain("instances");
     expect(childPaths).toContain("instances/:id/models/:modelName/versions/:version/profile");
     expect(childPaths).toContain("deployments/new");
-    expect(childPaths).toContain("perf-analyzers");
+    expect(childPaths).not.toContain("perf-analyzers");
     expect(childPaths).toContain("users");
     expect(childPaths).toContain("settings");
   });

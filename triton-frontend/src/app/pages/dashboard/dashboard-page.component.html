@@ -75,16 +75,6 @@
               <a mat-stroked-button class="run-link-btn" routerLink="/error-logs">Open logs</a>
             </div>
           }
-          @if (activeProfileRun(); as run) {
-            <div class="alert-item perf-running-item">
-              <span class="material-icons alert-icon">speed</span>
-              <span class="alert-text">
-                Perf Analyzer run active
-                <span class="alert-subtext">{{ run.label }}</span>
-              </span>
-              <a mat-stroked-button class="run-link-btn" [routerLink]="run.route">Open run</a>
-            </div>
-          }
           @if (alerts().length) {
             @for (alert of alerts(); track alert.label) {
               <div class="alert-item">

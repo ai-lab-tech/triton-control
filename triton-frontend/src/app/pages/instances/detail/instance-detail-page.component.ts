@@ -22,7 +22,6 @@ import { type Instance } from "../instances.data";
 import {
   DeploymentsService,
   InstancesService,
-  PerfAnalyzersService,
   UpdateInstanceS3Request,
   UpdateTritonInstanceRequest,
 } from "../../../api/generated/index";
@@ -45,10 +44,6 @@ import {
   selectDetailS3Saving,
   selectDetailTritonSaving,
 } from "../../../state/instances-detail/instances-detail.selectors";
-import {
-  selectActiveRunKey,
-  selectProfileRunning,
-} from "../../../state/instances-profile/instances-profile.selectors";
 import { isSelfDeployedStarting } from "../../../state/instances.utils";
 
 @Component({
@@ -75,7 +70,6 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly defaultS3Region = "us-east-1";
   private readonly instancesApi = inject(InstancesService);
   private readonly deploymentsApi = inject(DeploymentsService);
-  private readonly perfAnalyzersApi = inject(PerfAnalyzersService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
   private readonly auth = inject(AuthStore);
@@ -117,13 +111,6 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly selectedDetailTabIndex = signal(0);
   readonly deploymentDeleting = signal(false);
   readonly deploymentDeleteError = signal("");
-  readonly perfAnalyzerInstalled = signal(false);
-  readonly perfProfileRunning = toSignal(this.store.select(selectProfileRunning), {
-    initialValue: false,
-  });
-  readonly activeProfileRunKey = toSignal(this.store.select(selectActiveRunKey), {
-    initialValue: "",
-  });
   private dialogPointerStartedOnBackdrop = false;
   private openLogsOnce = false;
 
@@ -182,23 +169,6 @@ export class InstanceDetailPageComponent implements OnInit {
     const instance = this.instance();
     return !!instance && isSelfDeployedStarting(instance);
   });
-  readonly activeProfileRunLabel = computed(() => {
-    if (!this.perfProfileRunning() || !this.activeProfileRunKey()) {
-      return "";
-    }
-    const parts = this.activeProfileRunKey().split(":");
-    if (parts.length < 3) {
-      return "Perf Analyzer run in progress";
-    }
-    const runInstanceId = parts[0];
-    const runVersion = parts[parts.length - 1];
-    const runModel = parts.slice(1, -1).join(":");
-    const currentInstanceId = this.instanceId() ?? "";
-    if (runInstanceId === currentInstanceId) {
-      return `Perf Analyzer running for ${runModel}:${runVersion}`;
-    }
-    return "Perf Analyzer run in progress on another instance";
-  });
 
   constructor() {
     this.openLogsOnce =
@@ -255,18 +225,6 @@ export class InstanceDetailPageComponent implements OnInit {
       this.openLogsOnce = false;
     }
     this.startRuntimePolling(id);
-    void this.loadPerfAnalyzerStatus();
-  }
-
-  async loadPerfAnalyzerStatus(): Promise<void> {
-    try {
-      const status = await firstValueFrom(
-        this.perfAnalyzersApi.getPerfAnalyzerStatusApiPerfAnalyzersGet(),
-      );
-      this.perfAnalyzerInstalled.set(status.installed);
-    } catch {
-      this.perfAnalyzerInstalled.set(false);
-    }
   }
 
   saveS3Config(): void {
@@ -720,21 +678,8 @@ export class InstanceDetailPageComponent implements OnInit {
     return normalizedState === "READY" || normalizedState === "ACTIVE";
   }
 
-  canOpenProfile(modelName: string, state: string, version: string): boolean {
-    if (!this.canInferModel(state, version)) {
-      return false;
-    }
-    if (!this.perfProfileRunning()) {
-      return true;
-    }
-
-    const instance = this.instance();
-    if (!instance) {
-      return false;
-    }
-
-    const targetKey = `${instance.id}:${modelName}:${version}`;
-    return this.activeProfileRunKey() === targetKey;
+  canOpenProfile(_modelName: string, _state: string, version: string): boolean {
+    return !!version.trim();
   }
 
   canUnloadModel(state: string): boolean {

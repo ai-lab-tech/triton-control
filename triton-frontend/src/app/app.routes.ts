@@ -5,7 +5,6 @@ import { DashboardPageComponent } from "./pages/dashboard/dashboard-page.compone
 import { InstancesPageComponent } from "./pages/instances/instances-page.component";
 import { DevelopmentPageComponent } from "./pages/development/development-page.component";
 import { NewDeploymentPageComponent } from "./pages/deployments/new-deployment-page.component";
-import { NewPerfAnalyzerPageComponent } from "./pages/perf-analyzers/new-perf-analyzer-page.component";
 import { InstanceDetailPageComponent } from "./pages/instances/detail/instance-detail-page.component";
 import { InstanceModelInferPageComponent } from "./pages/instances/infer/instance-model-infer-page.component";
 import { InstanceModelProfilePageComponent } from "./pages/instances/profile/instance-model-profile-page.component";
@@ -42,7 +41,6 @@ export const APP_ROUTES: Routes = [
       { path: "instances", component: InstancesPageComponent },
       { path: "development", component: DevelopmentPageComponent },
       { path: "deployments/new", component: NewDeploymentPageComponent },
-      { path: "perf-analyzers", component: NewPerfAnalyzerPageComponent },
       { path: "workflows", component: WorkflowsPageComponent },
       { path: "mlflow", component: MlflowPageComponent },
       { path: "instances/:id", component: InstanceDetailPageComponent },

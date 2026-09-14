@@ -54,7 +54,6 @@ Main sidebar entries:
 - Triton Instances
 - Development (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
-- Perf Analyzer (when Kubernetes actions are available)
 - Workflows (when Kubernetes actions and Argo Workflows are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
 - S3 Profiles (account menu, `member`/`admin`): reusable S3 deployment credentials.
@@ -167,7 +166,7 @@ For each model version, users can:
 
 - see model state and reason returned by Triton
 - open the inference page
-- open the profile page (when Perf Analyzer is installed)
+- open the model Perf view
 - request model load (`member`/`admin`)
 - request model unload (`member`/`admin`)
 
@@ -224,9 +223,9 @@ Configuration side panel behavior:
 - **Live API Config** is Triton's parsed runtime JSON response, not the raw
   `config.pbtxt` file
 
-## Model Profile Page (Perf Analyzer)
+## Model Perf View
 
-Open **Profile** from a model row to run model profiling.
+Open **Perf** from a model row to configure and run a benchmark.
 
 Reference:
 
@@ -234,10 +233,12 @@ Reference:
 
 Current behavior:
 
-- profile button appears only when Perf Analyzer installation exists
-- only one profile run can execute at a time
-- while one run is active, other profile actions are disabled
-- active run can be reopened to inspect progress/results
+- configure the analyzer image and optional registry credentials in this view
+- each run creates its own non-root Kubernetes Job; no global installation is required
+- different models run concurrently, with one active run per model within an instance across all versions
+- while this model is creating, pending, running, or stopping, Start is disabled
+- Stop terminates only this run; Start becomes available after confirmed termination
+- reopening the view recovers the active run and saved results
 - the side configuration panel follows the same behavior as the Inference page:
   editable S3 `config.pbtxt` when S3 is configured, otherwise read-only
   **Live API Config**
@@ -447,18 +448,16 @@ See [Development Workspaces](development-workspaces.md) for workspace fields,
 Kubernetes resources, persistence, proxy behavior, deployment steps, and API
 details.
 
-## Perf Analyzer (Sidebar Entry)
+## Perf Analyzer Job Configuration
 
-**Perf Analyzer** is a standalone navigation entry, not an instance detail tab.
-
-Triton Control supports a shared Perf Analyzer installation for profile runs.
-
-- one installation is managed at a time (singleton installation)
-- profile runs target selected instance/model/version from the Profile page
+Performance controls are available from each model's **Perf** view. There is no
+global Perf Analyzer sidebar entry or installation step. See
+[Model performance Jobs](model-performance-jobs.md) for lifecycle, API, security,
+and upgrade details.
 
 Namespace behavior:
 
-- Perf Analyzer is created in the same namespace as Triton Control
+- each Perf Analyzer Job is created in the same namespace as Triton Control
 - in Kubernetes, this is the namespace of the running Triton Control pod
 - outside Kubernetes, the namespace defaults to `triton-control` and can be
   overridden with `TRITON_CONTROL_NAMESPACE`, `KUBERNETES_NAMESPACE`, or
@@ -470,7 +469,7 @@ Current scope:
 - they are not positioned as full production orchestration in this version
 
 Perf Analyzer can also use a private registry image pull secret. Paste the same
-`.dockerconfigjson` format into the Perf Analyzer image pull secret field when
+`.dockerconfigjson` format into the model Perf view's registry credentials field when
 the configured SDK image is stored in a private registry. This example is not a
 fixed template; use the Docker config JSON required by your registry:
 
@@ -525,7 +524,7 @@ Use this path when:
 Behavior after creation:
 
 - the instance appears in **Triton Instances** like other instances
-- **Profile** can be used from the **Models** tab when Perf Analyzer is installed
+- **Perf** can be opened from the **Models** tab without a global analyzer installation
 - the **Logs** tab is not shown for these manually added instances
 
 ## HTTPS Triton Connections

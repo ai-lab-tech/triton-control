@@ -150,7 +150,7 @@ describe("ShellComponent", () => {
 
     // Assert
     expect(addDeployment?.disabledReason).toContain("Triton Control itself runs in Kubernetes");
-    expect(perfAnalyzer?.disabledReason).toContain("Triton Control itself runs in Kubernetes");
+    expect(perfAnalyzer).toBeUndefined();
   });
 
   it("NavItems_KubernetesEnabled_ShowsEnabledKubernetesActions", () => {
@@ -167,7 +167,7 @@ describe("ShellComponent", () => {
 
     // Assert
     expect(addDeployment?.disabledReason).toBeUndefined();
-    expect(perfAnalyzer?.disabledReason).toBeUndefined();
+    expect(perfAnalyzer).toBeUndefined();
   });
 
   it("ToggleAdminMenu_InvokedTwice_TogglesOpenState", () => {
