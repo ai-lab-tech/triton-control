@@ -59,7 +59,6 @@ def create_code_server(
         "secret_name": secret_name,
         "image": request.image,
         "url": "",
-        "password_enc": "",
         "status": "creating",
         "status_message": "Kubernetes resources applied; waiting for pod readiness.",
         "applied_resources": applied_resources,
