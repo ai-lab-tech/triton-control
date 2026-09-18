@@ -154,7 +154,27 @@ Use normal Explorer controls for files and folders:
 - Use **Download S3 Files or Folder** to select a workspace destination, or
   **Upload Files or Folder to S3** to select local sources.
 
-Explorer controls whether a drag copies or moves and displays conflict prompts.
+Managed code-server uses Windows Explorer drag defaults for S3 transfers:
+
+- Workspace ↔ S3, or between different S3 profiles: **copy**.
+- Within one S3 profile: **move**.
+- **Ctrl-drag** forces copy (Option on macOS); **Shift-drag** forces move.
+- Drop on a bucket root or folder. Explorer displays overwrite/move prompts.
+
+The cursor and committed action use the same rule. Workspace-only dragging and
+workspace-root reordering retain code-server's native behavior. Right-button
+"drop action" menus and creating Windows shortcuts are not implemented.
+
+This behavior requires the managed startup customization in
+`code-server-s3-dnd.js`, tested against the pinned code-server **4.125.0** bundle.
+It is applied before code-server starts, and is idempotent. A different or
+partially patched Explorer bundle is rejected before serving the workspace,
+rather than silently reverting to move-by-default. Custom images containing
+code-server must use that build and allow writing its workbench bundle.
+Existing workspaces need the updated startup command and ConfigMap. Reload
+browser windows after applying the customization.
+
+Explorer handles transfer progress and conflict prompts.
 Moving within S3 copies all selected contents successfully before deleting the
 originals. Conditional requests protect against concurrent object changes.
 S3 folder operations include nested objects and folder markers. Profile roots

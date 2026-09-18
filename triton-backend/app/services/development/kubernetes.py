@@ -284,6 +284,12 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
         +
+        'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
+        'CODE_SERVER_ROOT=$(dirname "$(dirname "$CODE_SERVER_ENTRY")"); '
+        'CODE_SERVER_NODE="$CODE_SERVER_ROOT/lib/node"; '
+        'if [ ! -x "$CODE_SERVER_NODE" ]; then CODE_SERVER_NODE=$(command -v node); fi; '
+        '"$CODE_SERVER_NODE" /opt/triton-control/extensions/triton-deploy/code-server-s3-dnd.js '
+        '"$CODE_SERVER_ROOT" || { echo "Error: S3 drag-and-drop setup failed." >&2; exit 1; }; '
         "PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json; "
         "PERSISTENT_EXTENSIONS=/workspace/.triton-control/code-server-extensions; "
         "DEFAULT_SETTINGS='{\"workbench.startupEditor\":\"none\","
@@ -475,6 +481,7 @@ def _triton_deploy_extension_configmap(namespace: str, statefulset_name: str) ->
         "apiVersion": "v1",
         "kind": "ConfigMap",
         "data": {
+            "code-server-s3-dnd.js": (extension_dir / "code-server-s3-dnd.js").read_text(encoding="utf-8"),
             "triton-control-deploy.vsix.b64": _triton_deploy_extension_vsix_b64(extension_dir, package_json),
         },
         "immutable": False,

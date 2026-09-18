@@ -89,6 +89,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
         self.assertEqual(extension_configmap["kind"], "ConfigMap")
         self.assertIn("triton-control-deploy.vsix.b64", extension_configmap["data"])
+        self.assertIn("code-server-s3-dnd.js", extension_configmap["data"])
         self.assertEqual(statefulset["kind"], "StatefulSet")
         self.assertFalse(pod_spec["automountServiceAccountToken"])
         self.assertEqual(
@@ -115,6 +116,8 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3")
         self.assertIn("--version 4.125.0", container["args"][0])
+        self.assertIn("code-server-s3-dnd.js", container["args"][0])
+        self.assertLess(container["args"][0].index("code-server-s3-dnd.js"), container["args"][0].index('exec "$CODE_SERVER_BIN"'))
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
