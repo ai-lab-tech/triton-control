@@ -57,6 +57,22 @@ test("signing encodes object keys and query tokens without changing their meanin
   );
 });
 
+test("switching profiles uses only the selected profile CA, including certificate updates", () => {
+  const first = signedRequest({ ...profile, ca_certificate: "first-ca" }, "GET", "");
+  const second = signedRequest({ ...profile, ca_certificate: "second-ca" }, "GET", "");
+  const updated = signedRequest({ ...profile, ca_certificate: "rotated-ca" }, "GET", "");
+  const publicEndpoint = signedRequest(profile, "GET", "");
+  assert.ok(first.ca.includes("first-ca"));
+  assert.ok(second.ca.includes("second-ca"));
+  assert.ok(!second.ca.includes("first-ca"));
+  assert.ok(updated.ca.includes("rotated-ca"));
+  assert.ok(!updated.ca.includes("first-ca"));
+  assert.equal(publicEndpoint.ca, undefined);
+  for (const request of [first, second, updated, publicEndpoint]) {
+    assert.equal(request.rejectUnauthorized, true);
+  }
+});
+
 test("S3 listing decodes keys and pagination independently", () => {
   assert.deepEqual(
     parseList(`<ListBucketResult><EncodingType>url</EncodingType>

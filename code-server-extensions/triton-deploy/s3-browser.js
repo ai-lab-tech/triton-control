@@ -1,108 +1,95 @@
 const vscode = require("vscode");
-const crypto = require("node:crypto");
+const profileApi = require("./profile-api");
 const path = require("node:path");
 const s3 = require("./s3-client");
 const { planUpload } = require("./s3-files");
 
 class ProfileSession {
   constructor(onChange) {
-    this.pending = new Map();
     this.onChange = onChange;
+    this.ready = false;
+    this.generation = 0;
   }
-  connect() {
+  async connect() {
     if (!vscode.workspace.isTrusted)
       throw new Error("Trust this workspace before connecting S3 profiles.");
-    if (this.panel) {
-      this.panel.reveal();
-      return;
-    }
-    const panel = vscode.window.createWebviewPanel(
-      "tritonControlS3Session",
-      "S3 Profile Connection",
-      vscode.ViewColumn.Active,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [],
-      },
-    );
-    this.panel = panel;
-    const nonce = crypto.randomBytes(24).toString("hex");
-    panel.webview.onDidReceiveMessage((message) => {
-      if (message?.type === "ready") {
-        this.ready = true;
-        this.onChange();
-        return;
-      }
-      const pending = this.pending.get(message?.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      clearTimeout(pending.timer);
-      if (message.error) pending.reject(new Error(String(message.error)));
-      else if (Array.isArray(message.profiles))
-        pending.resolve(message.profiles);
-      else pending.reject(new Error("Invalid S3 profile response."));
-    });
-    panel.onDidDispose(() => {
-      this.panel = undefined;
-      this.ready = false;
-      for (const pending of this.pending.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error("S3 profile connection closed."));
-      }
-      this.pending.clear();
-      this.onChange();
-    });
-    panel.webview.html = `<!DOCTYPE html><html><head>
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self';">
-      <style>body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:24px;line-height:1.6}p{max-width:640px}</style>
-      </head><body><h2>S3 profiles</h2><p id="status">Connecting to Triton Control…</p>
-      <p>Open <strong>Triton Control → S3 Browser</strong> to browse your saved profiles.
-      Drag workspace files or folders onto a bucket or S3 folder to upload them.</p>
-      <p>Keep this tab open; you can switch to another editor. Closing it disconnects the S3 browser.
-      Credentials are fetched through your signed-in Triton Control session and are not saved by this browser.</p>
-      <script nonce="${nonce}">
-      const api = acquireVsCodeApi();
-      window.addEventListener('message', async ({data}) => {
-        if (data.type !== 'profiles') return;
-        try {
-          const response = await fetch('/api/s3-profiles', {credentials:'include', cache:'no-store'});
-          if (!response.ok) throw new Error('Cannot load S3 profiles (HTTP ' + response.status + '). Sign in to Triton Control with a member or admin account.');
-          const profiles = await response.json();
-          if (!Array.isArray(profiles)) throw new Error('Unexpected profile response. Reopen this workspace through Triton Control.');
-          document.getElementById('status').textContent = profiles.length ? 'Connected. Select a profile in S3 Browser.' : 'No saved profiles. Create one in Triton Control → S3 Profiles, then refresh S3 Browser.';
-          api.postMessage({id:data.id, profiles});
-        } catch (error) {
-          document.getElementById('status').textContent = error.message;
-          api.postMessage({id:data.id, error:error.message});
-        }
+    if (this.connecting) return;
+    this.connecting = true;
+    const generation = this.generation;
+    try {
+      const endpoint = await vscode.window.showInputBox({
+        title: "Connect S3 Profiles",
+        prompt: "Triton Control URL reachable from this workspace",
+        value: this.endpoint || process.env.TRITON_CONTROL_API_URL || "http://triton-control:8000",
+        ignoreFocusOut: true,
+        validateInput: (value) => {
+          try { profileApi.apiUrl(value); } catch (error) { return error.message; }
+        },
       });
-      api.postMessage({type:'ready'});
-      </script></body></html>`;
+      if (!endpoint) return;
+      const method = await vscode.window.showQuickPick([
+        { label: "Email and password", description: "Local Triton Control account" },
+        { label: "Access token", description: "Existing Triton Control or SSO bearer token" },
+      ], { title: "Sign in to Triton Control", ignoreFocusOut: true });
+      if (!method) return;
+      let token;
+      if (method.label === "Email and password") {
+        const email = await vscode.window.showInputBox({
+          title: "Triton Control email", ignoreFocusOut: true,
+        });
+        if (!email) return;
+        const password = await vscode.window.showInputBox({
+          title: "Triton Control password", password: true, ignoreFocusOut: true,
+        });
+        if (!password) return;
+        const login = await profileApi.requestJson(endpoint, "/api/auth/login", {
+          body: { email: email.trim(), password },
+        });
+        token = login.access_token;
+      } else {
+        token = await vscode.window.showInputBox({
+          title: "Triton Control access token", password: true, ignoreFocusOut: true,
+          prompt: "Used only for this extension session; not saved to disk",
+        });
+        if (!token) return;
+      }
+      if (typeof token !== "string" || !token.trim())
+        throw new Error("Sign-in did not return an access token.");
+      token = token.trim();
+      const profiles = await profileApi.requestJson(endpoint, "/api/s3-profiles", { token });
+      if (!Array.isArray(profiles)) throw new Error("Invalid S3 profile response.");
+      if (generation !== this.generation) return;
+      this.dispose();
+      this.endpoint = endpoint;
+      this.token = token;
+      this.ready = true;
+      this.onChange();
+      vscode.window.showInformationMessage(profiles.length
+        ? "S3 profiles connected. Select a profile in S3 Browser."
+        : "Connected. Create an S3 profile in Triton Control, then refresh S3 Browser.");
+    } finally {
+      this.connecting = false;
+    }
   }
-  profiles() {
-    if (!vscode.workspace.isTrusted || !this.panel || !this.ready)
-      return Promise.reject(
-        new Error(
-          "Connect S3 profiles first. Open this workspace through Triton Control over trusted HTTPS.",
-        ),
-      );
-    return new Promise((resolve, reject) => {
-      const id = crypto.randomBytes(16).toString("hex");
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(
-          new Error(
-            "Profile connection timed out. Reopen Connect S3 Profiles.",
-          ),
-        );
-      }, 15000);
-      this.pending.set(id, { resolve, reject, timer });
-      this.panel.webview.postMessage({ type: "profiles", id });
-    });
+  async profiles() {
+    if (!vscode.workspace.isTrusted || !this.ready)
+      throw new Error("Connect S3 profiles first.");
+    const generation = this.generation;
+    try {
+      const profiles = await profileApi.requestJson(this.endpoint, "/api/s3-profiles", { token: this.token });
+      if (generation !== this.generation) throw new Error("S3 profile connection closed.");
+      if (!Array.isArray(profiles)) throw new Error("Invalid S3 profile response.");
+      return profiles;
+    } catch (error) {
+      if (generation === this.generation && [401, 403].includes(error.status)) this.dispose();
+      throw error;
+    }
   }
   dispose() {
-    this.panel?.dispose();
+    this.generation++;
+    this.ready = false;
+    this.token = undefined;
+    this.onChange();
   }
 }
 
@@ -403,6 +390,7 @@ function registerS3Browser(context) {
       }),
     );
   command("tritonControl.connectS3", () => browser.session.connect());
+  command("tritonControl.disconnectS3", () => browser.session.dispose());
   command("tritonControl.refreshS3", () => browser.refresh());
   command("tritonControl.uploadS3", (target) => browser.chooseUpload(target));
   command("tritonControl.moreS3", async (node) => {

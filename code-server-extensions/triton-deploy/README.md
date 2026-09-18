@@ -129,10 +129,15 @@ directory too deep.
 
 ## S3 Browser and Workspace Drag-and-Drop
 
-Open **Triton Control → S3 Browser → Connect S3 Profiles**. The connection tab
-uses your signed-in Triton Control session; no endpoint or credentials need to
-be entered again. Keep that tab open (you can switch to another editor).
-Closing it disconnects the browser and cancels an active upload.
+Open **Explorer → S3 Browser → Connect S3 Profiles**. Native prompts ask
+for the Triton Control API URL reachable from the workspace, then your local
+email/password or an existing access token (including SSO). The default URL is
+`http://triton-control:8000`; deployments can override it with
+`TRITON_CONTROL_API_URL`. Sign-in uses no webview or browser cookies.
+
+The access token stays in extension memory only. Reconnect after reloading the
+window or when the token expires. **Disconnect S3 Profiles** clears the token
+and cancels an active upload. No connection tab needs to stay open.
 
 1. Expand your profile to browse its configured bucket and optional prefix.
 2. Drag files or folders from the **workspace Explorer** onto the target bucket
@@ -148,7 +153,7 @@ files, including subdirectories. Empty directories are omitted. Listings use
 **Load more…** for additional pages.
 
 Profiles are fetched again before each file, so ownership and credential updates
-are checked against the current browser session. The browser does not store S3
+are checked against the current authenticated account. The browser does not store S3
 credentials in workspace settings or extension storage. TLS verification is
 always enabled for HTTPS; a profile's public CA bundle is used directly, without
 requiring the global Node CA mount. The endpoint must be reachable from the pod.
@@ -158,8 +163,8 @@ objects (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`).
 This version supports workspace files only, up to 5 GiB per file and 10,000 files
 per upload. Symbolic links are rejected. Computer-to-browser drag-and-drop,
 multipart uploads, downloads, and deleting S3 objects are not included.
-Open code-server through Triton Control over trusted HTTPS (or localhost) so the
-profile connection webview can run.
+The native S3 connection works even when code-server is opened over HTTP.
+HTTPS connections from the extension still verify server certificates.
 
 New workspaces include the browser after deploying the updated backend image.
 For existing workspaces, install the updated extension VSIX and reload code-server.

@@ -61,10 +61,6 @@ spec:
               value: {{ .Values.tritonDeployments.s3SyncStagingEmptyDirSize | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION
               value: {{ .Values.development.codeServer.version | quote }}
-            - name: DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP
-              value: {{ include "triton-control.codeServerCaConfigMap" . | quote }}
-            - name: DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY
-              value: {{ .Values.development.codeServer.extraCaKey | default "rootCA.pem" | quote }}
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

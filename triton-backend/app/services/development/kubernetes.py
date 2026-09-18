@@ -375,7 +375,7 @@ def _statefulset_manifest(
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
                             {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
                             {"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"},
-                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"},
+                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"},
                         ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
@@ -426,30 +426,6 @@ def _statefulset_manifest(
             },
         ],
     }
-    extra_ca_config_map = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP", "").strip()
-    if extra_ca_config_map:
-        extra_ca_key = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY", "rootCA.pem").strip() or "rootCA.pem"
-        workspace_pod = pod_spec["template"]["spec"]
-        container = workspace_pod["containers"][0]
-        for env_var in container["env"]:
-            if env_var["name"] == "NODE_TLS_REJECT_UNAUTHORIZED":
-                env_var["value"] = "1"
-        container["env"].append({
-            "name": "NODE_EXTRA_CA_CERTS",
-            "value": "/etc/triton-control/code-server-ca/ca.pem",
-        })
-        container["volumeMounts"].append({
-            "name": "code-server-extra-ca",
-            "mountPath": "/etc/triton-control/code-server-ca",
-            "readOnly": True,
-        })
-        workspace_pod["volumes"].append({
-            "name": "code-server-extra-ca",
-            "configMap": {
-                "name": extra_ca_config_map,
-                "items": [{"key": extra_ca_key, "path": "ca.pem"}],
-            },
-        })
     image_pull_secret = _image_pull_secret_name(statefulset_name)
     if request.dockerconfigjson:
         pod_spec["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]
@@ -496,6 +472,7 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/profile-api.js": (extension_dir / "profile-api.js").read_text(encoding="utf-8"),
         "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
         "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),
         "extension/s3-files.js": (extension_dir / "s3-files.js").read_text(encoding="utf-8"),

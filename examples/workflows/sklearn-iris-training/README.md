@@ -61,15 +61,14 @@ python -m pip install --user awscli
 aws configure --profile workflow-training
 ```
 
-For HTTPS with a custom CA, follow the
-[workspace HTTPS certificate setup](../../../charts/triton-control/README.md#development-workspace-https-certificates)
-to mount the CA bundle. AWS CLI needs its own
-[`AWS_CA_BUNDLE`](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)
-setting in the terminal before uploading:
+For HTTPS with a custom CA, save the public CA bundle to a workspace file and
+configure AWS CLI in the terminal before uploading:
 
 ```bash
-export AWS_CA_BUNDLE=/etc/triton-control/code-server-ca/ca.pem
+export AWS_CA_BUNDLE=/path/to/ca-bundle.pem
 ```
+
+AWS CLI does not automatically load Triton Control S3 profiles.
 
 At the prompts, enter the access key ID, secret access key, bucket region, and
 your preferred output format. For an S3-compatible provider such as Cloudflare
@@ -102,14 +101,10 @@ for other compatible providers, select the addressing mode they require.
 More Connect supports HTTP and HTTPS. For HTTPS, the hostname must match the
 server certificate; the endpoint must be reachable from the workspace pod.
 
-For a private/custom CA, pass the public PEM bundle to Helm during installation
-or upgrade with `--set-file development.codeServer.extraCaBundle=/path/to/ca-bundle.pem`.
-Helm creates the ConfigMap and configures the workspace CA mount.
-See the [workspace HTTPS certificate setup](../../../charts/triton-control/README.md#development-workspace-https-certificates)
-for the full command and rollout requirements, including existing workspaces.
-The chart sets `NODE_EXTRA_CA_CERTS` for Node.js extensions at startup; exporting
-it in an already-open terminal does not update the running explorer. Endpoints
-with certificates already trusted by Node need no extra CA bundle.
+For a private/custom CA, use **Explorer → S3 Browser** with a saved S3
+profile containing the CA certificate. It applies that certificate dynamically
+for the selected profile. More Connect has separate connection settings and
+does not inherit Triton Control profiles.
 
 To upload the example folder with More Connect:
 

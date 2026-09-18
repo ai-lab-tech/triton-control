@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -71,6 +71,11 @@
         "command": "tritonControl.moreS3",
         "title": "Triton Control: Load More S3 Objects",
         "icon": "$(more)"
+      },
+      {
+        "command": "tritonControl.disconnectS3",
+        "title": "Triton Control: Disconnect S3 Profiles",
+        "icon": "$(debug-disconnect)"
       }
     ],
     "viewsContainers": {
@@ -87,7 +92,9 @@
         {
           "id": "tritonControl.workspaceActions",
           "name": "Workspace"
-        },
+        }
+      ],
+      "explorer": [
         {
           "id": "tritonControl.s3Browser",
           "name": "S3 Browser"
@@ -113,6 +120,11 @@
         },
         {
           "command": "tritonControl.refreshS3",
+          "when": "view == tritonControl.s3Browser",
+          "group": "navigation"
+        },
+        {
+          "command": "tritonControl.disconnectS3",
           "when": "view == tritonControl.s3Browser",
           "group": "navigation"
         }
