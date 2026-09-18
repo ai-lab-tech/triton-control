@@ -129,45 +129,54 @@ directory too deep.
 
 ## S3 Browser and Workspace Drag-and-Drop
 
-Open **Explorer → S3 Browser → Connect S3 Profiles**. Native prompts ask
-for the Triton Control API URL reachable from the workspace, then your local
-email/password or an existing access token (including SSO). The default URL is
-`http://triton-control:8000`; deployments can override it with
-`TRITON_CONTROL_API_URL`. Sign-in uses no webview or browser cookies.
+Saved S3 profiles appear as folders alongside your workspace in **Explorer**.
+Use the Explorer toolbar’s plug (**Choose S3 Profile**), disconnect, and refresh
+buttons. These actions are also available under **S3 Operations** when right-clicking an S3 folder;
+right-click a workspace folder and choose **S3 Operations → Choose Profile…** to connect when disconnected.
+When connected, both workspace and S3 context menus show **Refresh**,
+**Disconnect**, and **Switch Profile…**. Opening the submenu never selects a profile.
+Use **Choose S3 Profile** to select one, or **Refresh S3 Browser** to load all
+profiles. No URL, login, token, or webview is required. Credentials and CA
+certificates come dynamically from the workspace owner's saved profiles.
 
-The access token stays in extension memory only. Reconnect after reloading the
-window or when the token expires. **Disconnect S3 Profiles** clears the token
-and cancels an active upload. No connection tab needs to stay open.
+Use normal Explorer controls for files and folders:
 
-1. Expand your profile to browse its configured bucket and optional prefix.
-2. Drag files or folders from the **workspace Explorer** onto the target bucket
-   or S3 folder. Alternatively, right-click the target and select **Upload Files
-   or Folder to S3**.
-3. Existing files offer **Replace**, **Replace All**, or **Skip**. Dismissing the
-   prompt cancels the upload. Changed objects are protected by conditional writes.
-4. Watch upload progress in the notification; use **Cancel** to stop. Completed
-   files remain in S3. Refresh the tree to see changes made by other clients.
+- Drag between workspace and S3, or between S3 folders/profiles. Files can be
+  dropped directly onto the bucket/profile root.
+- Right-click any workspace file or folder → **S3 Operations → Copy**, then
+  right-click the bucket or destination folder → **S3 Operations → Paste**.
+  **Upload to Bucket Root…** copies the selection directly to the connected
+  profile root (its configured prefix, if any), without an extra folder.
+- Use Copy, Cut, and Paste to copy or move selections. The **Copy S3**,
+  **Cut S3**, and **Paste into S3** menu actions also work when the browser
+  blocks system clipboard access (for example, an HTTP origin).
+- Rename, create folders, or Delete using Explorer's context menu.
+- Use **Download S3 Files or Folder** to select a workspace destination, or
+  **Upload Files or Folder to S3** to select local sources.
 
-Dragging `training/` into `workflows/` uploads `workflows/training/` and all its
-files, including subdirectories. Empty directories are omitted. Listings use
-**Load more…** for additional pages.
+Explorer controls whether a drag copies or moves and displays conflict prompts.
+Moving within S3 copies all selected contents successfully before deleting the
+originals. Conditional requests protect against concurrent object changes.
+S3 folder operations include nested objects and folder markers. Profile roots
+cannot be deleted or moved; previous object versions are not purged.
 
-Profiles are fetched again before each file, so ownership and credential updates
-are checked against the current authenticated account. The browser does not store S3
-credentials in workspace settings or extension storage. TLS verification is
-always enabled for HTTPS; a profile's public CA bundle is used directly, without
-requiring the global Node CA mount. The endpoint must be reachable from the pod.
-The profile needs permission to list the bucket, read object metadata, and upload
-objects (`s3:ListBucket`, `s3:GetObject`, `s3:PutObject`).
+Transfers stream through private temporary files in the code-server pod and
+support up to 5 GiB per object and 10,000 objects per operation. Available pod
+disk space must accommodate the transfer. S3-to-S3 copies preserve HTTP content
+metadata and user metadata, but do not copy object tags, ACLs, or version history.
+Refresh Explorer to see changes made by other clients. Symbolic links and
+ambiguous or unsafe filesystem names are rejected by the upload/download commands.
+Multipart transfers are not implemented.
 
-This version supports workspace files only, up to 5 GiB per file and 10,000 files
-per upload. Symbolic links are rejected. Computer-to-browser drag-and-drop,
-multipart uploads, downloads, and deleting S3 objects are not included.
-The native S3 connection works even when code-server is opened over HTTP.
-HTTPS connections from the extension still verify server certificates.
+The profile endpoint must be reachable from the pod. HTTPS verifies certificates
+using the selected profile's CA bundle. Profiles need `s3:ListBucket`,
+`s3:GetObject`, and `s3:PutObject`; moves and deletion also need `s3:DeleteObject`.
+Credentials are never stored in workspace settings or extension storage.
 
-New workspaces include the browser after deploying the updated backend image.
-For existing workspaces, install the updated extension VSIX and reload code-server.
+Managed workspaces enable the extension's `fsChunks` API for streaming native
+Explorer transfers. Existing workspaces need the updated extension and
+`--enable-proposed-api triton-control.triton-control-deploy` code-server startup
+flag, followed by a restart. The native connection also works over HTTP.
 
 ## S3 Profiles
 

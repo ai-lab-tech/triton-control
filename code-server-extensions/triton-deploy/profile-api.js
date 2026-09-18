@@ -33,9 +33,9 @@ function requestJson(endpoint, path, { token, body } = {}) {
       });
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const hint = res.statusCode === 401 ? "Sign in again with Connect S3 Profiles."
-            : res.statusCode === 403 ? "Your account needs member or admin access."
-            : "Check the URL and sign-in method; SSO accounts require an access token.";
+          const hint = res.statusCode === 401 ? "Workspace access is no longer valid. Reopen the workspace from Triton Control."
+            : res.statusCode === 403 ? "Your account needs active member or admin access."
+            : "Could not load saved S3 profiles. Try refreshing S3 Browser.";
           const error = new Error(`Triton Control HTTP ${res.statusCode}. ${hint}`);
           error.status = res.statusCode;
           reject(error);

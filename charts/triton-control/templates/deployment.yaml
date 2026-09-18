@@ -59,6 +59,8 @@ spec:
               value: {{ .Values.tritonDeployments.modelRepositoryEmptyDirSize | quote }}
             - name: TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE
               value: {{ .Values.tritonDeployments.s3SyncStagingEmptyDirSize | quote }}
+            - name: DEVELOPMENT_PROFILE_API_URL
+              value: {{ printf "http://%s.%s.svc.cluster.local:%v" (include "triton-control.fullname" .) .Release.Namespace .Values.service.backendPort | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION
               value: {{ .Values.development.codeServer.version | quote }}
             {{- with .Values.app.env }}

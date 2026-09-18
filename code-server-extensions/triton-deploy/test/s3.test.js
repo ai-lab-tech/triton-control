@@ -200,3 +200,31 @@ test("uploads stream signed bytes, preserve existing objects, and abort active H
   await assert.rejects(pending, { name: "AbortError" });
   clearTimeout(timer);
 });
+
+test("recursive listing omits delimiter and deletion signs the exact encoded object key", async (t) => {
+  const { remove } = require("../s3-client");
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    seen.push({ url: req.url, method: req.method, authorization: req.headers.authorization });
+    if (req.method === "DELETE") {
+      res.writeHead(req.url.endsWith("forbidden") ? 403 : 204);
+      res.end();
+    } else {
+      res.end("<ListBucketResult><EncodingType>url</EncodingType><Contents><Key>folder%2Fa%2Bb.txt</Key><Size>1</Size></Contents></ListBucketResult>");
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const p = { ...profile, endpoint: `http://127.0.0.1:${server.address().port}` };
+  assert.equal((await list(p, "folder/", "next+page", undefined, true)).files[0].key, "folder/a+b.txt");
+  const query = new URL(seen[0].url, p.endpoint).searchParams;
+  assert.equal(query.has("delimiter"), false);
+  assert.equal(query.get("prefix"), "folder/");
+  assert.equal(query.get("continuation-token"), "next+page");
+  await remove(p, "folder/a+b.txt");
+  assert.equal(seen[1].method, "DELETE");
+  assert.equal(seen[1].url, "/models/folder/a%2Bb.txt");
+  assert.match(seen[1].authorization, /^AWS4-HMAC-SHA256/);
+  await assert.rejects(remove(p, ""), /Select an S3 object/);
+  await assert.rejects(remove(p, "forbidden"), /HTTP 403/);
+});

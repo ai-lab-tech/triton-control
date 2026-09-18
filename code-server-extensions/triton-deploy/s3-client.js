@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
 const tls = require("node:tls");
+const { Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 
 const encode = (value) =>
   encodeURIComponent(value).replace(
@@ -186,10 +188,10 @@ function parseList(xml) {
     next: tag(xml, "NextContinuationToken"),
   };
 }
-async function list(profile, prefix, continuation, signal) {
+async function list(profile, prefix, continuation, signal, recursive = false) {
   const query = {
     "list-type": "2",
-    delimiter: "/",
+    ...(recursive ? {} : { delimiter: "/" }),
     prefix,
     "encoding-type": "url",
     "max-keys": "500",
@@ -199,14 +201,54 @@ async function list(profile, prefix, continuation, signal) {
     check(await request(profile, "GET", "", { query, signal })).body,
   );
 }
-async function head(profile, key, signal) {
+async function stat(profile, key, signal) {
   const response = check(
     await request(profile, "HEAD", key, { signal }),
     [404],
   );
-  return response.status === 404 ? null : response.headers.etag;
+  return response.status === 404 ? null : {
+    etag: response.headers.etag,
+    size: Number(response.headers["content-length"] || 0),
+    metadata: Object.fromEntries(Object.entries(response.headers).filter(([name]) =>
+      name.startsWith("x-amz-meta-") || ["content-type", "content-encoding", "content-language", "content-disposition", "cache-control", "expires"].includes(name))),
+  };
 }
-async function upload(profile, key, file, { signal, onBytes, etag } = {}) {
+async function head(profile, key, signal) {
+  return (await stat(profile, key, signal))?.etag || null;
+}
+async function download(profile, key, filename, { signal, etag, onBytes } = {}) {
+  signal?.throwIfAborted();
+  const options = signedRequest(profile, "GET", key, {}, etag ? { "if-match": etag } : {});
+  const response = await new Promise((resolve, reject) => {
+    const req = (options.protocol === "https:" ? https : http).request({ ...options, signal }, resolve);
+    req.setTimeout(60000, () => req.destroy(new Error("S3 download timed out.")));
+    req.on("error", reject);
+    req.end();
+  });
+  let file;
+  let complete = false;
+  try {
+    check({ status: response.statusCode });
+    file = await fs.promises.open(filename, "wx", 0o600);
+    let bytes = 0;
+    const limit = new Transform({ transform(chunk, encoding, callback) {
+      bytes += chunk.length;
+      if (bytes > 5 * 1024 ** 3) return callback(new Error("Files over 5 GiB are not supported."));
+      onBytes?.(chunk.length);
+      callback(null, chunk);
+    } });
+    // The explicit descriptor lets us remove only the file we created on failure.
+    await pipeline(response, limit, file.createWriteStream(), { signal });
+    complete = true;
+  } finally {
+    response.destroy();
+    if (file) {
+      await file.close();
+      if (!complete) await fs.promises.unlink(filename).catch(() => {});
+    }
+  }
+}
+async function upload(profile, key, file, { signal, onBytes, etag, metadata = {} } = {}) {
   signal?.throwIfAborted();
   const stat = await fs.promises.stat(file);
   if (stat.size > 5 * 1024 ** 3)
@@ -218,10 +260,11 @@ async function upload(profile, key, file, { signal, onBytes, etag } = {}) {
     digest.update(chunk);
   signal?.throwIfAborted();
   const headers = {
+    ...metadata,
     "content-length": String(stat.size),
     ...(etag ? { "if-match": etag } : { "if-none-match": "*" }),
   };
-  check(
+  const response = check(
     await request(profile, "PUT", key, {
       headers,
       payloadHash: digest.digest("hex"),
@@ -230,5 +273,10 @@ async function upload(profile, key, file, { signal, onBytes, etag } = {}) {
       onBytes,
     }),
   );
+  return response.headers.etag;
 }
-module.exports = { signedRequest, parseList, list, head, upload };
+async function remove(profile, key, signal, etag) {
+  if (!key) throw new Error("Select an S3 object to delete.");
+  check(await request(profile, "DELETE", key, { signal, headers: etag ? { "if-match": etag } : {} }));
+}
+module.exports = { signedRequest, parseList, list, stat, head, download, upload, remove };

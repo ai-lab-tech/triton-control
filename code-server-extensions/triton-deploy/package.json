@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.2.2",
+  "version": "0.4.8",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -19,7 +19,7 @@
     "onCommand:tritonControl.refreshRepositories",
     "onView:tritonControl.workspaceActions",
     "onStartupFinished",
-    "onView:tritonControl.s3Browser"
+    "onFileSystem:triton-s3"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -54,18 +54,21 @@
       },
       {
         "command": "tritonControl.connectS3",
-        "title": "Triton Control: Connect S3 Profiles",
-        "icon": "$(plug)"
+        "title": "Choose Profile\u2026",
+        "icon": "$(plug)",
+        "category": "S3"
       },
       {
         "command": "tritonControl.refreshS3",
-        "title": "Triton Control: Refresh S3 Browser",
-        "icon": "$(refresh)"
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "S3"
       },
       {
         "command": "tritonControl.uploadS3",
-        "title": "Triton Control: Upload Files or Folder to S3",
-        "icon": "$(cloud-upload)"
+        "title": "Upload\u2026",
+        "icon": "$(cloud-upload)",
+        "category": "S3"
       },
       {
         "command": "tritonControl.moreS3",
@@ -74,8 +77,50 @@
       },
       {
         "command": "tritonControl.disconnectS3",
-        "title": "Triton Control: Disconnect S3 Profiles",
-        "icon": "$(debug-disconnect)"
+        "title": "Disconnect",
+        "icon": "$(debug-disconnect)",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.deleteS3",
+        "title": "Triton Control: Delete S3 Object or Folder",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "tritonControl.copyS3",
+        "title": "Copy",
+        "icon": "$(copy)",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.cutS3",
+        "title": "Cut",
+        "icon": "$(scissors)",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.pasteS3",
+        "title": "Paste",
+        "icon": "$(clippy)",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.downloadS3",
+        "title": "Download\u2026",
+        "icon": "$(cloud-download)",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.switchS3Profile",
+        "title": "Switch Profile\u2026",
+        "category": "S3",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "tritonControl.uploadWorkspaceS3",
+        "title": "Upload to Bucket Root\u2026",
+        "category": "S3",
+        "icon": "$(cloud-upload)"
       }
     ],
     "viewsContainers": {
@@ -93,12 +138,6 @@
           "id": "tritonControl.workspaceActions",
           "name": "Workspace"
         }
-      ],
-      "explorer": [
-        {
-          "id": "tritonControl.s3Browser",
-          "name": "S3 Browser"
-        }
       ]
     },
     "menus": {
@@ -115,35 +154,45 @@
         },
         {
           "command": "tritonControl.connectS3",
-          "when": "view == tritonControl.s3Browser",
-          "group": "navigation"
-        },
-        {
-          "command": "tritonControl.refreshS3",
-          "when": "view == tritonControl.s3Browser",
-          "group": "navigation"
+          "when": "view == workbench.explorer.fileView && !tritonControl.s3Connected",
+          "group": "navigation@81"
         },
         {
           "command": "tritonControl.disconnectS3",
-          "when": "view == tritonControl.s3Browser",
-          "group": "navigation"
+          "when": "view == workbench.explorer.fileView && tritonControl.s3Connected",
+          "group": "navigation@82"
+        },
+        {
+          "command": "tritonControl.refreshS3",
+          "when": "view == workbench.explorer.fileView && tritonControl.s3Connected",
+          "group": "navigation@83"
+        },
+        {
+          "command": "tritonControl.switchS3Profile",
+          "when": "view == workbench.explorer.fileView && tritonControl.s3Connected",
+          "group": "navigation@81"
         }
       ],
       "explorer/context": [
         {
           "command": "tritonControl.deployModelRepository",
-          "when": "explorerResourceIsFolder",
+          "when": "explorerResourceIsFolder && resourceScheme != triton-s3",
           "group": "navigation@90"
         },
         {
           "command": "tritonControl.uploadModelRepositorySimple",
-          "when": "explorerResourceIsFolder",
+          "when": "explorerResourceIsFolder && resourceScheme != triton-s3",
           "group": "navigation@91"
         },
         {
           "command": "tritonControl.newModelRepository",
-          "when": "explorerResourceIsFolder",
+          "when": "explorerResourceIsFolder && resourceScheme != triton-s3",
           "group": "navigation@89"
+        },
+        {
+          "submenu": "tritonControl.s3Operations",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote || resourceScheme == triton-s3",
+          "group": "tritonS3@1"
         }
       ],
       "view/item/context": [
@@ -161,11 +210,58 @@
           "command": "tritonControl.deployModelRepository",
           "when": "view == tritonControl.workspaceActions && viewItem == tritonModelRepositoryReady",
           "group": "navigation@90"
-        },
+        }
+      ],
+      "tritonControl.s3Operations": [
         {
           "command": "tritonControl.uploadS3",
-          "when": "view == tritonControl.s3Browser && viewItem == tritonS3folder",
-          "group": "navigation"
+          "when": "resourceScheme == triton-s3",
+          "group": "2_transfer@1"
+        },
+        {
+          "command": "tritonControl.downloadS3",
+          "when": "resourceScheme == triton-s3",
+          "group": "2_transfer@2"
+        },
+        {
+          "command": "tritonControl.copyS3",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote || resourceScheme == triton-s3",
+          "group": "3_clipboard@1"
+        },
+        {
+          "command": "tritonControl.cutS3",
+          "when": "resourceScheme == triton-s3",
+          "group": "3_clipboard@2"
+        },
+        {
+          "command": "tritonControl.pasteS3",
+          "when": "resourceScheme == triton-s3",
+          "group": "3_clipboard@3"
+        },
+        {
+          "command": "tritonControl.connectS3",
+          "group": "1_connection@1",
+          "when": "!tritonControl.s3Connected"
+        },
+        {
+          "command": "tritonControl.disconnectS3",
+          "when": "tritonControl.s3Connected",
+          "group": "1_connection@2"
+        },
+        {
+          "command": "tritonControl.refreshS3",
+          "when": "tritonControl.s3Connected",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "tritonControl.switchS3Profile",
+          "when": "tritonControl.s3Connected",
+          "group": "4_profile@1"
+        },
+        {
+          "command": "tritonControl.uploadWorkspaceS3",
+          "when": "tritonControl.s3Connected && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "2_transfer@1"
         }
       ]
     },
@@ -213,7 +309,14 @@
           "description": "Optional PEM CA certificate passed to Triton deployments for HTTPS S3 endpoints."
         }
       }
-    }
+    },
+    "keybindings": [],
+    "submenus": [
+      {
+        "id": "tritonControl.s3Operations",
+        "label": "S3 Operations"
+      }
+    ]
   },
   "devDependencies": {
     "@vscode/vsce": "^2.15.0"
@@ -227,5 +330,8 @@
       "supported": false,
       "description": "S3 access requires a trusted workspace."
     }
-  }
+  },
+  "enabledApiProposals": [
+    "fsChunks"
+  ]
 }

@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import shlex
 import sys
 import zipfile
@@ -218,6 +219,7 @@ def _manifests(
             statefulset_name,
             service_name,
             labels,
+            secret_name=secret_name,
             runtime_class_name=runtime_class_name,
         ),
         _service_manifest(namespace, service_name, labels),
@@ -233,7 +235,7 @@ def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
         "kind": "Secret",
         "metadata": {"name": secret_name, "namespace": namespace},
         "type": "Opaque",
-        "stringData": {"AUTH_MODE": "triton-control-proxy"},
+        "stringData": {"AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32)},
     }
 
 
@@ -244,6 +246,7 @@ def _statefulset_manifest(
     service_name: str,
     labels: dict[str, str],
     *,
+    secret_name: str | None = None,
     runtime_class_name: str | None = None,
 ) -> dict[str, Any]:
     if request.image_has_code_server:
@@ -336,12 +339,17 @@ def _statefulset_manifest(
         "'This persistent workspace is managed by Triton Control.' "
         "> /workspace/README.md; "
         "fi; "
+        "if [ ! -e /workspace/.triton-control/workspace.code-workspace ]; then "
+        "printf '%s\\n' '{\"folders\":[{\"path\":\"/workspace\",\"name\":\"workspace\"}]}' "
+        "> /workspace/.triton-control/workspace.code-workspace; "
+        "fi; "
         "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
         "--reconnection-grace-time 30 "
         "--disable-workspace-trust "
+        "--enable-proposed-api triton-control.triton-control-deploy "
         "--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\" "
         "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
-        "/workspace"
+        "/workspace/.triton-control/workspace.code-workspace"
     )
 
     pod_spec: dict[str, Any] = {
@@ -370,6 +378,20 @@ def _statefulset_manifest(
                             "capabilities": {"drop": ["ALL"]},
                         },
                         "env": [
+                            {
+                                "name": "TRITON_CONTROL_PROFILE_URL",
+                                "value": (
+                                    os.getenv("DEVELOPMENT_PROFILE_API_URL", "http://triton-control:8000").rstrip("/")
+                                    + f"/api/development/workspace-s3-profiles/{namespace}/{statefulset_name}"
+                                ),
+                            },
+                            {
+                                "name": "TRITON_CONTROL_PROFILE_TOKEN",
+                                "valueFrom": {"secretKeyRef": {
+                                    "name": secret_name or f"{statefulset_name}-secret",
+                                    "key": "S3_PROFILE_TOKEN",
+                                }},
+                            },
                             {"name": "HOME", "value": "/workspace"},
                             {"name": "XDG_CONFIG_HOME", "value": "/workspace/.config"},
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
@@ -475,6 +497,8 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
         "extension/profile-api.js": (extension_dir / "profile-api.js").read_text(encoding="utf-8"),
         "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
         "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),
+        "extension/s3-filesystem.js": (extension_dir / "s3-filesystem.js").read_text(encoding="utf-8"),
+        "extension/s3-transfers.js": (extension_dir / "s3-transfers.js").read_text(encoding="utf-8"),
         "extension/s3-files.js": (extension_dir / "s3-files.js").read_text(encoding="utf-8"),
         "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
         "extension/workspace-repositories.js": (
