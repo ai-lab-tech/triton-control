@@ -186,7 +186,7 @@
         },
         {
           "command": "tritonControl.newModelRepository",
-          "when": "explorerResourceIsFolder && resourceScheme != triton-s3",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote",
           "group": "navigation@89"
         },
         {

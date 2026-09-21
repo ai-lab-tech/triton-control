@@ -319,8 +319,14 @@ async function collectAndCreateEnsembleRepository(baseFolder) {
 }
 
 async function resolveWorkspaceFolder(resource) {
-  if (resource?.fsPath && fs.existsSync(resource.fsPath) && fs.statSync(resource.fsPath).isDirectory()) {
-    return resource.fsPath;
+  if (resource?.fsPath && fs.existsSync(resource.fsPath)) {
+    const stat = fs.statSync(resource.fsPath);
+    if (stat.isDirectory()) {
+      return resource.fsPath;
+    }
+    if (stat.isFile()) {
+      return path.dirname(resource.fsPath);
+    }
   }
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
   if (workspaceFolder) {

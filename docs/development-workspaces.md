@@ -230,7 +230,8 @@ repository structures in `/workspace`.
 
 Open the Triton Control icon in the code-server Activity Bar and select
 **New Model Repository**. The same command is also available from the command
-palette and from the Explorer folder context menu.
+palette and from the Explorer file or folder context menu. When launched from a file, the wizard
+uses its containing folder as the parent for the new repository.
 
 The command asks for:
 

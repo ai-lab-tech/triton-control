@@ -13,7 +13,8 @@ from Triton Control's **Add Deployment** page.
 1. Open a workspace folder in code-server.
 2. Open the Triton Control Activity Bar view and select **New Model
    Repository**. The command is also available from the command palette and
-   from the Explorer folder context menu.
+   from the Explorer file or folder context menu. When launched from a file,
+   the wizard uses its containing folder as the parent for the new repository.
 3. Choose `Single model` or `Ensemble pipeline`.
 4. Enter the repository target folder name.
 5. For a single model, enter the Triton model name and choose a template.
