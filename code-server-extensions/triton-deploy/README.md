@@ -130,12 +130,12 @@ directory too deep.
 ## S3 Browser and Workspace Drag-and-Drop
 
 Saved S3 profiles appear as folders alongside your workspace in **Explorer**.
-Use the Explorer toolbar’s plug (**Choose S3 Profile**), disconnect, and refresh
+Use the Explorer toolbar’s plug (**Choose Profile…**), disconnect, and refresh
 buttons. These actions are also available under **S3 Operations** when right-clicking an S3 folder;
 right-click a workspace folder and choose **S3 Operations → Choose Profile…** to connect when disconnected.
 When connected, both workspace and S3 context menus show **Refresh**,
 **Disconnect**, and **Switch Profile…**. Opening the submenu never selects a profile.
-Use **Choose S3 Profile** to select one, or **Refresh S3 Browser** to load all
+Use **Choose Profile…** to select one, or **Refresh** to load all
 profiles. No URL, login, token, or webview is required. Credentials and CA
 certificates come dynamically from the workspace owner's saved profiles.
 
@@ -147,12 +147,12 @@ Use normal Explorer controls for files and folders:
   right-click the bucket or destination folder → **S3 Operations → Paste**.
   **Upload to Bucket Root…** copies the selection directly to the connected
   profile root (its configured prefix, if any), without an extra folder.
-- Use Copy, Cut, and Paste to copy or move selections. The **Copy S3**,
-  **Cut S3**, and **Paste into S3** menu actions also work when the browser
+- Use Copy, Cut, and Paste to copy or move selections. The **S3 Operations → Copy**,
+  **Cut**, and **Paste** menu actions also work when the browser
   blocks system clipboard access (for example, an HTTP origin).
 - Rename, create folders, or Delete using Explorer's context menu.
-- Use **Download S3 Files or Folder** to select a workspace destination, or
-  **Upload Files or Folder to S3** to select local sources.
+- Use **S3 Operations → Download…** to select a workspace destination, or
+  **S3 Operations → Upload…** to select local sources.
 
 Managed code-server uses Windows Explorer drag defaults for S3 transfers:
 
