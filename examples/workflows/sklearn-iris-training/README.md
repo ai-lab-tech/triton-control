@@ -10,8 +10,13 @@ the object store.
 ## Prerequisites
 
 - Argo Workflows is enabled in Triton Control.
-- You have an existing S3-compatible bucket and credentials that can read the
-  uploaded training script and write below the selected output prefix.
+- You have an existing S3-compatible bucket and a saved profile under the Triton
+  Control account menu's **S3 Profiles**. Use the same account for the workspace
+  and workflow profile link.
+- The profile's credentials allow listing the bucket, reading the training script,
+  and writing the script and run outputs. The endpoint must be reachable from
+  both the workspace and workflow pods. For HTTPS with a custom CA, include the
+  public CA certificate in the saved profile.
 
 
 ## 1. Create a Development Workspace
@@ -28,7 +33,8 @@ writing and testing the training code:
 
 When the workspace is ready, open code-server from **Development**. Triton
 Control installs the Development runtime because the Python image does not
-include code-server.
+include code-server. It also installs the **Triton Control Deploy** plugin, whose
+S3 browser appears alongside the workspace folders in **Explorer**.
 
 ![Create a Triton Control workspace](screenshots/create-workspace-v2.png)
 
@@ -47,19 +53,28 @@ Edit the script in the workspace to try a different model, feature processing,
 or training arguments. Keep the output files, or update the validation and
 artifact expectations in `workflow.yaml` to match your own script.
 
-## 3. Install, Configure, and Use an S3 Client
+## 3. Upload the Training Script
 
-The workspace needs an S3 client to upload the training script. Choose AWS CLI
-or More Connect.
+Choose either **AWS CLI** in the workspace terminal or the bundled
+**code-server S3 plugin** in Explorer.
 
 ### AWS CLI
 
 Install and configure AWS CLI in the workspace terminal:
 
 ```bash
-python -m pip install --user awscli
+python3 -m pip install --user awscli
 aws configure --profile workflow-training
 ```
+
+If the saved S3 profile uses path-style addressing, configure the CLI to match:
+
+```bash
+aws configure set s3.addressing_style path --profile workflow-training
+```
+
+For a provider requiring virtual-hosted addressing, use `virtual` instead of
+`path`.
 
 For HTTPS with a custom CA, save the public CA bundle to a workspace file and
 configure AWS CLI in the terminal before uploading:
@@ -89,40 +104,69 @@ aws --profile workflow-training \
   s3://<your-s3-bucket>/workflows/sklearn-iris-training/train_iris.py
 ```
 
-### More Connect
+Use the endpoint and bucket from the Triton Control S3 profile you will link
+in step 4. If you use its browsing prefix (for example, `team-a`), include it
+explicitly in the upload destination:
+`s3://<your-s3-bucket>/team-a/workflows/sklearn-iris-training/train_iris.py`.
+Use that same full object key in `workflow.yaml`.
 
-In code-server's Extensions view, install
-[More Connect](https://open-vsx.org/extension/ucodkr/more-connect) (`ucodkr.more-connect`).
+### Code-Server S3 Plugin
 
-In **More Connect → S3 Browser**, add an S3 host and select **AWS S3**, **MinIO**,
-or **S3 Compatible**. Enter the S3 API endpoint without a bucket name, region,
-access key ID, and secret access key. MinIO automatically uses path-style access;
-for other compatible providers, select the addressing mode they require.
-More Connect supports HTTP and HTTPS. For HTTPS, the hostname must match the
-server certificate; the endpoint must be reachable from the workspace pod.
+Use the bundled **Triton Control Deploy** plugin in code-server's **Explorer**.
+It loads endpoint, bucket, credentials, addressing mode, and the optional CA
+certificate dynamically from your saved Triton Control S3 profile.
 
-For a private/custom CA, use **Explorer → S3 Browser** with a saved S3
-profile containing the CA certificate. It applies that certificate dynamically
-for the selected profile. More Connect has separate connection settings and
-does not inherit Triton Control profiles.
+1. In **Explorer**, right-click the workspace folder and choose
+   **S3 Operations → Choose Profile…**, then select your saved profile.
+   If already connected, use **S3 Operations → Switch Profile…** to select it.
+2. Expand **S3 · <profile name> · <bucket>** beside the workspace folder.
+3. Under that S3 root, create or open `workflows/sklearn-iris-training/` using
+   Explorer's **New Folder** action.
+4. Drag `/workspace/sklearn-iris-training/train_iris.py` from the workspace
+   tree onto that S3 folder. Workspace-to-S3 dragging copies the file and leaves
+   the workspace source in place.
+5. Wait for the transfer to finish and confirm that `train_iris.py` appears in
+   the destination folder. Open it from the S3 tree to check the uploaded code.
 
-To upload the example folder with More Connect:
+You can also right-click the workspace file and choose **S3 Operations → Copy**,
+then right-click the destination S3 folder and choose **S3 Operations → Paste**.
+To copy the entire `sklearn-iris-training` folder, drop it onto `workflows/`;
+the plugin preserves the outer folder name.
 
-1. In your bucket, create/open the destination `workflows/sklearn-iris-training/`.
-2. Click the **cloud-upload icon beside that S3 folder**, then choose **Upload Folder**.
-3. Select `/workspace/sklearn-iris-training/` and click **Upload**.
+With an empty profile prefix, the uploaded script is:
 
-More Connect uploads the folder's **contents**, including subdirectories, into
-the selected S3 destination; it does not add the outer folder name. Version 0.1.31
-supports **Upload Folder**, but not drag-and-drop.
+```text
+s3://<your-s3-bucket>/workflows/sklearn-iris-training/train_iris.py
+```
 
-Use **More Connect** for folder uploads; **S3/R2 Explorer** does not support them.
+If the profile has a prefix such as `team-a`, Explorer's S3 root starts at that
+prefix. The full script key is then
+`team-a/workflows/sklearn-iris-training/train_iris.py`. Include that prefix in
+both workflow object-path parameters in step 5.
+
+Drag-and-drop follows these rules:
+
+- Workspace ↔ S3, or between different S3 profiles: copy.
+- Within the same S3 profile: move.
+- **Ctrl-drag** forces copy (Option on macOS); **Shift-drag** forces move.
+
+The screenshot below shows the uploaded script open from S3 beside the local
+workspace. The validation run uses an isolated `sklearn-iris-review-…/plugin/`
+folder; use the object key you configured for your own run.
+
+![Training script uploaded and opened through the code-server S3 plugin](screenshots/code-server-s3-upload.png)
+
+Use **S3 Operations → Disconnect** to remove the S3 connection from Explorer.
 
 ## 4. Link the S3 Profile
 
-In **Workflows → Configure S3 Secrets**, select your **S3 profile** and click
-**Link profile**. Triton Control creates a Secret and an Argo repository ConfigMap
-in the workflow namespace. Endpoint, bucket, region, credentials, and the optional
+In **Workflows → Configure S3 Secrets**, select the Triton Control S3 profile
+for the endpoint and bucket used in step 3, then click **Link profile**. If you
+used the code-server plugin, select the same profile. AWS CLI profiles are
+configured separately and are not linked automatically.
+
+Triton Control creates a Secret and an Argo repository ConfigMap in the workflow
+namespace. Endpoint, bucket, region, credentials, and the optional
 HTTPS CA certificate sync automatically when the profile is saved. The ConfigMap
 stores connection settings; the Secret stores credentials and the CA certificate.
 
@@ -155,6 +199,9 @@ with the linked repository. Set only the object paths in `spec.arguments.paramet
 | `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
 
 Object paths are full bucket keys; the profile's browsing prefix is not added.
+For example, with the `team-a` prefix from step 3, set `s3-script-key` to
+`team-a/workflows/sklearn-iris-training/train_iris.py` and `s3-output-prefix` to
+`team-a/workflows/sklearn-iris-training/runs`.
 For HTTPS with a custom CA, save the public CA certificate in the S3 profile;
 Triton Control adds Argo's certificate reference automatically.
 
@@ -164,14 +211,19 @@ In Argo Workflows:
 
 1. Select **Submit New Workflow**.
 2. Select **Edit using full workflow options**.
-3. Paste the configured contents of `workflow.yaml`.
+3. Paste the configured contents of `workflow.yaml`, or use **Upload File**
+   to select the configured manifest from your computer.
 4. Create the workflow.
 
 ![Submit a new workflow in Argo Workflows](screenshots/argo-submit-new-workflow.png)
 
 ![Open the full workflow editor](screenshots/argo-edit-full-workflow-options.png)
 
-![Create the workflow from the manifest](screenshots/argo-create-workflow-manifest.png)
+The manifest screenshot uses the validation run's generated repository name
+and isolated S3 keys. Copy your own `artifactRepositoryRef` and object keys as
+explained in step 5.
+
+![Create the S3 artifact workflow from the current manifest](screenshots/argo-create-workflow-manifest.png)
 
 Before the training container starts, the Argo executor downloads
 `s3-script-key` to `/tmp/train_iris.py`. The container installs the pinned
@@ -193,7 +245,7 @@ s3://<bucketname>/workflows/sklearn-iris-training/runs/
     `-- metrics.json
 ```
 
-Use the client you chose in step 3 to check these files.
+Use either method from step 3 to inspect the results.
 
 ### AWS CLI
 
@@ -214,12 +266,24 @@ aws --profile workflow-training \
   s3 cp "s3://<bucketname>/<s3-output-prefix>/<workflow-name>/metrics.json" -
 ```
 
-### More Connect
+Include any browsing prefix in `<s3-output-prefix>`, just as you did in
+`workflow.yaml`.
 
-In **More Connect → S3 Browser**, refresh the connection from step 3 and open
-`<bucketname> → <s3-output-prefix> → <workflow-name>`. Check that the four files
-shown above exist, then open or download `metrics.json` and `accuracy.txt` to
-inspect the results.
+### Code-Server S3 Plugin
+
+In code-server's **Explorer**, use **S3 Operations → Refresh** on the connected
+S3 root to load the results written by Argo. Expand
+`workflows/sklearn-iris-training/runs/<workflow-name>/` beneath the same profile
+root used in step 3. This relative path also applies to the `team-a` example
+when you included that prefix in both workflow parameters.
+
+Check that all four files shown above exist. Open `metrics.json` and
+`accuracy.txt` directly from the S3 tree to inspect the results. To keep a local
+copy of the run, drag its folder from S3 onto `/workspace/sklearn-iris-training/`
+in Explorer. The default S3-to-workspace drag copies the results and leaves
+the S3 originals in place.
+
+![Argo training outputs and metrics in the code-server S3 plugin](screenshots/code-server-s3-results.png)
 
 The Argo Workflow also exposes `accuracy` as an output parameter and records
 the S3 location as the `training-results` output artifact.
