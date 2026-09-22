@@ -1,74 +1,15 @@
-# Anforderungen an das `mlflow-triton-control`-Plugin
+# Minimalanforderungen an das `mlflow-triton-control`-Plugin
 
-Das Plugin ist ein MLflow Deployment Plugin für das Triton-Control-Deployment
-Endpoint. Es verbindet MLflow Model Registry und Artifact Store mit einem
-bereits vorhandenen oder neu angelegten Triton-Endpoint.
+Der erste Ausbauschritt ist bewusst klein:
 
-## Ziel-URI und Installation
+> Das Plugin erstellt über die Triton-Control-API einen leeren Triton-Endpoint,
+> der ein Model Repository aus einem konfigurierten S3-Profil und S3-Präfix
+> verwendet.
 
-Das Plugin wird als Python-Paket im Argo-Deployment-Image installiert:
+Das Plugin lädt in diesem Schritt noch keine MLflow-Modelle herunter und
+erzeugt noch kein Triton-Modelldatei-Set.
 
-```text
-mlflow-triton-control
-mlflow>=3.14,<4
-requests oder httpx
-tritonclient[http]
-```
-
-Es registriert einen MLflow Deployment Target:
-
-```toml
-[project.entry-points."mlflow.deployments"]
-triton-control = "mlflow_triton_control"
-```
-
-Der Target URI lautet beispielsweise:
-
-```text
-triton-control://triton-control-api
-```
-
-Der Target URI enthält die Adresse der Triton-Control-API. Zugangsdaten und
-Endpoint-Standardwerte kommen aus der Plugin-Konfiguration beziehungsweise aus
-Kubernetes Secrets.
-
-## Benötigte Plugin-Konfiguration
-
-```text
-TRITON_CONTROL_URL
-TRITON_CONTROL_TOKEN
-TRITON_ENDPOINT
-TRITON_INSTANCE_ID              # optional, wenn Endpoint bereits bekannt ist
-TRITON_MODEL_REPOSITORY_PREFIX  # Triton-S3-Präfix
-MLFLOW_TRACKING_URI
-```
-
-Der Token wird als Bearer Token an Triton Control gesendet. S3-Zugangsdaten für
-das Triton Repository sollen nicht im Plugin liegen. Triton Control soll die
-konfigurierte S3-Verbindung der Instance verwenden.
-
-## MLflow Deployment API
-
-Das Plugin implementiert die Standardfunktionen von
-`mlflow.deployments.BaseDeploymentClient`:
-
-| MLflow-Funktion | Bedeutung im Plugin |
-|---|---|
-| `create_endpoint()` | Triton-Endpoint mit leerem Repository erstellen |
-| `get_endpoint()` | Triton-Endpoint und Readiness abfragen |
-| `list_endpoints()` | verfügbare Triton-Endpoints auflisten |
-| `delete_endpoint()` | Triton-Deployment entfernen |
-| `create_deployment()` | MLflow-Modell in Triton veröffentlichen und laden |
-| `update_deployment()` | neue MLflow-Version veröffentlichen und laden |
-| `get_deployment()` | Modell- und Triton-Status abfragen |
-| `list_deployments()` | geladene Modelle auflisten |
-| `delete_deployment()` | Modell entladen beziehungsweise entfernen |
-| `predict()` | Inferenz über den Triton-Endpoint ausführen |
-
-## Endpoint und Deployment sind getrennt
-
-Ein Endpoint entspricht einem laufenden Triton-Server. Er wird normalerweise
-einmalig erstellt:
+## Ziel
 
 ```bash
 mlflow deployments create-endpoint \
@@ -76,156 +17,252 @@ mlflow deployments create-endpoint \
   --name development
 ```
 
-Ein Deployment entspricht einem Modell innerhalb dieses Triton-Servers:
-
-```bash
-mlflow deployments create \
-  -t triton-control://triton-control-api \
-  --endpoint development \
-  --name sentiment-classifier \
-  -m models:/sentiment-classifier/4
-```
-
-Der Endpoint muss bereits mit einem kompatiblen Triton-Image und den benötigten
-Python-Abhängigkeiten laufen. Ein leeres Repository darf nicht mit
-`--load-model=*` gestartet werden. Bei fehlendem Modellnamen muss Triton ohne
-`--load-model` starten.
-
-## Modell-Deployment-Verhalten
-
-`create_deployment()` führt diese Schritte aus:
-
-1. MLflow Model URI auflösen, zum Beispiel `models:/sentiment-classifier/4`.
-2. MLflow-Modell aus dem MLflow Artifact Store herunterladen.
-3. Die `MLmodel`-Datei und den Flavor auswerten.
-4. Den passenden Adapter auswählen:
-   - `sklearn` → sklearn Python-Backend-Template
-   - `transformers` → Hugging-Face Python-Backend-Template
-   - `triton` → vorhandenes Repository übernehmen
-5. `config.pbtxt` und `model.py` erzeugen.
-6. Modellartefakte und Tokenizer in die Triton-Struktur kopieren.
-7. Alle Dateien in ein versioniertes Triton-S3-Präfix hochladen.
-8. Triton über die Repository API laden.
-9. Auf `READY` warten.
-10. Den Deploymentstatus zurückgeben.
-
-Für einen Upload soll zuerst in ein temporäres Präfix geschrieben werden. Die
-Konfiguration beziehungsweise der abschließende Publish-Schritt wird zuletzt
-geschrieben. So sieht Triton kein unvollständiges Modell.
-
-## Triton-Control-API-Aufrufe
-
-Das Plugin verwendet die Triton-Control-API und schreibt nicht direkt in die
-Kubernetes- oder Triton-Control-Datenbank:
+Der Ablauf:
 
 ```text
-POST /api/deployments
-    Triton-Deployment beziehungsweise Endpoint erstellen
-
-GET  /api/instances/{instance_id}/models
-    Repository- und Modellstatus lesen
-
-PUT  /api/instances/{instance_id}/s3/content?path=...
-    eine Repository-Datei hochladen
-
-POST /api/instances/{instance_id}/models/{model_name}/load
-    Modell explizit laden
-
-POST /api/instances/{instance_id}/models/{model_name}/unload
-    Modell explizit entladen
-
-POST /api/instances/{instance_id}/models/{model_name}/versions/{version}/infer
-    Smoke-Test beziehungsweise Inferenz proxyen
-```
-
-Der bestehende Upload-Endpunkt ist für kleine Modelle ausreichend. Für große
-Transformer- oder LLM-Artefakte sollte später ein atomarer Multipart- oder
-serverseitiger Import-Endpunkt ergänzt werden.
-
-## Flavors und Abhängigkeiten
-
-Das Plugin unterstützt zunächst:
-
-```text
-sklearn
-transformers
-triton
-```
-
-Die MLflow-Abhängigkeiten werden nicht automatisch in einen laufenden Triton-
-Pod installiert. Sie müssen bereits im Triton-Image, über `requirements_txt`
-oder über eine kompatible Python Execution Environment vorhanden sein.
-
-Beispiel für einen Python-Backend-Endpoint:
-
-```text
-scikit-learn==1.5.2
-joblib==1.4.2
-torch
-transformers
-safetensors
-tokenizers
-```
-
-Bei unterschiedlichen Python-Umgebungen pro Modell muss die Python-Version zur
-Triton-Python-Backend-Stub-Version passen.
-
-## Versionierung, Update und Rollback
-
-Die MLflow-Modellversion wird zur Triton-Modellversion:
-
-```text
-models:/sentiment-classifier/4
-                    │
-                    └── Triton: sentiment_classifier/4/
-```
-
-Beim Update wird die neue Version separat hochgeladen und anschließend geladen.
-Die vorherige Version bleibt für Rollback verfügbar:
-
-```bash
-mlflow deployments update \
-  -t triton-control://triton-control-api \
-  --endpoint development \
-  --name sentiment-classifier \
-  -m models:/sentiment-classifier/3
-```
-
-Das Plugin schreibt zusätzlich Deployment-Tags in MLflow:
-
-```text
-deployment_status=deployed|failed
-triton_endpoint=development
-triton_model_name=sentiment_classifier
-triton_model_version=4
-```
-
-Der Alias `champion` wird erst nach einem erfolgreichen Smoke-Test gesetzt.
-
-## Fehlerverhalten und Idempotenz
-
-Das Plugin muss:
-
-- bei einem fehlenden MLflow Model mit einer verständlichen Fehlermeldung
-  abbrechen,
-- unbekannte Flavors oder Tasks ablehnen,
-- inkompatible Python-Abhängigkeiten vor dem Upload melden,
-- bei einem erneuten Deployment derselben Version idempotent sein,
-- ein unvollständiges Triton-Modell nicht laden,
-- bei einem fehlgeschlagenen Load keinen `champion`-Alias setzen,
-- den Triton- und MLflow-Status im Fehlerfall synchronisieren.
-
-Der gewünschte Standard ist daher:
-
-```text
-MLflow Model URI
+MLflow CLI/API
       │
       ▼
 mlflow-triton-control Plugin
+      │  Bearer Token
+      ▼
+Triton Control API
+      │  S3-Profil + Repository-Präfix
+      ▼
+Kubernetes Triton Deployment
       │
-      ├── native MLflow Artifact Store lesen
-      ├── Triton Repository erzeugen
-      ├── Triton-Control-API verwenden
-      ├── Triton Model Load ausführen
-      └── Deploymentstatus in MLflow schreiben
+      ▼
+S3 Model Repository
+```
+
+## Umfang
+
+Im ersten Schritt:
+
+- MLflow Deployment Target registrieren
+- Triton-Control-URL konfigurieren
+- Bearer-Token verwenden
+- S3-Profil an Triton Control übergeben
+- Repository-Präfix übergeben
+- leeren Triton-Endpoint erstellen
+- Endpoint-Status abfragen
+- Endpoints auflisten und löschen
+
+Noch nicht:
+
+- MLflow Model URI herunterladen
+- sklearn- oder Transformers-Flavors erkennen
+- `model.py` oder `config.pbtxt` erzeugen
+- Modelle in das Repository kopieren
+- `create_deployment()` für Modelle
+- `update_deployment()`
+- `predict()` und Smoke-Tests
+- MLflow Model Registry oder Artifact Store verwenden
+- Modellversionen, Aliase oder Rollbacks verwalten
+
+## Installation
+
+Das Plugin wird im Argo- oder Deployment-Image installiert:
+
+```text
+mlflow-triton-control
+mlflow>=3.14,<4
+requests oder httpx
+```
+
+```toml
+[project.entry-points."mlflow.deployments"]
+triton-control = "mlflow_triton_control"
+```
+
+Der Target URI lautet:
+
+```text
+triton-control://triton-control-api
+```
+
+`tritonclient[http]` wird zunächst nicht benötigt, weil das Plugin noch
+keine Inferenz ausführt.
+
+## Konfiguration
+
+Das Plugin benötigt:
+
+```text
+TRITON_CONTROL_URL
+TRITON_CONTROL_TOKEN
+TRITON_S3_PROFILE
+TRITON_REPOSITORY_PREFIX
+TRITON_IMAGE
+```
+
+Beispiel:
+
+```text
+TRITON_CONTROL_URL=http://triton-control-api:8000
+TRITON_CONTROL_TOKEN=<bearer-token>
+TRITON_S3_PROFILE=training-s3
+TRITON_REPOSITORY_PREFIX=triton/development
+TRITON_IMAGE=nvcr.io/nvidia/tritonserver:26.06-py3
+```
+
+Alternativ werden Profil und Präfix über die Endpoint-Konfiguration übergeben:
+
+```python
+from mlflow.deployments import get_deploy_client
+
+client = get_deploy_client(
+    "triton-control://triton-control-api"
+)
+
+client.create_endpoint(
+    name="development",
+    config={
+        "s3_profile": "training-s3",
+        "repository_prefix": "triton/development",
+        "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
+    },
+)
+```
+
+Das Plugin sendet:
+
+```text
+Authorization: Bearer <TRITON_CONTROL_TOKEN>
+```
+
+S3-Credentials werden nicht an das Plugin übergeben.
+
+## Minimale MLflow Deployment API
+
+Im ersten Schritt werden nur diese Funktionen implementiert:
+
+| Funktion | Bedeutung |
+|---|---|
+| `create_endpoint()` | leeren Triton-Endpoint erstellen |
+| `get_endpoint()` | Endpoint- und Readiness-Status abfragen |
+| `list_endpoints()` | vorhandene Endpoints auflisten |
+| `delete_endpoint()` | Triton-Deployment entfernen |
+
+Modellfunktionen bleiben zunächst nicht implementiert:
+
+```python
+def create_deployment(*args, **kwargs):
+    raise NotImplementedError(
+        "Model deployment is not implemented yet"
+    )
+```
+
+## Triton-Control-API
+
+Das Plugin benötigt zunächst nur:
+
+```text
+POST /api/deployments
+    Triton-Deployment mit S3-Profil und Repository-Präfix erstellen
+
+GET /api/instances/{instance_id}
+    Endpoint-Status lesen
+
+DELETE /api/deployments/{instance_id}
+    Triton-Deployment entfernen
+```
+
+Der Request soll minimal so aussehen:
+
+```json
+{
+  "deployment_name": "development",
+  "s3_profile": "training-s3",
+  "repository_prefix": "triton/development",
+  "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
+  "model_control_mode": "explicit"
+}
+```
+
+Die aktuelle Deployment-API erwartet noch direkte S3-Credentials. Dafür muss
+Triton Control serverseitig die Felder `s3_profile` und
+`repository_prefix` akzeptieren und das Profil auflösen:
+
+```text
+s3_profile
+    ▼
+S3 Endpoint, Bucket und Credentials
+    ▼
+s3://<bucket>/<repository_prefix>
+```
+
+Das Plugin erhält niemals Access Keys oder Secret Keys.
+
+## Leerer Triton-Endpoint
+
+Beim leeren Endpoint wird kein Modellname gesetzt. Triton darf deshalb nicht
+mit `--load-model=*` starten. Das Backend muss den Parameter bei
+fehlendem Modellnamen vollständig weglassen:
+
+```text
+--model-control-mode=explicit
+```
+
+Das Repository muss am Anfang noch kein Modell enthalten:
+
+```text
+s3://<bucket>/triton/development/
+```
+
+Ein physisches S3-Verzeichnis muss nicht angelegt werden.
+
+## Späterer Ausbau
+
+Der gleiche Endpoint kann später für Modell-Deployments verwendet werden:
+
+```text
+MLflow Model
+      ▼
+Model Packaging
+      ▼
+s3://<bucket>/triton/development/<model>/
+      ▼
+Triton Model Load
+```
+
+Das ist nicht Bestandteil der ersten Plugin-Version.
+
+## Fehlerverhalten
+
+Das Plugin muss:
+
+- fehlende Konfiguration melden,
+- ungültige S3-Profile melden,
+- nicht erreichbares Triton Control melden,
+- HTTP-Fehler verständlich weitergeben,
+- auf die Readiness des Triton-Deployments warten,
+- keine S3-Credentials loggen,
+- bei einem bereits vorhandenen Endpoint idempotent reagieren.
+
+## Minimaler Codeumfang
+
+```text
+mlflow_triton_control/
+├── __init__.py
+├── config.py
+├── client.py
+└── deployment_client.py
+```
+
+Der erste Client benötigt nur:
+
+```python
+class TritonControlDeploymentClient(BaseDeploymentClient):
+    def create_endpoint(self, name, config=None):
+        ...
+
+    def get_endpoint(self, endpoint):
+        ...
+
+    def list_endpoints(self):
+        ...
+
+    def delete_endpoint(self, endpoint):
+        ...
 ```
