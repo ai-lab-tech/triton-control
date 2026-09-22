@@ -2,19 +2,18 @@
 
 Der erste Ausbauschritt ist bewusst klein:
 
-> Das Plugin erstellt über die Triton-Control-API einen leeren Triton-Endpoint,
-> der ein Model Repository aus einem konfigurierten S3-Profil und S3-Präfix
-> verwendet.
+> Das Plugin erstellt über die Triton-Control-API ein Triton-Deployment mit
+> einem konkreten Modell. Das Deployment verwendet ein Model Repository aus
+> einem konfigurierten S3-Profil und S3-Präfix.
 
-Das Plugin lädt in diesem Schritt noch keine MLflow-Modelle herunter und
-erzeugt noch kein Triton-Modelldatei-Set.
 
 ## Ziel
 
 ```bash
-mlflow deployments create-endpoint \
+mlflow deployments create \
   -t triton-control://triton-control-api \
-  --name development
+  --name iris-classifier \
+  -m models:/iris-classifier/1
 ```
 
 Der Ablauf:
@@ -27,7 +26,7 @@ mlflow-triton-control Plugin
       │  Bearer Token
       ▼
 Triton Control API
-      │  S3-Profil + Repository-Präfix
+      │  S3-Profil + Repository-Präfix + Modellname
       ▼
 Kubernetes Triton Deployment
       │
@@ -44,17 +43,17 @@ Im ersten Schritt:
 - Bearer-Token verwenden
 - S3-Profil an Triton Control übergeben
 - Repository-Präfix übergeben
-- leeren Triton-Endpoint erstellen
-- Endpoint-Status abfragen
-- Endpoints auflisten und löschen
+- Triton-Deployment mit einem Modell erstellen
+- `model-control-mode=explicit` setzen
+- Deployment-Status abfragen
+- Deployments auflisten und löschen
 
 Noch nicht:
 
-- MLflow Model URI herunterladen
+- MLflow Model URI in das Repository konvertieren oder hochladen
 - sklearn- oder Transformers-Flavors erkennen
 - `model.py` oder `config.pbtxt` erzeugen
-- Modelle in das Repository kopieren
-- `create_deployment()` für Modelle
+- Modelle automatisch in das Repository kopieren
 - `update_deployment()`
 - `predict()` und Smoke-Tests
 - MLflow Model Registry oder Artifact Store verwenden
@@ -104,9 +103,11 @@ TRITON_CONTROL_TOKEN=<bearer-token>
 TRITON_S3_PROFILE=training-s3
 TRITON_REPOSITORY_PREFIX=triton/development
 TRITON_IMAGE=nvcr.io/nvidia/tritonserver:26.06-py3
+TRITON_MODEL_NAME=iris_classifier
 ```
 
-Alternativ werden Profil und Präfix über die Endpoint-Konfiguration übergeben:
+Alternativ werden Profil, Präfix und Modellname über die Deployment-Konfiguration
+übergeben:
 
 ```python
 from mlflow.deployments import get_deploy_client
@@ -115,12 +116,15 @@ client = get_deploy_client(
     "triton-control://triton-control-api"
 )
 
-client.create_endpoint(
-    name="development",
+client.create_deployment(
+    name="iris-classifier",
+    model_uri="models:/iris-classifier/1",
+    flavor="triton",
     config={
         "s3_profile": "training-s3",
         "repository_prefix": "triton/development",
         "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
+        "model_name": "iris_classifier",
     },
 )
 ```
@@ -139,19 +143,14 @@ Im ersten Schritt werden nur diese Funktionen implementiert:
 
 | Funktion | Bedeutung |
 |---|---|
-| `create_endpoint()` | leeren Triton-Endpoint erstellen |
-| `get_endpoint()` | Endpoint- und Readiness-Status abfragen |
-| `list_endpoints()` | vorhandene Endpoints auflisten |
-| `delete_endpoint()` | Triton-Deployment entfernen |
+| `create_deployment()` | Triton-Deployment mit vorhandenem Modell erstellen |
+| `get_deployment()` | Deployment- und Readiness-Status abfragen |
+| `list_deployments()` | vorhandene Deployments auflisten |
+| `delete_deployment()` | Triton-Deployment entfernen |
 
-Modellfunktionen bleiben zunächst nicht implementiert:
-
-```python
-def create_deployment(*args, **kwargs):
-    raise NotImplementedError(
-        "Model deployment is not implemented yet"
-    )
-```
+Das Modell muss im angegebenen S3-Repository bereits in Triton-Struktur
+vorliegen. Das Plugin übernimmt in dieser Version weder Konvertierung noch
+Upload.
 
 ## Triton-Control-API
 
@@ -159,7 +158,7 @@ Das Plugin benötigt zunächst nur:
 
 ```text
 POST /api/deployments
-    Triton-Deployment mit S3-Profil und Repository-Präfix erstellen
+    Triton-Deployment mit S3-Profil, Repository-Präfix und Modell erstellen
 
 GET /api/instances/{instance_id}
     Endpoint-Status lesen
@@ -175,6 +174,7 @@ Der Request soll minimal so aussehen:
   "deployment_name": "development",
   "s3_profile": "training-s3",
   "repository_prefix": "triton/development",
+  "model_name": "iris_classifier",
   "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
   "model_control_mode": "explicit"
 }
@@ -194,27 +194,29 @@ s3://<bucket>/<repository_prefix>
 
 Das Plugin erhält niemals Access Keys oder Secret Keys.
 
-## Leerer Triton-Endpoint
+## Triton-Deployment mit explizitem Modell
 
-Beim leeren Endpoint wird kein Modellname gesetzt. Triton darf deshalb nicht
-mit `--load-model=*` starten. Das Backend muss den Parameter bei
-fehlendem Modellnamen vollständig weglassen:
+Das Deployment wird im Explicit-Mode gestartet. Der Modellname wird explizit
+gesetzt und beim Start geladen:
 
 ```text
 --model-control-mode=explicit
+--load-model=iris_classifier
 ```
 
-Das Repository muss am Anfang noch kein Modell enthalten:
+Das Modell muss unter dem konfigurierten Repository-Prefix vorhanden sein:
 
 ```text
-s3://<bucket>/triton/development/
+s3://<bucket>/triton/development/iris_classifier/
 ```
 
-Ein physisches S3-Verzeichnis muss nicht angelegt werden.
+Der Plugin-MVP prüft und provisioniert die Triton-Konfiguration, erzeugt aber
+noch keine `config.pbtxt` oder `model.py`.
 
-## Späterer Ausbau
+## Späterer Ausbau: Model Packaging
 
-Der gleiche Endpoint kann später für Modell-Deployments verwendet werden:
+In einer späteren Version kann das Plugin zusätzlich ein MLflow-Modell
+konvertieren und in das Repository hochladen:
 
 ```text
 MLflow Model
@@ -226,7 +228,8 @@ s3://<bucket>/triton/development/<model>/
 Triton Model Load
 ```
 
-Das ist nicht Bestandteil der ersten Plugin-Version.
+Das ist nicht Bestandteil der ersten Plugin-Version. In der ersten Version
+muss die Triton-Struktur bereits im S3-Präfix vorhanden sein.
 
 ## Fehlerverhalten
 
@@ -254,15 +257,15 @@ Der erste Client benötigt nur:
 
 ```python
 class TritonControlDeploymentClient(BaseDeploymentClient):
-    def create_endpoint(self, name, config=None):
+    def create_deployment(self, name, model_uri, flavor=None, config=None):
         ...
 
-    def get_endpoint(self, endpoint):
+    def get_deployment(self, name):
         ...
 
-    def list_endpoints(self):
+    def list_deployments(self):
         ...
 
-    def delete_endpoint(self, endpoint):
+    def delete_deployment(self, name):
         ...
 ```
