@@ -6,14 +6,17 @@ Der erste Ausbauschritt ist bewusst klein:
 > einem konkreten Modell. Das Deployment verwendet ein Model Repository aus
 > einem konfigurierten S3-Profil und S3-Präfix.
 
-
 ## Ziel
 
 ```bash
 mlflow deployments create \
   -t triton-control://triton-control-api \
   --name iris-classifier \
-  -m models:/iris-classifier/1
+  -m models:/iris-classifier/1 \
+  -C s3_profile_id=7 \
+  -C repository_prefix=triton/development \
+  -C model_name=iris_classifier \
+  -C image=nvcr.io/nvidia/tritonserver:26.06-py3
 ```
 
 Der Ablauf:
@@ -26,7 +29,7 @@ mlflow-triton-control Plugin
       │  Bearer Token
       ▼
 Triton Control API
-      │  S3-Profil + Repository-Präfix + Modellname
+      │  S3-Profil-ID + Repository-Präfix + Modellname
       ▼
 Kubernetes Triton Deployment
       │
@@ -41,7 +44,7 @@ Im ersten Schritt:
 - MLflow Deployment Target registrieren
 - Triton-Control-URL konfigurieren
 - Bearer-Token verwenden
-- S3-Profil an Triton Control übergeben
+- ID eines vorhandenen S3-Profils an Triton Control übergeben
 - Repository-Präfix übergeben
 - Triton-Deployment mit einem Modell erstellen
 - `model-control-mode=explicit` setzen
@@ -85,29 +88,39 @@ keine Inferenz ausführt.
 
 ## Konfiguration
 
-Das Plugin benötigt:
+Der Target URI enthält die interne Adresse der Triton-Control-API. Im gleichen
+Kubernetes-Namespace genügt der Service-Name. Der tatsächliche Name hängt vom
+Helm-Release ab:
 
 ```text
-TRITON_CONTROL_URL
-TRITON_CONTROL_TOKEN
-TRITON_S3_PROFILE
-TRITON_REPOSITORY_PREFIX
-TRITON_IMAGE
+triton-control://<kubernetes-service-name>
 ```
 
-Beispiel:
+Nur der Zugriffstoken ist geheim und wird dem Argo-Pod über ein Kubernetes
+Secret bereitgestellt:
 
-```text
-TRITON_CONTROL_URL=http://triton-control-api:8000
-TRITON_CONTROL_TOKEN=<bearer-token>
-TRITON_S3_PROFILE=training-s3
-TRITON_REPOSITORY_PREFIX=triton/development
-TRITON_IMAGE=nvcr.io/nvidia/tritonserver:26.06-py3
-TRITON_MODEL_NAME=iris_classifier
+```yaml
+env:
+  - name: TRITON_CONTROL_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: mlflow-triton-control
+        key: token
 ```
 
-Alternativ werden Profil, Präfix und Modellname über die Deployment-Konfiguration
-übergeben:
+Die übrigen Werte sind normale Deployment-Konfiguration:
+
+| Wert | Beispiel | Secret |
+|---|---|---|
+| Target URI | `triton-control://triton-control-api` | Nein |
+| `s3_profile_id` | `7` | Nein |
+| `repository_prefix` | `triton/development` | Nein |
+| `model_name` | `iris_classifier` | Nein |
+| `image` | `nvcr.io/nvidia/tritonserver:26.06-py3` | Nein |
+| `TRITON_CONTROL_TOKEN` | Bearer-JWT | Ja |
+
+Über die Python API werden Profil, Präfix und Modellname ebenfalls in der
+Deployment-Konfiguration übergeben:
 
 ```python
 from mlflow.deployments import get_deploy_client
@@ -121,7 +134,7 @@ client.create_deployment(
     model_uri="models:/iris-classifier/1",
     flavor="triton",
     config={
-        "s3_profile": "training-s3",
+        "s3_profile_id": 7,
         "repository_prefix": "triton/development",
         "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
         "model_name": "iris_classifier",
@@ -136,6 +149,37 @@ Authorization: Bearer <TRITON_CONTROL_TOKEN>
 ```
 
 S3-Credentials werden nicht an das Plugin übergeben.
+
+Das bereits für Argo vorhandene `artifactRepositoryRef` stellt dem
+Argo-Executor S3-Zugangsdaten bereit. Das Plugin liest dieses Secret nicht.
+Stattdessen löst Triton Control die übergebene `s3_profile_id`
+serverseitig auf.
+
+## Vorhandene Secret-Infrastruktur
+
+Triton Control besitzt bereits die benötigten Mechanismen:
+
+- S3-Profile werden benutzerbezogen in der Datenbank gespeichert.
+- S3 Secret Keys werden mit `S3_SECRET_ENCRYPTION_KEY` verschlüsselt.
+- Ein verknüpftes Argo-S3-Profil erzeugt eine Artifact-Repository-ConfigMap
+  und ein Kubernetes Secret.
+- Triton-Deployments erhalten bereits ein eigenes Kubernetes Secret mit
+  `AWS_ACCESS_KEY_ID` und `AWS_SECRET_ACCESS_KEY`.
+
+Diese Mechanismen werden wiederverwendet. Das Plugin erzeugt kein eigenes
+S3-Secret und mountet auch nicht das Argo-Artifact-Secret.
+
+Dass Argo und Triton Control im selben Namespace laufen, macht Secrets nicht
+automatisch für jeden Pod verfügbar. Nur explizit referenzierte Secrets werden
+als Umgebungsvariable oder Volume eingebunden.
+
+## Authentifizierung des Argo-Pods
+
+Die Triton-Control-API akzeptiert bereits Bearer-JWTs. Für den MVP wird der
+Token über ein Kubernetes Secret in den Argo-Pod injiziert. Lokale JWTs laufen
+standardmäßig nach 60 Minuten ab. Für dauerhaft automatisierte Workflows sollte
+später ein eigener Service-Account- oder API-Token mit eingeschränkten Rechten
+ergänzt werden.
 
 ## Minimale MLflow Deployment API
 
@@ -171,8 +215,8 @@ Der Request soll minimal so aussehen:
 
 ```json
 {
-  "deployment_name": "development",
-  "s3_profile": "training-s3",
+  "deployment_name": "iris-classifier",
+  "s3_profile_id": 7,
   "repository_prefix": "triton/development",
   "model_name": "iris_classifier",
   "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
@@ -180,19 +224,34 @@ Der Request soll minimal so aussehen:
 }
 ```
 
-Die aktuelle Deployment-API erwartet noch direkte S3-Credentials. Dafür muss
-Triton Control serverseitig die Felder `s3_profile` und
-`repository_prefix` akzeptieren und das Profil auflösen:
+Die aktuelle Deployment-API erwartet noch `s3_url`,
+`s3_access_key` und `s3_secret_key` direkt im Request.
+Sie muss für das Plugin um `s3_profile_id` und
+`repository_prefix` erweitert werden:
 
 ```text
-s3_profile
+s3_profile_id
     ▼
-S3 Endpoint, Bucket und Credentials
+Benutzereigenes S3-Profil aus der Datenbank laden
+    ▼
+Secret Key serverseitig entschlüsseln
+    ▼
+Endpoint, Bucket, Region und Credentials auflösen
     ▼
 s3://<bucket>/<repository_prefix>
+    ▼
+Deployment-spezifisches Kubernetes Secret erzeugen
 ```
 
 Das Plugin erhält niemals Access Keys oder Secret Keys.
+
+Bei der Profilauflösung muss Triton Control die bereits vorhandene
+benutzerbezogene Zugriffskontrolle verwenden. Ein Benutzer darf nur seine
+eigenen S3-Profile für ein Deployment auswählen.
+
+Der `repository_prefix` ist der vollständige Objektpfad innerhalb des
+Buckets. Ein im S3-Profil gespeicherter Browser-Prefix wird nicht automatisch
+vorangestellt.
 
 ## Triton-Deployment mit explizitem Modell
 
@@ -236,12 +295,12 @@ muss die Triton-Struktur bereits im S3-Präfix vorhanden sein.
 Das Plugin muss:
 
 - fehlende Konfiguration melden,
-- ungültige S3-Profile melden,
+- fehlende oder nicht berechtigte S3-Profile melden,
 - nicht erreichbares Triton Control melden,
 - HTTP-Fehler verständlich weitergeben,
 - auf die Readiness des Triton-Deployments warten,
 - keine S3-Credentials loggen,
-- bei einem bereits vorhandenen Endpoint idempotent reagieren.
+- bei einem bereits vorhandenen Deployment idempotent reagieren.
 
 ## Minimaler Codeumfang
 
