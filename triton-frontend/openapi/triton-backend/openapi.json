@@ -1294,6 +1294,131 @@
         ]
       }
     },
+    "/api/deployments/mlflow": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "List Mlflow Deployments",
+        "operationId": "list_mlflow_deployments_api_deployments_mlflow_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Mlflow Deployments Api Deployments Mlflow Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/deployments/mlflow/{name}": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get Mlflow Deployment",
+        "operationId": "get_mlflow_deployment_api_deployments_mlflow__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Mlflow Deployment Api Deployments Mlflow  Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Delete Mlflow Deployment",
+        "operationId": "delete_mlflow_deployment_api_deployments_mlflow__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deployments": {
       "post": {
         "tags": [
@@ -3846,15 +3971,52 @@
           },
           "s3_url": {
             "type": "string",
-            "title": "S3 Url"
+            "title": "S3 Url",
+            "default": ""
           },
           "s3_access_key": {
             "type": "string",
-            "title": "S3 Access Key"
+            "title": "S3 Access Key",
+            "default": ""
           },
           "s3_secret_key": {
             "type": "string",
-            "title": "S3 Secret Key"
+            "title": "S3 Secret Key",
+            "default": ""
+          },
+          "s3_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Profile Id"
+          },
+          "repository_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Prefix"
+          },
+          "model_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Uri"
           },
           "s3_region": {
             "type": "string",
@@ -4046,9 +4208,6 @@
         "type": "object",
         "required": [
           "deployment_name",
-          "s3_url",
-          "s3_access_key",
-          "s3_secret_key",
           "image"
         ],
         "title": "CreateDeploymentRequest",
