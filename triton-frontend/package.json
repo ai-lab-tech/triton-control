@@ -67,11 +67,12 @@
     "dompurify": "3.4.13",
     "esbuild": "0.28.1",
     "express-rate-limit": "8.5.1",
-    "fast-uri": "3.1.2",
-    "hono": "4.12.25",
-    "ip-address": "10.2.0",
+    "fast-uri": "3.1.8",
+    "hono": "4.13.8",
+    "ip-address": "10.7.2",
     "piscina": "5.2.0",
-    "undici": "7.28.0",
-    "vite": "7.3.5"
+    "undici": "7.29.1",
+    "vite": "7.3.5",
+    "nanoid": "3.3.19"
   }
 }

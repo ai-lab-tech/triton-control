@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import anyio
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -27,6 +28,14 @@ async def _get_claims_with_access_policy(
     allow_pending: bool = False,
 ) -> Dict[str, Any]:
     source_claims = await extract_claims(request, creds)
+    # A saturated SQLAlchemy pool must not block the ASGI loop (including
+    # health checks and completion of requests returning their connections).
+    return await anyio.to_thread.run_sync(_resolve_access_claims, request, source_claims, allow_pending)
+
+
+def _resolve_access_claims(
+    request: Request, source_claims: Dict[str, Any], allow_pending: bool,
+) -> Dict[str, Any]:
     try:
         with session_factory() as session:
             user = _identity.resolve_user(session, source_claims, auto_create_oidc=True)
