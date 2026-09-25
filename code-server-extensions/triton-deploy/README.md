@@ -140,6 +140,17 @@ Use **Choose Profile…** to select one, or **Refresh** to load all
 profiles. No URL, login, token, or webview is required. Credentials and CA
 certificates come dynamically from the workspace owner's saved profiles.
 
+On connection and **Refresh**, the plugin automatically checks whether the
+profile can list buckets. If allowed, Explorer opens the endpoint's bucket view.
+If denied or the check takes longer than **1.5 seconds**, it opens the configured
+bucket instead, without an extra error popup. Checks for multiple profiles run
+concurrently; ordinary file operations do not repeat this discovery check.
+Prefix-scoped profiles are never probed. This timeout only bounds the optional
+bucket-list check; an unreachable endpoint can still prevent bucket access.
+
+Choosing **Show Profile Folder** remembers that view and disables automatic
+bucket discovery for that profile until you choose **Show Buckets** again.
+
 Use **S3 Operations → Show Buckets** on a connected root to browse buckets at
 its endpoint, and **Show Profile Folder** to return to the saved bucket.
 **Create Bucket…** creates a general-purpose bucket in the profile's region

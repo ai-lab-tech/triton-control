@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"

@@ -11,6 +11,7 @@ const messages = [];
 let choices = [], methods = [];
 const token = { onCancellationRequested: () => ({ dispose() {} }) };
 const vscode = {
+  FileChangeType: { Changed: 1 },
   EventEmitter: class {
     constructor() {
       this.event = () => {};
@@ -43,7 +44,7 @@ const originalLoad = Module._load;
 Module._load = function (name, ...args) {
   return name === "vscode" ? vscode : originalLoad.call(this, name, ...args);
 };
-const { S3Browser, ProfileSession, folderChange, registerS3Browser } = require("../s3-browser");
+const { S3Browser, ProfileSession, folderChange, registerS3Browser, automaticBucketView } = require("../s3-browser");
 Module._load = originalLoad;
 const profile = {
   id: 1,
@@ -467,7 +468,51 @@ test("bucket commands reuse the selected profile, preserve connection on denial,
   assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "endpoint-1");
   await commands.get("tritonControl.showS3ProfileFolder")(endpoint);
   assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "profile-1");
+  await commands.get("tritonControl.refreshS3")();
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "profile-1");
+  state.delete("s3.scopedProfiles");
+  await commands.get("tritonControl.refreshS3")();
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "endpoint-1");
+  denied = true;
+  const messageCount = messages.length;
+  await commands.get("tritonControl.refreshS3")();
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "profile-1");
+  assert.equal(messages.length, messageCount, messages.at(-1));
+  // A slow detection result must not reconnect after an explicit disconnect.
+  let finishProbe;
+  s3.listBuckets = () => new Promise((resolve) => { finishProbe = resolve; });
+  const mounting = commands.get("tritonControl.refreshS3")();
+  await new Promise((resolve) => setImmediate(resolve));
+  await commands.get("tritonControl.disconnectS3")();
+  finishProbe([]);
+  await mounting;
+  assert.deepEqual(vscode.workspace.workspaceFolders, [local]);
   current = { ...profile, prefix: "restricted" }; created = undefined;
   await commands.get("tritonControl.createS3Bucket")(scoped.uri);
   assert.equal(created, undefined); assert.match(messages.at(-1), /restricted to a prefix/);
+});
+
+
+test("automatic bucket discovery handles success, denial, offline endpoints, and scoped profiles", async (t) => {
+  const original = s3.listBuckets; t.after(() => { s3.listBuckets = original; });
+  let requests = 0;
+  s3.listBuckets = async () => { requests++; return []; };
+  assert.equal(await automaticBucketView(profile), true);
+  assert.equal(await automaticBucketView({ ...profile, prefix: "restricted" }), false);
+  assert.equal(requests, 1);
+  s3.listBuckets = async () => { throw Object.assign(new Error("denied"), { status: 403 }); };
+  assert.equal(await automaticBucketView(profile), false);
+  s3.listBuckets = async () => { throw new Error("offline"); };
+  assert.equal(await automaticBucketView(profile), false);
+});
+
+test("automatic bucket discovery times out and cancels without waiting for the provider", async (t) => {
+  const original = s3.listBuckets; t.after(() => { s3.listBuckets = original; });
+  let signal, finish;
+  s3.listBuckets = (_, requestSignal) => { signal = requestSignal; return new Promise((resolve) => { finish = resolve; }); };
+  const started = Date.now();
+  assert.equal(await automaticBucketView(profile, 10), false);
+  assert.ok(signal.aborted);
+  assert.ok(Date.now() - started < 1000);
+  finish([]); // Late success must not change the selected view.
 });

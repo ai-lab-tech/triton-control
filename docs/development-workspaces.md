@@ -140,6 +140,18 @@ workflow manifests are still full bucket keys; include `team-a/` there.
 
 ### Browse and Create Buckets
 
+On connection and **Refresh**, the plugin automatically checks whether the
+profile can list buckets. If allowed, Explorer opens the endpoint's bucket view.
+If denied or the check takes longer than **1.5 seconds**, it opens the configured
+bucket instead, without an extra error popup. Checks for multiple profiles run
+concurrently; ordinary file operations do not repeat this discovery check.
+Prefix-scoped profiles are never probed. This timeout only bounds the optional
+bucket-list check; an unreachable endpoint can still prevent bucket access.
+
+Choosing **Show Profile Folder** remembers that view and disables automatic
+bucket discovery for that profile until you choose **Show Buckets** again.
+
+
 Right-click the connected S3 root and choose **S3 Operations → Show Buckets**.
 Explorer shows **S3 · <profile name> · Buckets**, with the endpoint's buckets
 beneath it. Expanding a bucket lists its objects; normal uploads, downloads,

@@ -548,6 +548,23 @@ function folderChange(current, desired) {
   while (end > start && nextEnd > start && same(current[end - 1], desired[nextEnd - 1])) { end--; nextEnd--; }
   return { start, count: end - start, folders: desired.slice(start, nextEnd) };
 }
+// Capability discovery is optional: never hold a bucket connection open for
+// the client's normal 60-second network timeout, or turn a denied list into a
+// connection error. The race also bounds providers that ignore cancellation.
+async function automaticBucketView(profile, timeoutMs = 1500) {
+  if (profile.prefix?.replace(/^\/+|\/+$/g, "")) return false;
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      s3.listBuckets(profile, controller.signal).then(() => true, () => false),
+      new Promise((resolve) => {
+        timer = setTimeout(() => { resolve(false); controller.abort(); }, timeoutMs);
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 function registerS3Browser(context) {
   const { S3FileSystem, SCHEME } = require("./s3-filesystem");
   const browser = new S3Browser();
@@ -558,7 +575,9 @@ function registerS3Browser(context) {
     (vscode.workspace.workspaceFolders || []).some((folder) => folder.uri.scheme === SCHEME));
   updateConnectionContext();
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(updateConnectionContext));
+  let mountGeneration = 0;
   async function mountProfiles(choose = false, all = false, only) {
+    const generation = ++mountGeneration;
     const pending = context.globalState.get("s3.pendingWorkspace");
     if (pending && vscode.workspace.workspaceFile?.fsPath === pending) {
       await context.globalState.update("s3.pendingWorkspace", undefined);
@@ -591,11 +610,23 @@ function registerS3Browser(context) {
     // onFileSystem activation can run before VS Code has initialized the
     // workspace folders. Updating then would replace the real local roots.
     if (!choose && !all && vscode.workspace.workspaceFile && !vscode.workspace.workspaceFolders?.length) return;
+    const endpointProfiles = new Set(context.globalState.get("s3.endpointProfiles", []));
+    const scopedProfiles = context.globalState.get("s3.scopedProfiles", []);
+    if (only === undefined) {
+      // Check profiles concurrently: multiple endpoints share the same bounded
+      // wait. Explicit Show Profile Folder remains the user's preferred view.
+      await Promise.all(profiles.map(async (profile) => {
+        const endpoint = !scopedProfiles.includes(profile.id) && await automaticBucketView(profile);
+        if (endpoint) endpointProfiles.add(profile.id); else endpointProfiles.delete(profile.id);
+      }));
+      if (generation !== mountGeneration) return;
+      await context.globalState.update("s3.endpointProfiles", [...endpointProfiles]);
+    }
+    if (generation !== mountGeneration) return;
     const current = vscode.workspace.workspaceFolders || [];
     const local = current.filter((folder) => folder.uri.scheme !== SCHEME).map(({ uri, name }) => ({ uri, name }));
-    const endpointProfiles = context.globalState.get("s3.endpointProfiles", []);
     const remote = profiles.map((profile) => {
-      const endpoint = endpointProfiles.includes(profile.id) && !profile.prefix?.replace(/^\/+|\/+$/g, "");
+      const endpoint = endpointProfiles.has(profile.id) && !profile.prefix?.replace(/^\/+|\/+$/g, "");
       return {
         uri: vscode.Uri.from({ scheme: SCHEME, authority: `${endpoint ? "endpoint" : "profile"}-${profile.id}`,
           path: endpoint ? "/" : "/" + (profile.prefix ? profile.prefix.replace(/^\/+|\/+$/g, "") : "") }),
@@ -644,7 +675,10 @@ function registerS3Browser(context) {
   }
   async function endpointMode(profile, enabled) {
     const ids = new Set(context.globalState.get("s3.endpointProfiles", []));
-    if (enabled) ids.add(profile.id); else ids.delete(profile.id);
+    const scoped = new Set(context.globalState.get("s3.scopedProfiles", []));
+    if (enabled) { ids.add(profile.id); scoped.delete(profile.id); }
+    else { ids.delete(profile.id); scoped.add(profile.id); }
+    await context.globalState.update("s3.scopedProfiles", [...scoped]);
     await context.globalState.update("s3.endpointProfiles", [...ids]);
     await mountProfiles(false, false, profile.id);
   }
@@ -680,6 +714,7 @@ function registerS3Browser(context) {
   command("tritonControl.switchS3Profile", () => mountProfiles(true));
   command("tritonControl.refreshS3", () => mountProfiles(false, true));
   command("tritonControl.disconnectS3", async () => {
+    mountGeneration++;
     await context.globalState.update("s3.disconnected", true);
     const folders = vscode.workspace.workspaceFolders || [];
     const local = folders.filter((folder) => folder.uri.scheme !== SCHEME).map(({ uri, name }) => ({ uri, name }));
@@ -733,4 +768,4 @@ function registerS3Browser(context) {
     mountProfiles().catch((error) => vscode.window.showErrorMessage(error.message));
 }
 
-module.exports = { registerS3Browser, S3Browser, ProfileSession, folderChange };
+module.exports = { automaticBucketView, registerS3Browser, S3Browser, ProfileSession, folderChange };
