@@ -16,13 +16,24 @@ class S3FileSystem {
     this.handles = new Map();
     this.nextHandle = 1;
   }
-  async resolve(uri) {
+  async resolve(uri, allowEndpoint = false) {
     if (!vscode.workspace.isTrusted) throw vscode.FileSystemError.NoPermissions("Trust this workspace to access S3.");
-    const match = /^profile-(\d+)$/.exec(uri.authority);
+    const match = /^(profile|endpoint)-(\d+)$/.exec(uri.authority);
     if (uri.scheme !== SCHEME || !match || uri.query || uri.fragment)
       throw vscode.FileSystemError.NoPermissions("Invalid S3 resource.");
-    const profile = await this.getProfile(Number(match[1]));
-    const key = uri.path.replace(/^\//, "");
+    let profile = await this.getProfile(Number(match[2]));
+    let key = uri.path.replace(/^\//, "");
+    if (match[1] === "endpoint") {
+      if (rootPrefix(profile)) throw vscode.FileSystemError.NoPermissions("Bucket browsing is unavailable for prefix-scoped profiles.");
+      if (!key) {
+        if (!allowEndpoint) throw vscode.FileSystemError.NoPermissions("Select a bucket or folder below the endpoint root.");
+        return { profile, key: "", root: "", endpoint: true };
+      }
+      const bucket = key.split("/")[0];
+      if (s3.validateBucketName(bucket)) throw vscode.FileSystemError.NoPermissions("Invalid S3 bucket name.");
+      profile = await this.getProfile(`${match[2]}--${bucket}`);
+      key = key.slice(bucket.length).replace(/^\//, "");
+    }
     const root = rootPrefix(profile);
     if (key !== root.replace(/\/$/, "") && !key.startsWith(root))
       throw vscode.FileSystemError.NoPermissions("S3 path is outside the saved profile prefix.");
@@ -31,7 +42,9 @@ class S3FileSystem {
   }
   isRoot(key, root) { return !key || key === root || key === root.replace(/\/$/, ""); }
   async stat(uri) {
-    const { profile, key, root } = await this.resolve(uri);
+    const { profile, key, root, endpoint } = await this.resolve(uri, true);
+    if (!endpoint && uri.authority.startsWith("endpoint-") && this.isRoot(key, root) && !await s3.bucketExists(profile))
+      throw vscode.FileSystemError.FileNotFound(uri);
     if (this.isRoot(key, root)) return { type: vscode.FileType.Directory, ctime: 0, mtime: 0, size: 0 };
     const info = await s3.stat(profile, key);
     if (info && !key.endsWith("/")) return { type: vscode.FileType.File, ctime: 0, mtime: 0, size: info.size };
@@ -41,7 +54,8 @@ class S3FileSystem {
     throw vscode.FileSystemError.FileNotFound(uri);
   }
   async readDirectory(uri) {
-    const initial = await this.resolve(uri);
+    const initial = await this.resolve(uri, true);
+    if (initial.endpoint) return (await s3.listBuckets(initial.profile)).map(({ name }) => [name, vscode.FileType.Directory]);
     const prefix = initial.key ? initial.key.replace(/\/$/, "") + "/" : "";
     const entries = new Map(), seen = new Set();
     let next;
@@ -91,7 +105,10 @@ class S3FileSystem {
   }
   async createDirectory(uri) {
     const { profile, key, root } = await this.resolve(uri);
-    if (this.isRoot(key, root)) return;
+    if (this.isRoot(key, root)) {
+      if (uri.authority.startsWith("endpoint-")) throw vscode.FileSystemError.NoPermissions("Use S3 Operations → Create Bucket… to create a bucket.");
+      return;
+    }
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "triton-s3-directory-"));
     try {
       const filename = path.join(directory, "empty");
@@ -110,7 +127,8 @@ class S3FileSystem {
     finally { await this.close(handle); }
   }
   async writeFile(uri, content, options) {
-    const { profile, key } = await this.resolve(uri);
+    const { profile, key, root } = await this.resolve(uri);
+    if (this.isRoot(key, root)) throw vscode.FileSystemError.FileIsADirectory(uri);
     const existing = await s3.stat(profile, key);
     if (!existing && !options.create) throw vscode.FileSystemError.FileNotFound(uri);
     if (existing && !options.overwrite) throw vscode.FileSystemError.FileExists(uri);

@@ -103,3 +103,54 @@ test("native writes reject conflicts, preserve failed writes, and abort without 
   await assert.rejects(provider.close(changed), /profile changed/);
   assert.ok(!store.has("allowed/changed"));
 });
+
+
+test("endpoint roots list buckets and route object operations to the selected bucket", async (t) => {
+  const { provider, store, profile } = fixture(t);
+  profile.prefix = "";
+  provider.getProfile = async (id) => typeof id === "number" ? profile : { ...profile, id, bucket: String(id).slice(3) };
+  const old = { listBuckets: s3.listBuckets, bucketExists: s3.bucketExists };
+  t.after(() => Object.assign(s3, old));
+  s3.listBuckets = async () => [{ name: "other-bucket" }];
+  s3.bucketExists = async (p) => p.bucket === "other-bucket";
+  const endpoint = (p) => uri(p).with({ authority: "endpoint-1" });
+  assert.deepEqual(await provider.readDirectory(endpoint("/")), [["other-bucket", 2]]);
+  assert.equal((await provider.stat(endpoint("/"))).type, 2);
+  assert.equal((await provider.stat(endpoint("/other-bucket"))).type, 2);
+  await assert.rejects(provider.stat(endpoint("/missing-bucket")), (e) => e.code === "FileNotFound");
+  const resolved = await provider.resolve(endpoint("/other-bucket/model.bin"));
+  assert.equal(resolved.profile.bucket, "other-bucket"); assert.equal(resolved.profileId, "1--other-bucket");
+  assert.equal(resolved.key, "model.bin");
+  await provider.writeFile(endpoint("/other-bucket/new.txt"), Buffer.from("new"), { create: true, overwrite: false });
+  assert.equal(store.get("new.txt").toString(), "new");
+  for (const p of ["/", "/other-bucket"]) {
+    await assert.rejects(provider.delete(endpoint(p), { recursive: true }));
+    await assert.rejects(provider.writeFile(endpoint(p), Buffer.from("bad"), { create: true, overwrite: true }));
+    await assert.rejects(provider.createDirectory(endpoint(p)));
+  }
+  profile.prefix = "restricted";
+  await assert.rejects(provider.readDirectory(endpoint("/")), /prefix-scoped/);
+});
+
+
+test("endpoint cross-bucket copies and moves preserve the right source and destination", async (t) => {
+  const { provider, store, profile } = fixture(t);
+  profile.prefix = ""; store.clear(); store.set("first-bucket/file.txt", Buffer.from("payload"));
+  provider.getProfile = async (id) => typeof id === "number" ? profile : { ...profile, id, bucket: String(id).slice(3) };
+  const key = (p, name) => `${p.bucket}/${name}`;
+  s3.stat = async (p, name) => store.has(key(p, name)) ? { etag: "etag", size: store.get(key(p, name)).length } : null;
+  s3.head = async (p, name) => (await s3.stat(p, name))?.etag;
+  s3.download = async (p, name, filename) => fs.writeFile(filename, store.get(key(p, name)), { flag: "wx" });
+  s3.upload = async (p, name, filename) => { store.set(key(p, name), await fs.readFile(filename)); return "etag"; };
+  s3.remove = async (p, name) => store.delete(key(p, name));
+  const endpoint = (p) => uri(p).with({ authority: "endpoint-1" });
+  await provider.copy(endpoint("/first-bucket/file.txt"), endpoint("/second-bucket/copied.txt"), { overwrite: false });
+  assert.equal(store.get("second-bucket/copied.txt").toString(), "payload");
+  assert.ok(store.has("first-bucket/file.txt"));
+  await provider.rename(endpoint("/first-bucket/file.txt"), endpoint("/second-bucket/moved.txt"), { overwrite: false });
+  assert.equal(store.get("second-bucket/moved.txt").toString(), "payload");
+  assert.ok(!store.has("first-bucket/file.txt"));
+  await provider.delete(endpoint("/second-bucket/copied.txt"), { recursive: false });
+  assert.ok(!store.has("second-bucket/copied.txt"));
+  assert.ok(store.has("second-bucket/moved.txt"));
+});

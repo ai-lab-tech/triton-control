@@ -138,6 +138,36 @@ A profile prefix becomes its Explorer root. For example, a profile with prefix
 `team-a` displays objects below `s3://<bucket>/team-a/`. Paths used in Argo
 workflow manifests are still full bucket keys; include `team-a/` there.
 
+### Browse and Create Buckets
+
+Right-click the connected S3 root and choose **S3 Operations → Show Buckets**.
+Explorer shows **S3 · <profile name> · Buckets**, with the endpoint's buckets
+beneath it. Expanding a bucket lists its objects; normal uploads, downloads,
+editing, copy/move, and deletion work inside each bucket. Dragging between
+buckets defaults to copying; dragging within one bucket defaults to moving.
+Use **Show Profile Folder** to return to the saved bucket and prefix.
+
+**S3 Operations → Create Bucket…** asks for a bucket name and uses the selected
+profile's endpoint, credentials, CA, and region. Bucket creation is separate
+from listing, so it does not require permission to list every bucket. Existing
+bucket names are checked before creation; a failed existence check stops the
+operation. Creation does not change the saved profile or grant new permissions.
+Refresh an open bucket view after creation, or use **Show Buckets** to open it.
+
+These actions are available only for profiles without a prefix. Prefix-scoped
+profiles keep their existing boundary. The provider enforces permissions:
+listing normally requires `s3:ListAllMyBuckets`, creation requires
+`s3:CreateBucket`, and access to bucket contents requires its own permissions.
+A listing failure leaves the current Explorer connection intact. Bucket names
+returned by the provider are not a guarantee of read/write access.
+
+The view uses the profile's configured endpoint and region for bucket access;
+it does not discover or redirect to other regional endpoints. Use a profile
+with the matching regional endpoint for buckets in another AWS region.
+Only general-purpose S3 buckets are supported. Bucket deletion and renaming
+are unavailable; use **Create Bucket…**, rather than Explorer's New Folder,
+at the endpoint root.
+
 ### Transfer Files in Explorer
 
 Drag files or folders directly onto an S3 bucket/profile root or folder, or
@@ -146,8 +176,8 @@ from S3 onto a workspace folder. Managed workspaces use these defaults:
 | Drag | Default action |
 | --- | --- |
 | Workspace ↔ S3 | Copy |
-| Between different S3 profiles | Copy |
-| Within the same S3 profile | Move |
+| Between different S3 profiles or buckets | Copy |
+| Within the same bucket and profile | Move |
 | Ctrl-drag (Option on macOS) | Force copy |
 | Shift-drag | Force move |
 

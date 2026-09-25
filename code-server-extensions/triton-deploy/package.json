@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -121,6 +121,21 @@
         "title": "Upload to Bucket Root\u2026",
         "category": "S3",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tritonControl.showS3Buckets",
+        "title": "Show Buckets",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.showS3ProfileFolder",
+        "title": "Show Profile Folder",
+        "category": "S3"
+      },
+      {
+        "command": "tritonControl.createS3Bucket",
+        "title": "Create Bucket\u2026",
+        "category": "S3"
       }
     ],
     "viewsContainers": {
@@ -262,6 +277,18 @@
           "command": "tritonControl.uploadWorkspaceS3",
           "when": "tritonControl.s3Connected && (resourceScheme == file || resourceScheme == vscode-remote)",
           "group": "2_transfer@1"
+        },
+        {
+          "command": "tritonControl.showS3Buckets",
+          "group": "4_profile@2"
+        },
+        {
+          "command": "tritonControl.showS3ProfileFolder",
+          "group": "4_profile@3"
+        },
+        {
+          "command": "tritonControl.createS3Bucket",
+          "group": "4_profile@4"
         }
       ]
     },

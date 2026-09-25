@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
 const tls = require("node:tls");
-const { Transform } = require("node:stream");
+const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 
 const encode = (value) =>
@@ -23,6 +23,7 @@ function signedRequest(
   headers = {},
   payloadHash = hash(""),
   now = new Date(),
+  service = false,
 ) {
   const endpoint = new URL(profile.endpoint);
   if (
@@ -37,11 +38,11 @@ function signedRequest(
       "The S3 profile endpoint must be an HTTP(S) host without a path or credentials.",
     );
   }
-  if (!profile.bucket || !profile.access_key || !profile.secret_key)
+  if ((!service && !profile.bucket) || !profile.access_key || !profile.secret_key)
     throw new Error("The S3 profile is incomplete.");
-  const virtual = profile.force_path_style === false;
+  const virtual = !service && profile.force_path_style === false;
   if (virtual) endpoint.hostname = `${profile.bucket}.${endpoint.hostname}`;
-  const pathname = `${virtual ? "" : `/${encode(profile.bucket)}`}/${key.split("/").map(encode).join("/")}`;
+  const pathname = service ? "/" : `${virtual ? "" : `/${encode(profile.bucket)}`}/${key.split("/").map(encode).join("/")}`;
   const search = Object.entries(query)
     .map(([k, v]) => [encode(k), encode(v)])
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -98,7 +99,7 @@ function request(
   profile,
   method,
   key,
-  { query, headers, payloadHash, stream, signal, onBytes } = {},
+  { query, headers, payloadHash, stream, signal, onBytes, service = false } = {},
 ) {
   return new Promise((resolve, reject) => {
     const options = signedRequest(
@@ -108,6 +109,8 @@ function request(
       query,
       headers,
       payloadHash,
+      undefined,
+      service,
     );
     const req = (options.protocol === "https:" ? https : http).request(
       { ...options, signal },
@@ -279,4 +282,49 @@ async function remove(profile, key, signal, etag) {
   if (!key) throw new Error("Select an S3 object to delete.");
   check(await request(profile, "DELETE", key, { signal, headers: etag ? { "if-match": etag } : {} }));
 }
-module.exports = { signedRequest, parseList, list, stat, head, download, upload, remove };
+function validateBucketName(name) {
+  if (typeof name !== "string" || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(name) ||
+      name.includes("..") || /^\d+\.\d+\.\d+\.\d+$/.test(name) ||
+      /^(xn--|sthree-|amzn-s3-demo-)/.test(name) || /(-s3alias|--ol-s3|\.mrap|--x-s3|--table-s3)$/.test(name))
+    return "Use a valid bucket name: 3–63 lowercase letters, numbers, dots or hyphens; start and end with a letter or number.";
+}
+async function listBuckets(profile, signal) {
+  const buckets = new Map(), seen = new Set();
+  let next;
+  do {
+    const response = check(await request(profile, "GET", "", { service: true, signal,
+      query: { "max-buckets": "1000", ...(next ? { "continuation-token": next } : {}) } }));
+    if (!/<ListAllMyBucketsResult[\s>]/.test(response.body)) throw new Error("Invalid S3 bucket listing.");
+    for (const match of response.body.matchAll(/<Bucket>([\s\S]*?)<\/Bucket>/g)) {
+      const name = tag(match[1], "Name");
+      if (validateBucketName(name)) throw new Error("S3 returned an unsupported bucket name.");
+      buckets.set(name, { name, region: tag(match[1], "BucketRegion") });
+      if (buckets.size > 10000) throw new Error("The endpoint has more than 10,000 buckets.");
+    }
+    next = tag(response.body, "ContinuationToken");
+    if (next && seen.has(next)) throw new Error("Repeated S3 bucket listing page.");
+    seen.add(next);
+  } while (next);
+  return [...buckets.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+async function bucketExists(profile, signal) {
+  return check(await request(profile, "HEAD", "", { signal }), [404]).status !== 404;
+}
+async function createBucket(profile, bucket, signal) {
+  const invalid = validateBucketName(bucket);
+  if (invalid) throw new Error(invalid);
+  // Avoid reissuing CreateBucket for an owned bucket (AWS us-east-1 can
+  // otherwise reset that bucket's ACL instead of returning a conflict).
+  if (await bucketExists({ ...profile, bucket }, signal)) throw new Error("This bucket already exists. Choose another name.");
+  const region = profile.region || "us-east-1";
+  const escape = (value) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
+  const body = region === "us-east-1" ? "" :
+    `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${escape(region)}</LocationConstraint></CreateBucketConfiguration>`;
+  // The AWS global endpoint requires us-east-1 for the signature, even when
+  // LocationConstraint selects another region. Redirects are never followed.
+  const signingProfile = new URL(profile.endpoint).hostname === "s3.amazonaws.com" ? { ...profile, region: "us-east-1" } : profile;
+  check(await request({ ...signingProfile, bucket }, "PUT", "", { signal,
+    headers: { "content-length": String(Buffer.byteLength(body)), ...(body ? { "content-type": "application/xml" } : {}) },
+    payloadHash: hash(body), stream: Readable.from([body]) }));
+}
+module.exports = { listBuckets, createBucket, bucketExists, validateBucketName, signedRequest, parseList, list, stat, head, download, upload, remove };

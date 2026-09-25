@@ -140,6 +140,16 @@ Use **Choose Profile…** to select one, or **Refresh** to load all
 profiles. No URL, login, token, or webview is required. Credentials and CA
 certificates come dynamically from the workspace owner's saved profiles.
 
+Use **S3 Operations → Show Buckets** on a connected root to browse buckets at
+its endpoint, and **Show Profile Folder** to return to the saved bucket.
+**Create Bucket…** creates a general-purpose bucket in the profile's region
+when the credentials permit it. Existing bucket names are checked first.
+These actions require a profile without a prefix; scoped profiles retain their
+boundary. Listing requires `s3:ListAllMyBuckets`; creation requires
+`s3:CreateBucket` and a successful existence check. Bucket contents have
+separate permissions. Cross-bucket drags default to copying. Bucket deletion
+and renaming are not supported, and regional endpoints are not auto-discovered.
+
 Use normal Explorer controls for files and folders:
 
 - Drag between workspace and S3, or between S3 folders/profiles. Files can be

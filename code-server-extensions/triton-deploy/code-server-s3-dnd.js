@@ -13,8 +13,10 @@ function s3DragCopy(event, items, target, fallback) {
   // Option on macOS); Shift forces a move otherwise.
   if (fallback) return true;
   if (event.shiftKey) return false;
+  const volume = (resource) => resource.authority?.startsWith("endpoint-")
+    ? `${resource.authority}/${resource.path.split("/")[1] || ""}` : resource.authority;
   return items.some(({ resource }) => resource.scheme !== destination.resource.scheme ||
-    resource.authority !== destination.resource.authority);
+    volume(resource) !== volume(destination.resource));
 }
 
 const marker = "/* triton-s3-windows-dnd-v1 */";
@@ -26,6 +28,13 @@ const bundles = [
   ["lib/vscode/out/vs/workbench/workbench.web.main.internal.js", "cK", "y_", "i5e"],
 ];
 function patchWorkbench(source) {
+  // Upgrade the previous managed helper while keeping both patched call sites.
+  if (source.includes(marker) && !source.includes(helper)) {
+    const start = source.indexOf(marker);
+    const end = source.indexOf("handleDragOver(", start);
+    if (end > start && source.slice(start, end).startsWith(marker + "tritonS3DragCopy(event, items, target, fallback) {"))
+      source = source.slice(0, start) + helper + source.slice(end);
+  }
   for (const [, native, controller, distinct] of bundles) {
     const hover = `handleDragOver(o,e,t,i,n){let r=n&&(n.ctrlKey&&!ht||n.altKey&&ht),s=o instanceof ${native}`;
     const drop = `let l=${distinct}([...s.keys()],m=>m.resource),c=n.ctrlKey&&!ht||n.altKey&&ht;`;

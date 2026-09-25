@@ -52,3 +52,16 @@ test("patch updates both drag feedback and drop action, is idempotent, and rejec
     }
   }
 });
+
+
+test("endpoint bucket boundaries default to copy while folders in one bucket default to move", () => {
+  const entry = (path) => ({ resource: { scheme: "triton-s3", authority: "endpoint-1", path }, isDirectory: true });
+  assert.equal(s3DragCopy({}, [entry("/first-bucket/a")], entry("/second-bucket"), false), true);
+  assert.equal(s3DragCopy({}, [entry("/first-bucket/a")], entry("/first-bucket/b"), false), false);
+  assert.equal(s3DragCopy({ shiftKey: true }, [entry("/first-bucket/a")], entry("/second-bucket"), false), false);
+  const patched = patchWorkbench(source);
+  const prior = patched.replace(/  const volume = [\s\S]*?volume\(resource\) !== volume\(destination.resource\)\);/, `  return items.some(({ resource }) => resource.scheme !== destination.resource.scheme ||
+    resource.authority !== destination.resource.authority);`);
+  assert.notEqual(prior, patched);
+  assert.equal(patchWorkbench(prior), patched);
+});

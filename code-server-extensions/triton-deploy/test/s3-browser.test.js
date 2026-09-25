@@ -344,7 +344,7 @@ test("filesystem activation preserves roots and S3 menu clipboard bypasses brows
   S3Browser.prototype.upload = async (destination, uris) => uploads.push({ destination, uris });
   t.after(() => { S3Browser.prototype.upload = originalUpload; });
   const root = { ...target, root: true, prefix: "" };
-  const rootUri = { scheme: "triton-s3", descriptor: root };
+  const rootUri = { scheme: "triton-s3", authority: "profile-1", descriptor: root };
   const localFile = { scheme: "file", fsPath: "/workspace/model.bin" };
   vscode.workspace.workspaceFolders = [{ uri: rootUri, name: "S3 profile" }];
   await commands.get("tritonControl.copyS3")(localFile);
@@ -406,4 +406,68 @@ test("parallel Explorer lookups share one profile request and retry after failur
   assert.equal(requests, 3);
   finish([{ ...profile, ca_certificate: "updated" }]);
   assert.equal((await retry)[0].ca_certificate, "updated");
+});
+
+
+test("endpoint bucket profiles use fresh owner credentials and cannot escape a profile prefix", async (t) => {
+  const browser = new S3Browser(); t.after(() => browser.dispose());
+  let current = { ...profile, secret_key: "first" };
+  browser.session.profiles = async () => [current];
+  assert.equal((await browser.profile("1--other--bucket")).bucket, "other--bucket");
+  current = { ...current, secret_key: "rotated" };
+  assert.equal((await browser.profile("1--other--bucket")).secret_key, "rotated");
+  current = { ...current, prefix: "restricted" };
+  await assert.rejects(browser.profile("1--other--bucket"), /prefix-scoped/);
+  browser.session.profiles = async () => [];
+  await assert.rejects(browser.profile("1--other--bucket"), /no longer available/);
+});
+
+
+test("bucket commands reuse the selected profile, preserve connection on denial, and restore scoped view", async (t) => {
+  const saved = { workspace: vscode.workspace, commands: vscode.commands, uri: vscode.Uri,
+    input: vscode.window.showInputBox, profiles: ProfileSession.prototype.profiles,
+    listBuckets: s3.listBuckets, createBucket: s3.createBucket };
+  const commands = new Map(), state = new Map([["s3.disconnected", true]]), subscriptions = [];
+  const makeUri = (value) => ({ ...value, query: "", fragment: "",
+    toString() { return `${this.scheme}://${this.authority || ""}${this.path}`; },
+    with(change) { return makeUri({ ...this, ...change }); } });
+  const local = { name: "workspace", uri: makeUri({ scheme: "file", path: "/workspace" }) };
+  const scoped = { name: "S3 profile", uri: makeUri({ scheme: "triton-s3", authority: "profile-1", path: "/" }) };
+  vscode.Uri = { ...vscode.Uri, from: makeUri };
+  vscode.workspace = { isTrusted: true, workspaceFolders: [local, scoped], workspaceFile: { fsPath: "/workspace/test.code-workspace" },
+    onDidChangeWorkspaceFolders: () => ({ dispose() {} }), registerFileSystemProvider: () => ({ dispose() {} }),
+    updateWorkspaceFolders: (start, count, ...folders) => { vscode.workspace.workspaceFolders.splice(start, count, ...folders); return true; } };
+  vscode.commands = { registerCommand: (name, run) => { commands.set(name, run); return { dispose() {} }; }, executeCommand: async () => {} };
+  let current = { ...profile }, denied = true, created;
+  ProfileSession.prototype.profiles = async () => [current];
+  s3.listBuckets = async () => { if (denied) throw new Error("Listing denied (HTTP 403)"); return [{ name: "new-bucket" }]; };
+  s3.createBucket = async (p, name) => { created = { id: p.id, name }; };
+  vscode.window.showInputBox = async () => "new-bucket";
+  Module._load = function (name, ...args) { return name === "vscode" ? vscode : originalLoad.call(this, name, ...args); };
+  t.after(() => {
+    for (const item of subscriptions) item.dispose?.();
+    Module._load = originalLoad; vscode.workspace = saved.workspace; vscode.commands = saved.commands; vscode.Uri = saved.uri;
+    vscode.window.showInputBox = saved.input; ProfileSession.prototype.profiles = saved.profiles;
+    s3.listBuckets = saved.listBuckets; s3.createBucket = saved.createBucket;
+  });
+  registerS3Browser({ subscriptions, globalState: { get: (key, fallback) => state.has(key) ? state.get(key) : fallback,
+    update: async (key, value) => state.set(key, value) } });
+  await commands.get("tritonControl.showS3Buckets")(scoped.uri);
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "profile-1");
+  assert.match(messages.at(-1), /403/);
+  // CreateBucket does not require ListBuckets permission.
+  await commands.get("tritonControl.createS3Bucket")(scoped.uri);
+  assert.deepEqual(created, { id: 1, name: "new-bucket" });
+  denied = false;
+  await commands.get("tritonControl.showS3Buckets")(scoped.uri);
+  const endpoint = vscode.workspace.workspaceFolders[1].uri;
+  assert.equal(endpoint.authority, "endpoint-1");
+  assert.equal(vscode.workspace.workspaceFolders[0], local);
+  await commands.get("tritonControl.refreshS3")();
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "endpoint-1");
+  await commands.get("tritonControl.showS3ProfileFolder")(endpoint);
+  assert.equal(vscode.workspace.workspaceFolders[1].uri.authority, "profile-1");
+  current = { ...profile, prefix: "restricted" }; created = undefined;
+  await commands.get("tritonControl.createS3Bucket")(scoped.uri);
+  assert.equal(created, undefined); assert.match(messages.at(-1), /restricted to a prefix/);
 });

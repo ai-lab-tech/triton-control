@@ -228,3 +228,51 @@ test("recursive listing omits delimiter and deletion signs the exact encoded obj
   await assert.rejects(remove(p, ""), /Select an S3 object/);
   await assert.rejects(remove(p, "forbidden"), /HTTP 403/);
 });
+
+
+test("bucket listing signs the service root, paginates, and rejects permission errors", async (t) => {
+  const { listBuckets } = require("../s3-client");
+  let denied = false;
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    requests.push(req.url);
+    assert.match(req.headers.authorization, /AWS4-HMAC-SHA256/);
+    if (denied) { res.writeHead(403); res.end("secret detail"); return; }
+    const next = req.url.includes("continuation-token=");
+    res.end(`<ListAllMyBucketsResult><Buckets><Bucket><Name>${next ? "second-bucket" : "first-bucket"}</Name></Bucket></Buckets>${next ? "" : "<ContinuationToken>a+b/=</ContinuationToken>"}</ListAllMyBucketsResult>`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const selected = { ...profile, endpoint: `http://127.0.0.1:${server.address().port}`, force_path_style: false };
+  assert.deepEqual((await listBuckets(selected)).map((b) => b.name), ["first-bucket", "second-bucket"]);
+  assert.deepEqual(requests, ["/?max-buckets=1000", "/?continuation-token=a%2Bb%2F%3D&max-buckets=1000"]);
+  denied = true;
+  await assert.rejects(listBuckets(selected), (e) => e.status === 403 && !e.message.includes("secret detail"));
+});
+
+test("bucket creation uses region XML, validates names, and never recreates existing buckets", async (t) => {
+  const { createBucket, validateBucketName } = require("../s3-client");
+  const created = [];
+  let exists = false;
+  const server = http.createServer(async (req, res) => {
+    if (req.method === "HEAD") { res.writeHead(exists ? 200 : 404); res.end(); return; }
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString();
+    assert.equal(req.headers["x-amz-content-sha256"], crypto.createHash("sha256").update(body).digest("hex"));
+    created.push({ path: req.url, body, auth: req.headers.authorization }); res.end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const selected = { ...profile, endpoint: `http://127.0.0.1:${server.address().port}` };
+  await createBucket(selected, "new-bucket");
+  await createBucket({ ...selected, region: "eu-central-1" }, "eu-bucket");
+  assert.equal(created[0].path, "/new-bucket/"); assert.equal(created[0].body, "");
+  assert.match(created[1].body, /<LocationConstraint>eu-central-1<\/LocationConstraint>/);
+  assert.match(created[1].auth, /eu-central-1\/s3\/aws4_request/);
+  for (const name of ["", "UPPERCASE", "../bad", "ab", "1.2.3.4", "a..b", "name--x-s3"]) {
+    assert.ok(validateBucketName(name)); await assert.rejects(createBucket(selected, name), /bucket name/);
+  }
+  exists = true;
+  await assert.rejects(createBucket(selected, "new-bucket"), /already exists/);
+  assert.equal(created.length, 2);
+});

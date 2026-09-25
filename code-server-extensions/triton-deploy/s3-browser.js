@@ -78,11 +78,17 @@ class S3Browser {
     this.changed.fire();
   }
   async profile(id) {
-    const profile = (await this.session.profiles()).find((p) => p.id === id);
+    const match = /^(\d+)(?:--([a-z0-9][a-z0-9.-]*))?$/.exec(String(id));
+    const profile = (await this.session.profiles()).find((p) => p.id === Number(match?.[1]));
     if (!profile)
       throw new Error(
         "This S3 profile is no longer available to the signed-in user.",
       );
+    if (match[2]) {
+      if (profile.prefix?.replace(/^\/+|\/+$/g, "")) throw new Error("Bucket browsing is unavailable for prefix-scoped profiles.");
+      if (s3.validateBucketName(match[2])) throw new Error("Invalid S3 bucket name.");
+      return { ...profile, id: String(id), bucket: match[2], prefix: "" };
+    }
     return profile;
   }
   getTreeItem(node) {
@@ -552,7 +558,7 @@ function registerS3Browser(context) {
     (vscode.workspace.workspaceFolders || []).some((folder) => folder.uri.scheme === SCHEME));
   updateConnectionContext();
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(updateConnectionContext));
-  async function mountProfiles(choose = false, all = false) {
+  async function mountProfiles(choose = false, all = false, only) {
     const pending = context.globalState.get("s3.pendingWorkspace");
     if (pending && vscode.workspace.workspaceFile?.fsPath === pending) {
       await context.globalState.update("s3.pendingWorkspace", undefined);
@@ -562,6 +568,11 @@ function registerS3Browser(context) {
       }
     }
     let profiles = await browser.session.profiles();
+    if (only !== undefined) {
+      profiles = profiles.filter((profile) => profile.id === only);
+      await context.globalState.update("s3.selectedProfile", only);
+      await context.globalState.update("s3.disconnected", false);
+    }
     if (choose) {
       const choice = await vscode.window.showQuickPick(profiles.map((profile) => ({
         label: profile.name, description: profile.bucket, profile,
@@ -582,11 +593,15 @@ function registerS3Browser(context) {
     if (!choose && !all && vscode.workspace.workspaceFile && !vscode.workspace.workspaceFolders?.length) return;
     const current = vscode.workspace.workspaceFolders || [];
     const local = current.filter((folder) => folder.uri.scheme !== SCHEME).map(({ uri, name }) => ({ uri, name }));
-    const remote = profiles.map((profile) => ({
-      uri: vscode.Uri.from({ scheme: SCHEME, authority: `profile-${profile.id}`,
-        path: "/" + (profile.prefix ? profile.prefix.replace(/^\/+|\/+$/g, "") : "") }),
-      name: `S3 · ${profile.name} · ${profile.bucket}`,
-    }));
+    const endpointProfiles = context.globalState.get("s3.endpointProfiles", []);
+    const remote = profiles.map((profile) => {
+      const endpoint = endpointProfiles.includes(profile.id) && !profile.prefix?.replace(/^\/+|\/+$/g, "");
+      return {
+        uri: vscode.Uri.from({ scheme: SCHEME, authority: `${endpoint ? "endpoint" : "profile"}-${profile.id}`,
+          path: endpoint ? "/" : "/" + (profile.prefix ? profile.prefix.replace(/^\/+|\/+$/g, "") : "") }),
+        name: endpoint ? `S3 · ${profile.name} · Buckets` : `S3 · ${profile.name} · ${profile.bucket}`,
+      };
+    });
     const desired = [...local, ...remote];
     if (!vscode.workspace.workspaceFile && local.length && remote.length) {
       // code-server can omit the original remote folder when creating an
@@ -614,6 +629,53 @@ function registerS3Browser(context) {
     if (!uri || uri.scheme !== SCHEME) throw new Error("Select an S3 object or folder in Explorer.");
     return provider.node(uri);
   };
+  async function selectedProfile(uri) {
+    const match = uri?.scheme === SCHEME && /^(?:profile|endpoint)-(\d+)$/.exec(uri.authority);
+    if (match) return browser.profile(Number(match[1]));
+    const roots = (vscode.workspace.workspaceFolders || []).filter((folder) => folder.uri.scheme === SCHEME);
+    if (roots.length === 1) return selectedProfile(roots[0].uri);
+    const profiles = await browser.session.profiles();
+    return (await vscode.window.showQuickPick(profiles.map((profile) => ({ label: profile.name, description: profile.bucket, profile })),
+      { title: "Choose S3 profile" }))?.profile;
+  }
+  function requireEndpointProfile(profile) {
+    if (profile.prefix?.replace(/^\/+|\/+$/g, ""))
+      throw new Error("This profile is restricted to a prefix. Use a profile without a prefix for bucket operations.");
+  }
+  async function endpointMode(profile, enabled) {
+    const ids = new Set(context.globalState.get("s3.endpointProfiles", []));
+    if (enabled) ids.add(profile.id); else ids.delete(profile.id);
+    await context.globalState.update("s3.endpointProfiles", [...ids]);
+    await mountProfiles(false, false, profile.id);
+  }
+  command("tritonControl.showS3Buckets", async (uri) => {
+    const profile = await selectedProfile(uri);
+    if (!profile) return;
+    requireEndpointProfile(profile);
+    // Check permission before changing the working Explorer connection.
+    await browser.operation("Listing S3 buckets", (signal) => s3.listBuckets(profile, signal));
+    await endpointMode(profile, true);
+  });
+  command("tritonControl.showS3ProfileFolder", async (uri) => {
+    const profile = await selectedProfile(uri);
+    if (profile) await endpointMode(profile, false);
+  });
+  command("tritonControl.createS3Bucket", async (uri) => {
+    const profile = await selectedProfile(uri);
+    if (!profile) return;
+    requireEndpointProfile(profile);
+    const name = await vscode.window.showInputBox({ title: "Create S3 bucket",
+      prompt: `Bucket name (${profile.name}, region ${profile.region || "us-east-1"})`,
+      ignoreFocusOut: true, validateInput: s3.validateBucketName });
+    if (name === undefined) return;
+    const current = await browser.profile(profile.id);
+    requireEndpointProfile(current);
+    if (current.endpoint !== profile.endpoint || current.region !== profile.region)
+      throw new Error("The profile changed. Start bucket creation again.");
+    await browser.operation(`Creating S3 bucket ${name}`, (signal) => s3.createBucket(current, name, signal));
+    vscode.window.showInformationMessage(`Created S3 bucket ${name}. Use Show Buckets to browse it if your credentials allow listing buckets.`);
+    provider.notify(vscode.Uri.from({ scheme: SCHEME, authority: `endpoint-${profile.id}`, path: "/" }));
+  });
   command("tritonControl.connectS3", () => mountProfiles(true));
   command("tritonControl.switchS3Profile", () => mountProfiles(true));
   command("tritonControl.refreshS3", () => mountProfiles(false, true));
@@ -634,8 +696,16 @@ function registerS3Browser(context) {
     const destination = roots.length === 1 ? roots[0] : (await vscode.window.showQuickPick(
       roots.map((folder) => ({ label: folder.name, folder })), { title: "Upload to bucket root" }))?.folder;
     if (!destination) return;
-    try { await browser.upload(await node(destination.uri), selected?.length ? selected : [uri]); }
-    finally { provider.notify(destination.uri); }
+    let destinationUri = destination.uri;
+    if (destinationUri.authority.startsWith("endpoint-")) {
+      const profile = await selectedProfile(destinationUri);
+      const buckets = await s3.listBuckets(profile);
+      const bucket = await vscode.window.showQuickPick(buckets.map(({ name }) => ({ label: name })), { title: "Upload to bucket root" });
+      if (!bucket) return;
+      destinationUri = destinationUri.with({ path: "/" + bucket.label });
+    }
+    try { await browser.upload(await node(destinationUri), selected?.length ? selected : [uri]); }
+    finally { provider.notify(destinationUri); }
   });
   command("tritonControl.downloadS3", async (uri, selected) => browser.download(await Promise.all((selected?.length ? selected : [uri]).map(node))));
   command("tritonControl.deleteS3", async (uri) => { await browser.deleteTarget(await node(uri)); provider.notify(uri); });
@@ -651,8 +721,12 @@ function registerS3Browser(context) {
     try { await browser.paste(await node(uri)); }
     finally {
       provider.notify(uri);
-      for (const source of sources) provider.notify(vscode.Uri.from({ scheme: SCHEME,
-        authority: `profile-${source.profileId}`, path: "/" + (source.key ?? source.prefix) }));
+      for (const source of sources) {
+        const [, id, bucket] = /^(\d+)(?:--(.+))?$/.exec(String(source.profileId));
+        provider.notify(vscode.Uri.from({ scheme: SCHEME,
+          authority: `${bucket ? "endpoint" : "profile"}-${id}`,
+          path: "/" + (bucket ? bucket + "/" : "") + (source.key ?? source.prefix) }));
+      }
     }
   });
   if (!context.globalState.get("s3.disconnected") && process.env.TRITON_CONTROL_PROFILE_URL && process.env.TRITON_CONTROL_PROFILE_TOKEN)
