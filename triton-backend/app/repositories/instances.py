@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.db.entities import TritonInstanceEntity
 
@@ -33,6 +33,14 @@ def find_by_name(session: Session, name: str) -> TritonInstanceEntity | None:
 
 def list_ids(session: Session) -> list[int | None]:
     return list(session.exec(select(TritonInstanceEntity.id)).all())
+
+
+def list_mlflow_for_owner(session: Session, owner_user_id: int) -> list[TritonInstanceEntity]:
+    query = select(TritonInstanceEntity).where(
+        TritonInstanceEntity.created_by_user_id == owner_user_id,
+        col(TritonInstanceEntity.mlflow_model_uri).is_not(None),
+    )
+    return list(session.exec(query).all())
 
 
 def list_visible(

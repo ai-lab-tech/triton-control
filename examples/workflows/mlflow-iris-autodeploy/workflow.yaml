@@ -1,0 +1,145 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  # Token delegation currently requires a fixed, DNS-compatible workflow name.
+  name: mlflow-iris-autodeploy
+  labels:
+    app.kubernetes.io/name: mlflow-iris-autodeploy
+    app.kubernetes.io/part-of: triton-control-examples
+  annotations:
+    triton-control.ai/mlflow-deploy-template: deploy
+    triton-control.ai/mlflow-deployment-name: iris-classifier
+    # Must match the s3-profile-id parameter below.
+    triton-control.ai/mlflow-s3-profile-id: "7"
+spec:
+  entrypoint: pipeline
+  artifactRepositoryRef:
+    # Copy this name from Workflows -> Configure S3 Secrets.
+    configMap: workflow-s3-training-a1b2c3
+    key: repository
+  podGC:
+    strategy: OnPodCompletion
+  ttlStrategy:
+    secondsAfterCompletion: 300
+    secondsAfterFailure: 300
+  arguments:
+    parameters:
+      - name: s3-training-script-key
+        value: workflows/mlflow-iris-autodeploy/train.py
+      - name: s3-plugin-wheel-key
+        value: workflows/mlflow-iris-autodeploy/mlflow_triton_control-0.1.0-py3-none-any.whl
+      - name: mlflow-tracking-uri
+        value: http://mlflow-service:5000
+      - name: triton-control-target
+        value: triton-control://triton-control:8000
+      - name: s3-bucket
+        value: triton-models
+      - name: repository-prefix
+        value: triton/development
+      - name: s3-profile-id
+        value: "7"
+      - name: triton-image
+        value: nvcr.io/nvidia/tritonserver:26.06-py3
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - name: train
+            template: train
+          - name: deploy
+            dependencies: [train]
+            template: deploy
+
+    - name: train
+      inputs:
+        artifacts:
+          - name: training-script
+            path: /tmp/train.py
+            archive:
+              none: {}
+            s3:
+              key: "{{workflow.parameters.s3-training-script-key}}"
+      container:
+        image: python:3.12-slim
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-ec"]
+        args:
+          - |
+            export HOME=/tmp
+            python -m pip install --no-cache-dir --target /tmp/python-packages \
+              "mlflow>=3,<4" \
+              "numpy>=1.26,<3" \
+              "onnx>=1.17,<2" \
+              "scikit-learn>=1.5,<2" \
+              "skl2onnx>=1.17,<2"
+            export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
+            python /tmp/train.py
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "{{workflow.parameters.mlflow-tracking-uri}}"
+          - name: MLFLOW_EXPERIMENT_NAME
+            value: triton-autodeploy
+          - name: MLFLOW_REGISTERED_MODEL_NAME
+            value: iris-classifier
+          - name: ARGO_WORKFLOW_NAME
+            value: "{{workflow.name}}"
+          - name: ARGO_WORKFLOW_UID
+            value: "{{workflow.uid}}"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+      outputs:
+        artifacts:
+          - name: triton-model
+            path: /tmp/model-repository/iris_classifier
+            archive:
+              none: {}
+            s3:
+              key: "{{workflow.parameters.repository-prefix}}/iris_classifier"
+
+    - name: deploy
+      inputs:
+        artifacts:
+          - name: plugin-wheel
+            path: /tmp/mlflow_triton_control-0.1.0-py3-none-any.whl
+            archive:
+              none: {}
+            s3:
+              key: "{{workflow.parameters.s3-plugin-wheel-key}}"
+      container:
+        image: python:3.12-slim
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-ec"]
+        args:
+          - |
+            export HOME=/tmp
+            python -m pip install --no-cache-dir --target /tmp/python-packages \
+              /tmp/mlflow_triton_control-0.1.0-py3-none-any.whl
+            export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
+            export PATH="/tmp/python-packages/bin:$PATH"
+            mlflow deployments create \
+              --target "{{workflow.parameters.triton-control-target}}" \
+              --name iris-classifier \
+              --model-uri "s3://{{workflow.parameters.s3-bucket}}/{{workflow.parameters.repository-prefix}}/iris_classifier" \
+              -C s3_profile_id="{{workflow.parameters.s3-profile-id}}" \
+              -C image="{{workflow.parameters.triton-image}}" \
+              -C wait_timeout_seconds=600
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]

@@ -1,0 +1,33 @@
+artifact_path: /home/tino/Desktop/dev/triton-control/mlruns/1/models/m-d61181efb90e471489b5e54681cd87e4/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.12.3
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.1
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.16.1
+model_id: m-d61181efb90e471489b5e54681cd87e4
+model_size_bytes: 23715
+model_uuid: m-d61181efb90e471489b5e54681cd87e4
+prompts: null
+run_id: 08219ee3ca8840ad918456a26a0c12bf
+saved_input_example_info:
+  artifact_path: input_example.json
+  serving_input_path: serving_input_example.json
+  type: ndarray
+signature:
+  inputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float32", "shape": [-1, 4]}}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "int64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-09-25 12:24:27.071901'

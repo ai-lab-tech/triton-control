@@ -60,6 +60,8 @@ class TritonInstanceEntity(SQLModel, table=True):
     deployment_secret_name: Optional[str] = None
     deployment_log: str = Field(default="")
     is_self_deployed: bool = Field(default=False)
+    mlflow_model_uri: Optional[str] = None
+    mlflow_model_name: Optional[str] = None
     pod_statuses: List[str] = Field(default_factory=list, sa_column=Column(JSON))
 
     s3_endpoint: Optional[str] = None

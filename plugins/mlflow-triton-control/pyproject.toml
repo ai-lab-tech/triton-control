@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlflow-triton-control"
+version = "0.1.0"
+description = "MLflow deployment target for Triton Control"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["mlflow>=3,<4", "httpx>=0.27,<1"]
+
+[project.entry-points."mlflow.deployments"]
+triton-control = "mlflow_triton_control.deployment_client"
+
+[tool.setuptools.packages.find]
+include = ["mlflow_triton_control*"]

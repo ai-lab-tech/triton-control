@@ -167,6 +167,8 @@ def _migrate_oidc_config_table() -> None:
 def _migrate_triton_instances_table() -> None:
     """Apply lightweight schema migration for triton_instances."""
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_uri VARCHAR"))
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_name VARCHAR"))
         conn.execute(
             text(
                 """
