@@ -25,42 +25,31 @@ plugin.
   deployments.
 - The selected S3 bucket and Triton Control service are reachable from the
   workflow namespace.
+- The workflow pods can clone this repository from GitHub over HTTPS.
 - The workflow pods can download Python packages from the configured package
   index.
 
-## 1. Build the Plugin Wheel
+## 1. Push the Source Branch
 
-Build the plugin locally from the repository root:
-
-```bash
-cd plugins/mlflow-triton-control
-python -m build
-```
-
-This creates `dist/mlflow_triton_control-0.1.0-py3-none-any.whl`.
-
-## 2. Upload the Workflow Files
-
-Upload the training script and Wheel into the S3 bucket used by the linked
-Argo artifact repository. For example with AWS CLI:
+Push the example and plugin to the Git revision configured in `workflow.yaml`:
 
 ```bash
-aws --profile workflow-training \
-  --endpoint-url https://<your-s3-endpoint> \
-  s3 cp examples/workflows/mlflow-iris-autodeploy/train.py \
-  s3://<your-s3-bucket>/workflows/mlflow-iris-autodeploy/train.py
-
-aws --profile workflow-training \
-  --endpoint-url https://<your-s3-endpoint> \
-  s3 cp plugins/mlflow-triton-control/dist/mlflow_triton_control-0.1.0-py3-none-any.whl \
-  s3://<your-s3-bucket>/workflows/mlflow-iris-autodeploy/mlflow_triton_control-0.1.0-py3-none-any.whl
+git push origin feature/mlflow-triton-control-implementation
 ```
 
-The same upload is possible through More Connect as described by the existing
-`sklearn-iris-training` workflow example. No custom workflow image is needed.
-Both steps use `python:3.12-slim` and install their dependencies at runtime.
-The `triton-image` parameter remains the separate NVIDIA Triton image that
-serves the exported model.
+Argo clones this branch directly from GitHub for both workflow steps. The
+training step runs `train.py` from the checkout, and the deployment step
+installs `plugins/mlflow-triton-control` from the same checkout. No Wheel build
+or upload is required.
+
+## 2. Configure S3 Access
+
+Link the S3 profile under **Workflows -> Configure S3 Secrets**, as described
+by the existing `sklearn-iris-training` workflow example. S3 stores only the
+generated Triton model repository. No source files or plugin packages need to
+be uploaded. Both steps use `python:3.12-slim` and install their dependencies
+at runtime. The `triton-image` parameter remains the separate NVIDIA Triton
+image that serves the exported model.
 
 ## 3. Configure the Workflow
 
@@ -71,8 +60,8 @@ Edit [workflow.yaml](workflow.yaml) before submitting it:
 | `metadata.name` | A fixed, unused Kubernetes workflow name |
 | `metadata.annotations/...s3-profile-id` | ID of your S3 profile |
 | `artifactRepositoryRef.configMap` | ConfigMap shown by **Configure S3 Secrets** |
-| `s3-training-script-key` | Object key of the uploaded `train.py` |
-| `s3-plugin-wheel-key` | Object key of the uploaded plugin Wheel |
+| `git-repository` | HTTPS clone URL of this GitHub repository |
+| `git-revision` | Pushed branch, tag, or commit containing the example and plugin |
 | `mlflow-tracking-uri` | Internal MLflow service URL |
 | `triton-control-target` | `triton-control://` URI for the backend service and API port |
 | `s3-bucket` | Bucket from the selected S3 profile |
@@ -84,6 +73,9 @@ The MLflow deployment name is `iris-classifier` in the annotation and the
 deployment command. The Triton model name is `iris_classifier` in `train.py`,
 the S3 model URI, and the artifact key. Keep each name consistent in those
 locations if you rename it. The bucket must match the selected S3 profile.
+
+The configured Git revision must already exist on GitHub when the workflow is
+submitted. For reproducible runs, replace the branch name with a commit SHA.
 
 The fixed workflow name is required by the current token delegation. Delete a
 completed workflow before submitting it again, or change `metadata.name` for
