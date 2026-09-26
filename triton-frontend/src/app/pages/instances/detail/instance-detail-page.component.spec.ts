@@ -174,7 +174,9 @@ describe("InstanceDetailPageComponent", () => {
     tick(5000);
     void component.loadDeploymentLogs({ showLoading: false });
     void component.loadDeploymentLogs();
-    expect(deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet).toHaveBeenCalledTimes(1);
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(1);
 
     response.error(new Error("Pod restarting"));
     tick();
@@ -183,13 +185,17 @@ describe("InstanceDetailPageComponent", () => {
     );
     void component.loadDeploymentLogs({ showLoading: false });
     tick();
-    expect(deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet).toHaveBeenCalledTimes(2);
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(2);
     expect(component.deploymentLogs()).toBe("latest restart output");
     expect(component.deploymentLogsError()).toBe("");
 
     void component.loadDeploymentLogs({ showLoading: false });
     tick();
-    expect(deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet).toHaveBeenCalledTimes(3);
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(3);
   }));
 
   it("LoadDeploymentLogs_ErrorClearsStaleInstanceDeploymentLog", fakeAsync(() => {
