@@ -50,6 +50,26 @@ async def _get_claims_with_access_policy(
             claims = _identity.claims_from_user(user, source_claims)
             if not allow_pending and not claims["access_allowed"]:
                 raise ForbiddenError("Account pending admin approval")
+            # A local API call uses the Bearer token, but browser navigation to
+            # code-server uses only the session cookie. Keep that cookie in sync
+            # after a fresh local login or credential change.
+            if (
+                creds is not None
+                and creds.scheme.lower() == "bearer"
+                and claims["auth_provider"] == "local"
+                and not source_claims.get("token_use")
+            ):
+                session_user = {
+                    "sub": user.email,
+                    "email": user.email,
+                    "name": user.name,
+                    "role": user.role,
+                    "auth_provider": "local",
+                    "access_allowed": claims["access_allowed"],
+                    "credential_version": user.credential_version,
+                }
+                if request.session.get("user") != session_user:
+                    request.session["user"] = session_user
             return claims
     except AppError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
