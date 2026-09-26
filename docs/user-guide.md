@@ -316,11 +316,12 @@ menu. A profile stores:
 Profiles are private to the signed-in user. Other users, including
 administrators, cannot list, edit, or delete them through the S3 profile API.
 Each user must create their own profile, even when multiple users connect to the
-same object store. Profiles are intended for deployment workflows, especially
-the code-server **Triton Control Deploy** extension, so users do not need to
-re-enter S3 credentials for every deploy. The extension shows the signed-in
-user's saved profiles in a dropdown and keeps manual S3 fields available in a
-collapsed optional section.
+same object store. The code-server **Triton Control Deploy** extension uses
+these profiles for its native Explorer S3 browser and model deployments.
+Connect from **Explorer → S3 Operations → Choose Profile…** on a workspace
+item; the browser uses the workspace owner's saved credentials and CA
+certificate dynamically. The separate deployment form provides a profile
+dropdown and optional manual S3 fields.
 
 The stored profile values are used to upload the selected model repository from
 the code-server workspace and to create the Triton deployment. The resulting
@@ -423,7 +424,15 @@ Users can create one persistent workspace, edit model repositories under
 `/workspace`, and deploy them through the bundled **Triton Control Deploy**
 extension.
 
-Inside code-server, open the Triton Control Activity Bar view and select
+For S3 files, use the native **Explorer** alongside `/workspace`. Right-click a
+workspace item and choose **S3 Operations → Choose Profile…**. Connected menus
+provide **Refresh**, **Switch Profile…**, and **Disconnect**. Dragging between
+the workspace and S3 copies; dragging within one S3 profile moves. Ctrl-drag
+forces copy and Shift-drag forces move. The S3 browser needs no webview or
+manual connection URL. See [S3 transfers](development-workspaces.md#transfer-files-in-explorer)
+for folder behavior and limits.
+
+For model scaffolding, open the Triton Control Activity Bar view and select
 **New Model Repository** to create a starter Triton repository. The command is
 also available from the command palette and Explorer folder context menu. It
 can create a single-model repository from Python, ONNX Runtime, TensorRT,

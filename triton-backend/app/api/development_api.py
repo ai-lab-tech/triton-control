@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response, WebSocket
+import anyio
+from fastapi import APIRouter, Depends, Header, Request, Response, WebSocket
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
@@ -17,10 +18,27 @@ from app.schemas import (
     CreateCodeServerRequest,
 )
 from app.services.development import navigation as code_server_navigation
+from app.services.development import profiles as code_server_profiles
 from app.services.development import proxy as code_server_proxy
 from app.services.development import workspaces
 
 router = APIRouter(prefix="/api/development", tags=["development"])
+
+
+@router.get("/workspace-s3-profiles/{namespace}/{statefulset_name}", include_in_schema=False)
+@translate_app_errors
+def workspace_s3_profiles(
+    namespace: str,
+    statefulset_name: str,
+    response: Response,
+    authorization: str = Header(default=""),
+    session: Session = Depends(get_session),
+) -> list[Any]:
+    response.headers["Cache-Control"] = "no-store"
+    scheme, _, token = authorization.partition(" ")
+    return code_server_profiles.workspace_profiles(
+        session, namespace, statefulset_name, token if scheme.lower() == "bearer" else "",
+    )
 
 
 @router.get("", response_model=list[CodeServerDTO])
@@ -104,9 +122,7 @@ async def proxy_code_server(
     claims: dict[str, Any] = Depends(get_claims),
 ) -> Response:
     """Proxy an authenticated request to an owned Development workspace."""
-    with session_factory() as session:
-        row = workspaces.get_owned_code_server(session, claims, code_server_id)
-        target = code_server_proxy.proxy_target(row)
+    target = await anyio.to_thread.run_sync(_owned_proxy_target, claims, code_server_id)
     return await code_server_proxy.proxy_http(target, path, request)
 
 
@@ -123,9 +139,14 @@ async def proxy_code_server_websocket(
         await websocket.close(code=1008)
         return
     try:
-        with session_factory() as session:
-            row = workspaces.get_owned_code_server(session, claims, code_server_id)
-            target = code_server_proxy.proxy_target(row)
+        target = await anyio.to_thread.run_sync(_owned_proxy_target, claims, code_server_id)
         await code_server_proxy.proxy_websocket(target, path, websocket)
     except AppError:
         await websocket.close(code=1008)
+
+
+def _owned_proxy_target(claims: dict[str, Any], code_server_id: int) -> code_server_proxy.CodeServerProxyTarget:
+    """Resolve ownership in a worker and release the connection before proxying."""
+    with session_factory() as session:
+        row = workspaces.get_owned_code_server(session, claims, code_server_id)
+        return code_server_proxy.proxy_target(row)

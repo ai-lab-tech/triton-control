@@ -406,9 +406,12 @@ S3 deployment profiles:
 - Profiles are user-owned and store endpoint, bucket, prefix, region,
   path-style mode, optional CA certificate, access key, and encrypted secret
   key.
-- The code-server deploy extension reads these profiles through
-  `/api/s3-profiles` and uses the selected profile for repository upload and
-  deployment creation.
+- The deployment form reads profiles through `/api/s3-profiles` for repository
+  upload and deployment creation.
+- The native code-server S3 browser loads the workspace owner's profiles through
+  `/api/development/workspace-s3-profiles/<namespace>/<statefulset-name>` using
+  its injected workspace token. It uses credentials and CA certificates in
+  memory. See [Development Workspaces](development-workspaces.md#credentials-and-certificates).
 
 ```json
 {
