@@ -92,6 +92,13 @@ mounted from a run-owned Secret at `/perf-input/input.json`; temporary volumes
 remain writable by UID/GID 10001. See [Model performance Jobs](../docs/model-performance-jobs.md)
 for concurrency, cancellation, configuration, and migration details.
 
+The base Job manifest is maintained in
+[`perf_analyzer_job.yaml`](app/services/perf_analyzer/perf_analyzer_job.yaml).
+`jobs_kubernetes.py` parses the template and fills dynamic fields and optional
+Secret references. Shared command preparation lives in `commands.py`;
+`jobs.py` handles lifecycle reconciliation and preserves captured output when
+final logs are unavailable.
+
 ## Auth Session and Token Timeout
 
 You can configure automatic logout behavior with environment variables:

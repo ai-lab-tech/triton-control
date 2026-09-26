@@ -233,12 +233,16 @@ Reference:
 
 Current behavior:
 
-- configure the analyzer image and optional registry credentials in this view
+- configure the analyzer image above batch size, concurrency range, and request count
+- expand **Optional Registry credentials (Docker config JSON)** when a private registry needs authentication; this section is collapsed by default
 - each run creates its own non-root Kubernetes Job; no global installation is required
 - different models run concurrently, with one active run per model within an instance across all versions
 - while this model is creating, pending, running, or stopping, Start is disabled
+- a pulsing speedometer and **Benchmark running** badge indicate the running job state; preparing and stopping have separate indicators, and the badge disappears when the run finishes
 - Stop terminates only this run; Start becomes available after confirmed termination
 - reopening the view recovers the active run and saved results
+- form settings are restored for the selected version; an active run for another version still blocks Start but does not replace the selected version's settings
+- previously captured output is retained if final pod logs become unavailable; log retrieval warnings appear in the run status separately from the output
 - the side configuration panel follows the same behavior as the Inference page:
   editable S3 `config.pbtxt` when S3 is configured, otherwise read-only
   **Live API Config**

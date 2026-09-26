@@ -2,7 +2,11 @@
 
 Open a model's **Perf** view to configure the analyzer image, optional registry credentials, batch size, concurrency range, request count, and input data. Start creates a dedicated Kubernetes Job without a global installation. Different models can benchmark concurrently. Within one Triton instance, all versions of the same model share one active-run slot.
 
+The analyzer image and **Optional Registry credentials (Docker config JSON)** section appear above the benchmark parameters. The image stays visible; registry credentials are collapsed by default. A pulsing speedometer and **Benchmark running** badge follow the job status returned by the backend. Preparing and stopping have separate indicators; the badge disappears after completion, failure, or cancellation. The icon does not animate when reduced motion is requested.
+
 Creating, pending, running, and stopping runs occupy that slot. Stop targets a specific run, retains available partial output, and keeps Start disabled until its workload has terminated. Reloading or reopening the view recovers server state. Completed or failed output remains available after Job cleanup. Kubernetes scheduling and contention on the target Triton server can affect benchmark results.
+
+Form settings are restored only from a run for the selected version, falling back to that version's legacy saved result or the form defaults. An active run for another version remains visible and blocks another start without supplying its settings to the selected version's form. If final pod logs are unavailable, previously captured output is preserved; retrieval warnings are reported separately in the run status.
 
 Every Job runs as UID/GID 10001 with `runAsNonRoot`, filesystem group 10001, no privilege escalation, all capabilities dropped, a read-only root filesystem, RuntimeDefault seccomp, and no mounted service-account token. `/tmp` and `/dev/shm` remain writable. Custom images must support this environment; there is no root fallback. Registry credentials and JSON inputs use separate run-owned Secrets. Pod logs are captured up to 2 MB per pod.
 
@@ -20,6 +24,14 @@ Helm values under `perfAnalyzer` supply the default image, deadline, and resourc
 | `PERF_ANALYZER_MEMORY_LIMIT` | `2Gi` |
 
 Jobs use the control namespace, resolved from the backend pod or `TRITON_CONTROL_NAMESPACE`/`KUBERNETES_NAMESPACE`/`POD_NAMESPACE`. Local development requires `KUBERNETES_KUBECONFIG_PATH`. The backend service account needs namespaced Job create/read/patch/delete, pod list/delete/log read, and Secret create/read/delete permissions. The chart supplies these permissions.
+
+## Implementation
+
+The base Job definition lives in [`perf_analyzer_job.yaml`](../triton-backend/app/services/perf_analyzer/perf_analyzer_job.yaml). It contains the suspended Job structure, security settings, default resource requests and limits, and writable temporary volumes. The template is included in the backend Python package.
+
+[`jobs_kubernetes.py`](../triton-backend/app/services/perf_analyzer/jobs_kubernetes.py) parses a fresh template for each run with `yaml.safe_load`, then assigns the run identity, image, command, deadline, and resource overrides to the parsed fields. It attaches input and registry Secret references only when needed. Dynamic values are not inserted through raw YAML string substitution, and optional fields cannot carry over between runs.
+
+[`commands.py`](../triton-backend/app/services/perf_analyzer/commands.py) exposes command preparation and input conversion helpers. [`jobs.py`](../triton-backend/app/services/perf_analyzer/jobs.py) handles lifecycle reconciliation and persistence; `jobs_kubernetes.py` handles Kubernetes operations. Legacy saved-result lookup remains in `installer.py`.
 
 ## API
 
