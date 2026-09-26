@@ -210,6 +210,7 @@ async def auth_me(
         "auth_provider": claims.get("auth_provider"),
         "access_allowed": bool(claims.get("access_allowed", True)),
         "user_id": claims.get("user_id"),
+        "credential_version": claims.get("credential_version", 0),
     }
     return {
         "authenticated": True,

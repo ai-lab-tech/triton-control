@@ -20,15 +20,20 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await main.health_check(), {"status": "healthy"})
         request = type("Request", (), {"session": {}})()
         self.assertEqual(
-            await main.auth_me(request, {"email": "user@example.test", "access_allowed": False}),
+            await main.auth_me(request, {
+                "email": "user@example.test", "access_allowed": False, "credential_version": 3,
+            }),
             {
                 "authenticated": True,
                 "access_allowed": False,
-                "user": {"email": "user@example.test", "access_allowed": False},
+                "user": {
+                    "email": "user@example.test", "access_allowed": False, "credential_version": 3,
+                },
             },
         )
         self.assertEqual(request.session["user"]["email"], "user@example.test")
         self.assertFalse(request.session["user"]["access_allowed"])
+        self.assertEqual(request.session["user"]["credential_version"], 3)
 
     def test_Startup_InitializesDatabaseAndHealthRefresher(self) -> None:
         with patch("app.main.init_db") as init_db, patch.object(main.instance_health_refresher, "start") as start:
