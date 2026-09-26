@@ -25,12 +25,14 @@ metadata:
   annotations:
     triton-control.ai/mlflow-deploy-template: deploy
     triton-control.ai/mlflow-deployment-name: iris-classifier
-    triton-control.ai/mlflow-s3-profile-id: "7"
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-The backend verifies that the submitting user owns the S3 profile. It creates
-a temporary token Secret and injects `TRITON_CONTROL_TOKEN` into the named
-`script` or `container` template. The token is valid for 60 minutes and limited
+The backend resolves the profile name for the submitting user. It creates
+a temporary token Secret and injects `TRITON_CONTROL_TOKEN` and
+`TRITON_CONTROL_S3_PROFILE_ID` into the named `script` or `container` template.
+Use the injected ID with `-C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID"`.
+The token is valid for 60 minutes and limited
 to the specified deployment and S3 profile. The Workflow receives a five-minute
 completion TTL unless it already defines one, and the Secret receives a
 Workflow owner reference for garbage collection.

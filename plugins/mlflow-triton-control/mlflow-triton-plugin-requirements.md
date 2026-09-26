@@ -257,9 +257,10 @@ den eingeschränkten Token selbst.
 
 Die Workflow-Annotationen `triton-control.ai/mlflow-deploy-template`,
 `triton-control.ai/mlflow-deployment-name` und
-`triton-control.ai/mlflow-s3-profile-id` aktivieren die Delegation. Der Proxy
-prüft die Profil-ID, erstellt das kurzlebige Secret und injiziert dessen
-Referenz in das benannte Pod-Template. Details stehen in der
+`triton-control.ai/mlflow-s3-profile-name` aktivieren die Delegation. Der Proxy
+löst den Profilnamen für den angemeldeten Benutzer auf, erstellt das kurzlebige
+Secret und injiziert den Token sowie `TRITON_CONTROL_S3_PROFILE_ID` in das
+benannte Pod-Template. Die bisherige ID-Annotation bleibt kompatibel. Details stehen in der
 [Paket-README](README.md#argo-workflows).
 
 ## Minimale MLflow Deployment API

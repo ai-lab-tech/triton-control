@@ -46,18 +46,28 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         raise BadRequestError("MLflow deployment workflows must run in the Triton Control namespace")
     workflow_name = metadata.get("name", "")
     deployment_name = annotations.get("triton-control.ai/mlflow-deployment-name", "")
+    profile_name = annotations.get("triton-control.ai/mlflow-s3-profile-name", "").strip()
     profile_id_raw = annotations.get("triton-control.ai/mlflow-s3-profile-id", "")
     if not all(_DNS_NAME.fullmatch(value) for value in (workflow_name, deployment_name)):
         raise BadRequestError("Workflow and deployment names must be lowercase Kubernetes names")
-    try:
-        profile_id = int(profile_id_raw)
-    except (TypeError, ValueError) as exc:
-        raise BadRequestError("A valid MLflow S3 profile ID is required") from exc
+    if bool(profile_name) == bool(profile_id_raw):
+        raise BadRequestError("Specify exactly one MLflow S3 profile name or ID")
 
     with session_factory() as session:
         user = require_user_entity(session, claims)
-        if not s3_profiles.find_for_owner(session, user.id or 0, profile_id):
+        if profile_name:
+            profile = s3_profiles.find_by_name_for_owner(session, user.id or 0, profile_name)
+        else:
+            try:
+                profile_id = int(profile_id_raw)
+            except (TypeError, ValueError) as exc:
+                raise BadRequestError("A valid MLflow S3 profile ID is required") from exc
+            if profile_id <= 0:
+                raise BadRequestError("A valid MLflow S3 profile ID is required")
+            profile = s3_profiles.find_for_owner(session, user.id or 0, profile_id)
+        if profile is None:
             raise NotFoundError("S3 profile not found")
+        profile_id = profile.id or 0
 
     spec = workflow.get("spec") or {}
     templates = spec.get("templates") or []
@@ -68,8 +78,9 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
     if not isinstance(pod_template, dict):
         raise BadRequestError("MLflow deployment template must be a script or container")
     environment = pod_template.setdefault("env", [])
-    if any(item.get("name") == "TRITON_CONTROL_TOKEN" for item in environment):
-        raise BadRequestError("TRITON_CONTROL_TOKEN is already set in the deployment template")
+    reserved_env = {"TRITON_CONTROL_TOKEN", "TRITON_CONTROL_S3_PROFILE_ID"}
+    if any(item.get("name") in reserved_env for item in environment):
+        raise BadRequestError("A managed Triton Control environment variable is already set")
 
     token = issue_access_token(
         {
@@ -97,6 +108,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         "name": "TRITON_CONTROL_TOKEN",
         "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "token"}},
     })
+    environment.append({"name": "TRITON_CONTROL_S3_PROFILE_ID", "value": str(profile_id)})
     # The workflow and its temporary credential are garbage-collected together.
     spec.setdefault("ttlStrategy", {}).setdefault("secondsAfterCompletion", 300)
     return json.dumps(payload).encode("utf-8"), secret_name, namespace

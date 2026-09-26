@@ -9,8 +9,8 @@ metadata:
   annotations:
     triton-control.ai/mlflow-deploy-template: deploy
     triton-control.ai/mlflow-deployment-name: iris-classifier
-    # Must match the s3-profile-id parameter below.
-    triton-control.ai/mlflow-s3-profile-id: "7"
+    # Name of an S3 profile owned by the user submitting this workflow.
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
 spec:
   entrypoint: pipeline
   artifactRepositoryRef:
@@ -34,8 +34,6 @@ spec:
         value: triton-models
       - name: repository-prefix
         value: triton/development
-      - name: s3-profile-id
-        value: "7"
       - name: triton-image
         value: nvcr.io/nvidia/tritonserver:26.06-py3
   templates:
@@ -114,7 +112,7 @@ spec:
               --target "{{workflow.parameters.triton-control-target}}" \
               --name iris-classifier \
               --model-uri "s3://{{workflow.parameters.s3-bucket}}/{{workflow.parameters.repository-prefix}}/iris_classifier" \
-              -C s3_profile_id="{{workflow.parameters.s3-profile-id}}" \
+              -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600
         resources:

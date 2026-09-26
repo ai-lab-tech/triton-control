@@ -63,14 +63,13 @@ Edit [workflow.yaml](workflow.yaml) before submitting it:
 | Location | Required value |
 | --- | --- |
 | `metadata.name` | A fixed, unused Kubernetes workflow name |
-| `metadata.annotations/...s3-profile-id` | ID of your S3 profile |
+| `metadata.annotations/...s3-profile-name` | Name of your S3 profile |
 | `artifactRepositoryRef.configMap` | ConfigMap shown by **Configure S3 Secrets** |
 | `github-ref` | Pushed GitHub ref containing `train.py` and the built plugin Wheel |
 | `mlflow-tracking-uri` | Internal MLflow service URL |
 | `triton-control-target` | `triton-control://` URI for the backend service and API port |
 | `s3-bucket` | Bucket from the selected S3 profile |
 | `repository-prefix` | Parent directory for Triton models in that bucket |
-| `s3-profile-id` | Same profile ID as the annotation |
 | `triton-image` | Triton server image used for the deployment |
 
 The MLflow deployment name is `iris-classifier` in the annotation and the
@@ -93,10 +92,10 @@ proxy. A direct request to Argo Server bypasses deployment-token injection.
 
 For an opted-in workflow, Triton Control:
 
-1. verifies that the current user owns the annotated S3 profile;
+1. resolves the annotated S3 profile name for the current user;
 2. creates a short-lived token limited to `iris-classifier` and that profile;
-3. injects `TRITON_CONTROL_TOKEN` into the `deploy` template through a
-   temporary Kubernetes Secret;
+3. injects `TRITON_CONTROL_TOKEN` through a temporary Kubernetes Secret and
+   `TRITON_CONTROL_S3_PROFILE_ID` into the `deploy` template;
 4. attaches the Secret to the Workflow for garbage collection.
 
 The `train` task records parameters, accuracy, tags, an MLflow sklearn model,
@@ -118,7 +117,7 @@ mlflow deployments create \
   -t triton-control://<triton-control-service>:8000 \
   --name iris-classifier \
   -m s3://<bucket>/<repository-prefix>/iris_classifier \
-  -C s3_profile_id=<profile-id> \
+  -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
   -C image=nvcr.io/nvidia/tritonserver:26.06-py3
 ```
 
