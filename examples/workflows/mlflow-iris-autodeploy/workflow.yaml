@@ -24,10 +24,8 @@ spec:
     secondsAfterFailure: 300
   arguments:
     parameters:
-      - name: git-repository
-        value: https://github.com/ai-lab-tech/triton-control.git
-      - name: git-revision
-        value: feature/mlflow-triton-control-implementation
+      - name: github-ref
+        value: refs/heads/feature/mlflow-triton-control-implementation
       - name: mlflow-tracking-uri
         value: http://mlflow-service:5000
       - name: triton-control-target
@@ -51,13 +49,6 @@ spec:
             template: deploy
 
     - name: train
-      inputs:
-        artifacts:
-          - name: source
-            path: /tmp/triton-control
-            git:
-              repo: "{{workflow.parameters.git-repository}}"
-              revision: "{{workflow.parameters.git-revision}}"
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -72,7 +63,10 @@ spec:
               "scikit-learn>=1.5,<2" \
               "skl2onnx>=1.17,<2"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
-            python /tmp/triton-control/examples/workflows/mlflow-iris-autodeploy/train.py
+            python -c 'import urllib.request; urllib.request.urlretrieve(
+              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/train.py",
+              "/tmp/train.py")'
+            python /tmp/train.py
         env:
           - name: MLFLOW_TRACKING_URI
             value: "{{workflow.parameters.mlflow-tracking-uri}}"
@@ -105,13 +99,6 @@ spec:
               key: "{{workflow.parameters.repository-prefix}}/iris_classifier"
 
     - name: deploy
-      inputs:
-        artifacts:
-          - name: source
-            path: /tmp/triton-control
-            git:
-              repo: "{{workflow.parameters.git-repository}}"
-              revision: "{{workflow.parameters.git-revision}}"
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -120,7 +107,7 @@ spec:
           - |
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
-              /tmp/triton-control/plugins/mlflow-triton-control
+              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/wheels/mlflow_triton_control-0.1.0-py3-none-any.whl"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             export PATH="/tmp/python-packages/bin:$PATH"
             mlflow deployments create \

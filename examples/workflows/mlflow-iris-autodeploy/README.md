@@ -25,22 +25,27 @@ plugin.
   deployments.
 - The selected S3 bucket and Triton Control service are reachable from the
   workflow namespace.
-- The workflow pods can clone this repository from GitHub over HTTPS.
+- The workflow pods can download files from `raw.githubusercontent.com` over HTTPS.
 - The workflow pods can download Python packages from the configured package
   index.
 
-## 1. Push the Source Branch
+## 1. Build and Push the Plugin Wheel
 
-Push the example and plugin to the Git revision configured in `workflow.yaml`:
+Build the package from the repository root and copy the Wheel into the example:
 
 ```bash
+python -m build --wheel plugins/mlflow-triton-control
+cp plugins/mlflow-triton-control/dist/mlflow_triton_control-0.1.0-py3-none-any.whl \
+  examples/workflows/mlflow-iris-autodeploy/wheels/
+git add examples/workflows/mlflow-iris-autodeploy/wheels/
+git commit -m "build(mlflow): update example wheel"
 git push origin feature/mlflow-triton-control-implementation
 ```
 
-Argo clones this branch directly from GitHub for both workflow steps. The
-training step runs `train.py` from the checkout, and the deployment step
-installs `plugins/mlflow-triton-control` from the same checkout. No Wheel build
-or upload is required.
+Commit a new Wheel whenever the plugin source changes. During execution, the
+training pod downloads `train.py` from GitHub. The deployment pod installs the
+committed Wheel directly from its GitHub URL with `pip`. Argo does not clone
+the repository or transfer the Wheel as an artifact.
 
 ## 2. Configure S3 Access
 
@@ -60,8 +65,7 @@ Edit [workflow.yaml](workflow.yaml) before submitting it:
 | `metadata.name` | A fixed, unused Kubernetes workflow name |
 | `metadata.annotations/...s3-profile-id` | ID of your S3 profile |
 | `artifactRepositoryRef.configMap` | ConfigMap shown by **Configure S3 Secrets** |
-| `git-repository` | HTTPS clone URL of this GitHub repository |
-| `git-revision` | Pushed branch, tag, or commit containing the example and plugin |
+| `github-ref` | Pushed GitHub ref containing `train.py` and the built plugin Wheel |
 | `mlflow-tracking-uri` | Internal MLflow service URL |
 | `triton-control-target` | `triton-control://` URI for the backend service and API port |
 | `s3-bucket` | Bucket from the selected S3 profile |
@@ -74,8 +78,8 @@ deployment command. The Triton model name is `iris_classifier` in `train.py`,
 the S3 model URI, and the artifact key. Keep each name consistent in those
 locations if you rename it. The bucket must match the selected S3 profile.
 
-The configured Git revision must already exist on GitHub when the workflow is
-submitted. For reproducible runs, replace the branch name with a commit SHA.
+The configured GitHub ref must already exist when the workflow is submitted.
+For reproducible runs, replace `refs/heads/...` with a commit SHA.
 
 The fixed workflow name is required by the current token delegation. Delete a
 completed workflow before submitting it again, or change `metadata.name` for
