@@ -253,8 +253,9 @@ details.
 
 ### Self-Deployed Triton And Perf Analyzer Namespace Behavior
 
-Triton Control supports creating self-managed Triton deployments and a singleton
-Perf Analyzer workload from the UI.
+Triton Control supports creating self-managed Triton deployments and per-model
+Perf Analyzer Jobs from the UI. See [Model performance Jobs](model-performance-jobs.md)
+for upgrade steps and non-root Job settings.
 
 Namespace selection depends on where Triton Control backend is running:
 

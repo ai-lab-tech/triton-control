@@ -84,6 +84,7 @@ def init_db() -> None:
         EmailConfigEntity,
         ErrorEventEntity,
         MlflowEntity,
+        ModelPerfJobEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
@@ -96,6 +97,10 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE triton_instances ADD COLUMN IF NOT EXISTS perf_deleting BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
     _migrate_users_account_lifecycle()
     _migrate_triton_instances_table()
     _migrate_oidc_config_table()

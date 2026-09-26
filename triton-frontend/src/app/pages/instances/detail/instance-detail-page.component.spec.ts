@@ -3,7 +3,7 @@ import { HttpErrorResponse } from "@angular/common/http";
 import { fakeAsync, TestBed, tick } from "@angular/core/testing";
 import { MatTabChangeEvent } from "@angular/material/tabs";
 import { ActivatedRoute } from "@angular/router";
-import { of, throwError, EMPTY } from "rxjs";
+import { of, throwError, EMPTY, Subject } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { AuthStore } from "../../../shared/auth/auth.store";
@@ -79,15 +79,13 @@ describe("InstanceDetailPageComponent", () => {
       "deleteDeploymentApiDeploymentsInstanceIdDelete",
     ]);
     perfAnalyzersApiMock = jasmine.createSpyObj<PerfAnalyzersService>("PerfAnalyzersService", [
-      "getPerfAnalyzerStatusApiPerfAnalyzersGet",
+      "getModelPerfStatus",
     ]);
 
     instancesApiMock.getInstanceModelsApiInstancesInstanceIdModelsGet.and.returnValue(
       of([] as any),
     );
-    perfAnalyzersApiMock.getPerfAnalyzerStatusApiPerfAnalyzersGet.and.returnValue(
-      of({ installed: false } as any),
-    );
+    perfAnalyzersApiMock.getModelPerfStatus.and.returnValue(of({ installed: false } as any));
     usersApiMock.listUsersApiAuthUsersGet.and.returnValue(of([] as any));
 
     spyOn(navigator.clipboard, "writeText").and.resolveTo();
@@ -159,6 +157,45 @@ describe("InstanceDetailPageComponent", () => {
     expect(
       deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
     ).toHaveBeenCalledTimes(2);
+  }));
+
+  it("LoadDeploymentLogs_SlowBackgroundRefresh_PreventsOverlappingRequestsAndResumesAfterError", fakeAsync(() => {
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      isSelfDeployed: true,
+    } as any);
+    mockStore.refreshState();
+    const response = new Subject<any>();
+    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(response);
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+    const component = fixture.componentInstance;
+
+    void component.loadDeploymentLogs({ showLoading: false });
+    tick(5000);
+    void component.loadDeploymentLogs({ showLoading: false });
+    void component.loadDeploymentLogs();
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(1);
+
+    response.error(new Error("Pod restarting"));
+    tick();
+    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(
+      of({ logs: "latest restart output" } as any),
+    );
+    void component.loadDeploymentLogs({ showLoading: false });
+    tick();
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(2);
+    expect(component.deploymentLogs()).toBe("latest restart output");
+    expect(component.deploymentLogsError()).toBe("");
+
+    void component.loadDeploymentLogs({ showLoading: false });
+    tick();
+    expect(
+      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
+    ).toHaveBeenCalledTimes(3);
   }));
 
   it("LoadDeploymentLogs_ErrorClearsStaleInstanceDeploymentLog", fakeAsync(() => {

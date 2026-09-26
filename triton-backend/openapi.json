@@ -1679,158 +1679,13 @@
         }
       }
     },
-    "/api/perf-analyzers": {
-      "get": {
-        "tags": [
-          "perf-analyzers"
-        ],
-        "summary": "Get Perf Analyzer Status",
-        "description": "Return the singleton Perf Analyzer installation state.",
-        "operationId": "get_perf_analyzer_status_api_perf_analyzers_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerfAnalyzerStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
+    "/api/instances/{instance_id}/models/{model_name}/perf/runs": {
       "post": {
         "tags": [
           "perf-analyzers"
         ],
-        "summary": "Install Perf Analyzer",
-        "description": "Install a Perf Analyzer SDK container on Kubernetes.",
-        "operationId": "install_perf_analyzer_api_perf_analyzers_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InstallPerfAnalyzerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerfAnalyzerInstallResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "perf-analyzers"
-        ],
-        "summary": "Uninstall Perf Analyzer",
-        "description": "Uninstall the singleton Perf Analyzer Kubernetes workload.",
-        "operationId": "uninstall_perf_analyzer_api_perf_analyzers_delete",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerfAnalyzerDeleteResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/perf-analyzers/runs": {
-      "post": {
-        "tags": [
-          "perf-analyzers"
-        ],
-        "summary": "Run Perf Analyzer",
-        "description": "Execute Perf Analyzer for one Triton instance model.",
-        "operationId": "run_perf_analyzer_api_perf_analyzers_runs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunPerfAnalyzerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerfAnalyzerRunResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/perf-analyzers/runs/latest": {
-      "get": {
-        "tags": [
-          "perf-analyzers"
-        ],
-        "summary": "Get Latest Perf Analyzer Run",
-        "description": "Return the latest persisted Perf Analyzer result for one model target.",
-        "operationId": "get_latest_perf_analyzer_run_api_perf_analyzers_runs_latest_get",
+        "summary": "Start Model Perf",
+        "operationId": "startModelPerf",
         "security": [
           {
             "HTTPBearer": []
@@ -1839,7 +1694,7 @@
         "parameters": [
           {
             "name": "instance_id",
-            "in": "query",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "integer",
@@ -1848,7 +1703,73 @@
           },
           {
             "name": "model_name",
-            "in": "query",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartModelPerfRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPerfRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/perf/status": {
+      "get": {
+        "tags": [
+          "perf-analyzers"
+        ],
+        "summary": "Get Model Perf Status",
+        "operationId": "getModelPerfStatus",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string",
@@ -1871,7 +1792,137 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PerfAnalyzerLatestRunResponse"
+                  "$ref": "#/components/schemas/ModelPerfStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/perf/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "perf-analyzers"
+        ],
+        "summary": "Get Model Perf Run",
+        "operationId": "getModelPerfRun",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Name"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPerfRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/models/{model_name}/perf/runs/{run_id}/stop": {
+      "post": {
+        "tags": [
+          "perf-analyzers"
+        ],
+        "summary": "Stop Model Perf",
+        "operationId": "stopModelPerf",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Name"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPerfRunResponse"
                 }
               }
             }
@@ -4801,36 +4852,6 @@
         "title": "InstallMlflowRequest",
         "description": "Request body for ``POST /api/mlflow``."
       },
-      "InstallPerfAnalyzerRequest": {
-        "properties": {
-          "installation_name": {
-            "type": "string",
-            "title": "Installation Name",
-            "default": "perf-analyzer"
-          },
-          "image": {
-            "type": "string",
-            "title": "Image"
-          },
-          "dockerconfigjson": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dockerconfigjson"
-          }
-        },
-        "type": "object",
-        "required": [
-          "image"
-        ],
-        "title": "InstallPerfAnalyzerRequest",
-        "description": "Request body for ``POST /api/perf-analyzers``."
-      },
       "InstanceLogsResponse": {
         "properties": {
           "logs": {
@@ -5182,6 +5203,174 @@
         "title": "MlflowStatusResponse",
         "description": "Response describing singleton MLflow installation and UI proxy base path."
       },
+      "ModelPerfRunResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "instance_id": {
+            "type": "integer",
+            "title": "Instance Id"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "creating",
+              "pending",
+              "running",
+              "stopping",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size"
+          },
+          "concurrency_range": {
+            "type": "string",
+            "title": "Concurrency Range"
+          },
+          "measurement_request_count": {
+            "type": "integer",
+            "title": "Measurement Request Count"
+          },
+          "input_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Data"
+          },
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Command"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output",
+            "default": ""
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "instance_id",
+          "model_name",
+          "model_version",
+          "image",
+          "state",
+          "message",
+          "batch_size",
+          "concurrency_range",
+          "measurement_request_count",
+          "created_at"
+        ],
+        "title": "ModelPerfRunResponse"
+      },
+      "ModelPerfStatusResponse": {
+        "properties": {
+          "active_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelPerfRunResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelPerfRunResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_result": {
+            "$ref": "#/components/schemas/PerfAnalyzerLatestRunResponse"
+          },
+          "default_image": {
+            "type": "string",
+            "title": "Default Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latest_result",
+          "default_image"
+        ],
+        "title": "ModelPerfStatusResponse"
+      },
       "ModelRepositoryActionResponse": {
         "properties": {
           "status": {
@@ -5285,62 +5474,6 @@
         ],
         "title": "OidcSettingsDTO"
       },
-      "PerfAnalyzerDeleteResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "message",
-          "namespace"
-        ],
-        "title": "PerfAnalyzerDeleteResponse",
-        "description": "Response after uninstalling the singleton Perf Analyzer workload."
-      },
-      "PerfAnalyzerInstallResponse": {
-        "properties": {
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "deployment_name": {
-            "type": "string",
-            "title": "Deployment Name"
-          },
-          "image": {
-            "type": "string",
-            "title": "Image"
-          },
-          "applied_resources": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Applied Resources"
-          }
-        },
-        "type": "object",
-        "required": [
-          "namespace",
-          "deployment_name",
-          "image",
-          "applied_resources"
-        ],
-        "title": "PerfAnalyzerInstallResponse",
-        "description": "Response after Perf Analyzer Kubernetes resources are applied."
-      },
       "PerfAnalyzerLatestRunResponse": {
         "properties": {
           "found": {
@@ -5422,120 +5555,6 @@
         ],
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
-      },
-      "PerfAnalyzerRunResponse": {
-        "properties": {
-          "command": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Command"
-          },
-          "output": {
-            "type": "string",
-            "title": "Output"
-          }
-        },
-        "type": "object",
-        "required": [
-          "command",
-          "output"
-        ],
-        "title": "PerfAnalyzerRunResponse",
-        "description": "Output captured from a Perf Analyzer process executed in Kubernetes."
-      },
-      "PerfAnalyzerStatusResponse": {
-        "properties": {
-          "installed": {
-            "type": "boolean",
-            "title": "Installed"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "not_installed"
-          },
-          "ready": {
-            "type": "boolean",
-            "title": "Ready",
-            "default": false
-          },
-          "status_message": {
-            "type": "string",
-            "title": "Status Message",
-            "default": ""
-          },
-          "installation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PerfAnalyzerInstallResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "installed"
-        ],
-        "title": "PerfAnalyzerStatusResponse",
-        "description": "Response describing the singleton Perf Analyzer installation state."
-      },
-      "RunPerfAnalyzerRequest": {
-        "properties": {
-          "instance_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Instance Id"
-          },
-          "model_name": {
-            "type": "string",
-            "title": "Model Name"
-          },
-          "model_version": {
-            "type": "string",
-            "title": "Model Version"
-          },
-          "batch_size": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Batch Size",
-            "default": 1
-          },
-          "concurrency_range": {
-            "type": "string",
-            "title": "Concurrency Range",
-            "default": "1"
-          },
-          "measurement_request_count": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Measurement Request Count",
-            "default": 50
-          },
-          "input_data": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "instance_id",
-          "model_name",
-          "model_version"
-        ],
-        "title": "RunPerfAnalyzerRequest",
-        "description": "Request body for a model-level Perf Analyzer run."
       },
       "S3DeleteResponse": {
         "properties": {
@@ -5748,6 +5767,71 @@
           "password"
         ],
         "title": "SelfRegisterRequest"
+      },
+      "StartModelPerfRequest": {
+        "properties": {
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          },
+          "batch_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Batch Size",
+            "default": 1
+          },
+          "concurrency_range": {
+            "type": "string",
+            "title": "Concurrency Range",
+            "default": "1"
+          },
+          "measurement_request_count": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Measurement Request Count",
+            "default": 50
+          },
+          "input_data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_version"
+        ],
+        "title": "StartModelPerfRequest"
       },
       "TestEmailRequest": {
         "properties": {

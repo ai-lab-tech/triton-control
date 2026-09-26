@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 from typing import Any, Literal
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, Mock, patch
 
 from fastapi import HTTPException
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
@@ -877,7 +877,9 @@ class DeploymentServiceTests(unittest.TestCase):
         # Assert
         self.assertEqual(response["status"], "deleted")
 
-    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self) -> None:
+    @patch("app.services.deployment.deployment.prepare_instance_deletion")
+    @patch("app.services.deployment.records.prepare_instance_deletion")
+    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self, _record_perf, _deployment_perf) -> None:
         # Arrange
         instance = SimpleNamespace(
             id=2,
@@ -948,6 +950,50 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("UnexpectedAdmissionError", logs)
         self.assertIn("Pod was rejected", logs)
         self.assertIn("running triton log", logs)
+
+    def test_ReadDeploymentLogs_RestartsKeepAvailableLogsInOrder(self) -> None:
+        cases = [
+            ("Running", "model load failed", "restarted successfully"),
+            ("Running", "model load failed", ApiException(status=400, reason="Container waiting")),
+            ("Running", ApiException(status=500, reason="Previous logs unavailable"), "latest output"),
+            ("Running", ApiException(status=400, reason="No previous container"), "first start"),
+            ("Running", ApiException(status=404, reason="Previous container removed"), "latest output"),
+            ("Failed", "previous failure", "fatal model error"),
+            ("Succeeded", "previous run", "final output"),
+        ]
+        for phase, previous, current in cases:
+            with self.subTest(phase=phase, previous=previous, current=current):
+                pod = SimpleNamespace(
+                    metadata=SimpleNamespace(name="triton-pod"),
+                    status=SimpleNamespace(phase=phase),
+                    spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
+                )
+                read_log = Mock(side_effect=[previous, current])
+                core_api = SimpleNamespace(
+                    list_namespaced_pod=Mock(return_value=SimpleNamespace(items=[pod])),
+                    read_namespaced_pod_log=read_log,
+                )
+                with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
+                    "kubernetes.client.CoreV1Api", return_value=core_api,
+                ):
+                    logs = k8s.read_deployment_logs("namespace", "deployment")
+
+                core_api.list_namespaced_pod.assert_called_once_with(
+                    namespace="namespace", label_selector="app=triton,deployment=deployment",
+                )
+                self.assertEqual(read_log.call_count, 2)
+                self.assertTrue(read_log.call_args_list[0].kwargs["previous"])
+                self.assertNotIn("previous", read_log.call_args_list[1].kwargs)
+                if isinstance(previous, str):
+                    self.assertIn(previous, logs)
+                elif previous.status == 500:
+                    self.assertIn("previous unavailable", logs)
+                else:
+                    self.assertNotIn("previous", logs)
+                if isinstance(current, str):
+                    self.assertTrue(logs.endswith(current))
+                else:
+                    self.assertIn("Container waiting", logs)
 
     def test_ResolveServiceUrls_IngressStatus_ReturnsExternalAddress(self) -> None:
         # Arrange

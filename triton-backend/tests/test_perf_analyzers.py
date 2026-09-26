@@ -3,203 +3,14 @@
 import json
 import unittest
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import ANY, patch
 
-from fastapi import HTTPException
-
-from app.api.perf_analyzer_api import install_perf_analyzer as install_perf_analyzer_api
-from app.exceptions import BadRequestError, ConflictError
 from app.repositories import perf_analyzer as perf_repo
-from app.schemas import InstallPerfAnalyzerRequest, RunPerfAnalyzerRequest
-from app.services.perf_analyzer import installer
-from app.services.perf_analyzer import kubernetes as k8s
+from app.schemas import RunPerfAnalyzerRequest
+from app.services.perf_analyzer import commands, installer
 
 
-class PerfAnalyzerInstallTests(unittest.TestCase):
-    def _request(self) -> InstallPerfAnalyzerRequest:
-        return InstallPerfAnalyzerRequest(
-            installation_name="perf analyzer",
-            image="nvcr.io/nvidia/tritonserver:26.06-py3-sdk",
-        )
-
-    def test_InstallPerfAnalyzer_NameProvided_AppliesNamedResources(self) -> None:
-        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=None), patch(
-            "app.services.perf_analyzer.installer.k8s.apply_installation_resources",
-            return_value=["Deployment/perf-analyzer"],
-        ) as apply_resources, patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.save",
-            side_effect=lambda _session, entity: entity,
-        ):
-            response = installer.install_perf_analyzer(self._request(), SimpleNamespace())
-
-        apply_resources.assert_called_once()
-        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "triton-control")
-        self.assertEqual(response.namespace, "triton-control")
-        self.assertEqual(response.deployment_name, "perf-analyzer")
-        self.assertEqual(response.applied_resources, ["Deployment/perf-analyzer"])
-
-    def test_InstallPerfAnalyzer_InCluster_UsesControlNamespace(self) -> None:
-        with patch("app.services.perf_analyzer.installer.is_running_in_cluster", return_value=True), patch(
-            "app.services.perf_analyzer.installer.in_cluster_namespace",
-            return_value="triton-control",
-        ), patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=None), patch(
-            "app.services.perf_analyzer.installer.k8s.apply_installation_resources",
-            return_value=["Deployment/perf-analyzer"],
-        ) as apply_resources, patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.save",
-            side_effect=lambda _session, entity: entity,
-        ):
-            response = installer.install_perf_analyzer(self._request(), SimpleNamespace())
-
-        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "triton-control")
-        self.assertEqual(response.namespace, "triton-control")
-
-    def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
-        dockerconfigjson = '{"auths":{"registry.example":{"auth":"token"}}}'
-        request = self._request().model_copy(update={"dockerconfigjson": dockerconfigjson})
-
-        manifests = k8s._manifests(request, "perf-analyzer", "perf-analyzer")
-
-        secret = manifests[0]
-        deployment = manifests[1]
-        self.assertEqual(secret["metadata"]["name"], "perf-analyzer-pull-secret")
-        self.assertEqual(secret["stringData"][".dockerconfigjson"], dockerconfigjson)
-        self.assertEqual(
-            deployment["spec"]["template"]["spec"]["imagePullSecrets"],
-            [{"name": "perf-analyzer-pull-secret"}],
-        )
-        container = deployment["spec"]["template"]["spec"]["containers"][0]
-        self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3-sdk")
-        self.assertEqual(container["command"], ["/bin/bash", "-c"])
-        self.assertIn("sleep infinity", container["args"][0])
-        self.assertEqual(
-            container["volumeMounts"],
-            [{"name": "tmp", "mountPath": "/tmp"}, {"name": "dshm", "mountPath": "/dev/shm"}],
-        )
-        self.assertEqual(
-            deployment["spec"]["template"]["spec"]["volumes"],
-            [{"name": "tmp", "emptyDir": {}}, {"name": "dshm", "emptyDir": {"medium": "Memory"}}],
-        )
-
-    def test_ApplyInstallationResources_AppliesManifestObjects(self) -> None:
-        applied: list[dict[str, Any]] = []
-
-        with patch("app.services.perf_analyzer.kubernetes._client", return_value=object()), patch(
-            "app.services.perf_analyzer.kubernetes._ensure_namespace"
-        ) as ensure_namespace, patch(
-            "kubernetes.utils.create_from_dict",
-            side_effect=lambda _api_client, data, **_kwargs: applied.append(data),
-        ), patch(
-            "app.services.perf_analyzer.kubernetes._wait_for_running_pod"
-        ):
-            resources = k8s.apply_installation_resources(
-                self._request(),
-                namespace="perf-analyzer",
-                deployment_name="perf-analyzer",
-            )
-
-        ensure_namespace.assert_called_once()
-        self.assertEqual(applied[0]["kind"], "Deployment")
-        self.assertEqual(resources, ["Deployment/perf-analyzer"])
-
-    def test_WaitForRunningPod_RunningPhaseReturned_StopsWaiting(self) -> None:
-        pod = SimpleNamespace(
-            metadata=SimpleNamespace(name="perf-analyzer-abc"),
-            status=SimpleNamespace(phase="Running"),
-        )
-
-        with patch("kubernetes.client.CoreV1Api") as core_api, patch(
-            "app.services.perf_analyzer.kubernetes.time.sleep"
-        ) as sleep:
-            core_api.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[pod])
-
-            k8s._wait_for_running_pod(object(), "perf-analyzer")
-
-        sleep.assert_not_called()
-
-    def test_InstallPerfAnalyzerApi_ServiceRaisesDomainError_ReturnsHttpError(self) -> None:
-        with patch(
-            "app.services.perf_analyzer.installer.install_perf_analyzer",
-            side_effect=BadRequestError("bad perf analyzer request"),
-        ):
-            with self.assertRaises(HTTPException) as raised:
-                install_perf_analyzer_api(self._request(), session=SimpleNamespace(), _claims=SimpleNamespace())
-
-        self.assertEqual(raised.exception.status_code, 400)
-
-    def test_UninstallPerfAnalyzer_RecordExists_DeletesNamespaceAndRecord(self) -> None:
-        entity = SimpleNamespace(namespace="perf")
-
-        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=entity), patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.save",
-            side_effect=lambda _session, saved_entity: saved_entity,
-        ), patch(
-            "app.services.perf_analyzer.installer.k8s.delete_namespace",
-            return_value="Namespace 'perf' deletion requested.",
-        ) as delete_namespace, patch("app.services.perf_analyzer.installer.perf_analyzer.delete") as delete_record:
-            response = installer.uninstall_perf_analyzer(SimpleNamespace())
-
-        delete_namespace.assert_called_once_with("perf")
-        delete_record.assert_called_once()
-        self.assertEqual(response.status, "deleted")
-
-    def test_UninstallPerfAnalyzer_ControlNamespace_DeletesOnlyResources(self) -> None:
-        entity = SimpleNamespace(namespace="triton-control", deployment_name="perf-analyzer")
-
-        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=entity), patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.save",
-            side_effect=lambda _session, saved_entity: saved_entity,
-        ), patch(
-            "app.services.perf_analyzer.installer.k8s.delete_installation_resources",
-            return_value="Deployment/perf-analyzer",
-        ) as delete_resources, patch(
-            "app.services.perf_analyzer.installer.k8s.delete_namespace",
-        ) as delete_namespace, patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.delete",
-        ):
-            response = installer.uninstall_perf_analyzer(SimpleNamespace())
-
-        delete_resources.assert_called_once_with("triton-control", "perf-analyzer")
-        delete_namespace.assert_not_called()
-        self.assertEqual(response.namespace, "triton-control")
-
-    def test_RunPerfAnalyzer_InstalledPod_ExecutesModelCommand(self) -> None:
-        request = RunPerfAnalyzerRequest(
-            instance_id=3,
-            model_name="resnet",
-            model_version="1",
-            concurrency_range="1:4:1",
-        )
-        entity = SimpleNamespace(namespace="perf")
-        instance = SimpleNamespace(url="http://triton.example.local", is_self_deployed=False)
-
-        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", return_value=entity), patch(
-            "app.services.perf_analyzer.installer.get_instance_or_404",
-            return_value=instance,
-        ), patch(
-            "app.services.perf_analyzer.installer.k8s.exec_running_pod",
-            return_value="perf output",
-        ) as exec_pod, patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.get_latest_run",
-            return_value=None,
-        ), patch(
-            "app.services.perf_analyzer.installer.perf_analyzer.save_latest_run",
-            side_effect=lambda _session, run: run,
-        ) as save_latest_run:
-            response = installer.run_perf_analyzer(request, SimpleNamespace(), {"role": "admin"})
-
-        self.assertEqual(response.output, "perf output")
-        self.assertIn("resnet", response.command)
-        self.assertIn("triton.example.local", response.command)
-        exec_pod.assert_called_once()
-        save_latest_run.assert_called_once()
-        saved_run = save_latest_run.call_args.args[1]
-        self.assertEqual(saved_run.instance_id, 3)
-        self.assertEqual(saved_run.model_name, "resnet")
-        self.assertEqual(saved_run.model_version, "1")
-        self.assertEqual(saved_run.output, "perf output")
-
+class PerfAnalyzerCommandTests(unittest.TestCase):
     def test_GetLatestPerfAnalyzerRun_RecordExists_ReturnsPersistedResult(self) -> None:
         request = RunPerfAnalyzerRequest(
             instance_id=3,
@@ -250,41 +61,6 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         self.assertFalse(response.found)
         self.assertEqual(response.output, "")
 
-    def test_RunPerfAnalyzer_AnotherRunInProgress_RaisesConflict(self) -> None:
-        request = RunPerfAnalyzerRequest(
-            instance_id=3,
-            model_name="resnet",
-            model_version="1",
-            concurrency_range="1",
-        )
-
-        acquired = installer._run_lock.acquire(blocking=False)
-        self.assertTrue(acquired)
-        try:
-            with self.assertRaises(ConflictError) as raised:
-                installer.run_perf_analyzer(request, SimpleNamespace(), {"role": "admin"})
-        finally:
-            installer._run_lock.release()
-
-        self.assertEqual(raised.exception.detail, "Another Perf Analyzer run is already in progress")
-
-    def test_RunPerfAnalyzer_RunFails_ReleasesGlobalLock(self) -> None:
-        request = RunPerfAnalyzerRequest(
-            instance_id=3,
-            model_name="resnet",
-            model_version="1",
-            concurrency_range="1",
-        )
-
-        with patch("app.services.perf_analyzer.installer.perf_analyzer.get", side_effect=BadRequestError("boom")):
-            with self.assertRaises(BadRequestError):
-                installer.run_perf_analyzer(request, SimpleNamespace(), {"role": "admin"})
-
-        acquired = installer._run_lock.acquire(blocking=False)
-        self.assertTrue(acquired)
-        if acquired:
-            installer._run_lock.release()
-
     def test_PerfAnalyzerTarget_SelfDeployedSameNamespaceWithIngress_UsesExternalUrl(self) -> None:
         instance = SimpleNamespace(
             url="https://triton.example.local",
@@ -293,7 +69,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-admin",
         )
@@ -308,7 +84,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="perf-analyzer",
         )
@@ -318,7 +94,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
     def test_PerfAnalyzerTarget_ExternalInstance_UsesRegisteredTritonUrl(self) -> None:
         instance = SimpleNamespace(url="https://triton.example.local/triton", is_self_deployed=False)
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="perf-analyzer",
         )
@@ -333,7 +109,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-admin",
         )
@@ -348,7 +124,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-control",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-control",
         )
@@ -358,7 +134,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
     def test_PerfAnalyzerProtocol_ExternalHttpsInstance_UsesHttpTransportFlag(self) -> None:
         instance = SimpleNamespace(url="https://triton.example.local:8443", is_self_deployed=False)
 
-        protocol = installer._perf_analyzer_protocol(instance, target="triton.example.local:8443")
+        protocol = commands._perf_analyzer_protocol(instance, target="triton.example.local:8443")
 
         self.assertEqual(protocol, "HTTP")
 
@@ -371,7 +147,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         )
         instance = SimpleNamespace(url="https://triton.example.local:8443", is_self_deployed=False)
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="perf", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="perf", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -390,7 +166,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -409,7 +185,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -431,10 +207,10 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         )
 
         with patch(
-            "app.services.perf_analyzer.installer._fetch_triton_model_config",
+            "app.services.perf_analyzer.commands.fetch_triton_model_config",
             return_value={"backend": "vllm"},
         ):
-            command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+            command = commands.run_command(request, instance, perf_analyzer_namespace="triton-control")
 
         self.assertEqual(command[command.index("-u") + 1], "opt125m-service.triton-control.svc.cluster.local:18001")
         self.assertEqual(command[command.index("-i") + 1], "grpc")
@@ -457,7 +233,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             deployment_log="Image: nvcr.io/nvidia/tritonserver:25.12-trtllm-python-py3",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-control", decoupled=False)
 
         self.assertEqual(command[command.index("-u") + 1], "trtllm-service.triton-control.svc.cluster.local:18000")
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -465,10 +241,10 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         self.assertNotIn("--streaming", command)
 
     def test_DirectPerfInputArgument_ModeAndPath_ReturnsDirectArgument(self) -> None:
-        self.assertEqual(installer._direct_perf_input_argument("zero"), "zero")
-        self.assertEqual(installer._direct_perf_input_argument("random"), "random")
-        self.assertEqual(installer._direct_perf_input_argument("/tmp/pa_input.json"), "/tmp/pa_input.json")
-        self.assertIsNone(installer._direct_perf_input_argument('{"data":[]}'))
+        self.assertEqual(commands.direct_perf_input_argument("zero"), "zero")
+        self.assertEqual(commands.direct_perf_input_argument("random"), "random")
+        self.assertEqual(commands.direct_perf_input_argument("/tmp/pa_input.json"), "/tmp/pa_input.json")
+        self.assertIsNone(commands.direct_perf_input_argument('{"data":[]}'))
 
     def test_PrepareInputData_DecoupledVllmGeneratePayload_ConvertsToPerfAnalyzerData(self) -> None:
         raw = (
@@ -476,7 +252,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
             '{"stream":false,"max_tokens":512,"temperature":0.6,"top_p":0.95}}'
         )
 
-        prepared = installer._prepare_input_data_for_perf_analyzer(raw, decoupled=True)
+        prepared = commands.prepare_input_data_for_perf_analyzer(raw, decoupled=True)
 
         self.assertIsNotNone(prepared)
         parsed = json.loads(prepared or "{}")
@@ -498,7 +274,7 @@ class PerfAnalyzerInstallTests(unittest.TestCase):
         )
         instance = SimpleNamespace(url="http://triton.example.local:8000", is_self_deployed=False)
 
-        command = installer._run_command(
+        command = commands.run_command(
             request,
             instance,
             perf_analyzer_namespace="perf",

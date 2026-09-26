@@ -8,26 +8,44 @@
           instanceName || "Instance #" + instanceId()
         }}</a>
         <span class="breadcrumb-separator">/</span>
-        <span aria-current="page">Profile {{ modelName() }}</span>
+        <span aria-current="page">Perf {{ modelName() }}</span>
       </nav>
-      <div class="page-title">Model Profile</div>
+      <div class="profile-title-row">
+        <div class="page-title">Model Perf</div>
+        <div role="status" aria-live="polite">
+          @if (activeRun(); as run) {
+            <span class="benchmark-status" [class.benchmark-running]="run.state === 'running'">
+              <span class="material-icons" aria-hidden="true">{{
+                run.state === "running" ? "speed" : "hourglass_top"
+              }}</span>
+              @switch (run.state) {
+                @case ("running") {
+                  Benchmark running
+                }
+                @case ("stopping") {
+                  Stopping benchmark…
+                }
+                @default {
+                  Preparing benchmark…
+                }
+              }
+            </span>
+          }
+        </div>
+      </div>
       <p class="page-subtitle">{{ modelName() }} - Version {{ version() }}</p>
     </div>
 
     <mat-card class="card profile-card">
       @if (loadingStatus()) {
         <div class="panel-hint">Loading Perf Analyzer status...</div>
-      } @else if (!installed()) {
-        <div class="status-panel error-panel">
-          <div class="section-title">Perf Analyzer not installed</div>
-          <div class="panel-hint">Install the Perf Analyzer workload before running profiles.</div>
-          <a mat-stroked-button routerLink="/perf-analyzers">
-            <span class="material-icons">speed</span>
-            Open Perf Analyzer
-          </a>
+      }
+      @if (latestRun(); as run) {
+        <div class="status-panel" role="status" aria-live="polite">
+          <div class="section-title">{{ run.state }} · Version {{ run.model_version }}</div>
+          <div class="panel-hint">{{ run.message }}</div>
         </div>
       }
-
       <div class="endpoint-list">
         <div class="endpoint-row">
           <span class="endpoint-label">Instance</span>
@@ -38,6 +56,37 @@
           <code class="endpoint-url">{{ modelName() }}:{{ version() }}</code>
         </div>
       </div>
+
+      <div class="form-row">
+        <label class="field-label" for="perf-image">Analyzer image</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="perf-image"
+            matInput
+            [(ngModel)]="image"
+            [disabled]="hasActiveRun() || busy()"
+          />
+        </mat-form-field>
+      </div>
+
+      <mat-expansion-panel class="optional-settings mat-elevation-z0">
+        <mat-expansion-panel-header>
+          <mat-panel-title>Optional Registry credentials (Docker config JSON)</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="form-row">
+          <label class="field-label" for="perf-registry">Docker config JSON</label>
+          <mat-form-field appearance="outline">
+            <textarea
+              id="perf-registry"
+              matInput
+              [(ngModel)]="dockerconfigjson"
+              [disabled]="hasActiveRun() || busy()"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+          </mat-form-field>
+        </div>
+      </mat-expansion-panel>
 
       <div class="profile-grid">
         <div class="form-row">
@@ -95,6 +144,16 @@
           <span class="material-icons">arrow_back</span>
           Back
         </a>
+        @if (activeRun(); as run) {
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="stopProfiler()"
+            [disabled]="busy() || run.state === 'stopping'"
+          >
+            {{ run.state === "stopping" ? "Stopping..." : "Stop" }}
+          </button>
+        }
         <button
           mat-flat-button
           color="primary"
@@ -103,15 +162,9 @@
           [disabled]="!canRun()"
         >
           <span class="material-icons">speed</span>
-          {{ running() ? "Running..." : "Run Profiler" }}
+          {{ busy() ? "Please wait..." : "Start" }}
         </button>
       </div>
-
-      @if (otherRunInProgress()) {
-        <div class="panel-hint">
-          Another Perf Analyzer run is already in progress. Wait until it finishes.
-        </div>
-      }
 
       @if (resolvingInstance()) {
         <div class="panel-hint">Resolving instance metadata in background...</div>

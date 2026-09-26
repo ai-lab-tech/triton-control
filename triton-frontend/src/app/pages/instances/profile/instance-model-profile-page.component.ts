@@ -1,37 +1,26 @@
-import { Component, computed, effect, inject, OnInit, signal } from "@angular/core";
-import { toSignal } from "@angular/core/rxjs-interop";
+import { Component, computed, inject, OnInit, OnDestroy, signal } from "@angular/core";
+import { toSignal, takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
 
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
+import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
-import { Store } from "@ngrx/store";
 
 import {
   InstanceS3ConfigDTO,
   InstancesService,
   PerfAnalyzersService,
+  ModelPerfRunResponse,
+  ModelPerfStatusResponse,
   TritonInstanceDTO,
 } from "../../../api/generated/index";
 import { mapApiErrorMessage } from "../../../shared/api-error-message";
 import { InstanceModelRepositoryConfigComponent } from "../shared/instance-model-repository-config.component";
-import {
-  profileLastResultLoadStarted,
-  profilePageOpened,
-  profileRunStarted,
-} from "../../../state/instances-profile/instances-profile.actions";
-import {
-  selectActiveProfileEntry,
-  selectActiveKey,
-  selectActiveRunKey,
-  selectProfileError,
-  selectProfileOutput,
-  selectProfileRunning,
-} from "../../../state/instances-profile/instances-profile.selectors";
 import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-monaco-editor.component";
 
 @Component({
@@ -42,6 +31,7 @@ import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-mona
     RouterLink,
     MatButtonModule,
     MatCardModule,
+    MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -51,17 +41,19 @@ import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-mona
   styleUrl: "./instance-model-profile-page.component.scss",
   templateUrl: "./instance-model-profile-page.component.html",
 })
-export class InstanceModelProfilePageComponent implements OnInit {
+export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
   private static readonly LEGACY_TEMP_INPUT_PATH = "/tmp/pa_input.json";
   private static readonly LEGACY_SHM_INPUT_PATH = "/dev/shm/pa_input.json";
   private readonly route = inject(ActivatedRoute);
   private readonly instancesApi = inject(InstancesService);
   private readonly perfAnalyzersApi = inject(PerfAnalyzersService);
-  private readonly store = inject(Store);
+  private readonly params = toSignal(this.route.paramMap, {
+    initialValue: this.route.snapshot.paramMap,
+  });
 
-  readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id") ?? "");
-  readonly modelName = computed(() => this.route.snapshot.paramMap.get("modelName") ?? "");
-  readonly version = computed(() => this.route.snapshot.paramMap.get("version") ?? "");
+  readonly instanceId = computed(() => this.params().get("id") ?? "");
+  readonly modelName = computed(() => this.params().get("modelName") ?? "");
+  readonly version = computed(() => this.params().get("version") ?? "");
   readonly profileKey = computed(
     () => `${this.instanceId()}:${this.modelName()}:${this.version()}`,
   );
@@ -81,132 +73,220 @@ export class InstanceModelProfilePageComponent implements OnInit {
   "data": []
 }`;
 
+  image = "";
+  dockerconfigjson = "";
   readonly loadingStatus = signal(true);
-  readonly installed = signal(false);
   readonly resolvingInstance = signal(false);
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
   readonly statusError = signal("");
-  readonly running = toSignal(this.store.select(selectProfileRunning), { initialValue: false });
-  readonly activeProfileKey = toSignal(this.store.select(selectActiveKey), { initialValue: "" });
-  readonly activeRunKey = toSignal(this.store.select(selectActiveRunKey), { initialValue: "" });
-  readonly profileEntry = toSignal(this.store.select(selectActiveProfileEntry), {
-    initialValue: { error: "", output: "", command: [] },
-  });
-  readonly output = toSignal(this.store.select(selectProfileOutput), { initialValue: "" });
-  readonly profileError = toSignal(this.store.select(selectProfileError), { initialValue: "" });
-  readonly error = computed(() => this.statusError() || this.profileError());
-  readonly otherRunInProgress = computed(
-    () => this.running() && !!this.activeRunKey() && this.activeRunKey() !== this.profileKey(),
-  );
-  private readonly applyLoadedResult = effect(() => {
-    const entry = this.profileEntry();
-    if (!entry.output || this.activeProfileKey() !== this.profileKey()) {
-      return;
-    }
-    if (entry.batchSize != null) {
-      this.batchSize = entry.batchSize;
-    }
-    if (entry.concurrencyRange != null) {
-      this.concurrencyRange = entry.concurrencyRange;
-    }
-    if (entry.measurementRequestCount != null) {
-      this.measurementRequestCount = entry.measurementRequestCount;
-    }
-    if (entry.inputData != null) {
-      this.inputData = this.normalizeLegacyInputData(entry.inputData);
-    }
-  });
+  readonly actionError = signal("");
+  readonly busy = signal(false);
+  readonly activeRun = signal<ModelPerfRunResponse | null>(null);
+  readonly latestRun = signal<ModelPerfRunResponse | null>(null);
+  readonly output = signal("");
+  readonly hasActiveRun = computed(() => !!this.activeRun());
+  readonly error = computed(() => this.actionError() || this.statusError());
+  private timer?: ReturnType<typeof setTimeout>;
+  private generation = 0;
+  private statusRequest = 0;
+  private destroyed = false;
+  private restoredKey = "";
+
+  constructor() {
+    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.generation++;
+      clearTimeout(this.timer);
+      this.activeRun.set(null);
+      this.latestRun.set(null);
+      this.output.set("");
+      this.loadingStatus.set(true);
+      this.statusError.set("");
+      this.actionError.set("");
+      this.busy.set(false);
+      this.image = "";
+      this.dockerconfigjson = "";
+      this.batchSize = 1;
+      this.concurrencyRange = "1";
+      this.measurementRequestCount = 50;
+      this.inputData = "";
+      this.restoredKey = "";
+      // Defer until the route signal receives the new parameters as well.
+      queueMicrotask(() => {
+        if (!this.destroyed && this.hasValidRoute()) {
+          void this.loadStatus();
+          void this.resolveInstance();
+        }
+      });
+    });
+  }
 
   canRun(): boolean {
     return (
       this.hasValidRoute() &&
-      this.installed() &&
       !this.loadingStatus() &&
-      !this.running() &&
-      Number.isFinite(Number(this.batchSize)) &&
+      !this.statusError() &&
+      !this.hasActiveRun() &&
+      !this.busy() &&
+      !!this.image.trim() &&
+      Number.isInteger(Number(this.batchSize)) &&
       Number(this.batchSize) >= 1 &&
-      Number.isFinite(Number(this.measurementRequestCount)) &&
+      Number.isInteger(Number(this.measurementRequestCount)) &&
       Number(this.measurementRequestCount) >= 1 &&
-      this.concurrencyRange.trim().length > 0
+      /^[1-9][0-9]*(?::[0-9]+(?::[1-9][0-9]*)?)?$/.test(this.concurrencyRange.trim())
     );
   }
 
-  async ngOnInit(): Promise<void> {
-    if (!this.hasValidRoute()) {
-      this.loadingStatus.set(false);
-      return;
-    }
-
-    this.store.dispatch(profilePageOpened({ key: this.profileKey() }));
-    this.store.dispatch(
-      profileLastResultLoadStarted({
-        key: this.profileKey(),
-        instanceId: this.instanceId(),
-        modelName: this.modelName(),
-        version: this.version(),
-      }),
-    );
+  ngOnInit(): void {
     this.loadInstanceFromNavigation();
+  }
 
-    await Promise.all([this.loadStatus(), this.resolveInstance()]);
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.generation++;
+    clearTimeout(this.timer);
   }
 
   async runProfiler(): Promise<void> {
-    const instanceId = Number(this.instanceId());
-    if (!this.canRun() || !Number.isInteger(instanceId) || instanceId <= 0) {
-      return;
+    if (!this.canRun()) return;
+    const generation = this.generation;
+    this.statusRequest++;
+    clearTimeout(this.timer);
+    this.busy.set(true);
+    this.actionError.set("");
+    try {
+      const run = await firstValueFrom(
+        this.perfAnalyzersApi.startModelPerf(
+          {
+            model_version: this.version(),
+            image: this.image.trim(),
+            dockerconfigjson: this.dockerconfigjson.trim() || undefined,
+            batch_size: Number(this.batchSize),
+            concurrency_range: this.concurrencyRange.trim(),
+            measurement_request_count: Number(this.measurementRequestCount),
+            input_data: this.normalizeLegacyInputData(this.inputData) || undefined,
+          },
+          Number(this.instanceId()),
+          this.modelName(),
+        ),
+      );
+      if (generation !== this.generation) return;
+      this.dockerconfigjson = "";
+      this.applyRun(run);
+    } catch (error) {
+      if (generation !== this.generation) return;
+      this.actionError.set(mapApiErrorMessage(error, "Could not start benchmark."));
+    } finally {
+      if (generation === this.generation) {
+        this.busy.set(false);
+        await this.loadStatus();
+      }
     }
+  }
 
-    this.statusError.set("");
-    const normalizedInputData = this.normalizeLegacyInputData(this.inputData);
-    this.inputData = normalizedInputData;
-    this.store.dispatch(
-      profileRunStarted({
-        key: this.profileKey(),
-        instanceId: this.instanceId(),
-        modelName: this.modelName(),
-        version: this.version(),
-        batchSize: Number(this.batchSize),
-        concurrencyRange: this.concurrencyRange.trim() || "1",
-        measurementRequestCount: Number(this.measurementRequestCount),
-        inputData: normalizedInputData || undefined,
-      }),
-    );
+  async stopProfiler(): Promise<void> {
+    const run = this.activeRun();
+    if (!run || this.busy() || run.state === "stopping") return;
+    const generation = this.generation;
+    this.statusRequest++;
+    clearTimeout(this.timer);
+    this.busy.set(true);
+    this.actionError.set("");
+    try {
+      const stopped = await firstValueFrom(
+        this.perfAnalyzersApi.stopModelPerf(Number(this.instanceId()), this.modelName(), run.id),
+      );
+      if (generation === this.generation) this.applyRun(stopped);
+    } catch (error) {
+      if (generation === this.generation) {
+        this.actionError.set(mapApiErrorMessage(error, "Could not stop benchmark."));
+      }
+    } finally {
+      if (generation === this.generation) {
+        this.busy.set(false);
+        await this.loadStatus();
+      }
+    }
   }
 
   saveInputData(value: string): void {
     this.inputData = this.normalizeLegacyInputData(value);
   }
 
-  private async loadStatus(): Promise<void> {
-    this.loadingStatus.set(true);
+  private applyRun(run: ModelPerfRunResponse): void {
+    const active = ["creating", "pending", "running", "stopping"].includes(run.state);
+    this.activeRun.set(active ? run : null);
+    this.latestRun.set(run);
+    this.output.set(run.output || "");
+  }
+
+  async loadStatus(): Promise<void> {
+    const generation = this.generation;
+    const key = this.profileKey();
+    const requestId = ++this.statusRequest;
+    clearTimeout(this.timer);
     try {
-      const status = await firstValueFrom(
-        this.perfAnalyzersApi.getPerfAnalyzerStatusApiPerfAnalyzersGet(),
+      const status: ModelPerfStatusResponse = await firstValueFrom(
+        this.perfAnalyzersApi.getModelPerfStatus(
+          Number(this.instanceId()),
+          this.modelName(),
+          this.version(),
+        ),
       );
-      this.installed.set(Boolean(status.installed));
+      if (generation !== this.generation || requestId !== this.statusRequest || this.busy()) return;
+      this.statusError.set("");
+      if (!this.image) this.image = status.default_image;
+      const active = (status.active_run ?? null) as ModelPerfRunResponse | null;
+      const latest = (status.latest_run ?? null) as ModelPerfRunResponse | null;
+      this.activeRun.set(active);
+      this.latestRun.set(active || latest);
+      this.output.set(
+        active || latest ? (active || latest)!.output || "" : status.latest_result.output || "",
+      );
+      if (this.restoredKey !== key) {
+        const selectedRun = [active, latest].find((run) => run?.model_version === this.version());
+        const saved = selectedRun || (status.latest_result.found ? status.latest_result : null);
+        if (saved) {
+          this.batchSize = saved.batch_size ?? 1;
+          this.concurrencyRange = saved.concurrency_range ?? "1";
+          this.measurementRequestCount = saved.measurement_request_count ?? 50;
+          this.inputData = this.normalizeLegacyInputData(saved.input_data);
+          if (selectedRun) this.image = selectedRun.image;
+        }
+        this.restoredKey = key;
+      }
     } catch (error) {
-      this.installed.set(false);
-      this.statusError.set(mapApiErrorMessage(error, "Failed to load Perf Analyzer status."));
+      if (generation !== this.generation || requestId !== this.statusRequest) return;
+      this.statusError.set(mapApiErrorMessage(error, "Failed to load benchmark status; retrying."));
     } finally {
-      this.loadingStatus.set(false);
+      if (
+        generation === this.generation &&
+        requestId === this.statusRequest &&
+        !this.destroyed &&
+        !this.busy()
+      ) {
+        this.loadingStatus.set(false);
+        // Poll idle tabs too, so runs started in another browser become visible.
+        this.timer = setTimeout(() => void this.loadStatus(), this.activeRun() ? 3000 : 5000);
+      }
     }
   }
 
   private async resolveInstance(): Promise<void> {
+    const generation = this.generation;
     this.resolvingInstance.set(true);
     try {
       const instance = (await firstValueFrom(
         this.instancesApi.getInstanceApiInstancesInstanceIdGet(this.instanceId()),
       )) as TritonInstanceDTO;
 
+      if (generation !== this.generation) return;
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl = instance?.url ?? this.instanceUrl;
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
     } catch {
-      this.statusError.set("Failed to load instance details.");
+      if (generation === this.generation) this.actionError.set("Failed to load instance details.");
     } finally {
-      this.resolvingInstance.set(false);
+      if (generation === this.generation) this.resolvingInstance.set(false);
     }
   }
 

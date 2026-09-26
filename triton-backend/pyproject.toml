@@ -59,6 +59,9 @@ select = ["E", "F", "W", "I"]
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+"app.services.perf_analyzer" = ["*.yaml"]
+
 ###################################  COVERAGE  CONFIG  ###################################
 
 [tool.coverage.run]

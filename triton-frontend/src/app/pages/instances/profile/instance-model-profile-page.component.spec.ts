@@ -1,161 +1,227 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { TestBed } from "@angular/core/testing";
-import { ActivatedRoute } from "@angular/router";
-import { of } from "rxjs";
-import { MockStore, provideMockStore } from "@ngrx/store/testing";
+import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from "@angular/core/testing";
+import { ActivatedRoute, convertToParamMap } from "@angular/router";
+import { BehaviorSubject, Subject, of, throwError } from "rxjs";
 
-import { InstancesService, PerfAnalyzersService } from "../../../api/generated/index";
 import {
-  profileLastResultLoadStarted,
-  profilePageOpened,
-  profileRunStarted,
-} from "../../../state/instances-profile/instances-profile.actions";
-import {
-  selectActiveProfileEntry,
-  selectActiveKey,
-  selectProfileError,
-  selectProfileOutput,
-  selectProfileRunning,
-} from "../../../state/instances-profile/instances-profile.selectors";
+  InstancesService,
+  ModelPerfRunResponse,
+  ModelPerfStatusResponse,
+  PerfAnalyzersService,
+} from "../../../api/generated/index";
 import { InstanceModelProfilePageComponent } from "./instance-model-profile-page.component";
 
-describe("InstanceModelProfilePageComponent", () => {
-  let instancesApiMock: jasmine.SpyObj<InstancesService>;
-  let perfAnalyzersApiMock: jasmine.SpyObj<PerfAnalyzersService>;
-  let mockStore: MockStore;
+describe("Model Perf jobs", () => {
+  let fixture: ComponentFixture<InstanceModelProfilePageComponent>;
+  let component: InstanceModelProfilePageComponent;
+  let api: {
+    getModelPerfStatus: jasmine.Spy;
+    startModelPerf: jasmine.Spy;
+    stopModelPerf: jasmine.Spy;
+  };
+  const routeParams = (name: string, version = "1") =>
+    convertToParamMap({ id: "7", modelName: name, version });
+  let params: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+  const idle = (): ModelPerfStatusResponse => ({
+    default_image: "sdk:test",
+    latest_result: { found: false },
+  });
+  const run = (state = "running", version = "1"): ModelPerfRunResponse => ({
+    id: "run-a",
+    instance_id: 7,
+    model_name: "model-a",
+    model_version: version,
+    state,
+    message: state,
+    image: "sdk:test",
+    batch_size: 1,
+    concurrency_range: "1",
+    measurement_request_count: 50,
+    created_at: "2026-09-14T10:00:00",
+    output: "",
+  });
 
   beforeEach(async () => {
-    instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
-      "getInstanceApiInstancesInstanceIdGet",
-      "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
-      "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
+    params = new BehaviorSubject(routeParams("model-a"));
+    api = jasmine.createSpyObj("PerfAnalyzersService", [
+      "getModelPerfStatus",
+      "startModelPerf",
+      "stopModelPerf",
     ]);
-    perfAnalyzersApiMock = jasmine.createSpyObj<PerfAnalyzersService>("PerfAnalyzersService", [
-      "getLatestPerfAnalyzerRunApiPerfAnalyzersRunsLatestGet",
-      "getPerfAnalyzerStatusApiPerfAnalyzersGet",
-    ]);
-
-    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
-      of({
-        name: "node-7",
-        url: "http://localhost:8000",
-        s3: { enabled: true, endpoint: "https://s3.local", bucket: "models", prefix: "repo" },
-      } as any),
-    );
-    perfAnalyzersApiMock.getPerfAnalyzerStatusApiPerfAnalyzersGet.and.returnValue(
-      of({ installed: true } as any),
-    );
-
+    api.getModelPerfStatus.and.returnValue(of(idle()));
+    api.startModelPerf.and.returnValue(of(run("creating")));
+    api.stopModelPerf.and.returnValue(of(run("stopping")));
     await TestBed.configureTestingModule({
       imports: [InstanceModelProfilePageComponent],
       providers: [
-        provideMockStore(),
         {
           provide: ActivatedRoute,
-          useValue: {
-            snapshot: {
-              paramMap: {
-                get: (key: string) =>
-                  key === "id"
-                    ? "7"
-                    : key === "modelName"
-                      ? "model-a"
-                      : key === "version"
-                        ? "1"
-                        : null,
-              },
-            },
-          },
+          useValue: { snapshot: { paramMap: params.value }, paramMap: params },
         },
-        { provide: InstancesService, useValue: instancesApiMock },
-        { provide: PerfAnalyzersService, useValue: perfAnalyzersApiMock },
+        { provide: PerfAnalyzersService, useValue: api },
+        {
+          provide: InstancesService,
+          useValue: { getInstanceApiInstancesInstanceIdGet: () => of({ name: "test" }) },
+        },
       ],
-    }).compileComponents();
-
-    mockStore = TestBed.inject(MockStore);
-    mockStore.overrideSelector(selectActiveKey, "7:model-a:1");
-    mockStore.overrideSelector(selectActiveProfileEntry, { error: "", output: "", command: [] });
-    mockStore.overrideSelector(selectProfileRunning, false);
-    mockStore.overrideSelector(selectProfileOutput, "");
-    mockStore.overrideSelector(selectProfileError, "");
-    mockStore.refreshState();
+    })
+      .overrideComponent(InstanceModelProfilePageComponent, { set: { template: "" } })
+      .compileComponents();
   });
 
-  afterEach(() => {
-    mockStore?.resetSelectors();
-  });
+  function mount(): void {
+    fixture = TestBed.createComponent(InstanceModelProfilePageComponent);
+    component = fixture.componentInstance;
+  }
 
-  it("NgOnInit_ValidRouteAndApiSuccess_LoadsInstanceAndStatus", async () => {
-    // Arrange
-    const fixture = TestBed.createComponent(InstanceModelProfilePageComponent);
-    const component = fixture.componentInstance;
+  afterEach(() => fixture.destroy());
 
-    // Act
-    await component.ngOnInit();
+  it("starts from the model tab without a global installation", fakeAsync(() => {
+    mount();
+    flushMicrotasks();
+    expect(component.canRun()).toBeTrue();
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run("creating") }));
+    void component.runProfiler();
+    flushMicrotasks();
+    expect(api.startModelPerf).toHaveBeenCalledWith(
+      jasmine.objectContaining({ image: "sdk:test", model_version: "1" }),
+      7,
+      "model-a",
+    );
+    expect(component.canRun()).toBeFalse();
+  }));
 
-    // Assert
-    expect(component.instanceName).toBe("node-7");
-    expect(component.installed()).toBeTrue();
-    expect(component.instanceS3()?.bucket).toBe("models");
-  });
+  it("restores another version's active job and blocks a second start", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run("running", "2") }));
+    mount();
+    flushMicrotasks();
+    expect(component.activeRun()?.model_version).toBe("2");
+    expect(component.canRun()).toBeFalse();
+    void component.runProfiler();
+    expect(api.startModelPerf).not.toHaveBeenCalled();
+  }));
 
-  it("RunProfiler_ValidForm_SendsSelectedModelRunPayload", async () => {
-    // Arrange
-    const fixture = TestBed.createComponent(InstanceModelProfilePageComponent);
-    const component = fixture.componentInstance;
-    await component.ngOnInit();
-    component.batchSize = 4;
-    component.concurrencyRange = " 1:8:1 ";
-    component.measurementRequestCount = 120;
-    spyOn(mockStore, "dispatch");
+  it("keeps Start disabled until Stop is confirmed", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run() }));
+    mount();
+    flushMicrotasks();
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run("stopping") }));
+    void component.stopProfiler();
+    flushMicrotasks();
+    expect(api.stopModelPerf).toHaveBeenCalledWith(7, "model-a", "run-a");
+    expect(component.canRun()).toBeFalse();
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), latest_run: run("cancelled") }));
+    tick(3000);
+    expect(component.canRun()).toBeTrue();
+  }));
 
-    // Act
-    await component.runProfiler();
-
-    // Assert
-    expect(mockStore.dispatch).toHaveBeenCalledWith(
-      profileRunStarted({
-        key: "7:model-a:1",
-        instanceId: "7",
-        modelName: "model-a",
-        version: "1",
-        batchSize: 4,
-        concurrencyRange: "1:8:1",
-        measurementRequestCount: 120,
-        inputData: component.inputData,
+  it("restores only the selected version's settings while another version is active", fakeAsync(() => {
+    const otherVersion = {
+      ...run("running", "2"),
+      image: "sdk:other",
+      batch_size: 8,
+      input_data: '{"data":[{"OTHER":[2]}]}',
+    };
+    const selectedVersion = {
+      ...run("succeeded", "1"),
+      image: "sdk:selected",
+      batch_size: 2,
+      concurrency_range: "2:4",
+      measurement_request_count: 100,
+      input_data: '{"data":[{"SELECTED":[1]}]}',
+    };
+    api.getModelPerfStatus.and.returnValue(
+      of({
+        ...idle(),
+        active_run: otherVersion,
+        latest_run: selectedVersion,
       }),
     );
-  });
+    mount();
+    flushMicrotasks();
+    expect(component.activeRun()?.model_version).toBe("2");
+    expect(component.hasActiveRun()).toBeTrue();
+    expect(component.canRun()).toBeFalse();
+    expect(component.image).toBe("sdk:selected");
+    expect(component.batchSize).toBe(2);
+    expect(component.concurrencyRange).toBe("2:4");
+    expect(component.measurementRequestCount).toBe(100);
+    expect(component.inputData).toBe(selectedVersion.input_data);
+  }));
 
-  it("NgOnInit_ValidRoute_LoadsLastResultFromBackendState", async () => {
-    // Arrange
-    const fixture = TestBed.createComponent(InstanceModelProfilePageComponent);
-    const component = fixture.componentInstance;
-    spyOn(mockStore, "dispatch");
-
-    // Act
-    await component.ngOnInit();
-
-    // Assert
-    expect(mockStore.dispatch).toHaveBeenCalledWith(profilePageOpened({ key: "7:model-a:1" }));
-    expect(mockStore.dispatch).toHaveBeenCalledWith(
-      profileLastResultLoadStarted({
-        key: "7:model-a:1",
-        instanceId: "7",
-        modelName: "model-a",
-        version: "1",
+  it("keeps defaults when only another version has a saved run", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(
+      of({
+        ...idle(),
+        active_run: { ...run("running", "2"), image: "sdk:other", batch_size: 8 },
       }),
     );
-  });
+    mount();
+    flushMicrotasks();
+    expect(component.image).toBe("sdk:test");
+    expect(component.batchSize).toBe(1);
+    expect(component.inputData).toBe("");
+    expect(component.canRun()).toBeFalse();
+  }));
 
-  it("ErrorSelector_ProfileErrorPresent_ExposesDisplayError", () => {
-    // Arrange
-    mockStore.overrideSelector(selectProfileError, "Profiler run failed.");
-    mockStore.refreshState();
-    const fixture = TestBed.createComponent(InstanceModelProfilePageComponent);
-    const component = fixture.componentInstance;
+  it("does not block another model and ignores the old model's late response", fakeAsync(() => {
+    const pending = new Subject<ModelPerfStatusResponse>();
+    api.getModelPerfStatus.and.returnValue(pending);
+    mount();
+    flushMicrotasks();
+    api.getModelPerfStatus.and.returnValue(of(idle()));
+    params.next(routeParams("model-b"));
+    flushMicrotasks();
+    pending.next({ ...idle(), active_run: run() });
+    flushMicrotasks();
+    expect(component.modelName()).toBe("model-b");
+    expect(component.activeRun()).toBeNull();
+    expect(component.canRun()).toBeTrue();
+  }));
 
-    // Assert
-    expect(component.error()).toBe("Profiler run failed.");
-  });
+  it("shows status uncertainty and retries without enabling Start", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(throwError(() => new Error("offline")));
+    mount();
+    flushMicrotasks();
+    expect(component.canRun()).toBeFalse();
+    expect(component.statusError()).toBeTruthy();
+    api.getModelPerfStatus.and.returnValue(of(idle()));
+    tick(5000);
+    expect(component.canRun()).toBeTrue();
+  }));
+
+  it("refreshes server status after a conflicting start", fakeAsync(() => {
+    mount();
+    flushMicrotasks();
+    api.startModelPerf.and.returnValue(
+      throwError(() => ({ status: 409, error: { detail: "Active run: run-a" } })),
+    );
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run() }));
+    void component.runProfiler();
+    flushMicrotasks();
+    expect(component.activeRun()?.id).toBe("run-a");
+    expect(component.canRun()).toBeFalse();
+  }));
+
+  it("does not let an older idle poll overwrite an accepted start", fakeAsync(() => {
+    mount();
+    flushMicrotasks();
+    const pending = new Subject<ModelPerfStatusResponse>();
+    api.getModelPerfStatus.and.returnValue(pending);
+    void component.loadStatus();
+    api.getModelPerfStatus.and.returnValue(of({ ...idle(), active_run: run("creating") }));
+    void component.runProfiler();
+    flushMicrotasks();
+    pending.next(idle());
+    flushMicrotasks();
+    expect(component.canRun()).toBeFalse();
+  }));
+
+  it("stops polling after leaving the tab", fakeAsync(() => {
+    mount();
+    flushMicrotasks();
+    const calls = api.getModelPerfStatus.calls.count();
+    fixture.destroy();
+    tick(10000);
+    expect(api.getModelPerfStatus.calls.count()).toBe(calls);
+  }));
 });

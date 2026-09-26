@@ -8,6 +8,52 @@
   gap: 0.4rem;
 }
 
+.profile-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.benchmark-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  .material-icons {
+    font-size: 1.15rem;
+  }
+}
+
+.benchmark-running {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+  color: #115e59;
+
+  .material-icons {
+    animation: benchmark-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes benchmark-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .benchmark-running .material-icons {
+    animation: none;
+  }
+}
+
 .page-breadcrumbs {
   display: inline-flex;
   align-items: center;
@@ -74,6 +120,11 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.optional-settings {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
 }
 
 .form-row,
@@ -185,6 +236,10 @@
 }
 
 @media (max-width: 980px) {
+  .optional-settings mat-panel-description {
+    display: none;
+  }
+
   .profile-grid {
     grid-template-columns: 1fr;
   }

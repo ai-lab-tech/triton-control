@@ -21,7 +21,7 @@ Defines the following database tables:
 from datetime import datetime
 from typing import Any, List, Optional
 
-from sqlalchemy import JSON, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Index, String, Text, UniqueConstraint, text
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -42,6 +42,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     server_metadata: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON, nullable=True))
     health_live: bool = Field(default=False)
     health_ready: bool = Field(default=False)
+    perf_deleting: bool = Field(default=False)
     health_last_checked_at: Optional[datetime] = Field(default=None)
     health_error: Optional[str] = None
     triton_verify_ssl: bool = Field(default=False)
@@ -235,6 +236,44 @@ class PerfAnalyzerRunEntity(SQLModel, table=True):
     command: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     output: str = Field(default="", sa_column=Column(String))
     executed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class ModelPerfJobEntity(SQLModel, table=True):
+    """Durable execution intent; active model uniqueness spans versions and workers."""
+
+    __tablename__ = "model_perf_jobs"
+    __table_args__ = (
+        Index(
+            "uq_model_perf_job_active", "instance_id", "model_name", unique=True,
+            postgresql_where=text("state IN ('creating', 'pending', 'running', 'stopping')"),
+            sqlite_where=text("state IN ('creating', 'pending', 'running', 'stopping')"),
+        ),
+    )
+
+    id: str = Field(primary_key=True)
+    instance_id: int = Field(foreign_key="triton_instances.id", index=True)
+    model_name: str
+    model_version: str
+    image: str
+    namespace: str
+    job_name: str
+    job_uid: str | None = None
+    state: str = Field(default="creating", index=True)
+    message: str = "Preparing benchmark."
+    prepared: bool = False
+    stop_output_saved: bool = False
+    cleaned: bool = False
+    pull_secret: bool = False
+    batch_size: int = 1
+    concurrency_range: str = "1"
+    measurement_request_count: int = 50
+    input_data: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    command: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    output: str = Field(default="", sa_column=Column(Text))
+    exit_code: int | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class MlflowEntity(SQLModel, table=True):
