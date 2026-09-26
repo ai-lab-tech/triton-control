@@ -15,7 +15,8 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "generate:api": "node scripts/generate-api.mjs",
-    "test:smoke": "playwright test -c e2e/playwright.config.ts"
+    "test:smoke": "playwright test -c e2e/playwright.config.ts",
+    "test:smoke:plugins": "playwright test -c e2e/code-server/playwright.config.ts"
   },
   "dependencies": {
     "@angular/animations": "^21.2.23",
