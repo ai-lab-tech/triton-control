@@ -86,16 +86,20 @@ test.describe.serial("code-server plugin workflows", () => {
   }
 
   async function openFile(path: string): Promise<void> {
-    await page.keyboard.press("Control+p");
-    const quick = workbench.locator(".quick-input-widget input");
-    await expect(quick).toBeVisible();
-    await quick.fill(path);
-    await workbench
-      .locator(".quick-input-list .monaco-list-row")
-      .filter({ hasText: basename(path) })
-      .first()
-      .click();
-    await expect(quick).toBeHidden();
+    // Restoring Explorer after a restart can dismiss Quick Open as well.
+    await expect(async () => {
+      await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
+      await workbench.locator("body").press("Control+p");
+      const quick = workbench.locator(".quick-input-widget input");
+      await expect(quick).toBeVisible({ timeout: 2000 });
+      await quick.fill(path);
+      await workbench
+        .locator(".quick-input-list .monaco-list-row")
+        .filter({ hasText: basename(path) })
+        .first()
+        .click({ timeout: 2000 });
+      await expect(quick).toBeHidden({ timeout: 2000 });
+    }).toPass({ timeout: 30_000 });
   }
 
   async function explorer(): Promise<void> {
@@ -178,6 +182,9 @@ test.describe.serial("code-server plugin workflows", () => {
     expect(
       kubectl("exec", pod, "--", "/tmp/triton-control-code-server/bin/code-server", "--version"),
     ).toContain(required("PLUGIN_SMOKE_VERSION"));
+    // Seed before Explorer mounts the remote filesystem so its initial listing
+    // includes the fixture, even when the workbench restores a cached tree.
+    s3("put", `${prefix}/remote-${phase}.txt`, "original smoke content");
     page = await context.newPage();
     // Angular rehydrates authentication from the real backend session cookie.
     await page.goto("/development");
@@ -221,14 +228,19 @@ test.describe.serial("code-server plugin workflows", () => {
 
   test("S3 Explorer edits objects and copies a local folder using drag and drop", async () => {
     const filename = `remote-${phase}.txt`;
-    s3("put", `${prefix}/${filename}`, "original smoke content");
+    expect(s3("get", `${prefix}/${filename}`)).toBe("original smoke content");
     await command("S3: Choose Profile…");
     await workbench.getByText("Smoke S3", { exact: true }).click();
     const root = row("S3 · Smoke S3 · plugin-smoke");
     await expect(root).toBeVisible();
-    if ((await root.getAttribute("aria-expanded")) !== "true") {
-      await root.locator(".monaco-tl-twistie").click();
-    }
+    // Selecting a profile refreshes Explorer asynchronously and can replace
+    // or collapse its root. Re-expand until the actual object is visible.
+    await expect(async () => {
+      if ((await root.getAttribute("aria-expanded")) !== "true") {
+        await root.locator(".monaco-tl-twistie").click();
+      }
+      await expect(row(filename)).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
     await row(filename).dblclick();
     const editor = workbench.locator(".part.editor .monaco-editor .view-lines");
     await expect(editor).toContainText("original smoke content");
