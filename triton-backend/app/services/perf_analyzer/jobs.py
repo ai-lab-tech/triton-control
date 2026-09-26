@@ -19,7 +19,7 @@ from app.repositories import perf_jobs as repo
 from app.schemas.perf_analyzer import RunPerfAnalyzerRequest
 from app.schemas.perf_jobs import ModelPerfRunResponse, ModelPerfStatusResponse, StartModelPerfRequest
 from app.services.access import get_instance_or_404
-from app.services.perf_analyzer import installer as commands
+from app.services.perf_analyzer import commands, installer
 from app.services.perf_analyzer.jobs_kubernetes import Jobs, deadline_seconds, default_image, pod_message
 
 logger = logging.getLogger(__name__)
@@ -42,23 +42,23 @@ def start(
         instance_id=instance_id, model_name=model_name,
         **request.model_dump(exclude={"image", "dockerconfigjson"}),
     )
-    config = commands._fetch_triton_model_config(instance, model_name=model_name, model_version=target.model_version)
+    config = commands.fetch_triton_model_config(instance, model_name=model_name, model_version=target.model_version)
     if config is None:
         raise BadRequestError("Cannot read the selected model/version configuration from Triton")
-    decoupled = commands._model_config_requires_decoupled_perf_analyzer_mode(config)
-    prepared_input = commands._prepare_input_data_for_perf_analyzer(target.input_data, decoupled=decoupled)
-    input_arg = commands._direct_perf_input_argument(prepared_input or "")
+    decoupled = commands.model_config_requires_decoupled_perf_analyzer_mode(config)
+    prepared_input = commands.prepare_input_data_for_perf_analyzer(target.input_data, decoupled=decoupled)
+    input_arg = commands.direct_perf_input_argument(prepared_input or "")
     if prepared_input and input_arg is None:
         input_arg = "/perf-input/input.json"
     run_id = uuid4().hex
-    namespace = commands._perf_analyzer_namespace()
+    namespace = commands.perf_analyzer_namespace()
     run = ModelPerfJobEntity(
         id=run_id, instance_id=instance_id, model_name=target.model_name, model_version=target.model_version,
         image=request.image or default_image(), namespace=namespace, job_name=f"model-perf-{run_id}",
         pull_secret=bool(request.dockerconfigjson), input_data=prepared_input,
-        batch_size=commands._effective_perf_analyzer_batch_size(target, decoupled=decoupled),
+        batch_size=commands.effective_perf_analyzer_batch_size(target, decoupled=decoupled),
         concurrency_range=target.concurrency_range, measurement_request_count=target.measurement_request_count,
-        command=commands._run_command(target, instance, perf_analyzer_namespace=namespace,
+        command=commands.run_command(target, instance, perf_analyzer_namespace=namespace,
                                       input_data_arg=input_arg, decoupled=decoupled),
     )
     repo.reserve(session, run)
@@ -106,7 +106,7 @@ def status(
         reconcile(session, current.id)
     current = repo.active(session, instance_id, model_name)
     latest = repo.latest(session, instance_id, model_name, version)
-    previous = commands.get_latest_perf_analyzer_run(
+    previous = installer.get_latest_perf_analyzer_run(
         RunPerfAnalyzerRequest(instance_id=instance_id, model_name=model_name, model_version=version), session, claims,
     )
     return ModelPerfStatusResponse(
@@ -183,9 +183,12 @@ def reconcile_active(session: Session, run: ModelPerfJobEntity, api: Jobs) -> No
     if run.state == "stopping":
         if not run.stop_output_saved:
             try:
-                run.output = api.logs(run, pods) or run.output
+                logs = api.logs(run, pods)
+                run.output = logs.output or run.output
+                if logs.warning:
+                    run.message = f"Stopping benchmark. {logs.warning}"
             except Exception:
-                run.output += "\nPartial output unavailable: could not read pod logs before stopping."
+                run.message = "Stopping benchmark. Could not read pod logs; keeping previously captured output."
             run.stop_output_saved = True
             # Reconciliation commits this snapshot before a later pass deletes anything.
             return
@@ -193,9 +196,9 @@ def reconcile_active(session: Session, run: ModelPerfJobEntity, api: Jobs) -> No
         if job is None and not pods:
             finish(session, run, "cancelled", "Benchmark stopped.")
         return
-    output = api.logs(run, pods)
-    if output:
-        run.output = output
+    logs = api.logs(run, pods)
+    if logs.output:
+        run.output = logs.output
     if run.state == "creating":
         if not run.prepared:
             if (datetime.utcnow() - run.created_at).total_seconds() > 60:
@@ -244,6 +247,8 @@ def reconcile_active(session: Session, run: ModelPerfJobEntity, api: Jobs) -> No
         run.started_at = run.started_at or datetime.utcnow()
     else:
         run.message = pod_message(pods)
+    if logs.warning:
+        run.message = f"{run.message} {logs.warning}"
 
 
 def prepare_instance_deletion(session: Session, instance_id: int) -> None:

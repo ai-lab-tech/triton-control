@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
 
+import yaml  # type: ignore[import-untyped]
 from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
@@ -13,6 +16,13 @@ from app.services.kubernetes_client import api_client
 
 TIMEOUT = (5, 15)
 RUN_LABEL = "triton-control/run-id"
+_JOB_TEMPLATE = Path(__file__).with_name("perf_analyzer_job.yaml")
+
+
+@dataclass(frozen=True)
+class LogSnapshot:
+    output: str = ""
+    warning: str = ""
 
 
 def default_image() -> str:
@@ -25,35 +35,20 @@ def deadline_seconds() -> int:
 
 def manifest(run: ModelPerfJobEntity) -> dict[str, Any]:
     """Always create suspended; only a locked, active run can enable execution."""
-    labels = {"app": "model-perf-analyzer", RUN_LABEL: run.id}
-    pod: dict[str, Any] = {
-        "restartPolicy": "Never", "automountServiceAccountToken": False,
-        "securityContext": {
-            "runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001, "fsGroup": 10001,
-            "seccompProfile": {"type": "RuntimeDefault"},
-        },
-        "containers": [{
-            "name": "perf-analyzer", "image": run.image, "imagePullPolicy": "IfNotPresent",
-            "command": run.command,
-            "securityContext": {
-                "runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001,
-                "allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
-                "capabilities": {"drop": ["ALL"]},
-            },
-            "resources": {
-                "requests": {"cpu": os.getenv("PERF_ANALYZER_CPU_REQUEST", "250m"),
-                             "memory": os.getenv("PERF_ANALYZER_MEMORY_REQUEST", "512Mi")},
-                "limits": {"cpu": os.getenv("PERF_ANALYZER_CPU_LIMIT", "2"),
-                           "memory": os.getenv("PERF_ANALYZER_MEMORY_LIMIT", "2Gi")},
-            },
-            # These are private per-pod emptyDir mounts, not backend host temporary files.
-            "volumeMounts": [
-                {"name": "tmp", "mountPath": "/tmp"},  # nosec B108
-                {"name": "dshm", "mountPath": "/dev/shm"},  # nosec B108
-            ],
-        }],
-        "volumes": [{"name": "tmp", "emptyDir": {}}, {"name": "dshm", "emptyDir": {"medium": "Memory"}}],
-    }
+    # Parse a fresh object for every run so optional fields cannot leak between Jobs.
+    job = cast(dict[str, Any], yaml.safe_load(_JOB_TEMPLATE.read_text(encoding="utf-8")))
+    job["metadata"].update(name=run.job_name, namespace=run.namespace)
+    job["metadata"]["labels"][RUN_LABEL] = run.id
+    spec = job["spec"]
+    spec["activeDeadlineSeconds"] = deadline_seconds()
+    spec["template"]["metadata"]["labels"][RUN_LABEL] = run.id
+    pod = spec["template"]["spec"]
+    container = pod["containers"][0]
+    container.update(image=run.image, command=list(run.command))
+    for resource_type, suffix in (("requests", "REQUEST"), ("limits", "LIMIT")):
+        for resource in ("cpu", "memory"):
+            values = container["resources"][resource_type]
+            values[resource] = os.getenv(f"PERF_ANALYZER_{resource.upper()}_{suffix}", values[resource])
     if "/perf-input/input.json" in run.command:
         pod["volumes"].append({"name": "input", "secret": {"secretName": f"{run.job_name}-input"}})
         pod["containers"][0]["volumeMounts"].append({
@@ -61,15 +56,7 @@ def manifest(run: ModelPerfJobEntity) -> dict[str, Any]:
         })
     if run.pull_secret:
         pod["imagePullSecrets"] = [{"name": f"{run.job_name}-pull"}]
-    return {
-        "apiVersion": "batch/v1", "kind": "Job",
-        "metadata": {"name": run.job_name, "namespace": run.namespace, "labels": labels},
-        "spec": {
-            "suspend": True, "parallelism": 1, "completions": 1, "backoffLimit": 0,
-            "activeDeadlineSeconds": deadline_seconds(),
-            "template": {"metadata": {"labels": labels}, "spec": pod},
-        },
-    }
+    return job
 
 
 class Jobs:
@@ -140,8 +127,9 @@ class Jobs:
                 return []
             raise
 
-    def logs(self, run: ModelPerfJobEntity, pods: list[Any]) -> str:
+    def logs(self, run: ModelPerfJobEntity, pods: list[Any]) -> LogSnapshot:
         output = []
+        warnings = []
         for pod in pods:
             try:
                 value = self.core.read_namespaced_pod_log(
@@ -154,8 +142,8 @@ class Jobs:
                 if exc.status not in {400, 404}:
                     raise
                 if pod.status.phase in {"Succeeded", "Failed"}:
-                    output.append("Benchmark output unavailable: pod logs could not be recovered.")
-        return "\n".join(output)
+                    warnings.append("Benchmark output unavailable: pod logs could not be recovered.")
+        return LogSnapshot(output="\n".join(output), warning="\n".join(warnings))
 
     def delete_job(self, run: ModelPerfJobEntity, job: Any, pods: list[Any]) -> None:
         if job:

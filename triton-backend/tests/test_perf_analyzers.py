@@ -7,7 +7,7 @@ from unittest.mock import ANY, patch
 
 from app.repositories import perf_analyzer as perf_repo
 from app.schemas import RunPerfAnalyzerRequest
-from app.services.perf_analyzer import installer
+from app.services.perf_analyzer import commands, installer
 
 
 class PerfAnalyzerCommandTests(unittest.TestCase):
@@ -69,7 +69,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-admin",
         )
@@ -84,7 +84,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="perf-analyzer",
         )
@@ -94,7 +94,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
     def test_PerfAnalyzerTarget_ExternalInstance_UsesRegisteredTritonUrl(self) -> None:
         instance = SimpleNamespace(url="https://triton.example.local/triton", is_self_deployed=False)
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="perf-analyzer",
         )
@@ -109,7 +109,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-admin",
         )
@@ -124,7 +124,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-control",
         )
 
-        target = installer._perf_analyzer_target(
+        target = commands._perf_analyzer_target(
             instance,
             perf_analyzer_namespace="triton-control",
         )
@@ -134,7 +134,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
     def test_PerfAnalyzerProtocol_ExternalHttpsInstance_UsesHttpTransportFlag(self) -> None:
         instance = SimpleNamespace(url="https://triton.example.local:8443", is_self_deployed=False)
 
-        protocol = installer._perf_analyzer_protocol(instance, target="triton.example.local:8443")
+        protocol = commands._perf_analyzer_protocol(instance, target="triton.example.local:8443")
 
         self.assertEqual(protocol, "HTTP")
 
@@ -147,7 +147,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
         )
         instance = SimpleNamespace(url="https://triton.example.local:8443", is_self_deployed=False)
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="perf", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="perf", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -166,7 +166,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -185,7 +185,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_namespace="triton-admin",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-admin", decoupled=False)
 
         self.assertIn("-i", command)
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -207,10 +207,10 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
         )
 
         with patch(
-            "app.services.perf_analyzer.installer._fetch_triton_model_config",
+            "app.services.perf_analyzer.commands.fetch_triton_model_config",
             return_value={"backend": "vllm"},
         ):
-            command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control")
+            command = commands.run_command(request, instance, perf_analyzer_namespace="triton-control")
 
         self.assertEqual(command[command.index("-u") + 1], "opt125m-service.triton-control.svc.cluster.local:18001")
         self.assertEqual(command[command.index("-i") + 1], "grpc")
@@ -233,7 +233,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             deployment_log="Image: nvcr.io/nvidia/tritonserver:25.12-trtllm-python-py3",
         )
 
-        command = installer._run_command(request, instance, perf_analyzer_namespace="triton-control", decoupled=False)
+        command = commands.run_command(request, instance, perf_analyzer_namespace="triton-control", decoupled=False)
 
         self.assertEqual(command[command.index("-u") + 1], "trtllm-service.triton-control.svc.cluster.local:18000")
         self.assertEqual(command[command.index("-i") + 1], "HTTP")
@@ -241,10 +241,10 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
         self.assertNotIn("--streaming", command)
 
     def test_DirectPerfInputArgument_ModeAndPath_ReturnsDirectArgument(self) -> None:
-        self.assertEqual(installer._direct_perf_input_argument("zero"), "zero")
-        self.assertEqual(installer._direct_perf_input_argument("random"), "random")
-        self.assertEqual(installer._direct_perf_input_argument("/tmp/pa_input.json"), "/tmp/pa_input.json")
-        self.assertIsNone(installer._direct_perf_input_argument('{"data":[]}'))
+        self.assertEqual(commands.direct_perf_input_argument("zero"), "zero")
+        self.assertEqual(commands.direct_perf_input_argument("random"), "random")
+        self.assertEqual(commands.direct_perf_input_argument("/tmp/pa_input.json"), "/tmp/pa_input.json")
+        self.assertIsNone(commands.direct_perf_input_argument('{"data":[]}'))
 
     def test_PrepareInputData_DecoupledVllmGeneratePayload_ConvertsToPerfAnalyzerData(self) -> None:
         raw = (
@@ -252,7 +252,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
             '{"stream":false,"max_tokens":512,"temperature":0.6,"top_p":0.95}}'
         )
 
-        prepared = installer._prepare_input_data_for_perf_analyzer(raw, decoupled=True)
+        prepared = commands.prepare_input_data_for_perf_analyzer(raw, decoupled=True)
 
         self.assertIsNotNone(prepared)
         parsed = json.loads(prepared or "{}")
@@ -274,7 +274,7 @@ class PerfAnalyzerCommandTests(unittest.TestCase):
         )
         instance = SimpleNamespace(url="http://triton.example.local:8000", is_self_deployed=False)
 
-        command = installer._run_command(
+        command = commands.run_command(
             request,
             instance,
             perf_analyzer_namespace="perf",

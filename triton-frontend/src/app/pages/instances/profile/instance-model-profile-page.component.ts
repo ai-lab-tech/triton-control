@@ -6,6 +6,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
+import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
@@ -30,6 +31,7 @@ import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-mona
     RouterLink,
     MatButtonModule,
     MatCardModule,
+    MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -82,7 +84,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
   readonly activeRun = signal<ModelPerfRunResponse | null>(null);
   readonly latestRun = signal<ModelPerfRunResponse | null>(null);
   readonly output = signal("");
-  readonly running = computed(() => !!this.activeRun());
+  readonly hasActiveRun = computed(() => !!this.activeRun());
   readonly error = computed(() => this.actionError() || this.statusError());
   private timer?: ReturnType<typeof setTimeout>;
   private generation = 0;
@@ -123,7 +125,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
       this.hasValidRoute() &&
       !this.loadingStatus() &&
       !this.statusError() &&
-      !this.running() &&
+      !this.hasActiveRun() &&
       !this.busy() &&
       !!this.image.trim() &&
       Number.isInteger(Number(this.batchSize)) &&
@@ -241,14 +243,14 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
         active || latest ? (active || latest)!.output || "" : status.latest_result.output || "",
       );
       if (this.restoredKey !== key) {
-        const saved =
-          active || latest || (status.latest_result.found ? status.latest_result : null);
+        const selectedRun = [active, latest].find((run) => run?.model_version === this.version());
+        const saved = selectedRun || (status.latest_result.found ? status.latest_result : null);
         if (saved) {
           this.batchSize = saved.batch_size ?? 1;
           this.concurrencyRange = saved.concurrency_range ?? "1";
           this.measurementRequestCount = saved.measurement_request_count ?? 50;
           this.inputData = this.normalizeLegacyInputData(saved.input_data);
-          if (active || latest) this.image = (active || latest)!.image;
+          if (selectedRun) this.image = selectedRun.image;
         }
         this.restoredKey = key;
       }

@@ -23,7 +23,7 @@ from app.repositories import perf_jobs as repo
 from app.schemas.perf_jobs import StartModelPerfRequest
 from app.services.deployment import deployment
 from app.services.perf_analyzer import jobs
-from app.services.perf_analyzer.jobs_kubernetes import RUN_LABEL, Jobs, manifest
+from app.services.perf_analyzer.jobs_kubernetes import RUN_LABEL, Jobs, LogSnapshot, manifest
 
 
 def make_run(model="model-a", version="1", instance_id=1):
@@ -65,7 +65,7 @@ class PerfLifecycleTests(unittest.TestCase):
         self.api = MagicMock(spec=Jobs)
         self.api.read.return_value = None
         self.api.pods.return_value = []
-        self.api.logs.return_value = ""
+        self.api.logs.return_value = LogSnapshot()
         self.api.cleanup.return_value = True
         self.patcher = patch.object(jobs, "Jobs", return_value=self.api)
         self.patcher.start()
@@ -73,7 +73,7 @@ class PerfLifecycleTests(unittest.TestCase):
         self.access = patch.object(jobs, "get_instance_or_404", return_value=self.session.get(TritonInstanceEntity, 1))
         self.access.start()
         self.addCleanup(self.access.stop)
-        self.config = patch.object(jobs.commands, "_fetch_triton_model_config", return_value={"backend": "onnxruntime"})
+        self.config = patch.object(jobs.commands, "fetch_triton_model_config", return_value={"backend": "onnxruntime"})
         self.config.start()
         self.addCleanup(self.config.stop)
 
@@ -151,7 +151,7 @@ class PerfLifecycleTests(unittest.TestCase):
         self.session.commit()
         self.api.read.return_value = fake_job(run)
         self.api.pods.return_value = [fake_pod()]
-        self.api.logs.return_value = "partial output"
+        self.api.logs.return_value = LogSnapshot(output="partial output")
         response = jobs.stop(self.session, {}, 1, "model-a", run.id)
         self.assertEqual(response.state, "stopping")
         self.api.delete_job.assert_not_called()
@@ -185,7 +185,7 @@ class PerfLifecycleTests(unittest.TestCase):
         self.session.commit()
         self.api.read.return_value = fake_job(run, conditions=[NS(type="Complete", status="True")])
         self.api.pods.return_value = [fake_pod("Succeeded", 0)]
-        self.api.logs.return_value = "throughput: 123"
+        self.api.logs.return_value = LogSnapshot(output="throughput: 123")
         jobs.reconcile(self.session, run.id)
         self.assertEqual(run.state, "succeeded")
         self.api.cleanup.assert_not_called()
@@ -194,6 +194,35 @@ class PerfLifecycleTests(unittest.TestCase):
         jobs.reconcile(self.session, run.id)
         self.assertTrue(run.cleaned)
         self.reserve()
+
+    def test_unavailable_final_logs_preserve_previously_captured_output(self):
+        for status in (400, 404):
+            with self.subTest(status=status):
+                run = self.reserve(model=f"model-{status}")
+                run.state = "running"
+                run.output = "captured throughput: 123"
+                self.session.add(run)
+                self.session.commit()
+                pods = [fake_pod("Succeeded", 0)]
+                reader = Jobs.__new__(Jobs)
+                reader.core = MagicMock()
+                reader.core.read_namespaced_pod_log.side_effect = ApiException(status=status)
+                self.api.logs.return_value = reader.logs(run, pods)
+                self.api.read.return_value = fake_job(run, conditions=[NS(type="Complete", status="True")])
+                self.api.pods.return_value = pods
+
+                jobs.reconcile(self.session, run.id)
+
+                self.assertEqual(run.state, "succeeded")
+                self.assertEqual(run.output, "captured throughput: 123")
+                self.assertIn("pod logs could not be recovered", run.message)
+                saved = self.session.exec(select(PerfAnalyzerRunEntity).where(
+                    PerfAnalyzerRunEntity.model_name == run.model_name,
+                )).one()
+                self.assertEqual(saved.output, run.output)
+                jobs.reconcile(self.session, run.id)
+                self.assertTrue(run.cleaned)
+                self.assertEqual(run.output, "captured throughput: 123")
 
     def test_outage_does_not_release_slot(self):
         run = self.reserve()
@@ -318,7 +347,38 @@ class PerfManifestTests(unittest.TestCase):
         self.assertTrue(security["readOnlyRootFilesystem"])
         self.assertEqual(security["capabilities"]["drop"], ["ALL"])
         self.assertEqual(pod["volumes"][-1]["secret"]["secretName"], a.job_name + "-input")
+        self.assertEqual(pod["imagePullSecrets"], [{"name": a.job_name + "-pull"}])
         self.assertNotIn(a.id, str(manifest(b)))
+        plain_pod = manifest(b)["spec"]["template"]["spec"]
+        self.assertNotIn("imagePullSecrets", plain_pod)
+        self.assertEqual([volume["name"] for volume in plain_pod["volumes"]], ["tmp", "dshm"])
+
+    def test_manifest_preserves_dynamic_values_and_resource_overrides(self):
+        run = make_run()
+        run.image = "registry.example:5000/sdk:test"
+        run.command += ["--input-data", "a: b\n# literal command argument"]
+        with patch.dict(os.environ, {
+            "PERF_ANALYZER_CPU_REQUEST": "500m",
+            "PERF_ANALYZER_MEMORY_REQUEST": "1Gi",
+            "PERF_ANALYZER_CPU_LIMIT": "4",
+            "PERF_ANALYZER_MEMORY_LIMIT": "4Gi",
+            "PERF_ANALYZER_DEADLINE_SECONDS": "120",
+        }):
+            value = manifest(run)
+        self.assertEqual(value["metadata"]["name"], run.job_name)
+        self.assertEqual(value["metadata"]["namespace"], run.namespace)
+        self.assertEqual(value["metadata"]["labels"][RUN_LABEL], run.id)
+        self.assertEqual(value["spec"]["template"]["metadata"]["labels"][RUN_LABEL], run.id)
+        self.assertEqual(value["spec"]["activeDeadlineSeconds"], 120)
+        container = value["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["image"], run.image)
+        self.assertEqual(container["command"], run.command)
+        self.assertEqual(container["resources"], {
+            "requests": {"cpu": "500m", "memory": "1Gi"},
+            "limits": {"cpu": "4", "memory": "4Gi"},
+        })
+        container["command"].append("mutated")
+        self.assertNotIn("mutated", run.command)
 
     def test_deletion_uses_exact_uid_and_rejects_foreign_resources(self):
         api = Jobs.__new__(Jobs)

@@ -114,6 +114,55 @@ describe("Model Perf jobs", () => {
     expect(component.canRun()).toBeTrue();
   }));
 
+  it("restores only the selected version's settings while another version is active", fakeAsync(() => {
+    const otherVersion = {
+      ...run("running", "2"),
+      image: "sdk:other",
+      batch_size: 8,
+      input_data: '{"data":[{"OTHER":[2]}]}',
+    };
+    const selectedVersion = {
+      ...run("succeeded", "1"),
+      image: "sdk:selected",
+      batch_size: 2,
+      concurrency_range: "2:4",
+      measurement_request_count: 100,
+      input_data: '{"data":[{"SELECTED":[1]}]}',
+    };
+    api.getModelPerfStatus.and.returnValue(
+      of({
+        ...idle(),
+        active_run: otherVersion,
+        latest_run: selectedVersion,
+      }),
+    );
+    mount();
+    flushMicrotasks();
+    expect(component.activeRun()?.model_version).toBe("2");
+    expect(component.hasActiveRun()).toBeTrue();
+    expect(component.canRun()).toBeFalse();
+    expect(component.image).toBe("sdk:selected");
+    expect(component.batchSize).toBe(2);
+    expect(component.concurrencyRange).toBe("2:4");
+    expect(component.measurementRequestCount).toBe(100);
+    expect(component.inputData).toBe(selectedVersion.input_data);
+  }));
+
+  it("keeps defaults when only another version has a saved run", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(
+      of({
+        ...idle(),
+        active_run: { ...run("running", "2"), image: "sdk:other", batch_size: 8 },
+      }),
+    );
+    mount();
+    flushMicrotasks();
+    expect(component.image).toBe("sdk:test");
+    expect(component.batchSize).toBe(1);
+    expect(component.inputData).toBe("");
+    expect(component.canRun()).toBeFalse();
+  }));
+
   it("does not block another model and ignores the old model's late response", fakeAsync(() => {
     const pending = new Subject<ModelPerfStatusResponse>();
     api.getModelPerfStatus.and.returnValue(pending);

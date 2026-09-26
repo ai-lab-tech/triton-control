@@ -10,7 +10,29 @@
         <span class="breadcrumb-separator">/</span>
         <span aria-current="page">Perf {{ modelName() }}</span>
       </nav>
-      <div class="page-title">Model Perf</div>
+      <div class="profile-title-row">
+        <div class="page-title">Model Perf</div>
+        <div role="status" aria-live="polite">
+          @if (activeRun(); as run) {
+            <span class="benchmark-status" [class.benchmark-running]="run.state === 'running'">
+              <span class="material-icons" aria-hidden="true">{{
+                run.state === "running" ? "speed" : "hourglass_top"
+              }}</span>
+              @switch (run.state) {
+                @case ("running") {
+                  Benchmark running
+                }
+                @case ("stopping") {
+                  Stopping benchmark…
+                }
+                @default {
+                  Preparing benchmark…
+                }
+              }
+            </span>
+          }
+        </div>
+      </div>
       <p class="page-subtitle">{{ modelName() }} - Version {{ version() }}</p>
     </div>
 
@@ -24,30 +46,6 @@
           <div class="panel-hint">{{ run.message }}</div>
         </div>
       }
-      <div class="profile-grid">
-        <div class="form-row">
-          <label class="field-label" for="perf-image">Analyzer image</label>
-          <mat-form-field appearance="outline">
-            <input id="perf-image" matInput [(ngModel)]="image" [disabled]="running() || busy()" />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="perf-registry"
-            >Registry credentials (optional Docker config JSON)</label
-          >
-          <mat-form-field appearance="outline">
-            <textarea
-              id="perf-registry"
-              matInput
-              [(ngModel)]="dockerconfigjson"
-              [disabled]="running() || busy()"
-              autocomplete="off"
-              spellcheck="false"
-            ></textarea>
-          </mat-form-field>
-        </div>
-      </div>
-
       <div class="endpoint-list">
         <div class="endpoint-row">
           <span class="endpoint-label">Instance</span>
@@ -58,6 +56,37 @@
           <code class="endpoint-url">{{ modelName() }}:{{ version() }}</code>
         </div>
       </div>
+
+      <div class="form-row">
+        <label class="field-label" for="perf-image">Analyzer image</label>
+        <mat-form-field appearance="outline">
+          <input
+            id="perf-image"
+            matInput
+            [(ngModel)]="image"
+            [disabled]="hasActiveRun() || busy()"
+          />
+        </mat-form-field>
+      </div>
+
+      <mat-expansion-panel class="optional-settings mat-elevation-z0">
+        <mat-expansion-panel-header>
+          <mat-panel-title>Optional Registry credentials (Docker config JSON)</mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="form-row">
+          <label class="field-label" for="perf-registry">Docker config JSON</label>
+          <mat-form-field appearance="outline">
+            <textarea
+              id="perf-registry"
+              matInput
+              [(ngModel)]="dockerconfigjson"
+              [disabled]="hasActiveRun() || busy()"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+          </mat-form-field>
+        </div>
+      </mat-expansion-panel>
 
       <div class="profile-grid">
         <div class="form-row">
