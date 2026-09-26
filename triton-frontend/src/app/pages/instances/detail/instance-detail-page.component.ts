@@ -80,6 +80,7 @@ export class InstanceDetailPageComponent implements OnInit {
   private readonly deploymentLogPollingIntervalMs =
     environment.deploymentLogPollingIntervalMs ?? 5000;
   private readonly logsTabActive$ = new Subject<boolean>();
+  private deploymentLogsRequestPending = false;
 
   s3AccessKey = "";
   s3SecretKey = "";
@@ -366,10 +367,11 @@ export class InstanceDetailPageComponent implements OnInit {
   async loadDeploymentLogs(options: { showLoading?: boolean } = {}): Promise<void> {
     const showLoading = options.showLoading ?? true;
     const instance = this.instance();
-    if (!instance?.isSelfDeployed || this.deploymentLogsLoading()) {
+    if (!instance?.isSelfDeployed || this.deploymentLogsRequestPending) {
       return;
     }
 
+    this.deploymentLogsRequestPending = true;
     if (showLoading) {
       this.deploymentLogsLoading.set(true);
       this.deploymentLogsError.set("");
@@ -386,6 +388,7 @@ export class InstanceDetailPageComponent implements OnInit {
       this.deploymentLogsError.set(mapApiErrorMessage(error, "Failed to load deployment logs."));
       this.deploymentLogs.set("");
     } finally {
+      this.deploymentLogsRequestPending = false;
       if (showLoading) {
         this.deploymentLogsLoading.set(false);
       }
