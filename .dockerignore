@@ -17,3 +17,6 @@
 **/tls/*.pem
 charts
 swagger
+
+**/playwright-report
+**/test-results
