@@ -7,3 +7,6 @@ src/app/api/generated
 dist
 *.pem 
 coverage
+
+playwright-report/
+test-results/

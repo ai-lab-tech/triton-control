@@ -59,6 +59,7 @@ Project:
 
 - [Roadmap](roadmap.md): planned product changes for upcoming versions.
 - [Local Project Development](development.md): local Python/npm workflow, tests, and CI checks for Triton Control itself.
+- [User Authentication Smoke Tests](user-auth-smoke.md): additional-user provisioning, SMTP and manual invitations, local registration, OIDC, and role access checks.
 
 ## Main Components
 
