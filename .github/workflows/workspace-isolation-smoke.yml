@@ -1,0 +1,68 @@
+name: Workspace user isolation smoke
+
+on:
+  pull_request:
+    paths:
+      - "code-server-extensions/**"
+      - "triton-backend/app/api/auth_api.py"
+      - "triton-backend/app/main.py"
+      - "triton-backend/app/services/auth/**"
+      - "triton-backend/app/core/security.py"
+      - "triton-backend/app/core/identity.py"
+      - "triton-backend/app/services/development/**"
+      - "triton-backend/app/api/development_api.py"
+      - "triton-frontend/src/app/pages/development/**"
+      - "triton-frontend/e2e/workspace-isolation/**"
+      - "triton-frontend/package*.json"
+      - "charts/triton-control/**"
+      - "docker/**"
+      - "Dockerfile"
+      - ".github/workflows/workspace-isolation-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workspace-isolation-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: triton-frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.2
+      - name: Install kind
+        run: |
+          mkdir -p "$RUNNER_TEMP/kind-bin"
+          curl -fsSL https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64 -o "$RUNNER_TEMP/kind-bin/kind"
+          chmod +x "$RUNNER_TEMP/kind-bin/kind"
+          echo "$RUNNER_TEMP/kind-bin" >> "$GITHUB_PATH"
+      - name: Install test dependencies
+        run: |
+          npm ci --prefix triton-frontend
+          cd triton-frontend
+          npx playwright install --with-deps chromium
+      - name: Test per-user workspace isolation
+        run: bash triton-frontend/e2e/workspace-isolation/run.sh
+      - name: Upload browser traces and runtime logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-user-isolation
+          path: |
+            triton-frontend/test-results/
+            triton-frontend/playwright-report/
+          retention-days: 7

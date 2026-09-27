@@ -59,6 +59,7 @@ Project:
 
 - [Roadmap](roadmap.md): planned product changes for upcoming versions.
 - [Local Project Development](development.md): local Python/npm workflow, tests, and CI checks for Triton Control itself.
+- [Workspace Isolation Smoke Test](workspace-isolation-smoke.md): verify separate code-server pods and PVCs, access restrictions, and persistent files for two users.
 
 ## Main Components
 

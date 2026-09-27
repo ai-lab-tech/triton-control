@@ -30,6 +30,19 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.session["user"]["email"], "user@example.test")
         self.assertFalse(request.session["user"]["access_allowed"])
 
+    async def test_AuthMe_PreservesActivatedLocalCredentialVersion(self) -> None:
+        request = type("Request", (), {"session": {}})()
+        claims = {
+            "email": "member@example.test",
+            "auth_provider": "local",
+            "credential_version": 2,
+            "access_allowed": True,
+        }
+        await main.auth_me(request, claims)
+        # Cookie-authenticated workspace requests validate this value against
+        # the user's stored version after activation or a password reset.
+        self.assertEqual(request.session["user"]["credential_version"], 2)
+
     def test_Startup_InitializesDatabaseAndHealthRefresher(self) -> None:
         with patch("app.main.init_db") as init_db, patch.object(main.instance_health_refresher, "start") as start:
             main.on_startup()
