@@ -177,10 +177,12 @@ Authorization: Bearer <TRITON_CONTROL_TOKEN>
 
 S3-Credentials werden nicht an das Plugin übergeben.
 
-Das bereits für Argo vorhandene `artifactRepositoryRef` stellt dem
-Argo-Executor S3-Zugangsdaten bereit. Das Plugin liest dieses Secret nicht.
-Stattdessen löst Triton Control die übergebene `s3_profile_id`
-serverseitig auf.
+Der Argo-Executor benötigt ein `artifactRepositoryRef`, um Modell-Artefakte
+hochzuladen. Der authentifizierte Triton-Control-Proxy löst den Namen des
+ausgewählten S3-Profils auf und setzt den passenden Artifact-Repository-
+ConfigMap-Verweis selbst. Bucket und interne Profil-ID kommen ebenfalls aus
+dem Profil. Das Plugin liest keine S3-Secrets; die Deployment-API löst die
+übergebene `s3_profile_id` serverseitig auf.
 
 Die code-server-Extension ist die Referenz für die **vorhandenen API-Pfade und
 Benutzerrechte**: Ihr Webview ruft `POST /api/deployments` und
@@ -258,8 +260,9 @@ den eingeschränkten Token selbst.
 Die Workflow-Annotationen `triton-control.ai/mlflow-deploy-template`,
 `triton-control.ai/mlflow-deployment-name` und
 `triton-control.ai/mlflow-s3-profile-name` aktivieren die Delegation. Der Proxy
-löst den Profilnamen für den angemeldeten Benutzer auf, erstellt das kurzlebige
-Secret und injiziert den Token sowie `TRITON_CONTROL_S3_PROFILE_ID` in das
+löst den Profilnamen für den angemeldeten Benutzer auf, setzt den
+`artifactRepositoryRef`, erstellt das kurzlebige Secret und injiziert den
+Token, `TRITON_CONTROL_S3_PROFILE_ID` und `TRITON_CONTROL_S3_BUCKET` in das
 benannte Pod-Template. Die bisherige ID-Annotation bleibt kompatibel. Details stehen in der
 [Paket-README](README.md#argo-workflows).
 

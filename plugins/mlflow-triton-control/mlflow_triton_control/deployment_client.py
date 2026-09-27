@@ -110,7 +110,8 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
             time.sleep(min(3.0, max(0.0, deadline - time.monotonic())))
 
     def get_deployment(self, name):
-        return self._request("GET", f"/api/deployments/mlflow/{quote(name, safe='')}")
+        deployment = self._request("GET", f"/api/deployments/mlflow/{quote(name, safe='')}")
+        return {**deployment, "flavor": "triton"}
 
     def list_deployments(self):
         return self._request("GET", "/api/deployments/mlflow")

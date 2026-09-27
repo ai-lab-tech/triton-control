@@ -49,6 +49,7 @@ class DeploymentClientTests(unittest.TestCase):
                     config={"s3_profile_id": 7, "image": "triton:latest"},
                 )
         self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["flavor"], "triton")
         payload = request.call_args_list[0].kwargs["json"]
         self.assertEqual(payload["repository_prefix"], "dev")
         self.assertEqual(payload["model_name"], "iris_classifier")

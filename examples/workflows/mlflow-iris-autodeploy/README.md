@@ -35,7 +35,7 @@ Build the package from the repository root and copy the Wheel into the example:
 
 ```bash
 python -m build --wheel plugins/mlflow-triton-control
-cp plugins/mlflow-triton-control/dist/mlflow_triton_control-0.1.0-py3-none-any.whl \
+cp plugins/mlflow-triton-control/dist/mlflow_triton_control-0.1.1-py3-none-any.whl \
   examples/workflows/mlflow-iris-autodeploy/wheels/
 git add examples/workflows/mlflow-iris-autodeploy/wheels/
 git commit -m "build(mlflow): update example wheel"
@@ -64,13 +64,15 @@ Edit [workflow.yaml](workflow.yaml) before submitting it:
 | --- | --- |
 | `metadata.name` | A fixed, unused Kubernetes workflow name |
 | `metadata.annotations/...s3-profile-name` | Name of your S3 profile |
-| `artifactRepositoryRef.configMap` | ConfigMap shown by **Configure S3 Secrets** |
 | `github-ref` | Pushed GitHub ref containing `train.py` and the built plugin Wheel |
 | `mlflow-tracking-uri` | Internal MLflow service URL |
 | `triton-control-target` | `triton-control://` URI for the backend service and API port |
-| `s3-bucket` | Bucket from the selected S3 profile |
 | `repository-prefix` | Parent directory for Triton models in that bucket |
 | `triton-image` | Triton server image used for the deployment |
+
+Triton Control resolves the selected profile's linked Argo artifact-repository
+ConfigMap and bucket when the authenticated proxy receives the workflow. No
+ConfigMap name or bucket parameter is needed in this manifest.
 
 The MLflow deployment name is `iris-classifier` in the annotation and the
 deployment command. The Triton model name is `iris_classifier` in `train.py`,
@@ -92,10 +94,12 @@ proxy. A direct request to Argo Server bypasses deployment-token injection.
 
 For an opted-in workflow, Triton Control:
 
-1. resolves the annotated S3 profile name for the current user;
+1. resolves the annotated S3 profile name and its linked Argo artifact
+   repository for the current user;
 2. creates a short-lived token limited to `iris-classifier` and that profile;
 3. injects `TRITON_CONTROL_TOKEN` through a temporary Kubernetes Secret and
-   `TRITON_CONTROL_S3_PROFILE_ID` into the `deploy` template;
+   injects `TRITON_CONTROL_S3_PROFILE_ID` and `TRITON_CONTROL_S3_BUCKET` into
+   the `deploy` template;
 4. attaches the Secret to the Workflow for garbage collection.
 
 The `train` task records parameters, accuracy, tags, an MLflow sklearn model,

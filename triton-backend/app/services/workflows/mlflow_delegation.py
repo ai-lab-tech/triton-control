@@ -14,8 +14,9 @@ from app.core.identity import require_user_entity
 from app.core.user_auth import issue_access_token
 from app.db.database import session_factory
 from app.exceptions import BadRequestError, NotFoundError
-from app.repositories import s3_profiles
+from app.repositories import s3_profiles, workflow_s3_credentials
 from app.services.kubernetes_client import api_client, in_cluster_namespace
+from app.services.workflows.artifact_repository import REPOSITORY_KEY
 
 _SUBMIT_PATH = re.compile(r"api/v1/workflows/([a-z0-9-]+)\Z")
 _DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -68,8 +69,24 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if profile is None:
             raise NotFoundError("S3 profile not found")
         profile_id = profile.id or 0
+        profile_bucket = profile.bucket
+        linked_repositories = [
+            row for row in workflow_s3_credentials.list_for_profile(session, profile_id)
+            if row.namespace == namespace
+        ]
+        if not linked_repositories:
+            raise BadRequestError(
+                "Link the selected S3 profile under Workflows -> Configure S3 Secrets before submitting this workflow"
+            )
+        if len(linked_repositories) > 1:
+            raise BadRequestError("The selected S3 profile has multiple Argo artifact repositories in this namespace")
+        repository_config_map = linked_repositories[0].secret_name
 
     spec = workflow.get("spec") or {}
+    spec["artifactRepositoryRef"] = {
+        "configMap": repository_config_map,
+        "key": REPOSITORY_KEY,
+    }
     templates = spec.get("templates") or []
     selected = next((item for item in templates if item.get("name") == template_name), None)
     if not isinstance(selected, dict):
@@ -78,7 +95,11 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
     if not isinstance(pod_template, dict):
         raise BadRequestError("MLflow deployment template must be a script or container")
     environment = pod_template.setdefault("env", [])
-    reserved_env = {"TRITON_CONTROL_TOKEN", "TRITON_CONTROL_S3_PROFILE_ID"}
+    reserved_env = {
+        "TRITON_CONTROL_TOKEN",
+        "TRITON_CONTROL_S3_PROFILE_ID",
+        "TRITON_CONTROL_S3_BUCKET",
+    }
     if any(item.get("name") in reserved_env for item in environment):
         raise BadRequestError("A managed Triton Control environment variable is already set")
 
@@ -109,6 +130,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "token"}},
     })
     environment.append({"name": "TRITON_CONTROL_S3_PROFILE_ID", "value": str(profile_id)})
+    environment.append({"name": "TRITON_CONTROL_S3_BUCKET", "value": profile_bucket})
     # The workflow and its temporary credential are garbage-collected together.
     spec.setdefault("ttlStrategy", {}).setdefault("secondsAfterCompletion", 300)
     return json.dumps(payload).encode("utf-8"), secret_name, namespace

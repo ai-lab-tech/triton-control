@@ -10,18 +10,13 @@ metadata:
     triton-control.ai/mlflow-deploy-template: deploy
     triton-control.ai/mlflow-deployment-name: iris-classifier
     # Name of an S3 profile owned by the user submitting this workflow.
-    triton-control.ai/mlflow-s3-profile-name: workflow-training
+    triton-control.ai/mlflow-s3-profile-name: qwen3_30b_a3b
 spec:
   entrypoint: pipeline
-  artifactRepositoryRef:
-    # Copy this name from Workflows -> Configure S3 Secrets.
-    configMap: workflow-s3-training-a1b2c3
-    key: repository
-  podGC:
-    strategy: OnPodCompletion
+  # Keep completed pods available while debugging the training/deployment logs.
   ttlStrategy:
-    secondsAfterCompletion: 300
-    secondsAfterFailure: 300
+    secondsAfterCompletion: 86400
+    secondsAfterFailure: 86400
   arguments:
     parameters:
       - name: github-ref
@@ -30,8 +25,6 @@ spec:
         value: http://mlflow-service:5000
       - name: triton-control-target
         value: triton-control://triton-control:8000
-      - name: s3-bucket
-        value: triton-models
       - name: repository-prefix
         value: triton/development
       - name: triton-image
@@ -105,13 +98,15 @@ spec:
           - |
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
-              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/wheels/mlflow_triton_control-0.1.0-py3-none-any.whl"
+              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/wheels/mlflow_triton_control-0.1.1-py3-none-any.whl"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             export PATH="/tmp/python-packages/bin:$PATH"
+            : "${TRITON_CONTROL_S3_BUCKET:?S3 bucket was not injected from the selected S3 profile}"
+            : "${TRITON_CONTROL_S3_PROFILE_ID:?S3 profile ID was not injected from the selected S3 profile}"
             mlflow deployments create \
               --target "{{workflow.parameters.triton-control-target}}" \
               --name iris-classifier \
-              --model-uri "s3://{{workflow.parameters.s3-bucket}}/{{workflow.parameters.repository-prefix}}/iris_classifier" \
+              --model-uri "s3://$TRITON_CONTROL_S3_BUCKET/{{workflow.parameters.repository-prefix}}/iris_classifier" \
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600

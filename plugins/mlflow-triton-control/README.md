@@ -11,8 +11,23 @@ python -m pip install dist/mlflow_triton_control-*.whl
 mlflow deployments help -t triton-control
 ```
 
-See [the requirements](mlflow-triton-plugin-requirements.md) for the target URI,
-authentication, API extensions and current feature boundaries.
+## How MLflow finds the plugin
+
+`mlflow deployments create` is a command provided by MLflow. This package
+registers the deployment target through its Python package metadata:
+
+```toml
+[project.entry-points."mlflow.deployments"]
+triton-control = "mlflow_triton_control.deployment_client"
+```
+
+For `--target triton-control://triton-control:8000`, MLflow looks up the
+`triton-control` entry point among installed packages, loads this module, and
+calls `TritonControlDeploymentClient.create_deployment()`. That class inherits
+from MLflow's `BaseDeploymentClient` and sends the deployment request to the
+Triton Control API. MLflow reads entry-point metadata; it does not search
+through every package's source files. The package must be installed in the
+same Python environment as the `mlflow` CLI.
 
 ## Argo Workflows
 
@@ -28,9 +43,10 @@ metadata:
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-The backend resolves the profile name for the submitting user. It creates
-a temporary token Secret and injects `TRITON_CONTROL_TOKEN` and
-`TRITON_CONTROL_S3_PROFILE_ID` into the named `script` or `container` template.
+The backend resolves the profile name and its linked Argo artifact repository
+for the submitting user. It sets `spec.artifactRepositoryRef` and injects
+`TRITON_CONTROL_TOKEN`, `TRITON_CONTROL_S3_PROFILE_ID`, and
+`TRITON_CONTROL_S3_BUCKET` into the named `script` or `container` template.
 Use the injected ID with `-C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID"`.
 The token is valid for 60 minutes and limited
 to the specified deployment and S3 profile. The Workflow receives a five-minute

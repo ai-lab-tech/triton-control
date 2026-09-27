@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.user_auth import verify_access_token
-from app.db.entities import S3ProfileEntity, UserEntity
+from app.db.entities import S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
 from app.exceptions import BadRequestError, NotFoundError
 from app.services.workflows import mlflow_delegation
 
@@ -23,6 +23,11 @@ class WorkflowDelegationTests(unittest.TestCase):
             session.add(S3ProfileEntity(
                 id=11, owner_user_id=7, name="models", endpoint="https://s3.example.test",
                 bucket="triton-models", access_key="access", secret_key_enc="secret",
+            ))
+            session.add(WorkflowS3CredentialEntity(
+                id=21, created_by_user_id=7, name="models", namespace="triton-control",
+                secret_name="workflow-s3-models", access_key_id="access",
+                s3_profile_id=11, s3_profile_name="models",
             ))
             session.commit()
 
