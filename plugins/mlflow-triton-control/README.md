@@ -29,6 +29,35 @@ Triton Control API. MLflow reads entry-point metadata; it does not search
 through every package's source files. The package must be installed in the
 same Python environment as the `mlflow` CLI.
 
+## Log a Triton model in MLflow
+
+Like NVIDIA's Triton MLflow plugin, this package provides a `triton` model
+flavor for a complete Triton model directory. The directory must contain at
+least one numbered version; `config.pbtxt` may be included at
+its root. The MLflow Model contains an `MLmodel` file with a `triton` flavor
+entry and a copy of the entire directory under `model/`.
+
+```python
+from mlflow_triton_control import triton
+
+model_info = triton.log_model(
+    triton_model_path="/tmp/model-repository/iris_classifier",
+    name="triton-model",
+    registered_model_name="iris-serving",
+)
+print(model_info.registered_model_version)
+```
+
+`triton.load_model("models:/iris-serving/1")` downloads the registered model
+and returns the local Triton model directory. Omit `registered_model_name` to
+save a model without creating a Registry version. This API is in the plugin
+package, not in MLflow's `mlflow.triton` namespace.
+
+The current deployment client still accepts an already-published `s3://` Triton
+repository URI. Deploying directly from `models:/...` and copying that version
+to the selected S3 profile are separate planned changes. The current Iris
+workflow therefore continues to use the S3 URI.
+
 ## Argo Workflows
 
 Submit the workflow through Triton Control's authenticated Argo proxy. Mark the

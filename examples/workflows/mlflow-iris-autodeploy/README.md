@@ -17,6 +17,48 @@ The training step therefore performs the ONNX export and creates
 `config.pbtxt`; the deployment step passes the resulting S3 model URI to the
 plugin.
 
+## Planned Registry-Driven Flow
+
+The following is the agreed target design, **not the behavior of the current
+workflow**. The Triton logging API is available in package version 0.2.0;
+registry-based deployment and promotion are still planned:
+
+```text
+Argo Workflow
+
+1. Train and package
+   - Train the sklearn model; log parameters and metrics to an MLflow run.
+   - Save the sklearn checkpoint as an MLflow Logged Model, without registering
+     it as a Model Registry version. Keep its model ID for later runs.
+   - Export a complete Triton repository (for Iris: config.pbtxt and the ONNX
+     model) and log it with mlflow_triton_control.triton.log_model().
+   - Register only the Triton repository as a new model version.
+
+   Output: models:/<triton-model>/<fixed-version>
+                         |
+                         v
+2. Deploy
+   - Pass that exact version to `mlflow deployments create`.
+   - The deployment plugin downloads the registered Triton repository and
+     copies it to a version-specific path in the selected Triton S3 bucket.
+   - Triton Control creates the deployment; Triton loads the model.
+                         |
+                         v
+3. Verify and promote
+   - Run a real inference request as a smoke test.
+   - Record the result as a status tag on the Triton model version.
+   - Only after success, move the `champion` alias to that version.
+```
+
+Both the sklearn checkpoint and the registered Triton repository live in the
+MLflow artifact store. Only the Triton repository is registered; the S3 copy
+is used for serving. Link the checkpoint's model ID, the training run ID, and
+the Triton registry version so the deployed model can be traced back to its
+training run. Because the registry version already contains a complete Triton
+repository, deployment does not need to infer a training flavor or task. The
+logging function belongs to the `mlflow-triton-control` package; it is not an
+`mlflow.triton.log_model()` API.
+
 ## Prerequisites
 
 - MLflow and Argo Workflows are enabled in Triton Control.
