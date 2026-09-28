@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import secrets
 import shlex
 import sys
 import zipfile
@@ -218,6 +219,7 @@ def _manifests(
             statefulset_name,
             service_name,
             labels,
+            secret_name=secret_name,
             runtime_class_name=runtime_class_name,
         ),
         _service_manifest(namespace, service_name, labels),
@@ -233,7 +235,7 @@ def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
         "kind": "Secret",
         "metadata": {"name": secret_name, "namespace": namespace},
         "type": "Opaque",
-        "stringData": {"AUTH_MODE": "triton-control-proxy"},
+        "stringData": {"AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32)},
     }
 
 
@@ -244,6 +246,7 @@ def _statefulset_manifest(
     service_name: str,
     labels: dict[str, str],
     *,
+    secret_name: str | None = None,
     runtime_class_name: str | None = None,
 ) -> dict[str, Any]:
     if request.image_has_code_server:
@@ -281,6 +284,12 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
         +
+        'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
+        'CODE_SERVER_ROOT=$(dirname "$(dirname "$CODE_SERVER_ENTRY")"); '
+        'CODE_SERVER_NODE="$CODE_SERVER_ROOT/lib/node"; '
+        'if [ ! -x "$CODE_SERVER_NODE" ]; then CODE_SERVER_NODE=$(command -v node); fi; '
+        '"$CODE_SERVER_NODE" /opt/triton-control/extensions/triton-deploy/code-server-s3-dnd.js '
+        '"$CODE_SERVER_ROOT" || { echo "Error: S3 drag-and-drop setup failed." >&2; exit 1; }; '
         "PERSISTENT_SETTINGS=/workspace/.triton-control/code-server-settings.json; "
         "PERSISTENT_EXTENSIONS=/workspace/.triton-control/code-server-extensions; "
         "DEFAULT_SETTINGS='{\"workbench.startupEditor\":\"none\","
@@ -336,12 +345,17 @@ def _statefulset_manifest(
         "'This persistent workspace is managed by Triton Control.' "
         "> /workspace/README.md; "
         "fi; "
+        "if [ ! -e /workspace/.triton-control/workspace.code-workspace ]; then "
+        "printf '%s\\n' '{\"folders\":[{\"path\":\"/workspace\",\"name\":\"workspace\"}]}' "
+        "> /workspace/.triton-control/workspace.code-workspace; "
+        "fi; "
         "exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080 --auth none "
         "--reconnection-grace-time 30 "
         "--disable-workspace-trust "
+        "--enable-proposed-api triton-control.triton-control-deploy "
         "--user-data-dir \"$CODE_SERVER_RUNTIME/user-data\" "
         "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
-        "/workspace"
+        "/workspace/.triton-control/workspace.code-workspace"
     )
 
     pod_spec: dict[str, Any] = {
@@ -370,12 +384,26 @@ def _statefulset_manifest(
                             "capabilities": {"drop": ["ALL"]},
                         },
                         "env": [
+                            {
+                                "name": "TRITON_CONTROL_PROFILE_URL",
+                                "value": (
+                                    os.getenv("DEVELOPMENT_PROFILE_API_URL", "http://triton-control:8000").rstrip("/")
+                                    + f"/api/development/workspace-s3-profiles/{namespace}/{statefulset_name}"
+                                ),
+                            },
+                            {
+                                "name": "TRITON_CONTROL_PROFILE_TOKEN",
+                                "valueFrom": {"secretKeyRef": {
+                                    "name": secret_name or f"{statefulset_name}-secret",
+                                    "key": "S3_PROFILE_TOKEN",
+                                }},
+                            },
                             {"name": "HOME", "value": "/workspace"},
                             {"name": "XDG_CONFIG_HOME", "value": "/workspace/.config"},
                             {"name": "XDG_DATA_HOME", "value": "/workspace/.local/share"},
                             {"name": "XDG_CACHE_HOME", "value": "/workspace/.cache"},
                             {"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"},
-                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"},
+                            {"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"},
                         ],
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "startupProbe": {
@@ -426,30 +454,6 @@ def _statefulset_manifest(
             },
         ],
     }
-    extra_ca_config_map = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP", "").strip()
-    if extra_ca_config_map:
-        extra_ca_key = os.getenv("DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY", "rootCA.pem").strip() or "rootCA.pem"
-        workspace_pod = pod_spec["template"]["spec"]
-        container = workspace_pod["containers"][0]
-        for env_var in container["env"]:
-            if env_var["name"] == "NODE_TLS_REJECT_UNAUTHORIZED":
-                env_var["value"] = "1"
-        container["env"].append({
-            "name": "NODE_EXTRA_CA_CERTS",
-            "value": "/etc/triton-control/code-server-ca/ca.pem",
-        })
-        container["volumeMounts"].append({
-            "name": "code-server-extra-ca",
-            "mountPath": "/etc/triton-control/code-server-ca",
-            "readOnly": True,
-        })
-        workspace_pod["volumes"].append({
-            "name": "code-server-extra-ca",
-            "configMap": {
-                "name": extra_ca_config_map,
-                "items": [{"key": extra_ca_key, "path": "ca.pem"}],
-            },
-        })
     image_pull_secret = _image_pull_secret_name(statefulset_name)
     if request.dockerconfigjson:
         pod_spec["template"]["spec"]["imagePullSecrets"] = [{"name": image_pull_secret}]
@@ -477,6 +481,7 @@ def _triton_deploy_extension_configmap(namespace: str, statefulset_name: str) ->
         "apiVersion": "v1",
         "kind": "ConfigMap",
         "data": {
+            "code-server-s3-dnd.js": (extension_dir / "code-server-s3-dnd.js").read_text(encoding="utf-8"),
             "triton-control-deploy.vsix.b64": _triton_deploy_extension_vsix_b64(extension_dir, package_json),
         },
         "immutable": False,
@@ -496,6 +501,12 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/profile-api.js": (extension_dir / "profile-api.js").read_text(encoding="utf-8"),
+        "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
+        "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),
+        "extension/s3-filesystem.js": (extension_dir / "s3-filesystem.js").read_text(encoding="utf-8"),
+        "extension/s3-transfers.js": (extension_dir / "s3-transfers.js").read_text(encoding="utf-8"),
+        "extension/s3-files.js": (extension_dir / "s3-files.js").read_text(encoding="utf-8"),
         "extension/scaffold.js": (extension_dir / "scaffold.js").read_text(encoding="utf-8"),
         "extension/workspace-repositories.js": (
             extension_dir / "workspace-repositories.js"

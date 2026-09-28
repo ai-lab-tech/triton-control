@@ -148,10 +148,37 @@ When the pod leaves `PodInitializing`, retry the logs or inference request. If
 it stays there, inspect the events in `describe pod` for image pull, volume, or
 S3 sync errors.
 
-## code-server Plugin Window Does Not Open
+## code-server S3 Connection or Transfer Problems
 
-If the Development workspace loads but the **Triton Control Deploy** plugin
-window stays blank or the browser console shows this error:
+The bundled S3 browser lives in **Explorer**, beside the workspace folders.
+Right-click a workspace item and choose **S3 Operations → Choose Profile…**;
+when already connected, use **Switch Profile…**. Opening the submenu does not
+connect by itself. No connection tab or webview is needed.
+
+- Missing menus: check that **Triton Control Deploy** is installed in the
+  managed workspace, then reload. Older workspaces need the updated extension
+  and startup integration, not a separately installed S3 client.
+- Workspace integration/access errors: reopen the workspace through **Development**
+  and check the workspace Secret and profile endpoint configuration. Do not
+  paste access keys into the browser's connection settings.
+- S3 certificate or connection errors: check the selected saved profile's endpoint,
+  addressing mode, and CA certificate. The endpoint must be reachable from the
+  workspace pod. A shared `minio-root-ca` ConfigMap is not required by this browser.
+- Objects missing after an external upload: use **S3 Operations → Refresh** and
+  check the selected bucket and profile prefix. Folder drops preserve the outer
+  folder name; workflow keys must include the full prefix.
+- Unexpected move/copy defaults after an upgrade: check that the startup
+  customization succeeded and hard-refresh with **Ctrl+Shift+R**. It supports
+  the managed code-server **4.125.0** build; unsupported bundles fail startup.
+
+See [S3 Browser](development-workspaces.md#s3-profiles-and-s3-browser) for
+connection actions, transfer rules, limits, and upgrade requirements.
+
+## code-server Deployment Form Does Not Open
+
+These webview requirements apply to the full deployment form, not the native
+S3 browser. If the Development workspace loads but the **Triton Control Deploy**
+deployment form stays blank or the browser console shows this error:
 
 ```text
 'crypto.subtle' is not available so webviews will not work

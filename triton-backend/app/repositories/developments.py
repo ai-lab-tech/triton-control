@@ -55,3 +55,10 @@ def create(session: Session, **values: Any) -> CodeServerEntity:
 def delete(session: Session, row: CodeServerEntity) -> None:
     session.delete(row)
     session.commit()
+
+
+def find_by_workload(session: Session, namespace: str, statefulset_name: str) -> CodeServerEntity | None:
+    return session.exec(select(CodeServerEntity).where(
+        CodeServerEntity.namespace == namespace,
+        CodeServerEntity.statefulset_name == statefulset_name,
+    )).first()

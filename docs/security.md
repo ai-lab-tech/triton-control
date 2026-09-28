@@ -124,3 +124,17 @@ docker/proxy_headers.conf
 
 The `Host` header forwarded to the backend is fixed instead of passing through a
 client-controlled host value.
+
+## Managed Workspace S3 Access
+
+The native code-server S3 browser authenticates to its workspace-scoped profile
+endpoint using `TRITON_CONTROL_PROFILE_TOKEN`, injected from a Kubernetes Secret.
+The backend verifies the workspace owner and account status before returning
+profiles. This token is not accepted as general application API authentication.
+Processes in the workspace can use it to retrieve the owner's S3 profiles, so
+workspace code runs within that owner's storage access boundary.
+
+The extension uses S3 credentials in memory and does not persist them to editor
+settings or `.aws/credentials`. HTTPS verification uses the selected profile's
+CA certificate dynamically. Disconnecting removes the Explorer connection;
+it does not revoke the workspace token or the underlying S3 credentials.

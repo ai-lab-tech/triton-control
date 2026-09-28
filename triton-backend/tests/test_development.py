@@ -89,6 +89,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(secret["stringData"]["AUTH_MODE"], "triton-control-proxy")
         self.assertEqual(extension_configmap["kind"], "ConfigMap")
         self.assertIn("triton-control-deploy.vsix.b64", extension_configmap["data"])
+        self.assertIn("code-server-s3-dnd.js", extension_configmap["data"])
         self.assertEqual(statefulset["kind"], "StatefulSet")
         self.assertFalse(pod_spec["automountServiceAccountToken"])
         self.assertEqual(
@@ -112,13 +113,16 @@ class CodeServerTests(unittest.TestCase):
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
-        self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "0"}, container["env"])
+        self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3")
         self.assertIn("--version 4.125.0", container["args"][0])
+        self.assertIn("code-server-s3-dnd.js", container["args"][0])
+        self.assertLess(container["args"][0].index("code-server-s3-dnd.js"), container["args"][0].index('exec "$CODE_SERVER_BIN"'))
         self.assertIn("--method=standalone --prefix=\"$CODE_SERVER_RUNTIME\"", container["args"][0])
         self.assertIn("exec \"$CODE_SERVER_BIN\" --bind-addr 0.0.0.0:8080", container["args"][0])
         self.assertIn("--reconnection-grace-time 30", container["args"][0])
         self.assertIn("--disable-workspace-trust", container["args"][0])
+        self.assertIn("--enable-proposed-api triton-control.triton-control-deploy", container["args"][0])
         self.assertIn("--auth none", container["args"][0])
         self.assertIn("\"workbench.colorTheme\":\"Default Dark+\"", container["args"][0])
         self.assertIn("\"security.workspace.trust.enabled\":false", container["args"][0])
@@ -200,27 +204,22 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertIn("--version 4.126.0", container["args"][0])
 
-    def test_Manifests_MountsConfiguredCaAndEnablesVerification(self) -> None:
-        for key in ("rootCA.pem", "custom.pem"):
-            with self.subTest(key=key), patch.dict("os.environ", {
-                "DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP": "minio-root-ca",
-                "DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY": key,
-            }):
-                manifests = k8s._manifests(
-                    self._request(), "triton-control", "code-7-dev-workspace",
-                    "code-7-dev-workspace-svc", "code-7-dev-workspace-secret",
-                )
-            pod = manifests[2]["spec"]["template"]["spec"]
-            container = pod["containers"][0]
-            env = {item["name"]: item["value"] for item in container["env"]}
-            self.assertEqual(env["NODE_TLS_REJECT_UNAUTHORIZED"], "1")
-            mount = next(m for m in container["volumeMounts"] if m["name"] == "code-server-extra-ca")
-            self.assertTrue(mount["readOnly"])
-            volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
-            self.assertEqual(volume["configMap"], {
-                "name": "minio-root-ca", "items": [{"key": key, "path": "ca.pem"}],
-            })
-            self.assertEqual(env["NODE_EXTRA_CA_CERTS"], mount["mountPath"] + "/ca.pem")
+    def test_Manifests_IgnoresLegacyGlobalCaConfiguration(self) -> None:
+        with patch.dict("os.environ", {
+            "DEVELOPMENT_CODE_SERVER_EXTRA_CA_CONFIG_MAP": "minio-root-ca",
+            "DEVELOPMENT_CODE_SERVER_EXTRA_CA_KEY": "rootCA.pem",
+        }):
+            manifests = k8s._manifests(
+                self._request(), "triton-control", "code-7-dev-workspace",
+                "code-7-dev-workspace-svc", "code-7-dev-workspace-secret",
+            )
+        pod = manifests[2]["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        env = {item["name"]: item.get("value") for item in container["env"]}
+        self.assertEqual(env["NODE_TLS_REJECT_UNAUTHORIZED"], "1")
+        self.assertNotIn("NODE_EXTRA_CA_CERTS", env)
+        self.assertNotIn("code-server-extra-ca", [v["name"] for v in pod["volumes"]])
+        self.assertNotIn("code-server-extra-ca", [m["name"] for m in container["volumeMounts"]])
 
     def test_Manifests_ImageAlreadyHasCodeServer_SkipsInstallScript(self) -> None:
         request = self._request().model_copy(update={"image_has_code_server": True})
@@ -295,6 +294,12 @@ class CodeServerTests(unittest.TestCase):
             names = set(archive.namelist())
 
         self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/profile-api.js", names)
+        self.assertIn("extension/s3-browser.js", names)
+        self.assertIn("extension/s3-client.js", names)
+        self.assertIn("extension/s3-files.js", names)
+        self.assertIn("extension/s3-transfers.js", names)
+        self.assertIn("extension/s3-filesystem.js", names)
         self.assertIn("extension/scaffold.js", names)
         self.assertIn("extension/workspace-repositories.js", names)
         self.assertIn("extension/resources/triton-control.svg", names)
@@ -305,9 +310,11 @@ class CodeServerTests(unittest.TestCase):
 
         contributes = package_json["contributes"]
 
-        self.assertEqual(package_json["version"], "0.1.1")
+        self.assertEqual(package_json["version"], "0.4.10")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
+        self.assertIn("onFileSystem:triton-s3", package_json["activationEvents"])
+        self.assertEqual(package_json["enabledApiProposals"], ["fsChunks"])
         self.assertIn("onView:tritonControl.workspaceActions", package_json["activationEvents"])
         self.assertIn("onCommand:tritonControl.openRepositorySetup", package_json["activationEvents"])
         self.assertIn("onCommand:tritonControl.refreshRepositories", package_json["activationEvents"])
@@ -368,7 +375,7 @@ class CodeServerTests(unittest.TestCase):
         create.assert_called_once()
         save.assert_called_once()
         self.assertEqual(result.id, 9)
-        self.assertEqual(result.url, "/api/development/9/proxy/?folder=/workspace")
+        self.assertEqual(result.url, "/api/development/9/proxy/?workspace=/workspace/.triton-control/workspace.code-workspace")
         self.assertEqual(created["owner_user_id"], 7)
         self.assertEqual(created["name"], "dev-workspace")
         self.assertEqual(created["statefulset_name"], "code-7-dev-workspace")
@@ -524,7 +531,7 @@ class CodeServerTests(unittest.TestCase):
         list_for_owner.assert_called_once_with(ANY, 7)
         refresh_status.assert_called_once_with(ANY, row)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].url, "/api/development/2/proxy/?folder=/workspace")
+        self.assertEqual(result[0].url, "/api/development/2/proxy/?workspace=/workspace/.triton-control/workspace.code-workspace")
 
     def test_GetCodeServer_DifferentOwner_RaisesForbidden(self) -> None:
         user = SimpleNamespace(id=7)

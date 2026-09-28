@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import anyio
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -36,6 +37,19 @@ async def _get_claims_with_access_policy(
         )
         if not permitted:
             raise HTTPException(status_code=403, detail="Workflow token cannot access this API")
+    # A saturated SQLAlchemy pool must not block the ASGI loop (including
+    # health checks and completion of requests returning their connections).
+    return await anyio.to_thread.run_sync(
+        _resolve_access_claims, request, source_claims, allow_pending, creds
+    )
+
+
+def _resolve_access_claims(
+    request: Request,
+    source_claims: Dict[str, Any],
+    allow_pending: bool,
+    creds: HTTPAuthorizationCredentials,
+) -> Dict[str, Any]:
     try:
         with session_factory() as session:
             user = _identity.resolve_user(session, source_claims, auto_create_oidc=True)

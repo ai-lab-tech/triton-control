@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     paths:
       - "triton-backend/**"
+      - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
       - "Dockerfile"
       - "compose.yaml"
@@ -14,6 +15,7 @@ on:
     branches: ["main"]
     paths:
       - "triton-backend/**"
+      - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
       - "Dockerfile"
       - "compose.yaml"
@@ -24,6 +26,19 @@ permissions:
   contents: read
 
 jobs:
+  extension-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test code-server extension
+        working-directory: code-server-extensions/triton-deploy
+        run: npm test
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

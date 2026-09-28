@@ -76,8 +76,9 @@ authenticated backend proxy:
 Both HTTP and WebSocket traffic pass through this proxy. The code-server
 Service is therefore not exposed directly to the browser.
 
-code-server webviews, including the bundled **Triton Control Deploy**
-extension, require a browser secure context. Use trusted HTTPS for
+code-server webviews, including the full deployment form in **Triton Control
+Deploy**, require a browser secure context. The native S3 Explorer does not use
+a webview and works over HTTP as well as HTTPS. Use trusted HTTPS for
 non-localhost hosts. Plain `http://triton-control.test` can load the
 workspace, but plugin webviews may fail because browser crypto APIs are
 unavailable. HTTPS with an untrusted certificate can still fail when
@@ -111,58 +112,158 @@ Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server
 does not prompt users to mark the folder as trusted on each new workspace.
 
-## S3 Profiles and Optional S3/R2 Explorer
+## S3 Profiles and S3 Browser
 
-The **Triton Control Deploy** extension works best with an S3 profile. Members
-and admins can create profiles from the Triton Control account menu under
-**S3 Profiles**. The extension loads those profiles and shows them in an
-`S3 profile` dropdown.
+The bundled **Triton Control Deploy** extension displays saved S3 profiles as
+folders beside `/workspace` in the native **Explorer**. Members and admins
+create profiles through the Triton Control account menu's **S3 Profiles**.
+Each profile stores its endpoint, bucket, optional prefix, region, access key,
+encrypted secret key, addressing mode, and optional public CA certificate.
+Profiles belong to the workspace owner.
 
-Use profiles for shared or repeated deployment settings. Each profile stores
-the endpoint, bucket, optional prefix, region, access key, encrypted secret
-key, path-style mode, and optional CA certificate.
+### Connect, Switch, and Disconnect
 
-Manual S3 settings are still available inside the extension in a collapsed
-section. Use them for one-off deployments or to save a new profile from inside
-code-server.
+1. Open **Explorer** in code-server.
+2. Right-click a workspace file or folder and choose
+   **S3 Operations → Choose Profile…**. Select your saved profile.
+3. Expand **S3 · <profile name> · <bucket>** beside the workspace folders.
 
-### Optional: Install S3/R2 Explorer
+The connected context menu provides **Refresh**, **Disconnect**, and
+**Switch Profile…**. Explorer's toolbar also exposes these connection actions.
+Opening **S3 Operations** only opens the submenu; it does not prompt for a
+profile. A connection needs no manually entered backend URL, login, credentials,
+or connection tab. The S3 browser works over HTTP and HTTPS without a webview.
 
-S3/R2 Explorer is optional and is not installed automatically when a
-Development workspace is created. The **Triton Control Deploy** extension works
-without it because S3 profiles and manual settings are handled by Triton
-Control.
+A profile prefix becomes its Explorer root. For example, a profile with prefix
+`team-a` displays objects below `s3://<bucket>/team-a/`. Paths used in Argo
+workflow manifests are still full bucket keys; include `team-a/` there.
 
-To add S3/R2 Explorer:
+### Browse and Create Buckets
 
-1. Open the **Extensions** view in the Development workspace.
-2. Search the code-server extension marketplace for **S3/R2 Explorer**.
-3. Select **Install**.
-4. Open the extension settings and configure the S3-compatible endpoint,
-   region, access key, secret key, and path-style behavior.
+On connection and **Refresh**, the plugin automatically checks whether the
+profile can list buckets. If allowed, Explorer opens the endpoint's bucket view.
+If denied or the check takes longer than **1.5 seconds**, it opens the configured
+bucket instead, without an extra error popup. Checks for multiple profiles run
+concurrently; ordinary file operations do not repeat this discovery check.
+Prefix-scoped profiles are never probed. This timeout only bounds the optional
+bucket-list check; an unreachable endpoint can still prevent bucket access.
 
-The installed extension is stored under
-`/workspace/.triton-control/code-server-extensions` and therefore survives
-workspace pod restarts while the PVC is retained.
+Choosing **Show Profile Folder** remembers that view and disables automatic
+bucket discovery for that profile until you choose **Show Buckets** again.
 
-When S3/R2 Explorer is installed and configured, its settings can still be used
-as defaults for manual extension fields:
 
-| Setting | Used for |
+Right-click the connected S3 root and choose **S3 Operations → Show Buckets**.
+Explorer shows **S3 · <profile name> · Buckets**, with the endpoint's buckets
+beneath it. Expanding a bucket lists its objects; normal uploads, downloads,
+editing, copy/move, and deletion work inside each bucket. Dragging between
+buckets defaults to copying; dragging within one bucket defaults to moving.
+Use **Show Profile Folder** to return to the saved bucket and prefix.
+
+**S3 Operations → Create Bucket…** asks for a bucket name and uses the selected
+profile's endpoint, credentials, CA, and region. Bucket creation is separate
+from listing, so it does not require permission to list every bucket. Existing
+bucket names are checked before creation; a failed existence check stops the
+operation. Creation does not change the saved profile or grant new permissions.
+Refresh an open bucket view after creation, or use **Show Buckets** to open it.
+
+These actions are available only for profiles without a prefix. Prefix-scoped
+profiles keep their existing boundary. The provider enforces permissions:
+listing normally requires `s3:ListAllMyBuckets`, creation requires
+`s3:CreateBucket`, and access to bucket contents requires its own permissions.
+A listing failure leaves the current Explorer connection intact. Bucket names
+returned by the provider are not a guarantee of read/write access.
+
+The view uses the profile's configured endpoint and region for bucket access;
+it does not discover or redirect to other regional endpoints. Use a profile
+with the matching regional endpoint for buckets in another AWS region.
+Only general-purpose S3 buckets are supported. Bucket deletion and renaming
+are unavailable; use **Create Bucket…**, rather than Explorer's New Folder,
+at the endpoint root.
+
+### Transfer Files in Explorer
+
+Drag files or folders directly onto an S3 bucket/profile root or folder, or
+from S3 onto a workspace folder. Managed workspaces use these defaults:
+
+| Drag | Default action |
 | --- | --- |
-| `s3x.endpointUrl` | S3-compatible endpoint |
-| `s3x.region` | S3 region |
-| `s3x.accessKeyId` | Access key |
-| `s3x.secretAccessKey` | Secret key |
-| `s3x.forcePathStyle` | Path-style request mode |
+| Workspace ↔ S3 | Copy |
+| Between different S3 profiles or buckets | Copy |
+| Within the same bucket and profile | Move |
+| Ctrl-drag (Option on macOS) | Force copy |
+| Shift-drag | Force move |
 
-Use path-style access for compatible object stores that address objects as
-`https://s3.example.com/bucket/key`. Disable it only when the object store uses
-virtual-host addressing such as `https://bucket.s3.example.com/key`.
+Workspace-only dragging and workspace-root reordering keep code-server's native
+behavior. Right-button drop menus and Windows shortcut creation are not supported.
 
-For a private or self-signed HTTPS object-store certificate, provide the PEM CA
-certificate requested by the extension. This certificate is passed to the
-Triton deployment so its model repository client can trust the endpoint.
+Folder transfers preserve the outer folder name. To create
+`workflows/sklearn-iris-training/train_iris.py`, drop the local
+`sklearn-iris-training` folder onto `workflows/`, or drop the file onto
+`workflows/sklearn-iris-training/`.
+
+Explorer supports opening/editing objects, creating folders, renaming, deleting,
+and native Copy/Cut/Paste. The **S3 Operations** submenu additionally provides:
+
+- **Copy** on a workspace or S3 item, followed by **Paste** on an S3 destination.
+  These commands also work when browser clipboard access is unavailable.
+- **Cut** on an S3 item, followed by **Paste** on an S3 destination.
+- **Upload…** on an S3 destination, to choose workspace files or a folder.
+- **Upload to Bucket Root…** on a workspace selection, to copy directly into
+  the connected profile root, including its configured prefix.
+- **Download…** on an S3 selection, to choose a workspace destination.
+
+Explorer displays transfer progress and conflict prompts. The explicit upload
+command provides replacement/skip choices and cancellation; files already
+uploaded remain in S3. S3 moves copy the selected contents before deleting the
+sources. Conditional requests protect against concurrent object changes.
+Use **Refresh** after another client or an Argo workflow writes objects.
+
+Transfers stream through temporary files in the workspace pod. Allow enough
+pod disk space and keep operations within 5 GiB per object and 10,000 objects.
+Opening an object directly in the editor is limited to 128 MiB; use transfers
+for larger files. Multipart uploads are not implemented. Folder markers are
+supported; the explicit workspace upload command omits empty directories and
+rejects symbolic links. Downloads reject names that cannot safely become local
+paths. S3 copies preserve content/user metadata, but not tags, ACLs, or version
+history. Profile roots cannot be deleted or moved.
+
+### Credentials and Certificates
+
+The browser loads the owner's current profiles from the workspace-scoped
+backend endpoint. S3 credentials are used in extension memory, not written to
+workspace settings or `.aws/credentials`. The saved Explorer connection contains
+profile identifiers and paths.
+
+The workspace authenticates using `TRITON_CONTROL_PROFILE_TOKEN`, injected from
+its Kubernetes Secret, and `TRITON_CONTROL_PROFILE_URL`. The token is accepted
+only by the workspace profile endpoint. Ownership and account status are checked
+on each request; concurrent lookups share only an in-flight request. Processes
+running in the workspace can use this token to retrieve the owner's profiles.
+
+HTTPS verification stays enabled. The selected profile's public CA certificate
+is applied dynamically; the S3 browser does not require a shared
+`minio-root-ca` ConfigMap. The S3 endpoint must be reachable from the workspace
+pod. Save connection or certificate changes in **S3 Profiles**, then refresh.
+
+### Existing Workspaces and Runtime Compatibility
+
+New workspaces receive the plugin and startup integration automatically.
+Existing workspaces need the updated extension VSIX, extension ConfigMap, and
+startup command, including
+`--enable-proposed-api triton-control.triton-control-deploy` for streaming
+native transfers. After an update, restart the workspace and hard-refresh the
+browser with **Ctrl+Shift+R**.
+
+Windows-style S3 drag defaults use a managed code-server customization, tested
+against **4.125.0**. Startup patches both browser bundles before serving the
+workspace and rejects unsupported or incomplete bundles. Custom images that
+already include code-server must provide that build and a writable workbench
+bundle. See [Configuration](configuration.md) for the runtime version setting.
+
+The separate deployment form still offers an **S3 profile** dropdown and
+optional manual fields. Legacy `s3x.*` settings can supply defaults for those
+manual deployment fields; they do not configure the native S3 browser. Neither
+S3/R2 Explorer nor More Connect is required for the bundled browser.
 
 ## Create a Model Repository
 
@@ -171,7 +272,8 @@ repository structures in `/workspace`.
 
 Open the Triton Control icon in the code-server Activity Bar and select
 **New Model Repository**. The same command is also available from the command
-palette and from the Explorer folder context menu.
+palette and from the Explorer file or folder context menu. When launched from a file, the wizard
+uses its containing folder as the parent for the new repository.
 
 The command asks for:
 

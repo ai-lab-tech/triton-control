@@ -59,7 +59,6 @@ def create_code_server(
         "secret_name": secret_name,
         "image": request.image,
         "url": "",
-        "password_enc": "",
         "status": "creating",
         "status_message": "Kubernetes resources applied; waiting for pod readiness.",
         "applied_resources": applied_resources,
@@ -185,4 +184,4 @@ def _resource_prefix(owner_id: int, name: str) -> str:
 
 
 def proxy_url(code_server_id: int) -> str:
-    return f"/api/development/{code_server_id}/proxy/?folder=/workspace"
+    return f"/api/development/{code_server_id}/proxy/?workspace=/workspace/.triton-control/workspace.code-workspace"

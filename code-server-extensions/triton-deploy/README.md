@@ -13,7 +13,8 @@ from Triton Control's **Add Deployment** page.
 1. Open a workspace folder in code-server.
 2. Open the Triton Control Activity Bar view and select **New Model
    Repository**. The command is also available from the command palette and
-   from the Explorer folder context menu.
+   from the Explorer file or folder context menu. When launched from a file,
+   the wizard uses its containing folder as the parent for the new repository.
 3. Choose `Single model` or `Ensemble pipeline`.
 4. Enter the repository target folder name.
 5. For a single model, enter the Triton model name and choose a template.
@@ -126,6 +127,98 @@ s3://<endpoint>/<bucket>/prefix/model-repository-path
 
 It does not point at `.../model-name`, because that would make Triton start one
 directory too deep.
+
+## S3 Browser and Workspace Drag-and-Drop
+
+Saved S3 profiles appear as folders alongside your workspace in **Explorer**.
+Use the Explorer toolbar’s plug (**Choose Profile…**), disconnect, and refresh
+buttons. These actions are also available under **S3 Operations** when right-clicking an S3 folder;
+right-click a workspace folder and choose **S3 Operations → Choose Profile…** to connect when disconnected.
+When connected, both workspace and S3 context menus show **Refresh**,
+**Disconnect**, and **Switch Profile…**. Opening the submenu never selects a profile.
+Use **Choose Profile…** to select one, or **Refresh** to load all
+profiles. No URL, login, token, or webview is required. Credentials and CA
+certificates come dynamically from the workspace owner's saved profiles.
+
+On connection and **Refresh**, the plugin automatically checks whether the
+profile can list buckets. If allowed, Explorer opens the endpoint's bucket view.
+If denied or the check takes longer than **1.5 seconds**, it opens the configured
+bucket instead, without an extra error popup. Checks for multiple profiles run
+concurrently; ordinary file operations do not repeat this discovery check.
+Prefix-scoped profiles are never probed. This timeout only bounds the optional
+bucket-list check; an unreachable endpoint can still prevent bucket access.
+
+Choosing **Show Profile Folder** remembers that view and disables automatic
+bucket discovery for that profile until you choose **Show Buckets** again.
+
+Use **S3 Operations → Show Buckets** on a connected root to browse buckets at
+its endpoint, and **Show Profile Folder** to return to the saved bucket.
+**Create Bucket…** creates a general-purpose bucket in the profile's region
+when the credentials permit it. Existing bucket names are checked first.
+These actions require a profile without a prefix; scoped profiles retain their
+boundary. Listing requires `s3:ListAllMyBuckets`; creation requires
+`s3:CreateBucket` and a successful existence check. Bucket contents have
+separate permissions. Cross-bucket drags default to copying. Bucket deletion
+and renaming are not supported, and regional endpoints are not auto-discovered.
+
+Use normal Explorer controls for files and folders:
+
+- Drag between workspace and S3, or between S3 folders/profiles. Files can be
+  dropped directly onto the bucket/profile root.
+- Right-click any workspace file or folder → **S3 Operations → Copy**, then
+  right-click the bucket or destination folder → **S3 Operations → Paste**.
+  **Upload to Bucket Root…** copies the selection directly to the connected
+  profile root (its configured prefix, if any), without an extra folder.
+- Use Copy, Cut, and Paste to copy or move selections. The **S3 Operations → Copy**,
+  **Cut**, and **Paste** menu actions also work when the browser
+  blocks system clipboard access (for example, an HTTP origin).
+- Rename, create folders, or Delete using Explorer's context menu.
+- Use **S3 Operations → Download…** to select a workspace destination, or
+  **S3 Operations → Upload…** to select local sources.
+
+Managed code-server uses Windows Explorer drag defaults for S3 transfers:
+
+- Workspace ↔ S3, or between different S3 profiles: **copy**.
+- Within one S3 profile: **move**.
+- **Ctrl-drag** forces copy (Option on macOS); **Shift-drag** forces move.
+- Drop on a bucket root or folder. Explorer displays overwrite/move prompts.
+
+The cursor and committed action use the same rule. Workspace-only dragging and
+workspace-root reordering retain code-server's native behavior. Right-button
+"drop action" menus and creating Windows shortcuts are not implemented.
+
+This behavior requires the managed startup customization in
+`code-server-s3-dnd.js`, tested against the pinned code-server **4.125.0** bundle.
+It is applied before code-server starts, and is idempotent. A different or
+partially patched Explorer bundle is rejected before serving the workspace,
+rather than silently reverting to move-by-default. Custom images containing
+code-server must use that build and allow writing its workbench bundle.
+Existing workspaces need the updated startup command and ConfigMap. Reload
+browser windows after applying the customization.
+
+Explorer handles transfer progress and conflict prompts.
+Moving within S3 copies all selected contents successfully before deleting the
+originals. Conditional requests protect against concurrent object changes.
+S3 folder operations include nested objects and folder markers. Profile roots
+cannot be deleted or moved; previous object versions are not purged.
+
+Transfers stream through private temporary files in the code-server pod and
+support up to 5 GiB per object and 10,000 objects per operation. Available pod
+disk space must accommodate the transfer. S3-to-S3 copies preserve HTTP content
+metadata and user metadata, but do not copy object tags, ACLs, or version history.
+Refresh Explorer to see changes made by other clients. Symbolic links and
+ambiguous or unsafe filesystem names are rejected by the upload/download commands.
+Multipart transfers are not implemented.
+
+The profile endpoint must be reachable from the pod. HTTPS verifies certificates
+using the selected profile's CA bundle. Profiles need `s3:ListBucket`,
+`s3:GetObject`, and `s3:PutObject`; moves and deletion also need `s3:DeleteObject`.
+Credentials are never stored in workspace settings or extension storage.
+
+Managed workspaces enable the extension's `fsChunks` API for streaming native
+Explorer transfers. Existing workspaces need the updated extension and
+`--enable-proposed-api triton-control.triton-control-deploy` code-server startup
+flag, followed by a restart. The native connection also works over HTTP.
 
 ## S3 Profiles
 

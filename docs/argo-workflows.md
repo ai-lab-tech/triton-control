@@ -145,6 +145,20 @@ The workflow credential API returns metadata, not the secret key or CA contents.
 Linking makes these credentials available to workflows in the shared workflow
 namespace; the source profile itself remains owner-scoped.
 
+### Upload Scripts and Inspect Results
+
+Use either AWS CLI or the bundled **Triton Control Deploy** code-server plugin.
+For the plugin, connect through **Explorer → S3 Operations → Choose Profile…**
+on a workspace item and select the profile you link to Argo. Drag scripts from
+the workspace onto an S3 destination; cross-storage drags copy by default.
+After a run, refresh the S3 tree and open or copy the output files from Explorer.
+See [Development Workspaces](development-workspaces.md#s3-profiles-and-s3-browser).
+
+AWS CLI requires its own credentials, endpoint, addressing mode, and optional
+CA configuration; it does not inherit the code-server connection. Use the same
+bucket and full object keys with either client. A profile's Explorer prefix is
+not automatically prepended to Argo artifact keys.
+
 ### Use the Profile in a Workflow
 
 Copy the dialog's reference under workflow `spec`:
