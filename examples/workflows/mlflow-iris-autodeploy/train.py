@@ -1,4 +1,4 @@
-"""Train an Iris classifier, track it in MLflow, and export a Triton repository."""
+"""Train Iris, log the checkpoint, and register its Triton repository in MLflow."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import onnx
+from mlflow_triton_control import triton
 from mlflow.models import infer_signature
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
@@ -75,6 +76,9 @@ def main() -> None:
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "triton-autodeploy"))
+    model_root = OUTPUT_ROOT / MODEL_NAME
+    version_dir = model_root / "1"
+
     with mlflow.start_run(run_name=os.getenv("ARGO_WORKFLOW_NAME", "iris-autodeploy")):
         mlflow.log_params(
             {
@@ -94,43 +98,61 @@ def main() -> None:
         )
         mlflow.sklearn.log_model(
             sk_model=model,
-            name="model",
+            name="sklearn-checkpoint",
             signature=infer_signature(x_test, predictions),
             input_example=x_test[:2],
-            registered_model_name=os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "iris-classifier"),
         )
 
-    onnx_model = convert_sklearn(
-        model,
-        initial_types=[("input", FloatTensorType([None, 4]))],
-        options={id(model.named_steps["classifier"]): {"zipmap": False}},
-        target_opset=17,
-    )
-    onnx.checker.check_model(onnx_model)
-    output_names = [value.name for value in onnx_model.graph.output]
-    if len(output_names) != 2:
-        raise RuntimeError(f"Expected label and probability outputs, got {output_names}")
+        onnx_model = convert_sklearn(
+            model,
+            initial_types=[("input", FloatTensorType([None, 4]))],
+            options={id(model.named_steps["classifier"]): {"zipmap": False}},
+            target_opset=17,
+        )
+        onnx.checker.check_model(onnx_model)
+        output_names = [value.name for value in onnx_model.graph.output]
+        if len(output_names) != 2:
+            raise RuntimeError(f"Expected label and probability outputs, got {output_names}")
 
-    model_root = OUTPUT_ROOT / MODEL_NAME
-    version_dir = model_root / "1"
-    version_dir.mkdir(parents=True, exist_ok=True)
-    onnx.save_model(onnx_model, version_dir / "model.onnx")
-    (model_root / "config.pbtxt").write_text(
-        _triton_config(output_names[0], output_names[1]),
-        encoding="utf-8",
-    )
-    (model_root / "training-metadata.json").write_text(
+        version_dir.mkdir(parents=True, exist_ok=True)
+        onnx.save_model(onnx_model, version_dir / "model.onnx")
+        (model_root / "config.pbtxt").write_text(
+            _triton_config(output_names[0], output_names[1]),
+            encoding="utf-8",
+        )
+        (model_root / "training-metadata.json").write_text(
+            json.dumps(
+                {
+                    "accuracy": accuracy,
+                    "onnx_outputs": output_names,
+                    "workflow": os.getenv("ARGO_WORKFLOW_NAME", ""),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        registry_name = os.getenv(
+            "MLFLOW_TRITON_REGISTERED_MODEL_NAME", "iris-classifier-triton"
+        )
+        triton_model_info = triton.log_model(
+            triton_model_path=str(model_root),
+            name="triton-model",
+            registered_model_name=registry_name,
+        )
+
+    print(
         json.dumps(
             {
                 "accuracy": accuracy,
-                "onnx_outputs": output_names,
-                "workflow": os.getenv("ARGO_WORKFLOW_NAME", ""),
+                "sklearn_checkpoint_logged": True,
+                "triton_model": str(model_root),
+                "triton_registered_model": registry_name,
+                "triton_registered_model_version": triton_model_info.registered_model_version,
             },
             indent=2,
-        ),
-        encoding="utf-8",
+        )
     )
-    print(json.dumps({"accuracy": accuracy, "triton_model": str(model_root)}, indent=2))
 
 
 if __name__ == "__main__":

@@ -19,12 +19,8 @@ spec:
     secondsAfterFailure: 86400
   arguments:
     parameters:
-      - name: github-ref
-        value: refs/heads/feature/mlflow-triton-control-implementation
-      - name: mlflow-tracking-uri
-        value: http://mlflow-service:5000
-      - name: triton-control-target
-        value: triton-control://triton-control:8000
+      - name: s3-script-key
+        value: workflows/mlflow-iris-autodeploy/train.py
       - name: repository-prefix
         value: triton/development
       - name: triton-image
@@ -40,6 +36,14 @@ spec:
             template: deploy
 
     - name: train
+      inputs:
+        artifacts:
+          - name: training-script
+            path: /tmp/train.py
+            archive:
+              none: {}
+            s3:
+              key: "{{workflow.parameters.s3-script-key}}"
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -49,22 +53,20 @@ spec:
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
               "mlflow>=3,<4" \
+              "mlflow-triton-control==0.2.0" \
               "numpy>=1.26,<3" \
               "onnx>=1.17,<2" \
               "scikit-learn>=1.5,<2" \
               "skl2onnx>=1.17,<2"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
-            python -c 'import urllib.request; urllib.request.urlretrieve(
-              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/train.py",
-              "/tmp/train.py")'
             python /tmp/train.py
         env:
           - name: MLFLOW_TRACKING_URI
-            value: "{{workflow.parameters.mlflow-tracking-uri}}"
+            value: http://mlflow-service:5000
           - name: MLFLOW_EXPERIMENT_NAME
             value: triton-autodeploy
-          - name: MLFLOW_REGISTERED_MODEL_NAME
-            value: iris-classifier
+          - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
+            value: iris-classifier-triton
           - name: ARGO_WORKFLOW_NAME
             value: "{{workflow.name}}"
           - name: ARGO_WORKFLOW_UID
@@ -98,13 +100,13 @@ spec:
           - |
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
-              "https://raw.githubusercontent.com/ai-lab-tech/triton-control/{{workflow.parameters.github-ref}}/examples/workflows/mlflow-iris-autodeploy/wheels/mlflow_triton_control-0.1.1-py3-none-any.whl"
+              "mlflow-triton-control==0.2.0"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             export PATH="/tmp/python-packages/bin:$PATH"
             : "${TRITON_CONTROL_S3_BUCKET:?S3 bucket was not injected from the selected S3 profile}"
             : "${TRITON_CONTROL_S3_PROFILE_ID:?S3 profile ID was not injected from the selected S3 profile}"
             mlflow deployments create \
-              --target "{{workflow.parameters.triton-control-target}}" \
+              --target triton-control://triton-control:8000 \
               --name iris-classifier \
               --model-uri "s3://$TRITON_CONTROL_S3_BUCKET/{{workflow.parameters.repository-prefix}}/iris_classifier" \
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
