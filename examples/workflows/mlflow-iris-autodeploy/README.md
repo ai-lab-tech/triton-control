@@ -6,24 +6,38 @@ repository in the MLflow Model Registry with the plugin's Triton flavor, and
 uploads a serving copy to S3 for deployment through Triton Control.
 
 ```text
-train -> MLflow run + sklearn checkpoint (unregistered)
-      -> Triton repository -> MLflow Registry (triton flavor)
-                         `-> S3 -> Triton Control -> Triton
+train -> MLflow run + sklearn checkpoint -> MLflow Registry + best-checkpoint alias
+      -> Triton repository -> MLflow Registry (triton flavor) + candidate alias
+                         `-> S3 -> Triton Control -> Triton -> champion alias
 ```
 
 ## MLflow Artifacts and Registry
 
 The training step logs the sklearn checkpoint as an MLflow Logged Model named
-`sklearn-checkpoint`, without registering it. It then packages the complete
-Triton repository with `mlflow_triton_control.triton.log_model()` and registers
-that model as `iris-classifier-triton`. Each workflow run creates a new
-Registry version. The registered version has the `triton` flavor and contains
-the repository files, including `config.pbtxt` and the numbered ONNX model.
+`sklearn-checkpoint` and registers it as `iris-classifier-sklearn`. It then
+packages the complete Triton repository with
+`mlflow_triton_control.triton.log_model()` and registers that model as
+`iris-classifier-triton`. Each workflow run creates a new version of both
+registered models. The sklearn version receives a `validation_accuracy` tag and
+becomes `best-checkpoint` only when its accuracy is higher than the previous
+best version. The new Triton version starts as `candidate`. The Triton
+Registry version has the `triton` flavor and contains the repository files,
+including `config.pbtxt` and the numbered ONNX model.
+
+A later training run can load the selected sklearn checkpoint directly:
+
+```python
+model = mlflow.sklearn.load_model(
+    "models:/iris-classifier-sklearn@best-checkpoint"
+)
+```
 
 Argo also uploads the same Triton repository to S3. The current deployment
-client accepts an S3 model URI, so the deploy step serves that S3 copy. Direct
-deployment from `models:/...`, plus smoke-test-based status and `champion` alias
-promotion, are not part of this workflow yet.
+client accepts an S3 model URI, so the deploy step serves that S3 copy. After
+the deployment client reports the instance and model as ready, the deploy step
+sets `deployment_status=deployed` and moves the Triton model's `champion` alias
+to that version. Direct deployment from `models:/...` and an inference-based
+smoke test are not part of this workflow yet.
 
 ## Prerequisites
 
@@ -118,9 +132,11 @@ For an opted-in workflow, Triton Control:
    the `deploy` template;
 4. attaches the Secret to the Workflow for garbage collection.
 
-The `train` task records parameters, accuracy, and tags; logs an unregistered
-sklearn checkpoint; and registers the Triton repository as a new version of
-`iris-classifier-triton`. Argo then uploads this repository:
+The `train` task records parameters, accuracy, and tags; registers the sklearn
+checkpoint as a new version of `iris-classifier-sklearn`; and registers the
+Triton repository as a new version of `iris-classifier-triton`. It updates
+`best-checkpoint` when the new sklearn version has the best accuracy and assigns
+`candidate` to the new Triton version. Argo then uploads this repository:
 
 ```text
 s3://<bucket>/<repository-prefix>/iris_classifier/
@@ -143,7 +159,9 @@ mlflow deployments create \
 ```
 
 The command finishes only after the Triton server and the concrete
-`iris_classifier` model report readiness.
+`iris_classifier` model report readiness. The deploy step then tags the exact
+Triton Registry version passed from the train step as deployed and assigns its
+`champion` alias. The `candidate` alias remains available on that version.
 `mlflow deployments create` returns HTTP 409 if a deployment named
 `iris-classifier` already exists; this plugin version does not support updating
 deployments. To run the example again, delete the existing deployment first or
@@ -152,9 +170,12 @@ choose a new deployment name in both the Workflow annotation and command.
 ## 5. Verify the Deployment
 
 The workflow should contain successful `train` and `deploy` nodes. In MLflow,
-open the `triton-autodeploy` experiment, its `sklearn-checkpoint` logged model,
-and the `iris-classifier-triton` Registry version. In Triton Control, open the
-new `iris-classifier` instance.
+open the `triton-autodeploy` experiment and verify that
+`iris-classifier-sklearn` has a `best-checkpoint` alias and a
+`validation_accuracy` tag. The deployed version of `iris-classifier-triton`
+must have `candidate` and `champion` aliases plus the
+`deployment_status=deployed` tag. In Triton Control, open the new
+`iris-classifier` instance.
 
 With a local user token and the plugin installed, the deployment can also be
 queried from a terminal:

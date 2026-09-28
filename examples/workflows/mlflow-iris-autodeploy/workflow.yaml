@@ -34,6 +34,10 @@ spec:
           - name: deploy
             dependencies: [train]
             template: deploy
+            arguments:
+              parameters:
+                - name: triton-model-version
+                  value: "{{tasks.train.outputs.parameters.triton-model-version}}"
 
     - name: train
       inputs:
@@ -65,12 +69,16 @@ spec:
             value: http://mlflow-service:5000
           - name: MLFLOW_EXPERIMENT_NAME
             value: triton-autodeploy
+          - name: MLFLOW_SKLEARN_REGISTERED_MODEL_NAME
+            value: iris-classifier-sklearn
           - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
             value: iris-classifier-triton
           - name: ARGO_WORKFLOW_NAME
             value: "{{workflow.name}}"
           - name: ARGO_WORKFLOW_UID
             value: "{{workflow.uid}}"
+          - name: TRITON_MODEL_VERSION_OUTPUT
+            value: /tmp/triton-model-version
         resources:
           requests:
             cpu: 250m
@@ -83,6 +91,10 @@ spec:
           capabilities:
             drop: ["ALL"]
       outputs:
+        parameters:
+          - name: triton-model-version
+            valueFrom:
+              path: /tmp/triton-model-version
         artifacts:
           - name: triton-model
             path: /tmp/model-repository/iris_classifier
@@ -92,6 +104,9 @@ spec:
               key: "{{workflow.parameters.repository-prefix}}/iris_classifier"
 
     - name: deploy
+      inputs:
+        parameters:
+          - name: triton-model-version
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -112,6 +127,14 @@ spec:
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600
+            python -c 'import os; from mlflow import MlflowClient; client = MlflowClient(); name = os.environ["MLFLOW_TRITON_REGISTERED_MODEL_NAME"]; version = os.environ["MLFLOW_TRITON_MODEL_VERSION"]; client.set_model_version_tag(name=name, version=version, key="deployment_status", value="deployed"); client.set_registered_model_alias(name=name, alias="champion", version=version)'
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: http://mlflow-service:5000
+          - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
+            value: iris-classifier-triton
+          - name: MLFLOW_TRITON_MODEL_VERSION
+            value: "{{inputs.parameters.triton-model-version}}"
         resources:
           requests:
             cpu: 100m

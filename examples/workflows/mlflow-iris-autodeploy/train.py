@@ -10,6 +10,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import onnx
+from mlflow import MlflowClient
 from mlflow_triton_control import triton
 from mlflow.models import infer_signature
 from skl2onnx import convert_sklearn
@@ -23,6 +24,7 @@ from sklearn.preprocessing import StandardScaler
 
 MODEL_NAME = "iris_classifier"
 OUTPUT_ROOT = Path(os.getenv("TRITON_REPOSITORY_DIR", "/tmp/model-repository"))
+BEST_CHECKPOINT_ALIAS = "best-checkpoint"
 
 
 def _triton_config(label_output: str, probability_output: str) -> str:
@@ -49,6 +51,37 @@ output [
   }}
 ]
 '''
+
+
+def _update_best_checkpoint_alias(
+    client: MlflowClient,
+    model_name: str,
+    version: str,
+    accuracy: float,
+) -> bool:
+    client.set_model_version_tag(
+        name=model_name,
+        version=version,
+        key="validation_accuracy",
+        value=str(accuracy),
+    )
+    registered_model = client.get_registered_model(model_name)
+    current_version = registered_model.aliases.get(BEST_CHECKPOINT_ALIAS)
+    if current_version is not None:
+        current_model = client.get_model_version(model_name, current_version)
+        try:
+            current_accuracy = float(current_model.tags["validation_accuracy"])
+        except (KeyError, TypeError, ValueError):
+            current_accuracy = float("-inf")
+        if current_accuracy >= accuracy:
+            return False
+
+    client.set_registered_model_alias(
+        name=model_name,
+        alias=BEST_CHECKPOINT_ALIAS,
+        version=version,
+    )
+    return True
 
 
 def main() -> None:
@@ -78,6 +111,12 @@ def main() -> None:
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "triton-autodeploy"))
     model_root = OUTPUT_ROOT / MODEL_NAME
     version_dir = model_root / "1"
+    sklearn_registry_name = os.getenv(
+        "MLFLOW_SKLEARN_REGISTERED_MODEL_NAME", "iris-classifier-sklearn"
+    )
+    triton_registry_name = os.getenv(
+        "MLFLOW_TRITON_REGISTERED_MODEL_NAME", "iris-classifier-triton"
+    )
 
     with mlflow.start_run(run_name=os.getenv("ARGO_WORKFLOW_NAME", "iris-autodeploy")):
         mlflow.log_params(
@@ -96,11 +135,12 @@ def main() -> None:
                 "deployment.target": "triton-control",
             }
         )
-        mlflow.sklearn.log_model(
+        sklearn_model_info = mlflow.sklearn.log_model(
             sk_model=model,
             name="sklearn-checkpoint",
             signature=infer_signature(x_test, predictions),
             input_example=x_test[:2],
+            registered_model_name=sklearn_registry_name,
         )
 
         onnx_model = convert_sklearn(
@@ -132,23 +172,51 @@ def main() -> None:
             encoding="utf-8",
         )
 
-        registry_name = os.getenv(
-            "MLFLOW_TRITON_REGISTERED_MODEL_NAME", "iris-classifier-triton"
-        )
         triton_model_info = triton.log_model(
             triton_model_path=str(model_root),
             name="triton-model",
-            registered_model_name=registry_name,
+            registered_model_name=triton_registry_name,
         )
+
+        client = MlflowClient()
+        best_checkpoint_promoted = _update_best_checkpoint_alias(
+            client=client,
+            model_name=sklearn_registry_name,
+            version=sklearn_model_info.registered_model_version,
+            accuracy=accuracy,
+        )
+        client.set_registered_model_alias(
+            name=triton_registry_name,
+            alias="candidate",
+            version=triton_model_info.registered_model_version,
+        )
+        client.set_model_version_tag(
+            name=triton_registry_name,
+            version=triton_model_info.registered_model_version,
+            key="deployment_status",
+            value="candidate",
+        )
+        triton_version_output = os.getenv("TRITON_MODEL_VERSION_OUTPUT")
+        if triton_version_output:
+            Path(triton_version_output).write_text(
+                str(triton_model_info.registered_model_version),
+                encoding="utf-8",
+            )
 
     print(
         json.dumps(
             {
                 "accuracy": accuracy,
-                "sklearn_checkpoint_logged": True,
+                "sklearn_registered_model": sklearn_registry_name,
+                "sklearn_registered_model_version": (
+                    sklearn_model_info.registered_model_version
+                ),
+                "sklearn_best_checkpoint_promoted": best_checkpoint_promoted,
                 "triton_model": str(model_root),
-                "triton_registered_model": registry_name,
+                "triton_registered_model": triton_registry_name,
                 "triton_registered_model_version": triton_model_info.registered_model_version,
+                "sklearn_registered_model_alias": BEST_CHECKPOINT_ALIAS,
+                "triton_registered_model_alias": "candidate",
             },
             indent=2,
         )
