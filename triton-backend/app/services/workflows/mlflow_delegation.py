@@ -110,7 +110,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         },
         expires_minutes=60,
         extra_claims={
-            "token_use": "mlflow_workflow",
+            "token_use": "mlflow_workflow",  # nosec B105 - token type claim, not a secret
             "workflow_name": workflow_name,
             "allowed_deployment_name": deployment_name,
             "allowed_s3_profile_id": profile_id,
