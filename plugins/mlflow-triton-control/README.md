@@ -5,10 +5,8 @@ repository. Install this Python package in the environment running the MLflow
 CLI or Python API. Triton Control creates the Kubernetes deployment and resolves
 the selected user-owned S3 profile.
 
-Requires Python 3.10+ and MLflow `>=3.14,<4`. Automatic CI tests only
-the version pinned in `charts/triton-control/values.yaml`. This is the
-continuously verified deployment version; test proposed upgrades manually
-before changing the chart pin. The deployed server uses an explicit version.
+Requires Python 3.10+ and MLflow `>=3.14,<4`. Automatic CI tests the version
+pinned in `charts/triton-control/values.yaml`.
 
 ```bash
 python -m build
@@ -25,42 +23,22 @@ python -m unittest discover -s tests -v
 
 The smoke tests verify installed plugin discovery, deployment requests with a
 mock HTTP transport, and real model logging, registration, and retrieval with
-a temporary SQLite tracking database. A live Triton Control or Kubernetes
-deployment is not required.
+a temporary SQLite tracking database.
 
-## Smoke test with the latest MLflow version
+## Smoke tests
 
-Run from the repository root to test the newest supported release in a fresh,
-temporary environment:
+Run from the repository root; each command uses a fresh temporary environment:
 
 ```bash
+# Test a specific MLflow version
+bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
+
+# Test the latest supported MLflow version
 bash plugins/mlflow-triton-control/smoke-latest.sh
 ```
 
-## Smoke test with a specific MLflow version
-
-Run from the repository root and pass the exact MLflow version as the argument:
-
-```bash
-bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
-```
-
-Replace `3.14.0` with the version you want to test. The script installs that
-exact MLflow version and the built plugin wheel in a temporary environment,
-prints `Testing MLflow <version>`, and runs the smoke tests. A successful run
-ends with `OK`; installation or test failures return a nonzero exit code.
-Despite the script's name, supplying a version tests that version, rather than
-the latest release.
-
-The optional `mlflow_version` input on a manual GitHub Actions run adds that
-version alongside the chart's pinned version. Leaving it empty tests only the
-chart version. Versions outside the package's `>=3.14,<4` dependency range
-fail dependency resolution.
-
-Run this command from the repository root. It prints the resolved MLflow
-version, installs the built wheel, and runs the real MLflow smoke tests.
-GitHub Actions also tests the chart version every Monday and supports manual
-runs through `workflow_dispatch`. Testing `latest` is optional and manual.
+Replace `3.14.0` with the version to test. No live Kubernetes cluster is needed.
+Manual CI runs accept an additional version through `mlflow_version`.
 
 ## How MLflow finds the plugin
 

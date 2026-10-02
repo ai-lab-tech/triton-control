@@ -94,6 +94,11 @@ tritonDeployments:
   modelRepositoryEmptyDirSize: 20Gi
   s3SyncStagingEmptyDirSize: 20Gi
 
+mlflow:
+  version: "3.14.0"
+  image:
+    repository: registry.example.com/mlflow/mlflow
+
 postgresql:
   enabled: true
   auth:
