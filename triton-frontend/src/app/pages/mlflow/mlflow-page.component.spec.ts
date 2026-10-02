@@ -164,13 +164,17 @@ describe("MlflowPageComponent", () => {
   });
 
   it("can install when fields are present and not installed", async () => {
+    // Arrange
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
     flushInitialStatus();
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
 
-    expect(component.canInstall()).toBeTrue();
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeTrue();
   });
 
   it("restores top bar on destroy", async () => {
@@ -202,6 +206,7 @@ describe("MlflowPageComponent", () => {
   });
 
   it("installs and reloads status", async () => {
+    // Arrange
     const fixture = TestBed.createComponent(MlflowPageComponent);
     const component = fixture.componentInstance;
     await flushMicrotasks();
@@ -209,14 +214,12 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
-    expect(component.canInstall()).toBeTrue();
+
+    // Act
     const installPromise = component.install();
     await flushMicrotasks();
 
     const installReq = http.expectOne("/api/mlflow");
-    expect(installReq.request.method).toBe("POST");
-    expect(installReq.request.body.installation_name).toBe("mlflow");
     installReq.flush({
       namespace: "triton-control",
       deployment_name: "mlflow",
@@ -243,6 +246,10 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
     await installPromise;
 
+    // Assert
+    expect(installReq.request.method).toBe("POST");
+    expect(installReq.request.body.installation_name).toBe("mlflow");
+    expect(installReq.request.body.image).toBeUndefined();
     expect(component.messageTone()).toBe("success");
     expect(component.frameUrl()).not.toBeNull();
   });
@@ -254,7 +261,6 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     expect(component.canInstall()).toBeTrue();
     const installPromise = component.install();
     await flushMicrotasks();
@@ -272,7 +278,6 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     const installPromise = component.install();
     await flushMicrotasks();
 

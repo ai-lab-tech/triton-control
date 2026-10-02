@@ -17,17 +17,20 @@ _MODEL_DATA = "model"
 def _validate_repository(model_path: Path) -> None:
     if not model_path.is_dir():
         raise MlflowException(f"Triton model directory does not exist: {model_path}")
-    if model_path.is_symlink() or any(path.is_symlink() for path in model_path.rglob("*")):
+    if model_path.is_symlink() or any(
+        path.is_symlink() for path in model_path.rglob("*")
+    ):
         raise MlflowException("Triton model directory must not contain symbolic links")
     versions = [
-        path for path in model_path.iterdir()
-        if path.is_dir() and path.name.isascii() and path.name.isdecimal()
+        path
+        for path in model_path.iterdir()
+        if path.is_dir()
+        and path.name.isascii()
+        and path.name.isdecimal()
         and int(path.name) > 0
     ]
     if not versions:
-        raise MlflowException(
-            "Triton model directory must contain a numbered version"
-        )
+        raise MlflowException("Triton model directory must contain a numbered version")
 
 
 def save_model(triton_model_path, path, mlflow_model=None):
@@ -43,7 +46,9 @@ def save_model(triton_model_path, path, mlflow_model=None):
     if destination.exists():
         raise MlflowException(f"MLflow model path already exists: {destination}")
     if destination == source or destination.is_relative_to(source):
-        raise MlflowException("MLflow model path must be outside the Triton model directory")
+        raise MlflowException(
+            "MLflow model path must be outside the Triton model directory"
+        )
 
     destination.mkdir(parents=True)
     shutil.copytree(source, destination / _MODEL_DATA)
@@ -73,7 +78,6 @@ def log_model(
         await_registration_for=await_registration_for,
         run_id=run_id,
         metadata=metadata,
-        flavor_name=FLAVOR_NAME,
         triton_model_path=triton_model_path,
     )
 

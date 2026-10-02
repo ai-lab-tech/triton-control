@@ -69,7 +69,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session) -> MlflowIns
                 namespace=namespace,
                 deployment_name=name,
                 service_name=service_name,
-                image=request.image,
+                image=config.server_image(),
                 applied_resources=[],
                 status="creating",
                 status_message="Creating Kubernetes resources and waiting for pod readiness.",

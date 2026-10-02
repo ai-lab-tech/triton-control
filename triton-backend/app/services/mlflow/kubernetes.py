@@ -11,6 +11,7 @@ import yaml  # type: ignore[import-untyped]
 from app.exceptions import BadGatewayError, BadRequestError
 from app.schemas import InstallMlflowRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
+from app.services.mlflow import config
 
 _TEMPLATE = Path(__file__).with_name("mlflow_deployment.yaml")
 _POD_WAIT_ATTEMPTS = 120
@@ -174,7 +175,7 @@ def _manifests(
         deployment_name=q(deployment_name),
         service_name=q(service_name),
         data_pvc_name=q(_data_pvc_name(deployment_name)),
-        image=q(request.image),
+        image=q(config.server_image()),
         allowed_hosts=q(_allowed_hosts(namespace, service_name)),
     )
     return [manifest for manifest in yaml.safe_load_all(rendered) if manifest]

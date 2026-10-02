@@ -39,7 +39,6 @@ type MlflowStatusResponse = {
 
 type InstallMlflowRequest = {
   installation_name: string;
-  image: string;
   dockerconfigjson?: string;
 };
 
@@ -79,7 +78,6 @@ export class MlflowPageComponent implements OnDestroy {
     .replace(/\/$/, "");
 
   installationName = "mlflow";
-  image = "ghcr.io/mlflow/mlflow:v3.14.0";
   dockerconfigjson = "";
   readonly dockerconfigjsonEditorOptions = {
     theme: "vs-dark",
@@ -195,10 +193,7 @@ export class MlflowPageComponent implements OnDestroy {
 
   canInstall(): boolean {
     return (
-      !this.installing() &&
-      !this.status()?.installed &&
-      this.installationName.trim().length > 0 &&
-      this.image.trim().length > 0
+      !this.installing() && !this.status()?.installed && this.installationName.trim().length > 0
     );
   }
 
@@ -212,13 +207,12 @@ export class MlflowPageComponent implements OnDestroy {
     try {
       const payload: InstallMlflowRequest = {
         installation_name: this.installationName.trim(),
-        image: this.image.trim(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
       };
-      await firstValueFrom(
+      const installation = await firstValueFrom(
         this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload),
       );
-      this.status.set(this.creatingStatusFromPayload(payload));
+      this.status.set(this.creatingStatus(installation));
       await this.load();
       this.setMessage("MLflow installation started.", "success");
     } catch (error) {
@@ -294,8 +288,7 @@ export class MlflowPageComponent implements OnDestroy {
     this.messageTone.set(tone);
   }
 
-  private creatingStatusFromPayload(payload: InstallMlflowRequest): MlflowStatusResponse {
-    const installationName = payload.installation_name;
+  private creatingStatus(installation: MlflowInstallResponse): MlflowStatusResponse {
     return {
       installed: true,
       status: "creating",
@@ -303,13 +296,7 @@ export class MlflowPageComponent implements OnDestroy {
       status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",
       base_path: "/api/mlflow/proxy/",
       service_url: "",
-      installation: {
-        namespace: "triton-control",
-        deployment_name: installationName,
-        service_name: `${installationName}-service`,
-        image: payload.image,
-        applied_resources: [],
-      },
+      installation,
     };
   }
 

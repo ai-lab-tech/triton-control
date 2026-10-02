@@ -120,6 +120,12 @@ tritonDeployments:
   modelRepositoryEmptyDirSize: ""
   s3SyncStagingEmptyDirSize: ""
 
+# Embedded MLflow server. Change the pin only after the plugin smoke tests pass.
+mlflow:
+  version: "3.14.0"
+  image:
+    repository: ghcr.io/mlflow/mlflow
+
 development:
   codeServer:
     # Pin code-server for reproducible Development workspaces.

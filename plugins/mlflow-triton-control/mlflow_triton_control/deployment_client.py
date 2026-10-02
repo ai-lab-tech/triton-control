@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import time
@@ -37,7 +38,15 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
     def __init__(self, target_uri):
         super().__init__(target_uri)
         parsed = urlsplit(target_uri)
-        if parsed.scheme != "triton-control" or not parsed.netloc or parsed.path not in {"", "/"}:
+        if (
+            parsed.scheme != "triton-control"
+            or not parsed.hostname
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
             raise MlflowException("Target URI must be triton-control://<host>[:port]")
         self._base_url = f"http://{parsed.netloc}"
 
@@ -46,8 +55,12 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
         if not token:
             raise MlflowException("TRITON_CONTROL_TOKEN is required")
         try:
-            with httpx.Client(base_url=self._base_url, timeout=10.0, follow_redirects=False) as client:
-                response = client.request(method, path, headers={"Authorization": f"Bearer {token}"}, **kwargs)
+            with httpx.Client(
+                base_url=self._base_url, timeout=10.0, follow_redirects=False
+            ) as client:
+                response = client.request(
+                    method, path, headers={"Authorization": f"Bearer {token}"}, **kwargs
+                )
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as exc:
@@ -55,11 +68,17 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
                 detail = exc.response.json().get("detail", "Request failed")
             except (ValueError, AttributeError):
                 detail = "Request failed"
-            raise MlflowException(f"Triton Control returned HTTP {exc.response.status_code}: {detail}") from exc
+            raise MlflowException(
+                f"Triton Control returned HTTP {exc.response.status_code}: {detail}"
+            ) from exc
         except httpx.RequestError as exc:
-            raise MlflowException(f"Triton Control is unavailable: {type(exc).__name__}") from exc
+            raise MlflowException(
+                f"Triton Control is unavailable: {type(exc).__name__}"
+            ) from exc
 
-    def create_deployment(self, name, model_uri, flavor=None, config=None, endpoint=None):
+    def create_deployment(
+        self, name, model_uri, flavor=None, config=None, endpoint=None
+    ):
         if endpoint is not None:
             raise MlflowException("endpoint is not supported")
         if flavor not in {None, "triton"}:
@@ -73,19 +92,31 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
         except (KeyError, TypeError, ValueError) as exc:
             raise MlflowException("s3_profile_id and image are required") from exc
         if profile_id <= 0 or not image:
-            raise MlflowException("s3_profile_id must be positive and image must not be empty")
+            raise MlflowException(
+                "s3_profile_id must be positive and image must not be empty"
+            )
         try:
             timeout = float(config.get("wait_timeout_seconds", 300))
         except (TypeError, ValueError) as exc:
-            raise MlflowException("wait_timeout_seconds must be a positive number") from exc
-        if timeout <= 0:
+            raise MlflowException(
+                "wait_timeout_seconds must be a positive number"
+            ) from exc
+        if not math.isfinite(timeout) or timeout <= 0:
             raise MlflowException("wait_timeout_seconds must be a positive number")
         uri = urlsplit(model_uri)
         parts = uri.path.strip("/").split("/")
-        if (uri.scheme != "s3" or not uri.netloc or uri.query or uri.fragment
-                or len(parts) < 2 or any(part in {"", ".", ".."} for part in parts)
-                or not _MODEL.fullmatch(parts[-1])):
-            raise MlflowException("model_uri must be s3://<bucket>/<repository-prefix>/<model-name>")
+        if (
+            uri.scheme != "s3"
+            or not uri.netloc
+            or uri.query
+            or uri.fragment
+            or len(parts) < 2
+            or any(part in {"", ".", ".."} for part in parts)
+            or not _MODEL.fullmatch(parts[-1])
+        ):
+            raise MlflowException(
+                "model_uri must be s3://<bucket>/<repository-prefix>/<model-name>"
+            )
         prefix, model_name = "/".join(parts[:-1]), parts[-1]
         payload = {
             "deployment_name": name,
@@ -110,16 +141,25 @@ class TritonControlDeploymentClient(BaseDeploymentClient):
             time.sleep(min(3.0, max(0.0, deadline - time.monotonic())))
 
     def get_deployment(self, name):
-        deployment = self._request("GET", f"/api/deployments/mlflow/{quote(name, safe='')}")
+        deployment = self._request(
+            "GET", f"/api/deployments/mlflow/{quote(name, safe='')}"
+        )
         return {**deployment, "flavor": "triton"}
 
     def list_deployments(self):
-        return self._request("GET", "/api/deployments/mlflow")
+        return [
+            {**deployment, "flavor": "triton"}
+            for deployment in self._request("GET", "/api/deployments/mlflow")
+        ]
 
     def delete_deployment(self, name):
-        return self._request("DELETE", f"/api/deployments/mlflow/{quote(name, safe='')}")
+        return self._request(
+            "DELETE", f"/api/deployments/mlflow/{quote(name, safe='')}"
+        )
 
-    def update_deployment(self, name, model_uri=None, flavor=None, config=None, endpoint=None):
+    def update_deployment(
+        self, name, model_uri=None, flavor=None, config=None, endpoint=None
+    ):
         raise MlflowException("Updating deployments is not supported")
 
     def predict(self, deployment_name=None, inputs=None, endpoint=None):

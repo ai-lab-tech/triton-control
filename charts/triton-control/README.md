@@ -193,6 +193,27 @@ Do not commit real SMTP credentials. See the main
 [configuration documentation](../../docs/configuration.md) for all variables
 and delivery-mode behavior.
 
+## MLflow version
+
+The embedded MLflow server uses an operator-configured version. Users cannot
+override its image through the installation UI or API:
+
+```yaml
+mlflow:
+  version: "3.14.0"
+  image:
+    repository: ghcr.io/mlflow/mlflow
+```
+
+The server uses `<repository>:v<version>`. If you use the separately installed
+[`mlflow-triton-control`](../../plugins/mlflow-triton-control/README.md) deployment
+plugin, test it before changing your client
+MLflow version:
+
+```bash
+bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
+```
+
 ## RBAC Scope
 
 By default, the chart creates namespace-scoped RBAC (least privilege):

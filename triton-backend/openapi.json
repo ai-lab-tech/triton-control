@@ -4939,11 +4939,6 @@
             "title": "Installation Name",
             "default": "mlflow"
           },
-          "image": {
-            "type": "string",
-            "title": "Image",
-            "default": "ghcr.io/mlflow/mlflow:v3.14.0"
-          },
           "dockerconfigjson": {
             "anyOf": [
               {
@@ -4956,6 +4951,7 @@
             "title": "Dockerconfigjson"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "InstallMlflowRequest",
         "description": "Request body for ``POST /api/mlflow``."
