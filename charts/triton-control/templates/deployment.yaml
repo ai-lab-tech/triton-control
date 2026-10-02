@@ -53,6 +53,10 @@ spec:
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
           env:
+            - name: MLFLOW_VERSION
+              value: {{ .Values.mlflow.version | quote }}
+            - name: MLFLOW_IMAGE_REPOSITORY
+              value: {{ .Values.mlflow.image.repository | quote }}
             - name: TRITON_DEPLOY_S3_SYNC_IMAGE
               value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
             - name: TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE

@@ -23,8 +23,38 @@ from app.schemas import (
     InstanceLogsResponse,
 )
 from app.services.deployment import deployment as deployment_service
+from app.services.deployment import mlflow as mlflow_service
 
 router = APIRouter(prefix="/api/deployments", tags=["deployments"])
+
+
+@router.get("/mlflow")
+@translate_app_errors
+async def list_mlflow_deployments(
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> list[dict[str, Any]]:
+    return await mlflow_service.list_all(session, claims)
+
+
+@router.get("/mlflow/{name}")
+@translate_app_errors
+async def get_mlflow_deployment(
+    name: str,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> dict[str, Any]:
+    return await mlflow_service.get(session, claims, name)
+
+
+@router.delete("/mlflow/{name}", response_model=DeploymentDeleteResponse)
+@translate_app_errors
+def delete_mlflow_deployment(
+    name: str,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentDeleteResponse:
+    return mlflow_service.delete(session, claims, name)
 
 
 @router.post("", response_model=DeploymentResponse)

@@ -55,7 +55,8 @@ spec:
               --port 5000
               --allowed-hosts {allowed_hosts}
               --backend-store-uri sqlite:////mlflow-data/mlflow.db
-              --default-artifact-root /mlflow-data/artifacts
+              --serve-artifacts
+              --artifacts-destination /mlflow-data/artifacts
           ports:
             - name: http
               containerPort: 5000

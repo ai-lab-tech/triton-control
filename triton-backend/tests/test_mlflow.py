@@ -8,6 +8,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import httpx
 from fastapi import HTTPException
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from app.api import mlflow_api
 from app.db.entities import MlflowEntity
@@ -18,13 +19,52 @@ from app.services.mlflow import kubernetes as k8s
 
 
 class MlflowTests(unittest.TestCase):
+    def test_Status_NotInstalled_ReportsConfiguredVersion(self) -> None:
+        # Arrange
+        session = SimpleNamespace()
+        with (
+            patch.dict("os.environ", {"MLFLOW_VERSION": "3.16.1"}),
+            patch("app.services.mlflow.installer.mlflow.get", return_value=None),
+        ):
+            # Act
+            result = installer.get_mlflow_status(session)
+
+        # Assert
+        self.assertFalse(result.installed)
+        self.assertEqual(result.configured_version, "3.16.1")
+
+    def test_InstallRequest_ImageOverride_IsRejected(self) -> None:
+        # Arrange
+        payload = {"image": "ghcr.io/mlflow/mlflow:v2.0.0"}
+
+        # Act / Assert
+        with self.assertRaises(ValidationError):
+            InstallMlflowRequest.model_validate(payload)
+
+    def test_Manifests_Image_ComesFromOperatorConfiguration(self) -> None:
+        # Arrange
+        request = self._request()
+        with patch.dict("os.environ", {
+            "MLFLOW_VERSION": "3.14.0",
+            "MLFLOW_IMAGE_REPOSITORY": "registry.example/mlflow",
+        }):
+            # Act
+            manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service")
+
+        # Assert
+        deployment = next(item for item in manifests if item["kind"] == "Deployment")
+        image = deployment["spec"]["template"]["spec"]["containers"][0]["image"]
+        self.assertEqual(image, "registry.example/mlflow:v3.14.0")
+
     def _request(self) -> InstallMlflowRequest:
         return InstallMlflowRequest(
             installation_name="mlflow",
-            image="ghcr.io/mlflow/mlflow:v3.14.0",
         )
 
     def test_InstallMlflow_NameProvided_AppliesNamedResources(self) -> None:
+        # Arrange
+        request = self._request()
+        session = SimpleNamespace()
         with (
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
             patch(
@@ -36,12 +76,15 @@ class MlflowTests(unittest.TestCase):
                 side_effect=lambda _session, entity: entity,
             ),
         ):
-            response = installer.install_mlflow(self._request(), SimpleNamespace())
+            # Act
+            response = installer.install_mlflow(request, session)
 
+        # Assert
         apply_resources.assert_called_once()
         self.assertEqual(response.namespace, "triton-control")
         self.assertEqual(response.deployment_name, "mlflow")
         self.assertEqual(response.service_name, "mlflow-service")
+        self.assertEqual(response.image, "ghcr.io/mlflow/mlflow:v3.14.0")
         self.assertIn("Deployment/mlflow", response.applied_resources)
 
     def test_Status_NotInstalled_ReturnsDefaultBasePath(self) -> None:
@@ -229,6 +272,9 @@ class MlflowTests(unittest.TestCase):
         command = " ".join(container["args"])
         self.assertIn("--allowed-hosts", command)
         self.assertIn("mlflow-service.mlflow.svc.cluster.local:5000", command)
+        self.assertIn("--serve-artifacts", command)
+        self.assertIn("--artifacts-destination /mlflow-data/artifacts", command)
+        self.assertNotIn("--default-artifact-root /mlflow-data/artifacts", command)
 
     def test_ApiStatus_ViewerIsRejected(self) -> None:
         with self.assertRaises(HTTPException) as raised:
