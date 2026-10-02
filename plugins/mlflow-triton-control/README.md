@@ -58,6 +58,11 @@ Triton Control API. MLflow reads entry-point metadata; it does not search
 through every package's source files. The package must be installed in the
 same Python environment as the `mlflow` CLI.
 
+The short hostname works when the client runs in the Service's namespace.
+For another namespace, use `triton-control://<service>.<namespace>.svc.cluster.local:8000`,
+for example `triton-control://triton-control.blabla.svc.cluster.local:8000`.
+Use the actual Service name created by your Helm release.
+
 ## Log a Triton model in MLflow
 
 Like NVIDIA's Triton MLflow plugin, this package provides a `triton` model

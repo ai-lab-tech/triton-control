@@ -158,6 +158,9 @@ mlflow deployments create \
   -C image=nvcr.io/nvidia/tritonserver:26.06-py3
 ```
 
+Use the actual Triton Control Service name. For clients in another namespace,
+use `triton-control://<service>.<namespace>.svc.cluster.local:8000`.
+
 The command finishes only after the Triton server and the concrete
 `iris_classifier` model report readiness. The deploy step then tags the exact
 Triton Registry version passed from the train step as deployed and assigns its
