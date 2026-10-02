@@ -14,6 +14,7 @@ describe("MlflowPageComponent", () => {
   let http: HttpTestingController;
   const notInstalledStatus = {
     installed: false,
+    configured_version: "3.14.0",
     status: "not_installed",
     ready: false,
     status_message: "",
@@ -22,6 +23,7 @@ describe("MlflowPageComponent", () => {
   };
   const creatingStatus = {
     installed: true,
+    configured_version: "3.14.0",
     status: "creating",
     ready: false,
     status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",
@@ -68,6 +70,22 @@ describe("MlflowPageComponent", () => {
   function flushInitialStatus(status = notInstalledStatus): void {
     http.expectOne("/api/mlflow").flush(status);
   }
+
+  it("shows the configured MLflow version before installation", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(MlflowPageComponent);
+    await flushMicrotasks();
+
+    // Act
+    flushInitialStatus({ ...notInstalledStatus, configured_version: "3.16.1" });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Assert
+    const version = fixture.nativeElement.querySelector('[data-testid="mlflow-install-version"]');
+    expect(version.textContent.trim()).toBe("3.16.1");
+    expect(fixture.nativeElement.querySelector("#mlflow-image")).toBeNull();
+  });
 
   it("loads status and embeds iframe when ready", async () => {
     const fixture = TestBed.createComponent(MlflowPageComponent);

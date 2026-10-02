@@ -30,6 +30,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
     if entity is None:
         return MlflowStatusResponse(
             installed=False,
+            configured_version=config.server_version(),
             status="not_installed",
             ready=False,
             status_message="",
@@ -42,6 +43,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
         status = "creating"
     return MlflowStatusResponse(
         installed=True,
+        configured_version=config.server_version(),
         status=status,
         ready=ready,
         status_message=message or entity.status_message,

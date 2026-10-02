@@ -19,6 +19,20 @@ from app.services.mlflow import kubernetes as k8s
 
 
 class MlflowTests(unittest.TestCase):
+    def test_Status_NotInstalled_ReportsConfiguredVersion(self) -> None:
+        # Arrange
+        session = SimpleNamespace()
+        with (
+            patch.dict("os.environ", {"MLFLOW_VERSION": "3.16.1"}),
+            patch("app.services.mlflow.installer.mlflow.get", return_value=None),
+        ):
+            # Act
+            result = installer.get_mlflow_status(session)
+
+        # Assert
+        self.assertFalse(result.installed)
+        self.assertEqual(result.configured_version, "3.16.1")
+
     def test_InstallRequest_ImageOverride_IsRejected(self) -> None:
         # Arrange
         payload = {"image": "ghcr.io/mlflow/mlflow:v2.0.0"}

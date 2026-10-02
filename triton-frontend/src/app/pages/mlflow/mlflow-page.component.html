@@ -26,6 +26,12 @@
           </div>
 
           <div class="form-grid">
+            @if (status()?.configured_version; as version) {
+              <div class="form-row">
+                <span class="field-label">Version to install</span>
+                <span data-testid="mlflow-install-version">{{ version }}</span>
+              </div>
+            }
             <div class="form-row">
               <label class="field-label" for="mlflow-installation-name">Installation name</label>
               <mat-form-field appearance="outline">

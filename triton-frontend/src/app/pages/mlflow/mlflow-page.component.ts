@@ -29,6 +29,7 @@ type MlflowInstallResponse = {
 
 type MlflowStatusResponse = {
   installed: boolean;
+  configured_version: string;
   status: string;
   ready: boolean;
   status_message: string;
@@ -252,6 +253,7 @@ export class MlflowPageComponent implements OnDestroy {
       );
       this.status.set({
         installed: false,
+        configured_version: current.configured_version,
         status: "not_installed",
         ready: false,
         status_message: "",
@@ -291,6 +293,7 @@ export class MlflowPageComponent implements OnDestroy {
   private creatingStatus(installation: MlflowInstallResponse): MlflowStatusResponse {
     return {
       installed: true,
+      configured_version: this.status()?.configured_version ?? "",
       status: "creating",
       ready: false,
       status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",

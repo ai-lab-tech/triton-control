@@ -5294,6 +5294,11 @@
             "type": "boolean",
             "title": "Installed"
           },
+          "configured_version": {
+            "type": "string",
+            "title": "Configured Version",
+            "default": ""
+          },
           "status": {
             "type": "string",
             "title": "Status",

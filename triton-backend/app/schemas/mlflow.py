@@ -55,6 +55,7 @@ class MlflowStatusResponse(SQLModel):
     """Response describing singleton MLflow installation and UI proxy base path."""
 
     installed: bool
+    configured_version: str = ""
     status: str = "not_installed"
     ready: bool = False
     status_message: str = ""
