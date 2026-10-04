@@ -68,9 +68,10 @@ the workflow:
 | --- | --- |
 | `examples/workflows/mlflow-iris-autodeploy/train.py` | `workflows/mlflow-iris-autodeploy/train.py` |
 
-Use the same workspace S3 client as in the
-[sklearn Iris example](../sklearn-iris-training/README.md#3-install-configure-and-use-an-s3-client),
-such as More Connect or AWS CLI. For example, from the repository root in a
+Use the bundled **code-server S3 plugin** in Explorer or **AWS CLI** in the
+workspace terminal, as described in the
+[sklearn Iris example](../sklearn-iris-training/README.md#3-upload-the-training-script).
+For example, from the repository root in a
 workspace with a configured AWS CLI profile:
 
 ```bash
