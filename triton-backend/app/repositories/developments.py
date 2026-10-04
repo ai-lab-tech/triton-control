@@ -40,6 +40,10 @@ def list_for_owner(session: Session, owner_user_id: int) -> list[CodeServerEntit
     )
 
 
+def list_all(session: Session) -> list[CodeServerEntity]:
+    return list(session.exec(select(CodeServerEntity)).all())
+
+
 def save(session: Session, row: CodeServerEntity, *, refresh: bool = True) -> CodeServerEntity:
     session.add(row)
     session.commit()

@@ -2014,6 +2014,33 @@
         }
       }
     },
+    "/api/mlflow/upgrade": {
+      "post": {
+        "tags": [
+          "mlflow"
+        ],
+        "summary": "Upgrade Tracking",
+        "description": "Upgrade tracking attribution without deleting MLflow or workspace data.",
+        "operationId": "upgrade_tracking_api_mlflow_upgrade_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MlflowInstallResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/mlflow": {
       "get": {
         "tags": [

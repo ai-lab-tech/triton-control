@@ -125,6 +125,8 @@ mlflow:
   version: "3.14.0"
   image:
     repository: ghcr.io/mlflow/mlflow
+  # Internal credential gate; MLflow itself listens only on pod loopback.
+  gatewayImage: nginx:1.28-alpine
 
 development:
   codeServer:

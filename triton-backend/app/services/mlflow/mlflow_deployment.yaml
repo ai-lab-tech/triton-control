@@ -51,25 +51,53 @@ spec:
             - >
               mkdir -p /mlflow-data/artifacts &&
               exec mlflow server
-              --host 0.0.0.0
-              --port 5000
+              --host 127.0.0.1
+              --port 5001
               --allowed-hosts {allowed_hosts}
               --backend-store-uri sqlite:////mlflow-data/mlflow.db
               --serve-artifacts
               --artifacts-destination /mlflow-data/artifacts
-          ports:
-            - name: http
-              containerPort: 5000
           readinessProbe:
-            httpGet:
-              path: /
-              port: http
+            exec:
+              command:
+                - python
+                - -c
+                - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=2)"
             periodSeconds: 2
             timeoutSeconds: 2
           volumeMounts:
             - name: data
               mountPath: /mlflow-data
+        - name: tracking-gateway
+          image: {gateway_image}
+          imagePullPolicy: IfNotPresent
+          command: [nginx, -g, "daemon off;"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: gateway-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
       volumes:
+        - name: gateway-config
+          secret:
+            secretName: {gateway_secret_name}
         - name: data
           persistentVolumeClaim:
             claimName: {data_pvc_name}

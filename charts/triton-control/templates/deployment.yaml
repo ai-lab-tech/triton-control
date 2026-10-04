@@ -57,6 +57,10 @@ spec:
               value: {{ .Values.mlflow.version | quote }}
             - name: MLFLOW_IMAGE_REPOSITORY
               value: {{ .Values.mlflow.image.repository | quote }}
+            - name: MLFLOW_GATEWAY_IMAGE
+              value: {{ .Values.mlflow.gatewayImage | quote }}
+            - name: ARGO_WORKFLOWS_WORKFLOW_SERVICE_ACCOUNT
+              value: {{ .Values.argoWorkflows.controller.workflowDefaults.spec.serviceAccountName | quote }}
             - name: TRITON_DEPLOY_S3_SYNC_IMAGE
               value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
             - name: TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE

@@ -208,6 +208,7 @@ mlflow:
   version: "3.14.0"
   image:
     repository: ghcr.io/mlflow/mlflow
+  gatewayImage: nginx:1.28-alpine
 ```
 
 The server uses `<repository>:v<version>`. If you use the separately installed
@@ -218,6 +219,44 @@ MLflow version:
 ```bash
 bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
 ```
+
+MLflow listens on pod loopback behind a gateway that accepts only a credential
+held by the Triton Control backend. Argo containers submitted through Triton
+Control and new code-server workspaces receive `MLFLOW_TRACKING_URI` and
+`MLFLOW_TRACKING_TOKEN` automatically. The tracking proxy sets `mlflow.user` to
+the authenticated workflow submitter or workspace owner's email and prevents
+that tag from being changed or deleted. Binary artifacts and model registry
+operations use the same proxy. This attributes new runs; it does not hide
+other users' runs or change the creator of existing runs.
+
+After deploying this backend to an existing installation, an administrator
+must call **POST `/api/mlflow/upgrade`** once with their normal Triton Control
+authentication. This adds the gateway and updates existing workspace
+environments in place, retaining MLflow and workspace PVCs and existing S3
+credentials. Workspace pods roll to inherit the new environment. Previously
+submitted workflows keep their old configuration; submit a new workflow after
+the upgrade. New MLflow installations and workspaces need no upgrade call.
+
+For example, from the internal code-server terminal with an administrator's
+local-login token already exported:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $TRITON_CONTROL_TOKEN" \
+  http://triton-control.triton-control.svc.cluster.local:8000/api/mlflow/upgrade
+```
+
+The workflow executor ServiceAccount must have only its normal task-result
+permissions, not permission to read arbitrary Secrets or create privileged
+pods. Managed workflow submissions allow inline container/script templates,
+the submitter's linked S3 Secrets, and workflow-owned `volumeClaimTemplates`.
+Foreign Secret/PVC mounts, external/resource templates, elevated
+ServiceAccounts, and host/privileged access are rejected to prevent tracking
+credential impersonation. Kubernetes administrators remain trusted.
+Alternate Argo creation APIs (template submission, resubmission, retries, and
+CronWorkflow/template writes) are rejected by this proxy; submit a new inline
+Workflow instead. Reading, deleting, suspending, resuming, stopping, and
+terminating existing workflows remain available.
 
 ## RBAC Scope
 

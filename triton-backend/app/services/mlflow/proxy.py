@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
 
 import anyio
@@ -11,7 +12,7 @@ from fastapi import Request, Response
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError
 from app.services.kubernetes_client import api_client, is_running_in_cluster
-from app.services.mlflow import config, installer
+from app.services.mlflow import config, installer, tracking
 
 _HOP_BY_HOP_HEADERS = {
     "connection",
@@ -30,6 +31,8 @@ _REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
     "cookie",
     "origin",
     "referer",
+    "authorization",
+    "x-triton-mlflow-gateway",
     # Prevent Kubernetes service proxy from turning browser cache validation
     # requests into ApiException(304) errors.
     "if-none-match",
@@ -44,9 +47,9 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 }
 
 
-async def proxy_http(path: str, request: Request) -> Response:
+async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Response:
     """Proxy authenticated request to the singleton MLflow server."""
-    body = await request.body()
+    body = tracking.enforce_creator(path, request.method, await request.body(), claims)
     headers = {
         key: value
         for key, value in request.headers.items()
@@ -55,7 +58,7 @@ async def proxy_http(path: str, request: Request) -> Response:
     headers["x-forwarded-prefix"] = config.base_path().rstrip("/")
     query_params = list(request.query_params.multi_items())
     server_url = await anyio.to_thread.run_sync(_proxy_server_url)
-    return await anyio.to_thread.run_sync(
+    response = await anyio.to_thread.run_sync(
         _proxy_http_sync,
         server_url,
         path,
@@ -64,6 +67,7 @@ async def proxy_http(path: str, request: Request) -> Response:
         query_params,
         body,
     )
+    return tracking.expose_creator(path, response)
 
 
 def _proxy_server_url() -> str:
@@ -81,6 +85,7 @@ def _proxy_http_sync(
     query_params: list[tuple[str, str]],
     body: bytes,
 ) -> Response:
+    headers = {**headers, **tracking.gateway_header(server_url)}
     if is_running_in_cluster():
         return _direct_proxy_http_sync(server_url, path, method, headers, query_params, body)
     return _kubernetes_proxy_http_sync(server_url, path, method, headers, query_params, body)

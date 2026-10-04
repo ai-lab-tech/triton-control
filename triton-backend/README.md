@@ -130,3 +130,18 @@ python scripts/export_openapi.py
 The frontend keeps a copy at
 `../triton-frontend/openapi/triton-backend/openapi.json` for generated Angular
 API client updates. Backend CI verifies that both spec copies are current.
+
+## MLflow attribution smoke test
+
+With backend dependencies installed and Docker running, execute from
+`triton-backend`:
+
+```bash
+python -m scripts.smoke_mlflow_attribution
+```
+
+This starts isolated MLflow 3.14 and gateway containers, checks direct-access
+rejection and protected creator tags, and runs the unmodified MLflow SDK through
+training, metric logging, artifact upload, and model registration. It removes
+the test containers on exit and retains the built test image for subsequent
+runs. It does not change the Kubernetes installation.

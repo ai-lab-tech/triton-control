@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -11,7 +14,7 @@ import yaml  # type: ignore[import-untyped]
 from app.exceptions import BadGatewayError, BadRequestError
 from app.schemas import InstallMlflowRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
-from app.services.mlflow import config
+from app.services.mlflow import config, tracking
 
 _TEMPLATE = Path(__file__).with_name("mlflow_deployment.yaml")
 _POD_WAIT_ATTEMPTS = 120
@@ -45,7 +48,8 @@ def apply_installation_resources(
         api = _client()
         _ensure_namespace(api, namespace)
         applied = []
-        for manifest in _manifests(request, namespace, deployment_name, service_name):
+        token = _gateway_token(api, namespace, deployment_name)
+        for manifest in _manifests(request, namespace, deployment_name, service_name, gateway_token=token):
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
@@ -84,6 +88,47 @@ def delete_namespace(namespace: str) -> str:
         raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
 
 
+def upgrade_installation_resources(namespace: str, deployment_name: str, service_name: str) -> list[str]:
+    """Retain private-registry credentials when adding the tracking gateway."""
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    dockerconfigjson = None
+    try:
+        secret = client.CoreV1Api(_client()).read_namespaced_secret(
+            _image_pull_secret_name(deployment_name), namespace,
+        )
+        dockerconfigjson = base64.b64decode((secret.data or {}).get(".dockerconfigjson", "")).decode() or None
+    except ApiException as exc:
+        if exc.status != 404:
+            raise
+    applied = apply_installation_resources(
+        InstallMlflowRequest(installation_name=deployment_name, dockerconfigjson=dockerconfigjson),
+        namespace=namespace, deployment_name=deployment_name, service_name=service_name,
+    )
+    _wait_for_current_deployment(_client(), namespace, deployment_name)
+    return applied
+
+
+def _wait_for_current_deployment(api: Any, namespace: str, deployment_name: str) -> None:
+    from kubernetes import client
+
+    apps = client.AppsV1Api(api)
+    for _ in range(_POD_WAIT_ATTEMPTS):
+        deployment = apps.read_namespaced_deployment(deployment_name, namespace)
+        desired = deployment.spec.replicas or 1
+        status = deployment.status
+        if (
+            (status.observed_generation or 0) >= deployment.metadata.generation
+            and status.updated_replicas == desired
+            and status.ready_replicas == desired
+            and status.replicas == desired
+        ):
+            return
+        time.sleep(_POD_WAIT_INTERVAL_SECONDS)
+    raise BadGatewayError("MLflow tracking gateway rollout did not complete")
+
+
 def delete_installation_resources(namespace: str, deployment_name: str, service_name: str) -> str:
     """Delete MLflow resources in-place without deleting namespace."""
     from kubernetes import client
@@ -107,6 +152,7 @@ def delete_installation_resources(namespace: str, deployment_name: str, service_
     _delete(core.delete_namespaced_service, "Service", service_name)
     _delete(core.delete_namespaced_persistent_volume_claim, "PersistentVolumeClaim", _data_pvc_name(deployment_name))
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(deployment_name))
+    _delete(core.delete_namespaced_secret, "Secret", tracking.gateway_secret_name(deployment_name))
     return ", ".join(deleted) if deleted else "No MLflow resources found to delete."
 
 
@@ -156,6 +202,8 @@ def _manifests(
     namespace: str,
     deployment_name: str,
     service_name: str,
+    *,
+    gateway_token: str | None = None,
 ) -> list[dict[str, Any]]:
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
@@ -177,8 +225,29 @@ def _manifests(
         data_pvc_name=q(_data_pvc_name(deployment_name)),
         image=q(config.server_image()),
         allowed_hosts=q(_allowed_hosts(namespace, service_name)),
+        gateway_secret_name=q(tracking.gateway_secret_name(deployment_name)),
+        gateway_image=q(os.getenv("MLFLOW_GATEWAY_IMAGE", "nginx:1.28-alpine")),
     )
-    return [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
+    manifests = [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
+    manifests.append(tracking.gateway_manifest(namespace, deployment_name, gateway_token or secrets.token_urlsafe(32)))
+    # The gateway configuration must exist before its pod is scheduled.
+    return sorted(manifests, key=lambda manifest: manifest["kind"] != "Secret")
+
+
+def _gateway_token(api: Any, namespace: str, deployment_name: str) -> str:
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    try:
+        secret = client.CoreV1Api(api).read_namespaced_secret(tracking.gateway_secret_name(deployment_name), namespace)
+    except ApiException as exc:
+        if exc.status == 404:
+            return secrets.token_urlsafe(32)
+        raise
+    token = base64.b64decode((secret.data or {}).get("gateway-token", "")).decode()
+    if not token:
+        raise BadGatewayError("MLflow gateway Secret has no credential")
+    return token
 
 
 def _client() -> Any:

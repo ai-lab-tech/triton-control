@@ -63,6 +63,43 @@ class WorkflowDelegationTests(unittest.TestCase):
         self.assertEqual(claims["allowed_s3_profile_id"], 11)
         self.assertEqual(claims["allowed_deployment_name"], "iris-classifier")
         self.assertNotIn(secret.string_data["token"], body.decode())
+        self.assertIn("MLFLOW_TRACKING_TOKEN", env)
+        self.assertIn(f"/tracking/workflows/{namespace}/{secret_name}", env["MLFLOW_TRACKING_URI"]["value"])
+        patched = core_api.return_value.patch_namespaced_secret.call_args.args[2]
+        self.assertEqual(patched["metadata"]["annotations"]["triton-control.ai/mlflow-owner-user-id"], "7")
+        self.assertNotIn(patched["stringData"]["MLFLOW_TRACKING_TOKEN"], body.decode())
+
+    def test_plain_workflow_gets_submitter_identity_in_every_training_container(self) -> None:
+        submission = {"workflow": {
+            "metadata": {"generateName": "training-"},
+            "spec": {"templates": [
+                {"name": "train", "container": {"image": "python:3.12", "env": [
+                    {"name": "MLFLOW_TRACKING_URI", "value": "http://mlflow-service:5000"},
+                    {"name": "MLFLOW_TRACKING_TOKEN", "value": "fake-token"},
+                    {"name": "KEEP", "value": "yes"},
+                ]}},
+                {"name": "script", "script": {"image": "python:3.12", "source": "pass"}},
+            ]},
+        }}
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
+            mlflow_delegation, "api_client"
+        ), patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core:
+            body, secret_name, namespace = mlflow_delegation.prepare_submission(
+                "api/v1/workflows/triton-control", json.dumps(submission).encode(),
+                {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
+            )
+        result = json.loads(body)["workflow"]
+        for template in result["spec"]["templates"]:
+            env = (template.get("script") or template.get("container"))["env"]
+            self.assertEqual(sum(item["name"] == "MLFLOW_TRACKING_TOKEN" for item in env), 1)
+            self.assertEqual(sum(item["name"] == "MLFLOW_TRACKING_URI" for item in env), 1)
+            self.assertNotIn("fake-token", json.dumps(env))
+        core.return_value.patch_namespaced_secret.assert_not_called()
+        secret = core.return_value.create_namespaced_secret.call_args.kwargs["body"]
+        self.assertEqual(secret.metadata.annotations["triton-control.ai/mlflow-owner-user-id"], "7")
+        self.assertNotIn(secret.string_data["MLFLOW_TRACKING_TOKEN"], body.decode())
+        self.assertEqual(namespace, "triton-control")
+        self.assertTrue(secret_name.startswith("mlflow-training-"))
 
     def test_legacy_profile_id_annotation_still_works(self) -> None:
         submission = json.loads(self._submission())
@@ -85,7 +122,10 @@ class WorkflowDelegationTests(unittest.TestCase):
     def test_rejects_ambiguous_profile_reference(self) -> None:
         submission = json.loads(self._submission())
         submission["workflow"]["metadata"]["annotations"]["triton-control.ai/mlflow-s3-profile-id"] = "11"
-        with patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"):
+        with (
+            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
+            patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
+        ):
             with self.assertRaises(BadRequestError):
                 mlflow_delegation.prepare_submission(
                     "api/v1/workflows/triton-control", json.dumps(submission).encode(),

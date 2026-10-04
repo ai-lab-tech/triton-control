@@ -235,11 +235,11 @@ class MlflowTests(unittest.TestCase):
         manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service")
 
         secret = manifests[0]
-        pvc = manifests[1]
-        deployment = manifests[2]
-        service = manifests[3]
+        pvc = next(item for item in manifests if item["kind"] == "PersistentVolumeClaim")
+        deployment = next(item for item in manifests if item["kind"] == "Deployment")
+        service = next(item for item in manifests if item["kind"] == "Service")
         probe = deployment["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]
-        self.assertEqual(probe["httpGet"], {"path": "/", "port": "http"})
+        self.assertIn("127.0.0.1:5001/health", probe["exec"]["command"][-1])
         self.assertEqual(secret["kind"], "Secret")
         self.assertEqual(secret["stringData"][".dockerconfigjson"], dockerconfigjson)
         self.assertEqual(pvc["kind"], "PersistentVolumeClaim")

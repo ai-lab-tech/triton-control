@@ -63,8 +63,6 @@ spec:
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             python /tmp/train.py
         env:
-          - name: MLFLOW_TRACKING_URI
-            value: http://mlflow-service:5000
           - name: MLFLOW_EXPERIMENT_NAME
             value: triton-autodeploy
           - name: MLFLOW_SKLEARN_REGISTERED_MODEL_NAME
@@ -128,8 +126,6 @@ spec:
               -C wait_timeout_seconds=600
             python -c 'import os; from mlflow import MlflowClient; client = MlflowClient(); name = os.environ["MLFLOW_TRITON_REGISTERED_MODEL_NAME"]; version = os.environ["MLFLOW_TRITON_MODEL_VERSION"]; client.set_model_version_tag(name=name, version=version, key="deployment_status", value="deployed"); client.set_registered_model_alias(name=name, alias="champion", version=version)'
         env:
-          - name: MLFLOW_TRACKING_URI
-            value: http://mlflow-service:5000
           - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
             value: iris-classifier-triton
           - name: MLFLOW_TRITON_MODEL_VERSION

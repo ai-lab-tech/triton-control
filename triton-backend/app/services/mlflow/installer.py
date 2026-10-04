@@ -9,13 +9,14 @@ from sqlmodel import Session
 
 from app.db.entities import MlflowEntity
 from app.exceptions import BadRequestError, ConflictError
-from app.repositories import mlflow
+from app.repositories import developments, mlflow
 from app.schemas import (
     InstallMlflowRequest,
     MlflowDeleteResponse,
     MlflowInstallResponse,
     MlflowStatusResponse,
 )
+from app.services.development import kubernetes as workspace_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.mlflow import config
 from app.services.mlflow import kubernetes as k8s
@@ -126,6 +127,30 @@ def uninstall_mlflow(session: Session) -> MlflowDeleteResponse:
 
     mlflow.delete(session, entity)
     return MlflowDeleteResponse(status="deleted", message=message, namespace=namespace)
+
+
+def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
+    """Protect an existing MLflow installation and configure existing workspaces."""
+    if not _install_lock.acquire(blocking=False):
+        raise ConflictError("MLflow installation is already in progress")
+    try:
+        entity = mlflow.get(session)
+        if entity is None:
+            raise BadRequestError("MLflow is not installed")
+        entity.applied_resources = k8s.upgrade_installation_resources(
+            entity.namespace, entity.deployment_name, entity.service_name,
+        )
+        entity.status = "ready"
+        entity.status_message = "MLflow tracking gateway is ready."
+        entity.last_transition_at = datetime.utcnow()
+        entity = mlflow.save(session, entity)
+        for workspace in developments.list_all(session):
+            workspace_k8s.enable_mlflow_tracking(
+                workspace.namespace, workspace.statefulset_name, workspace.secret_name,
+            )
+        return _to_dto(entity)
+    finally:
+        _install_lock.release()
 
 
 def get_proxy_server_url(session: Session) -> str:

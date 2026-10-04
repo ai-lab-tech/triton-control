@@ -19,6 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.exceptions import BadGatewayError
 from app.services.workflows import mlflow_delegation
 from app.services.workflows.config import get_config
+from app.services.workflows.tracking_policy import validate_proxy_write
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +54,9 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None 
     config = get_config()
     if not config.enabled or not config.server_url:
         raise BadGatewayError("Argo Workflows is not configured")
+    if claims is not None:
+        validate_proxy_write(request.method, path)
 
-    client = httpx.AsyncClient(
-        follow_redirects=False,
-        timeout=_PROXY_TIMEOUT_SECONDS,
-        trust_env=False,
-    )
     target = _http_url(config.server_url, path, list(request.query_params.multi_items()))
     headers = {key: value for key, value in request.headers.items() if key.lower() not in _REQUEST_SKIP_HEADERS}
     headers["x-forwarded-prefix"] = config.base_path.rstrip("/")
@@ -69,6 +67,11 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None 
         body, secret_name, secret_namespace = await asyncio.to_thread(
             mlflow_delegation.prepare_submission, path, body, claims
         )
+    client = httpx.AsyncClient(
+        follow_redirects=False,
+        timeout=_PROXY_TIMEOUT_SECONDS,
+        trust_env=False,
+    )
     try:
         upstream_request = client.build_request(
             request.method,

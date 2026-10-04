@@ -152,9 +152,12 @@ the model is uploaded to `iris_classifier/` at the bucket root.
 Triton Control resolves the selected profile's linked Argo artifact-repository
 ConfigMap and bucket when the authenticated proxy receives the workflow. No
 ConfigMap name or bucket parameter is needed in this manifest.
-The training template uses the cluster's fixed MLflow service URL,
-`http://mlflow-service:5000`; edit `MLFLOW_TRACKING_URI` in the template if
-your installation uses a different service address.
+Triton Control automatically injects `MLFLOW_TRACKING_URI` and
+`MLFLOW_TRACKING_TOKEN` into the training and deployment containers. Tracking
+requests go through its authenticated proxy, which records the submitting
+user's email as the run creator. Scripts do not need to set a creator tag;
+supplied creator values are overwritten and later edits are rejected. Direct
+requests to the internal MLflow Service require a backend-only credential.
 
 The MLflow deployment name is `iris-classifier` in the annotation and the
 deployment command. The Triton model name is `iris_classifier` in `train.py`,
@@ -184,6 +187,14 @@ For an opted-in workflow, Triton Control:
    injects `TRITON_CONTROL_S3_PROFILE_ID` and `TRITON_CONTROL_S3_BUCKET` into
    the `deploy` template;
 4. attaches the Secret to the Workflow for garbage collection.
+
+Tracking credentials are also injected into ordinary inline container/script
+workflows submitted through this proxy, without the deployment annotations.
+They identify the submitter and are invalidated when the Workflow's Secret is
+deleted. Use `volumeClaimTemplates` for workflow storage and the configured
+executor ServiceAccount. To protect tracking credentials, managed submissions
+cannot mount unrelated Secrets or existing PVCs, use privileged/host access,
+or reference external/resource templates.
 
 The `train` task records parameters, accuracy, and tags; registers the sklearn
 checkpoint as a new version of `iris-classifier-sklearn`; and registers the

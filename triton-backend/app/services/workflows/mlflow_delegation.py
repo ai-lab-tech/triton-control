@@ -16,7 +16,9 @@ from app.db.database import session_factory
 from app.exceptions import BadRequestError, NotFoundError
 from app.repositories import s3_profiles, workflow_s3_credentials
 from app.services.kubernetes_client import api_client, in_cluster_namespace
+from app.services.mlflow import tracking
 from app.services.workflows.artifact_repository import REPOSITORY_KEY
+from app.services.workflows.tracking_policy import validate_workflow
 
 _SUBMIT_PATH = re.compile(r"api/v1/workflows/([a-z0-9-]+)\Z")
 _DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -24,6 +26,83 @@ _ANNOTATION = "triton-control.ai/mlflow-deploy-template"
 
 
 def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[bytes, str | None, str | None]:
+    """Give every submitted container/script the submitter's tracking identity."""
+    match = _SUBMIT_PATH.fullmatch(path.strip("/"))
+    if not match:
+        return body, None, None
+    try:
+        payload = json.loads(body)
+    except (ValueError, TypeError):
+        return body, None, None
+    workflow = payload.get("workflow") if isinstance(payload, dict) else None
+    if not isinstance(workflow, dict):
+        return body, None, None
+    require_member_or_admin(claims)
+    namespace = match.group(1)
+    with session_factory() as session:
+        user = require_user_entity(session, claims)
+        owner_id = user.id
+        allowed_secrets = {
+            row.secret_name for row in workflow_s3_credentials.list_all(session)
+            if row.namespace == namespace and row.created_by_user_id == owner_id
+        }
+    validate_workflow(workflow, allowed_secrets)
+    body, secret_name, _ = _prepare_deployment_submission(path, body, claims)
+    has_deployment_secret = secret_name is not None
+    payload = json.loads(body)
+    workflow = payload["workflow"]
+    metadata = workflow.get("metadata") or {}
+    if not secret_name:
+        prefix = (metadata.get("name") or metadata.get("generateName") or "workflow")[:32].rstrip("-")
+        secret_name = f"mlflow-{prefix}-{secrets.token_hex(5)}"
+    token = secrets.token_urlsafe(32)
+    core = client.CoreV1Api(api_client())
+    secret_body = {
+        "metadata": {"annotations": {tracking.WORKFLOW_OWNER_ANNOTATION: str(owner_id)}},
+        "stringData": {tracking.TRACKING_TOKEN_KEY: token},
+    }
+    try:
+        for template in workflow.get("spec", {}).get("templates", []):
+            pod = template.get("container") or template.get("script")
+            if pod is None:
+                continue
+            environment = pod.setdefault("env", [])
+            environment[:] = [
+                item for item in environment
+                if item.get("name") not in {"MLFLOW_TRACKING_URI", "MLFLOW_TRACKING_TOKEN"}
+            ]
+            environment.extend([
+                {"name": "MLFLOW_TRACKING_URI", "value": tracking.tracking_uri("workflows", namespace, secret_name)},
+                {"name": "MLFLOW_TRACKING_TOKEN", "valueFrom": {
+                    "secretKeyRef": {"name": secret_name, "key": tracking.TRACKING_TOKEN_KEY},
+                }},
+            ])
+        if tracking.WORKFLOW_OWNER_ANNOTATION in metadata.get("annotations", {}):
+            raise BadRequestError("MLflow workflow owner is managed by Triton Control")
+        metadata.setdefault("annotations", {})[tracking.WORKFLOW_OWNER_ANNOTATION] = str(owner_id)
+        workflow["metadata"] = metadata
+        if has_deployment_secret:
+            # Keep the deployment credential in its existing Secret.
+            core.patch_namespaced_secret(secret_name, namespace, secret_body)
+        else:
+            core.create_namespaced_secret(namespace=namespace, body=client.V1Secret(
+                metadata=client.V1ObjectMeta(
+                    name=secret_name, namespace=namespace,
+                    annotations={tracking.WORKFLOW_OWNER_ANNOTATION: str(owner_id)},
+                ),
+                string_data={tracking.TRACKING_TOKEN_KEY: token}, type="Opaque",
+            ))
+    except Exception:
+        # A deployment Secret may already have been created by the legacy path.
+        if has_deployment_secret:
+            cleanup_secret(namespace, secret_name)
+        raise
+    return json.dumps(payload).encode(), secret_name, namespace
+
+
+def _prepare_deployment_submission(
+    path: str, body: bytes, claims: dict[str, Any],
+) -> tuple[bytes, str | None, str | None]:
     """Return modified Argo request, secret name, and namespace when opted in."""
     match = _SUBMIT_PATH.fullmatch(path.strip("/"))
     if not match:

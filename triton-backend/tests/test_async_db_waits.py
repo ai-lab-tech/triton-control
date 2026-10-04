@@ -40,7 +40,7 @@ class AsyncDatabaseWaitTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(mlflow_proxy, "session_factory", SessionContext), patch.object(
             mlflow_proxy.installer, "get_proxy_server_url", self.gated_lookup(gate, "http://mlflow:5000")
         ), patch.object(mlflow_proxy, "_proxy_http_sync", upstream):
-            result = await mlflow_api.proxy_mlflow(request, "", {"role": "member"})
+            result = await mlflow_api.proxy_mlflow(request, "", {"role": "member", "email": "owner@example.com"})
         self.assertIs(result, response)
 
     def gated_lookup(self, gate, value):
