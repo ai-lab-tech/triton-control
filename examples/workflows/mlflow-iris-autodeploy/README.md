@@ -59,20 +59,50 @@ plugin release, update the pinned package version in [workflow.yaml](workflow.ya
 
 ## 2. Upload the Training Code and Configure S3 Access
 
-Link the S3 profile under **Workflows -> Configure S3 Secrets**, as described
-by the existing `sklearn-iris-training` workflow example. Upload the training
-script to the bucket in that profile, using the exact object key configured in
-the workflow:
+Save your bucket's S3 profile under the account menu's **S3 Profiles**, then
+link the same profile under **Workflows -> Configure S3 Secrets**. Upload the
+training script to that bucket using the exact object key configured in the
+workflow:
 
 | Local file | S3 object key |
 | --- | --- |
 | `examples/workflows/mlflow-iris-autodeploy/train.py` | `workflows/mlflow-iris-autodeploy/train.py` |
 
-Use the bundled **code-server S3 plugin** in Explorer or **AWS CLI** in the
-workspace terminal, as described in the
-[sklearn Iris example](../sklearn-iris-training/README.md#3-upload-the-training-script).
-For example, from the repository root in a
-workspace with a configured AWS CLI profile:
+### Start Code-Server and Upload with the S3 Plugin
+
+1. Open **Development** in Triton Control and create a CPU-only workspace:
+   use `nvcr.io/nvidia/tritonserver:26.06-py3`, disable **Image already has
+   Development installed**, set workspace storage to at least `5Gi`, and set
+   GPU count to `0`.
+2. Wait until the workspace is ready, then open code-server from
+   **Development**. Triton Control installs code-server and the bundled
+   **Triton Control Deploy** plugin with its S3 browser in **Explorer**.
+3. Create `/workspace/mlflow-iris-autodeploy` and copy or upload this example's
+   `train.py` and `workflow.yaml` into it.
+4. In **Explorer**, right-click the workspace folder and choose
+   **S3 Operations → Choose Profile…**. Select the same S3 profile linked under
+   **Workflows -> Configure S3 Secrets**. If already connected, use
+   **S3 Operations → Switch Profile…**.
+5. Expand **S3 · <profile name> · <bucket>** and create or open
+   `workflows/mlflow-iris-autodeploy/` under that S3 root.
+6. Drag the local `train.py` from the workspace tree onto that S3 folder.
+   This copies the file and keeps the local source. Wait for the transfer to
+   finish, then open `train.py` from the S3 tree to verify the upload.
+
+You can also use **S3 Operations → Copy** on the workspace file and
+**S3 Operations → Paste** on the destination S3 folder.
+
+If the S3 profile has a browsing prefix such as `team-a`, the S3 root starts at
+that prefix. The full uploaded object key is then
+`team-a/workflows/mlflow-iris-autodeploy/train.py`; set `s3-script-key` in
+`workflow.yaml` to that full key.
+
+### Alternative: AWS CLI
+
+To upload from the workspace terminal, follow the
+[AWS CLI setup instructions](../sklearn-iris-training/README.md#aws-cli).
+AWS CLI profiles are configured separately from Triton Control S3 profiles.
+From the repository root in a workspace with a configured AWS CLI profile:
 
 ```bash
 aws --profile workflow-training --endpoint-url https://<your-s3-endpoint> \
