@@ -87,7 +87,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session) -> MlflowIns
             )
             entity.applied_resources = applied
             entity.status = "ready"
-            entity.status_message = "MLflow pod is Running."
+            entity.status_message = "MLflow server is ready."
             entity.last_transition_at = datetime.utcnow()
             entity = mlflow.save(session, entity)
             return _to_dto(entity)

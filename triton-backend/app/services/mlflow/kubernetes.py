@@ -49,7 +49,7 @@ def apply_installation_resources(
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
-        _wait_for_running_pod(api, namespace, deployment_name)
+        _wait_for_ready_pod(api, namespace, deployment_name)
         return applied
     except ConfigException as exc:
         raise BadRequestError("Kubernetes configuration could not be loaded") from exc
@@ -116,13 +116,13 @@ def read_installation_readiness(namespace: str, deployment_name: str) -> tuple[b
 
     try:
         api = _client()
-        pod_name = _running_pod_name(api, namespace, deployment_name)
+        pod_name = _ready_pod_name(api, namespace, deployment_name)
         if pod_name:
-            return True, f"MLflow pod '{pod_name}' is Running."
+            return True, f"MLflow pod '{pod_name}' is Ready."
         reason = _pod_error_reason(api, namespace, deployment_name)
         if reason:
             return False, f"MLflow pod not ready: {reason}"
-        return False, "MLflow installation exists but pod is not Running yet."
+        return False, "MLflow installation exists but pod is not Ready yet."
     except ConfigException:
         return False, "Kubernetes configuration could not be loaded"
     except Exception as exc:
@@ -200,9 +200,9 @@ def _ensure_namespace(api: Any, namespace: str) -> None:
             raise
 
 
-def _wait_for_running_pod(api: Any, namespace: str, deployment_name: str) -> None:
+def _wait_for_ready_pod(api: Any, namespace: str, deployment_name: str) -> None:
     for _ in range(_POD_WAIT_ATTEMPTS):
-        if _running_pod_name(api, namespace, deployment_name):
+        if _ready_pod_name(api, namespace, deployment_name):
             return
         error = _pod_error_reason(api, namespace, deployment_name)
         if error:
@@ -210,7 +210,7 @@ def _wait_for_running_pod(api: Any, namespace: str, deployment_name: str) -> Non
                 f"MLflow pod in namespace '{namespace}' failed to start: {error}"
             )
         time.sleep(_POD_WAIT_INTERVAL_SECONDS)
-    raise BadGatewayError(f"MLflow pod in namespace '{namespace}' did not reach Running")
+    raise BadGatewayError(f"MLflow pod in namespace '{namespace}' did not become Ready")
 
 
 def _pod_error_reason(api: Any, namespace: str, deployment_name: str) -> str:
@@ -233,7 +233,7 @@ def _pod_error_reason(api: Any, namespace: str, deployment_name: str) -> str:
     return ""
 
 
-def _running_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
+def _ready_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
     from kubernetes import client
 
     pods = client.CoreV1Api(api).list_namespaced_pod(
@@ -243,7 +243,13 @@ def _running_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
     for pod in pods:
         phase = (getattr(getattr(pod, "status", None), "phase", "") or "").strip()
         name = (getattr(getattr(pod, "metadata", None), "name", "") or "").strip()
-        if phase == "Running" and name:
+        conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
+        ready = any(
+            getattr(condition, "type", None) == "Ready"
+            and getattr(condition, "status", None) == "True"
+            for condition in conditions
+        )
+        if phase == "Running" and ready and name:
             return name
     return ""
 

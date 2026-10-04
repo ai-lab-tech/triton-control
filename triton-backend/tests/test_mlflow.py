@@ -238,6 +238,8 @@ class MlflowTests(unittest.TestCase):
         pvc = manifests[1]
         deployment = manifests[2]
         service = manifests[3]
+        probe = deployment["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]
+        self.assertEqual(probe["httpGet"], {"path": "/", "port": "http"})
         self.assertEqual(secret["kind"], "Secret")
         self.assertEqual(secret["stringData"][".dockerconfigjson"], dockerconfigjson)
         self.assertEqual(pvc["kind"], "PersistentVolumeClaim")
@@ -358,7 +360,7 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="mlflow-123",
             ),
         ):
@@ -367,7 +369,7 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="",
             ),
             patch("app.services.mlflow.kubernetes._pod_error_reason", return_value="ImagePullBackOff"),
@@ -379,17 +381,30 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="",
             ),
             patch("app.services.mlflow.kubernetes._pod_error_reason", return_value=""),
         ):
-            self.assertIn("not Running yet", k8s.read_installation_readiness("ns", "mlflow")[1])
+            self.assertIn("not Ready yet", k8s.read_installation_readiness("ns", "mlflow")[1])
+
+    def test_InstallationWaitsUntilPodIsReady(self) -> None:
+        with (
+            patch("app.services.mlflow.kubernetes._ready_pod_name", side_effect=["", "mlflow-123"]) as ready,
+            patch("app.services.mlflow.kubernetes._pod_error_reason", return_value=""),
+            patch("app.services.mlflow.kubernetes.time.sleep") as sleep,
+        ):
+            k8s._wait_for_ready_pod(object(), "ns", "mlflow")
+        self.assertEqual(ready.call_count, 2)
+        sleep.assert_called_once_with(k8s._POD_WAIT_INTERVAL_SECONDS)
 
     def test_KubernetesPodHelpers_DetectRunningAndTerminalReasons(self) -> None:
         running = SimpleNamespace(
             metadata=SimpleNamespace(name="mlflow-123"),
-            status=SimpleNamespace(phase="Running", container_statuses=[]),
+            status=SimpleNamespace(
+                phase="Running", container_statuses=[],
+                conditions=[SimpleNamespace(type="Ready", status="True")],
+            ),
         )
         failed = SimpleNamespace(
             metadata=SimpleNamespace(name="mlflow-456"),
@@ -406,7 +421,11 @@ class MlflowTests(unittest.TestCase):
         )
         with patch("kubernetes.client.CoreV1Api") as core:
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[running])
-            self.assertEqual(k8s._running_pod_name(object(), "ns", "mlflow"), "mlflow-123")
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "mlflow-123")
+            running.status.conditions[0].status = "False"
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "")
+            running.status.conditions = []
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "")
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[failed])
             self.assertEqual(k8s._pod_error_reason(object(), "ns", "mlflow"), "Failed")
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[waiting])
