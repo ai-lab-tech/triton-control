@@ -24,6 +24,22 @@ best version. The new Triton version starts as `candidate`. The Triton
 Registry version has the `triton` flavor and contains the repository files,
 including `config.pbtxt` and the numbered ONNX model.
 
+### Why the Registry Contains Two Models
+
+- **`iris-classifier-sklearn`** is the original trained scikit-learn pipeline.
+  Keep it for loading in Python, evaluation, or later training. Its
+  `best-checkpoint` alias identifies the version with the highest validation
+  accuracy.
+- **`iris-classifier-triton`** is the exported ONNX model packaged as a Triton
+  repository. Its `champion` alias identifies the successfully deployed
+  version. This is the model served by Triton Control.
+
+The aliases can point to different version numbers. For example, after three
+workflow runs, `best-checkpoint` may still point to sklearn Version 1 if neither
+later run improved its accuracy, while `champion` points to Triton Version 3
+after that version was successfully deployed. The sklearn checkpoint is not
+deployed to Triton Control.
+
 A later training run can load the selected sklearn checkpoint directly:
 
 ```python
@@ -210,25 +226,63 @@ choose a new deployment name in both the Workflow annotation and command.
 ## 5. Verify the Deployment
 
 The workflow should contain successful `train` and `deploy` nodes. In MLflow,
-open the `triton-autodeploy` experiment and verify that
-`iris-classifier-sklearn` has a `best-checkpoint` alias and a
-`validation_accuracy` tag. The deployed version of `iris-classifier-triton`
-must have `candidate` and `champion` aliases plus the
-`deployment_status=deployed` tag. In Triton Control, open the new
-`iris-classifier` instance.
+open the `triton-autodeploy` experiment to inspect the training run and accuracy.
+Then open **Model Registry** from the MLflow menu:
 
-With a local user token and the plugin installed, the deployment can also be
-queried from a terminal:
+- Select **iris-classifier-sklearn** and verify that the best model version has
+  the `best-checkpoint` alias and a `validation_accuracy` tag.
+- Select **iris-classifier-triton** and open the deployed model version. Verify
+  that it has the `candidate` and `champion` aliases plus the
+  `deployment_status=deployed` tag.
+
+### Verify and Test in Triton Control
+
+1. Open **Triton Instances** and select **iris-classifier** to check that the
+   deployed server is live and ready.
+2. Open its **Models** tab and check that **iris_classifier**, version **1**,
+   is ready, then click **Infer** on that model.
+3. In the **Model Inference** page, replace the **JSON Body** with:
+
+   ```json
+   {
+     "inputs": [{
+       "name": "input",
+       "shape": [1, 4],
+       "datatype": "FP32",
+       "data": [5.1, 3.5, 1.4, 0.2]
+     }],
+     "outputs": [
+       {"name": "label"},
+       {"name": "probabilities"}
+     ]
+   }
+   ```
+
+4. Click **Send / Infer** and inspect the **Response** for the predicted
+   label and class probabilities.
+
+
+### Alternative: Verify from the Internal Code-Server Terminal
+
+Open your workspace's code-server from **Development**, then open its integrated
+terminal. Run these commands inside that workspace using the cluster-internal
+Triton Control Service address. Replace `<local-user-token>` with your Triton
+Control user token:
 
 ```bash
+python3 -m pip install --user "mlflow-triton-control==0.2.0"
+export PATH="$HOME/.local/bin:$PATH"
 export TRITON_CONTROL_TOKEN=<local-user-token>
 
 mlflow deployments get \
-  -t triton-control://localhost:8000 \
+  -t triton-control://triton-control.triton-control.svc.cluster.local:8000 \
   --name iris-classifier
 ```
 
-Send a Triton HTTP inference request to the instance endpoint:
+From the same code-server terminal, send an inference request to the Triton
+instance's internal HTTP endpoint. Use the instance URL shown in Triton Control
+for `<triton-endpoint>` (host and port), adjusting the Service name or namespace
+if your installation uses different values:
 
 ```bash
 curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
