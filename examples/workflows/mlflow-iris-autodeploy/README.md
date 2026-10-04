@@ -119,13 +119,19 @@ NVIDIA Triton image that serves the exported model.
 
 Edit [workflow.yaml](workflow.yaml) before submitting it:
 
-| Location | Required value |
-| --- | --- |
-| `metadata.name` | A fixed, unused Kubernetes workflow name |
-| `metadata.annotations/...s3-profile-name` | Name of your S3 profile |
-| `s3-script-key` | Full bucket key of the uploaded `train.py` |
-| `repository-prefix` | Parent directory for Triton models in that bucket |
-| `triton-image` | Triton server image used for the deployment |
+| Location | Required value | Example |
+| --- | --- | --- |
+| `metadata.name` | A fixed, unused Kubernetes workflow name | `mlflow-iris-autodeploy` |
+| `metadata.annotations/...s3-profile-name` | Name of your S3 profile | `workflow-training` (replace with your saved profile name) |
+| `s3-script-key` | Full bucket key of the uploaded `train.py`, including any profile prefix | `workflows/mlflow-iris-autodeploy/train.py` or `team-a/workflows/mlflow-iris-autodeploy/train.py` |
+| `triton-image` | Triton server image used for the deployment | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+
+The workflow derives the serving model's S3 path from the parent directory of
+`s3-script-key`; no separate repository prefix is needed. For example,
+`workflows/mlflow-iris-autodeploy/train.py` produces
+`workflows/mlflow-iris-autodeploy/iris_classifier/`. A profile prefix included in
+`s3-script-key` is preserved. If the script is at the bucket root (`train.py`),
+the model is uploaded to `iris_classifier/` at the bucket root.
 
 Triton Control resolves the selected profile's linked Argo artifact-repository
 ConfigMap and bucket when the authenticated proxy receives the workflow. No
@@ -170,7 +176,7 @@ Triton repository as a new version of `iris-classifier-triton`. It updates
 `candidate` to the new Triton version. Argo then uploads this repository:
 
 ```text
-s3://<bucket>/<repository-prefix>/iris_classifier/
+s3://<bucket>/<script-directory>/iris_classifier/
 |-- config.pbtxt
 |-- training-metadata.json
 `-- 1/
@@ -184,7 +190,7 @@ task runs:
 mlflow deployments create \
   -t triton-control://<triton-control-service>:8000 \
   --name iris-classifier \
-  -m s3://<bucket>/<repository-prefix>/iris_classifier \
+  -m s3://<bucket>/<script-directory>/iris_classifier \
   -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
   -C image=nvcr.io/nvidia/tritonserver:26.06-py3
 ```

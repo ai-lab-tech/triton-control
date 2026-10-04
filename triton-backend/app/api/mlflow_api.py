@@ -68,9 +68,8 @@ def uninstall_mlflow(
 async def proxy_mlflow(
     request: Request,
     path: str = "",
-    session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> Response:
     """Proxy authenticated request to embedded singleton MLflow server."""
     require_member_or_admin(claims)
-    return await proxy.proxy_http(path, request, session)
+    return await proxy.proxy_http(path, request)

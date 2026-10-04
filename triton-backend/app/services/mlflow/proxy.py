@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
 
 import anyio
 import httpx
 from fastapi import Request, Response
 
+from app.db.database import session_factory
 from app.exceptions import BadGatewayError
 from app.services.kubernetes_client import api_client, is_running_in_cluster
 from app.services.mlflow import config, installer
@@ -44,7 +44,7 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 }
 
 
-async def proxy_http(path: str, request: Request, session: Any) -> Response:
+async def proxy_http(path: str, request: Request) -> Response:
     """Proxy authenticated request to the singleton MLflow server."""
     body = await request.body()
     headers = {
@@ -54,7 +54,7 @@ async def proxy_http(path: str, request: Request, session: Any) -> Response:
     }
     headers["x-forwarded-prefix"] = config.base_path().rstrip("/")
     query_params = list(request.query_params.multi_items())
-    server_url = installer.get_proxy_server_url(session)
+    server_url = await anyio.to_thread.run_sync(_proxy_server_url)
     return await anyio.to_thread.run_sync(
         _proxy_http_sync,
         server_url,
@@ -64,6 +64,13 @@ async def proxy_http(path: str, request: Request, session: Any) -> Response:
         query_params,
         body,
     )
+
+
+def _proxy_server_url() -> str:
+    # Release the database connection before waiting for the upstream server.
+    # Pool waits must run outside the request loop so health probes keep working.
+    with session_factory() as session:
+        return installer.get_proxy_server_url(session)
 
 
 def _proxy_http_sync(

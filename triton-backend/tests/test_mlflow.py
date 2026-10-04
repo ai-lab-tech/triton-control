@@ -336,7 +336,6 @@ class MlflowTests(unittest.TestCase):
                 mlflow_api.proxy_mlflow(
                     request=SimpleNamespace(),
                     path="api/2.0/mlflow/experiments/list",
-                    session=SimpleNamespace(),
                     claims={"role": "member"},
                 )
             )

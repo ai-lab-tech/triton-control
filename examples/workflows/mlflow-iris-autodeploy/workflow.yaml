@@ -10,7 +10,7 @@ metadata:
     triton-control.ai/mlflow-deploy-template: deploy
     triton-control.ai/mlflow-deployment-name: iris-classifier
     # Name of an S3 profile owned by the user submitting this workflow.
-    triton-control.ai/mlflow-s3-profile-name: qwen3_30b_a3b
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
 spec:
   entrypoint: pipeline
   # Keep completed pods available while debugging the training/deployment logs.
@@ -21,8 +21,6 @@ spec:
     parameters:
       - name: s3-script-key
         value: workflows/mlflow-iris-autodeploy/train.py
-      - name: repository-prefix
-        value: triton/development
       - name: triton-image
         value: nvcr.io/nvidia/tritonserver:26.06-py3
   templates:
@@ -101,7 +99,8 @@ spec:
             archive:
               none: {}
             s3:
-              key: "{{workflow.parameters.repository-prefix}}/iris_classifier"
+              # Store the serving model beside the training script.
+              key: "{{=sprig.trimPrefix('./', sprig.dir(workflow.parameters['s3-script-key']) + '/iris_classifier')}}"
 
     - name: deploy
       inputs:
@@ -123,7 +122,7 @@ spec:
             mlflow deployments create \
               --target triton-control://triton-control:8000 \
               --name iris-classifier \
-              --model-uri "s3://$TRITON_CONTROL_S3_BUCKET/{{workflow.parameters.repository-prefix}}/iris_classifier" \
+              --model-uri "s3://$TRITON_CONTROL_S3_BUCKET/{{=sprig.trimPrefix('./', sprig.dir(workflow.parameters['s3-script-key']) + '/iris_classifier')}}" \
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600
