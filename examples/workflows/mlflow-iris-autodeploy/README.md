@@ -266,13 +266,23 @@ Then open **Model Registry** from the MLflow menu:
 
 Open your workspace's code-server from **Development**, then open its integrated
 terminal. Run these commands inside that workspace using the cluster-internal
-Triton Control Service address. Replace `<local-user-token>` with your Triton
-Control user token:
+Triton Control Service address. To get your local user token:
+
+1. Sign in to Triton Control with your local email and password.
+2. In that Triton Control browser tab, open the browser's developer tools and
+   select **Application → Local Storage** (or **Storage → Local Storage** in
+   Firefox).
+3. Select the Triton Control site and copy the value of `triton_access_token`.
+4. Paste it inside the quotes in the code-server terminal command below.
+
+This is your login access token; if it expires, sign in again and copy the new
+value. The workflow's temporary deployment token is injected automatically and
+does not need to be copied for workflow execution.
 
 ```bash
 python3 -m pip install --user "mlflow-triton-control==0.2.0"
 export PATH="$HOME/.local/bin:$PATH"
-export TRITON_CONTROL_TOKEN=<local-user-token>
+export TRITON_CONTROL_TOKEN="<paste-your-login-access-token>"
 
 mlflow deployments get \
   -t triton-control://triton-control.triton-control.svc.cluster.local:8000 \
