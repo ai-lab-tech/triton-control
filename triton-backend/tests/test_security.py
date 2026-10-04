@@ -275,6 +275,34 @@ class SecurityClaimsFlowTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException):
                 await _get_claims_with_access_policy(request, None, allow_pending=False)
 
+    async def test_LocalBearer_RefreshesStaleBrowserSession(self):
+        request = self._request(session_user={
+            "email": "u@example.com", "auth_provider": "local", "credential_version": 1,
+        })
+        user = UserEntity(
+            id=5, email="u@example.com", name="U", role="member",
+            auth_provider="local", credential_version=2, assigned_instances=[],
+            is_active=True, created_at=datetime.now(timezone.utc),
+        )
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="fresh-token")
+
+        class _SessionCtx:
+            def __enter__(self):
+                return SimpleNamespace()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with patch("app.core.security.extract_claims", AsyncMock(return_value={
+            "email": user.email, "auth_provider": "local", "credential_version": 2,
+        })), patch("app.core.security.session_factory", return_value=_SessionCtx()), patch(
+            "app.core.identity.resolve_user", return_value=user
+        ):
+            await _get_claims_with_access_policy(request, creds)
+
+        self.assertEqual(request.session["user"]["credential_version"], 2)
+        self.assertEqual(request.session["user"]["email"], user.email)
+
     async def test_GetClaimsWrappers_AllowPendingFlagVaries_DelegatesWithCorrectFlag(self):
         # Arrange
         request = self._request()

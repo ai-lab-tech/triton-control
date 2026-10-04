@@ -76,6 +76,8 @@ def upsert_deployed_instance(
             f"Initial health: {snap['health_error'] or 'healthy'}"
         ),
         "is_self_deployed": True,
+        "mlflow_model_uri": request.model_uri,
+        "mlflow_model_name": request.model_name if request.model_uri else None,
         "s3_enabled": True,
         "s3_endpoint": s3["endpoint"],
         "s3_bucket": s3["bucket"],
@@ -85,8 +87,8 @@ def upsert_deployed_instance(
         "s3_ca_certificate": (request.s3_ca_certificate or "") if s3["use_https"] else "",
         "s3_region": request.s3_region,
         "s3_access_key": request.s3_access_key,
-        "s3_secret_key_hash": hash_secret(request.s3_secret_key),
-        "s3_secret_key_enc": encrypt_secret(request.s3_secret_key),
+        "s3_secret_key_hash": hash_secret(request.s3_secret_key or ""),
+        "s3_secret_key_enc": encrypt_secret(request.s3_secret_key or ""),
         "s3_address_style": "path",
     }
     if instances.find_by_name(session, deployment_name):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any, cast
@@ -12,10 +13,11 @@ import httpx
 import websockets
 from fastapi import Request, WebSocket
 from starlette.background import BackgroundTask
-from starlette.responses import StreamingResponse
+from starlette.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketDisconnect
 
 from app.exceptions import BadGatewayError
+from app.services.workflows import mlflow_delegation
 from app.services.workflows.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 }
 
 
-async def proxy_http(path: str, request: Request) -> StreamingResponse:
+async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None = None) -> Response:
     config = get_config()
     if not config.enabled or not config.server_url:
         raise BadGatewayError("Argo Workflows is not configured")
@@ -60,17 +62,31 @@ async def proxy_http(path: str, request: Request) -> StreamingResponse:
     target = _http_url(config.server_url, path, list(request.query_params.multi_items()))
     headers = {key: value for key, value in request.headers.items() if key.lower() not in _REQUEST_SKIP_HEADERS}
     headers["x-forwarded-prefix"] = config.base_path.rstrip("/")
+    body = await request.body()
+    secret_name: str | None = None
+    secret_namespace: str | None = None
+    if request.method == "POST" and claims is not None:
+        body, secret_name, secret_namespace = await asyncio.to_thread(
+            mlflow_delegation.prepare_submission, path, body, claims
+        )
     try:
         upstream_request = client.build_request(
             request.method,
             target,
             headers=headers,
-            content=await request.body(),
+            content=body,
         )
         upstream = await client.send(upstream_request, stream=True)
     except httpx.HTTPError as exc:
         await client.aclose()
+        if secret_name and secret_namespace:
+            await asyncio.to_thread(mlflow_delegation.cleanup_secret, secret_namespace, secret_name)
         raise BadGatewayError(f"Argo Workflows proxy request failed: {exc}") from exc
+    except Exception:
+        await client.aclose()
+        if secret_name and secret_namespace:
+            await asyncio.to_thread(mlflow_delegation.cleanup_secret, secret_namespace, secret_name)
+        raise
 
     response_headers = {
         key: value for key, value in upstream.headers.items() if key.lower() not in _RESPONSE_SKIP_HEADERS
@@ -78,6 +94,32 @@ async def proxy_http(path: str, request: Request) -> StreamingResponse:
     location = response_headers.get("location")
     if location and location.startswith("/"):
         response_headers["location"] = f"{config.base_path.rstrip('/')}{location}"
+    if secret_name and secret_namespace:
+        response_body = await upstream.aread()
+        if upstream.is_success:
+            try:
+                created = json.loads(response_body)
+                workflow = created.get("workflow", created)
+                metadata = workflow["metadata"]
+                await asyncio.to_thread(
+                    mlflow_delegation.attach_workflow_owner,
+                    secret_namespace, secret_name, metadata["name"], metadata["uid"],
+                )
+            except (ValueError, KeyError, TypeError) as exc:
+                await asyncio.to_thread(mlflow_delegation.cleanup_secret, secret_namespace, secret_name)
+                await upstream.aclose()
+                await client.aclose()
+                raise BadGatewayError("Argo response lacked workflow identity") from exc
+            except Exception as exc:
+                await asyncio.to_thread(mlflow_delegation.cleanup_secret, secret_namespace, secret_name)
+                await upstream.aclose()
+                await client.aclose()
+                raise BadGatewayError("Could not bind deployment token to Argo workflow") from exc
+        else:
+            await asyncio.to_thread(mlflow_delegation.cleanup_secret, secret_namespace, secret_name)
+        await upstream.aclose()
+        await client.aclose()
+        return Response(response_body, status_code=upstream.status_code, headers=response_headers)
     return StreamingResponse(
         _response_body(upstream),
         status_code=upstream.status_code,

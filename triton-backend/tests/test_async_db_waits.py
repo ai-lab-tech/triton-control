@@ -9,11 +9,40 @@ from unittest.mock import AsyncMock, patch
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.api import development_api
+from app.api import development_api, mlflow_api
 from app.core import security
+from app.services.mlflow import proxy as mlflow_proxy
 
 
 class AsyncDatabaseWaitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_mlflow_pool_wait_leaves_loop_responsive_and_releases_session(self):
+        gate = threading.Event()
+        loop_thread = threading.get_ident()
+        closed = threading.Event()
+        response = Response("ok")
+        test = self
+
+        class SessionContext:
+            def __enter__(self):
+                test.assertNotEqual(threading.get_ident(), loop_thread)
+                return self
+
+            def __exit__(self, *args):
+                closed.set()
+
+        def upstream(*args):
+            self.assertTrue(closed.is_set())
+            return response
+
+        asyncio.get_running_loop().call_later(0.03, gate.set)
+        request = Request({"type": "http", "method": "GET", "headers": [], "query_string": b""})
+        request._body = b""
+        with patch.object(mlflow_proxy, "session_factory", SessionContext), patch.object(
+            mlflow_proxy.installer, "get_proxy_server_url", self.gated_lookup(gate, "http://mlflow:5000")
+        ), patch.object(mlflow_proxy, "_proxy_http_sync", upstream):
+            result = await mlflow_api.proxy_mlflow(request, "", {"role": "member"})
+        self.assertIs(result, response)
+
     def gated_lookup(self, gate, value):
         # Only the event loop can release this simulated pool wait. Running
         # the lookup on that loop would deadlock until this safety timeout.
@@ -40,7 +69,9 @@ class AsyncDatabaseWaitTests(unittest.IsolatedAsyncioTestCase):
                 target = SimpleNamespace(namespace="test", service_name="workspace")
                 asyncio.get_running_loop().call_later(0.03, gate.set)
                 response = Response("ok")
-                with patch.object(development_api, "_owned_proxy_target", self.gated_lookup(gate, target)), patch.object(
+                with patch.object(
+                    development_api, "_owned_proxy_target", self.gated_lookup(gate, target)
+                ), patch.object(
                     development_api.code_server_proxy, "proxy_http", AsyncMock(return_value=response)
                 ) as http, patch.object(
                     development_api.code_server_proxy, "proxy_websocket", AsyncMock()
