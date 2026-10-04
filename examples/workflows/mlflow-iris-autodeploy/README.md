@@ -275,6 +275,14 @@ Triton Control Service address. To get your local user token:
 3. Select the Triton Control site and copy the value of `triton_access_token`.
 4. Paste it inside the quotes in the code-server terminal command below.
 
+If that storage entry is missing, use the **Network** tab in developer tools:
+sign in again with your local email and password, select the `POST /api/auth/login`
+request, and copy `access_token` from its JSON response. Inspect the Triton
+Control browser tab, rather than the embedded MLflow or code-server frame.
+An existing browser session can authenticate through its cookie without a
+token in Local Storage. OIDC/SSO login also uses a browser session and does not
+provide this local-login token; the instructions above require a local account.
+
 This is your login access token; if it expires, sign in again and copy the new
 value. The workflow's temporary deployment token is injected automatically and
 does not need to be copied for workflow execution.
