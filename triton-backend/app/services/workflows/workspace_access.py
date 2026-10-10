@@ -8,7 +8,7 @@ import json
 import re
 import secrets
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import Request
 from kubernetes import client  # type: ignore[import-untyped]
@@ -32,10 +32,31 @@ def workspace_url(namespace: str, name: str) -> str:
 
 
 def environment(namespace: str, name: str, secret_name: str) -> list[dict[str, Any]]:
+    control = urlsplit(control_url())
+    workflow_namespace = get_config().namespace or in_cluster_namespace() or "triton-control"
     return [
         {"name": "TRITON_CONTROL_ARGO_URL", "value": workspace_url(namespace, name)},
         {"name": TOKEN_KEY, "valueFrom": {"secretKeyRef": {"name": secret_name, "key": TOKEN_KEY}}},
+        {"name": "ARGO_SERVER", "value": control.netloc},
+        {"name": "ARGO_BASE_HREF", "value": f"{control.path}/api/workflows/workspaces/{namespace}/{name}/argo"},
+        {"name": "ARGO_HTTP1", "value": "true"},
+        {"name": "ARGO_SECURE", "value": str(control.scheme == "https").lower()},
+        {"name": "ARGO_NAMESPACE", "value": workflow_namespace},
+        {"name": "ARGO_TOKEN", "value": f"Bearer $({TOKEN_KEY})"},
     ]
+
+
+def cli_workflow_route(method: str, path: str) -> tuple[str, str]:
+    """Accept standard CLI paths only for the existing workspace operations."""
+    match = re.fullmatch(r"api/v1/workflows/([a-z0-9-]+)(?:/([a-z0-9.-]+)(?:/([a-z]+))?)?", path)
+    namespace = get_config().namespace or in_cluster_namespace() or "triton-control"
+    if not match or match.group(1) != namespace:
+        raise ForbiddenError("This Argo API is not available to workspace credentials")
+    name, action = match.group(2) or "", match.group(3) or ""
+    allowed = {"PUT"} if action else ({"GET", "DELETE"} if name else {"GET", "POST"})
+    if method not in allowed or action and action not in {"suspend", "resume", "terminate", "stop"}:
+        raise ForbiddenError("This Argo operation is not available to workspace credentials")
+    return name, action
 
 
 def authenticate_workspace(namespace: str, name: str, token: str) -> dict[str, Any]:

@@ -116,6 +116,8 @@ installs Triton Control and Argo, creates MLflow and a code-server workspace
 through the API, and tests both connections with the injected credentials.
 Missing or incorrect credentials must be rejected. The cluster is deleted after
 the test; failures fail the CI job.
+The real Argo CLI also lists, submits, reads, and deletes a test workflow through
+the workspace proxy, and verifies rejection of an incorrect credential.
 
 To reproduce the complete CI test locally, run from the repository root with
 Docker, Kind, Helm, kubectl, and Python 3 installed:

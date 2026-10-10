@@ -36,3 +36,5 @@ smoke_pod=$(python3 triton-backend/scripts/prepare_workspace_smoke.py)
 kubectl rollout status -n triton-control "statefulset/${smoke_pod%-0}" --timeout=600s
 kubectl exec -i -n triton-control "$smoke_pod" -c code-server -- python3 - \
   < triton-backend/scripts/smoke_workspace_connections.py
+kubectl exec -i -n triton-control "$smoke_pod" -c code-server -- python3 - \
+  < triton-backend/scripts/smoke_workspace_argo_cli.py

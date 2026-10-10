@@ -127,6 +127,45 @@ class WorkspaceArgoIdentityTests(unittest.TestCase):
 
 
 class WorkspaceArgoApiTests(unittest.TestCase):
+    def test_cli_paths_use_same_owner_filter_and_authentication(self):
+        # Arrange
+        base = "/api/workflows/workspaces/control/alice-workspace/argo/api/v1/workflows/control"
+        with (
+            patch.object(workspace_access, "authenticate_workspace", return_value=self.claims) as authenticate,
+            patch.object(workspace_access, "get_config", return_value=SimpleNamespace(namespace="control")),
+            patch.object(proxy, "proxy_http", AsyncMock(return_value=Response(b'{"items":[]}'))) as upstream,
+        ):
+            # Act
+            response = self.client.get(base, headers=self.headers)
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        authenticate.assert_called_once_with("control", "alice-workspace", "alice-token")
+        self.assertEqual(upstream.call_args.args[0], "api/v1/workflows/control")
+        self.assertEqual(upstream.call_args.args[1].query_params["listOptions.labelSelector"],
+                         f"{workspace_access.OWNER_LABEL}=7")
+
+    def test_cli_cannot_select_other_namespace_or_alternate_api(self):
+        # Arrange
+        base = "/api/workflows/workspaces/control/alice-workspace/argo/"
+        paths = [
+            ("GET", "api/v1/workflows/foreign"), ("POST", "api/v1/workflows/control/submit"),
+            ("PUT", "api/v1/workflows/control/run/retry"), ("GET", "api/v1/workflow-templates/control"),
+            ("GET", "api/v1/info"), ("GET", "api/v1/workflows/control/run/log"),
+            ("POST", "api/v1/workflows/control/run"), ("GET", "api/v1/workflows/control/run/stop"),
+        ]
+        with patch.object(workspace_access, "authenticate_workspace", return_value=self.claims), patch.object(
+            workspace_access, "get_config", return_value=SimpleNamespace(namespace="control")
+        ), patch.object(
+            proxy, "proxy_http", AsyncMock()
+        ) as upstream:
+            # Act / Assert
+            for method, path in paths:
+                with self.subTest(method=method, path=path):
+                    response = self.client.request(method, base + path, headers=self.headers)
+                    self.assertEqual(response.status_code, 403)
+        upstream.assert_not_called()
+
     def setUp(self):
         app = FastAPI()
         app.add_middleware(SessionMiddleware, secret_key="test-session-key")
@@ -388,7 +427,30 @@ class WorkspaceArgoApiTests(unittest.TestCase):
         migrate.assert_not_called()
 
 
+class WorkspaceArgoCliApiTests(WorkspaceArgoApiTests):
+    """Run the same authentication, submission, and ownership checks through CLI routes."""
+
+    def setUp(self):
+        super().setUp()
+        self.base = "/api/workflows/workspaces/control/alice-workspace/argo/api/v1/workflows/control"
+
+
 class WorkspaceArgoProvisioningTests(unittest.TestCase):
+    def test_cli_environment_preserves_tls_and_control_base_path(self):
+        # Arrange
+        with patch.object(workspace_access, "control_url", return_value="https://control.example.test/control"), patch.object(
+            workspace_access, "get_config", return_value=SimpleNamespace(namespace="workflows")
+        ):
+            # Act
+            environment = workspace_access.environment("workspaces", "alice", "alice-secret")
+
+        # Assert
+        values = {item["name"]: item.get("value") for item in environment}
+        self.assertEqual(values["ARGO_SERVER"], "control.example.test")
+        self.assertEqual(values["ARGO_SECURE"], "true")
+        self.assertEqual(values["ARGO_NAMESPACE"], "workflows")
+        self.assertEqual(values["ARGO_BASE_HREF"], "/control/api/workflows/workspaces/workspaces/alice/argo")
+
     def test_new_workspace_has_separate_argo_and_mlflow_credentials(self):
         # Arrange
         namespace, name, secret_name = "control", "alice-workspace", "workspace-secret"
@@ -403,6 +465,10 @@ class WorkspaceArgoProvisioningTests(unittest.TestCase):
                             secret["stringData"][tracking.TRACKING_TOKEN_KEY])
         self.assertEqual(environment[1]["valueFrom"]["secretKeyRef"]["name"], secret_name)
         self.assertTrue(environment[0]["value"].endswith(f"/workspaces/{namespace}/{name}/workflows"))
+        cli_env = {item["name"]: item for item in environment}
+        self.assertEqual(cli_env["ARGO_HTTP1"]["value"], "true")
+        self.assertEqual(cli_env["ARGO_TOKEN"]["value"], "Bearer $(TRITON_CONTROL_ARGO_TOKEN)")
+        self.assertTrue(cli_env["ARGO_BASE_HREF"]["value"].endswith(f"/workspaces/{namespace}/{name}/argo"))
 
     def test_migration_preserves_storage_and_other_credentials(self):
         # Arrange

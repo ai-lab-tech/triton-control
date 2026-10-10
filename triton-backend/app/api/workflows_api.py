@@ -123,10 +123,29 @@ async def proxy_workspace_workflows(
     """Scope workspace credentials to validated submissions and their owner's workflows."""
     workflow_name = request.path_params.get("workflow_name", "")
     action = request.path_params.get("action", "")
+    return await _proxy_workspace_workflows(request, namespace, workspace_name, workflow_name, action)
+
+
+@router.api_route(
+    "/workspaces/{namespace}/{workspace_name}/argo/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], include_in_schema=False,
+)
+@translate_app_errors
+async def proxy_workspace_argo_cli(request: Request, namespace: str, workspace_name: str, path: str) -> Any:
+    """Expose the standard Argo HTTP paths with workspace credential restrictions."""
+    return await _proxy_workspace_workflows(request, namespace, workspace_name, "", "", cli_path=path)
+
+
+async def _proxy_workspace_workflows(
+    request: Request, namespace: str, workspace_name: str, workflow_name: str, action: str,
+    *, cli_path: str | None = None,
+) -> Any:
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer":
         raise UnauthorizedError("Argo workspace authentication required")
     claims = await anyio.to_thread.run_sync(workspace_access.authenticate_workspace, namespace, workspace_name, token)
+    if cli_path is not None:
+        workflow_name, action = workspace_access.cli_workflow_route(request.method, cli_path)
     path = await anyio.to_thread.run_sync(workspace_access.workflow_path, workflow_name, action, claims)
     listing = not workflow_name and request.method == "GET"
     if listing:

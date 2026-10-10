@@ -164,6 +164,25 @@ Expected: `Argo connection OK: 200` and your workflow names.
 For existing workspaces missing these variables, see
 [Argo REST from code-server](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#argo-rest-from-code-server).
 
+### Use the Argo CLI
+
+With the [Argo CLI](https://argo-workflows.readthedocs.io/en/latest/cli/argo/) installed
+in your workspace, run:
+
+```bash
+argo list
+argo submit workflow.yaml
+argo get <workflow-name>
+argo delete <workflow-name>
+```
+
+The injected `ARGO_*` variables configure HTTP access through Triton Control;
+no token export or kubeconfig is needed. You can also suspend, resume, stop, or
+terminate your workflows. Templates, retries, logs, watch, and administrative APIs
+are outside this workspace credential's scope. Use `argo get` to check progress.
+For existing workspaces, an administrator must run the workspace upgrade described
+in the link above, then reopen the terminal after the workspace restarts.
+
 ## S3 Profiles and S3 Browser
 
 The bundled **Triton Control Deploy** extension displays saved S3 profiles as

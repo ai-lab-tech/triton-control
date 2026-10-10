@@ -445,6 +445,27 @@ S3 and MLflow tokens. Workspace pods roll to inherit the new environment;
 repeating the migration preserves existing Argo tokens. MLflow does not need
 to be installed to enable workspace Argo access.
 
+### Argo CLI from code-server
+
+Install the Argo CLI matching the server version in your workspace image or terminal.
+New and upgraded workspaces receive `ARGO_SERVER`, `ARGO_BASE_HREF`, `ARGO_HTTP1`,
+`ARGO_SECURE`, `ARGO_NAMESPACE`, and `ARGO_TOKEN` automatically. The CLI uses
+the same workspace credential and ownership checks as REST, through Triton Control.
+
+```bash
+argo list
+argo submit workflow.yaml
+argo get <workflow-name>
+argo delete <workflow-name>
+```
+
+Suspend, resume, stop, and terminate are supported for owned workflows. Templates,
+retry/resubmit, logs, watch, archives, and administrative APIs are not supported by
+workspace credentials. Submit inline workflow files without `--watch`, `--wait`,
+`--log`, or `--from`; check progress with `argo get`.
+Existing workspaces need `POST /api/workflows/upgrade-workspaces` and a terminal
+restart after rollout to receive the CLI environment.
+
 ### User Workflow Images
 
 The public Argo system image configuration does not grant access to private
