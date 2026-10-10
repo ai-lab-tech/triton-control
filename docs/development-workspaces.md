@@ -112,6 +112,34 @@ Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server
 does not prompt users to mark the folder as trusted on each new workspace.
 
+## Connect to MLflow
+
+Enable **MLflow** in Triton Control, then open your workspace's integrated terminal.
+Managed workspaces receive `MLFLOW_TRACKING_URI` and `MLFLOW_TRACKING_TOKEN`
+automatically; no login token needs to be copied.
+
+Install the client if needed:
+
+```bash
+python3 -m pip install --user "mlflow>=3,<4"
+```
+
+Test the connection:
+
+```bash
+python3 - <<'PY'
+from mlflow import MlflowClient
+
+for experiment in MlflowClient().search_experiments():
+    print(experiment.experiment_id, experiment.name)
+print("MLflow connection OK")
+PY
+```
+
+Expected: experiment names followed by `MLflow connection OK`.
+If the environment variables are missing, reopen the terminal after the workspace
+has restarted following the automatic MLflow migration.
+
 ## S3 Profiles and S3 Browser
 
 The bundled **Triton Control Deploy** extension displays saved S3 profiles as
