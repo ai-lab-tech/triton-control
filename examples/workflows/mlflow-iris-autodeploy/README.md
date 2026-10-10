@@ -30,6 +30,7 @@ If your profile has a prefix such as `team-a`, include it in the full object key
 | --- | --- |
 | `metadata.name`: unused workflow name | `mlflow-iris-autodeploy` |
 | Annotation `triton-control.ai/mlflow-s3-profile-name`: your profile name | `workflow-training` |
+| Annotation `triton-control.ai/mlflow-deployment-name`: deployment name | `iris-classifier` |
 | Parameter `s3-script-key`: uploaded script's full object key | `workflows/mlflow-iris-autodeploy/train.py` |
 | Parameter `triton-image`: serving image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
@@ -37,8 +38,7 @@ The model is uploaded automatically beside the script:
 `workflows/mlflow-iris-autodeploy/iris_classifier/`.
 You only upload `train.py`; no separate model upload or repository-path input is needed.
 
-Keep the default deployment name `iris-classifier` and model name `iris_classifier`.
-If renaming the deployment, update both its annotation and `--name` in the deploy command.
+The deploy command reads its name from the deployment annotation. Keep the model name `iris_classifier`.
 
 ## 4. Run
 
@@ -48,7 +48,7 @@ Wait for both **train** and **deploy** to succeed.
 Triton Control injects credentials automatically and records your user as the MLflow run creator.
 You do not need to copy a login token or set a creator tag.
 
-For another run, delete the previous workflow and the `iris-classifier` deployment first.
+For another run, choose unused workflow and deployment names, or delete the previous ones first.
 The deployment plugin creates new deployments; it does not update existing ones.
 
 ## 5. Verify
