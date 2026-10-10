@@ -352,6 +352,44 @@ Optional aggregate ClusterRoles and ClusterWorkflowTemplates are disabled.
 Argo CRDs remain cluster-scoped because Kubernetes custom resource definitions
 cannot be namespace-scoped.
 
+### Argo API authentication
+
+The embedded Argo Server uses **client authentication**. Triton Control strips
+browser Authorization headers and forwards HTTP and WebSocket requests using
+its own pod-bound Kubernetes ServiceAccount token. The backend reads the
+projected token on each connection so Kubernetes rotation is picked up without
+a restart. This token is never injected into workflow pods or stored in a
+mountable application Secret. The status check verifies an authenticated
+workflow-list API request rather than only checking the public UI assets.
+
+The namespace-scoped `*-argo-proxy` RoleBinding gives the backend ServiceAccount
+workflow management permissions. The executor ServiceAccount retains only
+`create`/`patch` on `workflowtaskresults`; it cannot create workflows or pods, or
+read Secrets. Calling Argo directly with no token is rejected; using a workflow
+executor token cannot create a second workflow to bypass Secret validation.
+People with independent Kubernetes workflow/pod creation permissions remain
+trusted unless Kubernetes admission policies restrict their submissions.
+
+`argoIntegration.networkPolicy.enabled=true` also restricts ingress to Argo
+Server port 2746 to this release's Triton Control app pods in the same namespace.
+This requires a NetworkPolicy-capable CNI. Existing policies are additive: a
+broad allow policy can weaken this network restriction, but client authentication
+and RBAC still apply. Workflow pods do not need Argo Server access to report
+results; they use the Kubernetes API and their executor permissions.
+
+Deploy the updated backend image and Helm chart together. Remove an old
+`argoWorkflows.server.authModes: [server]` override and set `[client]`; the chart
+rejects insecure auth-mode overrides. Prefer an explicit values file over
+`--reuse-values` so the old server mode is not retained. Existing workflow pods
+keep running. Users continue using the embedded UI without another login.
+With `rbac.create=false`, supply equivalent backend RBAC yourself.
+
+For a backend running outside Kubernetes, set `ARGO_WORKFLOWS_TOKEN_PATH` to a
+protected file containing a Kubernetes bearer token with the same permissions;
+a kubeconfig with only a client certificate does not supply this Argo credential.
+For an independently managed Argo Server, configure client mode and equivalent
+RBAC/network restrictions in that installation as well.
+
 ### User Workflow Images
 
 The public Argo system image configuration does not grant access to private

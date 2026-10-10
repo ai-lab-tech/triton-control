@@ -192,7 +192,9 @@ Tracking credentials are also injected into ordinary inline container/script
 workflows submitted through this proxy, without the deployment annotations.
 They identify the submitter and are invalidated when the Workflow's Secret is
 deleted. Use `volumeClaimTemplates` for workflow storage and the configured
-executor ServiceAccount. To protect tracking credentials, managed submissions
+executor ServiceAccount. Argo API requests use the backend’s Kubernetes identity;
+workflow executor tokens cannot submit another workflow to bypass validation.
+To protect tracking credentials, managed submissions
 cannot mount unrelated Secrets or existing PVCs, use privileged/host access,
 or reference external/resource templates.
 
