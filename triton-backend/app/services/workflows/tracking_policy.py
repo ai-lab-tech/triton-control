@@ -9,6 +9,7 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 from app.exceptions import BadRequestError, ForbiddenError
+from app.services.workflows.artifact_repository import REPOSITORY_KEY
 
 
 def validate_proxy_write(method: str, path: str) -> None:
@@ -52,6 +53,14 @@ def validate_workflow(workflow: dict[str, Any], allowed_secrets: set[str]) -> No
         if not isinstance(value, dict):
             return
         for key, item in value.items():
+            if key == "artifactRepositoryRef":
+                if (
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("configMap"), str)
+                    or item["configMap"] not in allowed_secrets
+                    or item.get("key") != REPOSITORY_KEY
+                ):
+                    raise ForbiddenError("Workflow may reference only the submitting user's linked S3 repositories")
             if key == "serviceAccountName" and item != service_account:
                 raise ForbiddenError("Workflow must use the configured executor ServiceAccount")
             if key in {"hostNetwork", "hostPID", "hostIPC", "privileged"} and item:
@@ -61,6 +70,8 @@ def validate_workflow(workflow: dict[str, Any], allowed_secrets: set[str]) -> No
             if key == "capabilities" and isinstance(item, dict) and item.get("add"):
                 raise ForbiddenError("Managed workflows cannot add Linux capabilities")
             if key == "podSpecPatch":
+                if not isinstance(item, str) or "{{" in item:
+                    raise ForbiddenError("Managed workflows require literal podSpecPatch values")
                 try:
                     patch = yaml.safe_load(item)
                 except (yaml.YAMLError, TypeError) as exc:

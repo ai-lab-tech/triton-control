@@ -263,11 +263,69 @@ class TrackingApiTests(unittest.TestCase):
 
 
 class ManagedInstallationTests(unittest.TestCase):
+    def test_gateway_authentication_failure_prevents_ready_status(self):
+        # Arrange
+        from app.exceptions import BadGatewayError
+        with patch.object(mlflow_k8s, "_client"), patch.object(
+            mlflow_k8s, "_gateway_token", return_value="new-credential"
+        ), patch.object(mlflow_k8s.httpx, "Client") as http, patch.object(
+            mlflow_k8s, "_POD_WAIT_ATTEMPTS", 2
+        ), patch.object(mlflow_k8s.time, "sleep"):
+            http.return_value.__enter__.return_value.get.return_value = SimpleNamespace(status_code=401)
+
+            # Act / Assert
+            with self.assertRaises(BadGatewayError):
+                mlflow_k8s._wait_for_gateway("control", "mlflow", "mlflow-service")
+
+    def test_gateway_rotation_changes_pod_template_and_same_token_is_stable(self):
+        # Arrange
+        from app.schemas import InstallMlflowRequest
+        request = InstallMlflowRequest(installation_name="mlflow")
+
+        # Act
+        templates = [next(item for item in mlflow_k8s._manifests(
+            request, "control", "mlflow", "mlflow-service", gateway_token=token,
+        ) if item["kind"] == "Deployment")["spec"]["template"] for token in ("old", "new", "new")]
+
+        # Assert
+        self.assertNotEqual(templates[0], templates[1])
+        self.assertEqual(templates[1], templates[2])
+        self.assertNotIn('"new"', json.dumps(templates[1]))
+
+    def test_gateway_health_waits_until_new_credential_is_accepted(self):
+        # Arrange
+        with patch.object(mlflow_k8s, "_client"), patch.object(
+            mlflow_k8s, "_gateway_token", return_value="new-credential"
+        ), patch.object(mlflow_k8s.httpx, "Client") as http, patch.object(mlflow_k8s.time, "sleep") as sleep:
+            request = http.return_value.__enter__.return_value.get
+            request.side_effect = [SimpleNamespace(status_code=401), SimpleNamespace(status_code=200)]
+
+            # Act
+            mlflow_k8s._wait_for_gateway("control", "mlflow", "mlflow-service")
+
+        # Assert
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args.kwargs["headers"], {"X-Triton-Mlflow-Gateway": "new-credential"})
+        sleep.assert_called_once()
+
+    def test_empty_gateway_credential_is_regenerated(self):
+        # Arrange
+        with patch("kubernetes.client.CoreV1Api") as core, patch.object(
+            mlflow_k8s.secrets, "token_urlsafe", return_value="replacement"
+        ):
+            core.return_value.read_namespaced_secret.return_value = SimpleNamespace(data={})
+
+            # Act
+            token = mlflow_k8s._gateway_token(object(), "control", "mlflow")
+
+        # Assert
+        self.assertEqual(token, "replacement")
+
     def test_upgrade_reuses_gateway_and_registry_credentials(self):
         pull = base64.b64encode(b'{"auths":{"private.example":{"auth":"fixture"}}}').decode()
         with patch.object(mlflow_k8s, "_client"), patch("kubernetes.client.CoreV1Api") as core, patch.object(
             mlflow_k8s, "apply_installation_resources", return_value=["Deployment/mlflow"]
-        ) as apply, patch.object(mlflow_k8s, "_wait_for_current_deployment"):
+        ) as apply, patch.object(mlflow_k8s, "_wait_for_current_deployment"), patch.object(mlflow_k8s, "_wait_for_gateway"):
             core.return_value.read_namespaced_secret.return_value = SimpleNamespace(data={".dockerconfigjson": pull})
             mlflow_k8s.upgrade_installation_resources("control", "mlflow", "mlflow-service")
             self.assertEqual(apply.call_args.args[0].dockerconfigjson,

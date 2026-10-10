@@ -3,17 +3,79 @@
 import json
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.user_auth import verify_access_token
 from app.db.entities import S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
-from app.exceptions import BadRequestError, NotFoundError
+from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.services.workflows import mlflow_delegation
 
 
 class WorkflowDelegationTests(unittest.TestCase):
+    def test_plain_workflow_can_use_owned_repository(self) -> None:
+        # Arrange
+        reference = {"configMap": "workflow-s3-models", "key": "repository"}
+        submission = {"workflow": {"spec": {"artifactRepositoryRef": reference, "templates": []}}}
+        repository = SimpleNamespace(data={"repository": json.dumps({"s3": {
+            "accessKeySecret": {"name": "workflow-s3-models", "key": "access-key-id"},
+            "secretKeySecret": {"name": "workflow-s3-models", "key": "secret-access-key"},
+        }})})
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
+            mlflow_delegation, "api_client"
+        ), patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_config_map.return_value = repository
+
+            # Act
+            body, _, _ = mlflow_delegation.prepare_submission(
+                "api/v1/workflows/triton-control", json.dumps(submission).encode(),
+                {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
+            )
+
+        # Assert
+        self.assertEqual(json.loads(body)["workflow"]["spec"]["artifactRepositoryRef"], reference)
+        core.return_value.create_namespaced_secret.assert_called_once()
+
+    def test_plain_workflow_cannot_select_other_users_repository(self) -> None:
+        # Arrange
+        submission = {"workflow": {"spec": {"artifactRepositoryRef": {
+            "configMap": "workflow-s3-models", "key": "repository",
+        }, "templates": []}}}
+
+        # Act / Assert
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch(
+            "app.services.workflows.mlflow_delegation.client.CoreV1Api"
+        ) as core:
+            with self.assertRaises(ForbiddenError):
+                mlflow_delegation.prepare_submission(
+                    "api/v1/workflows/triton-control", json.dumps(submission).encode(),
+                    {"email": "other@example.com", "auth_provider": "local", "role": "member"},
+                )
+        core.assert_not_called()
+
+    def test_owned_repository_cannot_resolve_foreign_secret(self) -> None:
+        # Arrange
+        submission = {"workflow": {"spec": {"artifactRepositoryRef": {
+            "configMap": "workflow-s3-models", "key": "repository",
+        }, "templates": []}}}
+        repository = SimpleNamespace(data={"repository": json.dumps({"s3": {
+            "accessKeySecret": {"name": "foreign-secret", "key": "access-key-id"},
+        }})})
+
+        # Act / Assert
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
+            mlflow_delegation, "api_client"
+        ), patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_config_map.return_value = repository
+            with self.assertRaises(ForbiddenError):
+                mlflow_delegation.prepare_submission(
+                    "api/v1/workflows/triton-control", json.dumps(submission).encode(),
+                    {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
+                )
+        core.return_value.create_namespaced_secret.assert_not_called()
+
     def setUp(self) -> None:
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         SQLModel.metadata.create_all(self.engine)
