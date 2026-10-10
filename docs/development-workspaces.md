@@ -162,7 +162,7 @@ with urlopen(request, timeout=10) as response:
 
 Expected: `Argo connection OK: 200` and your workflow names.
 For existing workspaces missing these variables, see
-[Argo REST from code-server](../charts/triton-control/README.md#argo-rest-from-code-server).
+[Argo REST from code-server](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#argo-rest-from-code-server).
 
 ## S3 Profiles and S3 Browser
 

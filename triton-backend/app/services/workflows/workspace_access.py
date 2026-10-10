@@ -128,6 +128,8 @@ async def filter_list_response(response: Response, claims: dict[str, Any]) -> Re
     try:
         payload = json.loads(body)
         items = payload.get("items", [])
+        if items is None:
+            items = []
         if not isinstance(items, list):
             raise ValueError
         payload["items"] = [item for item in items if isinstance(item, dict) and (
