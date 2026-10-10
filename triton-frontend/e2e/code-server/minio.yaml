@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: plugin-smoke-minio }
+  template:
+    metadata:
+      labels: { app: plugin-smoke-minio }
+    spec:
+      containers:
+        - name: minio
+          image: plugin-smoke-minio:local
+          imagePullPolicy: Never
+          args: [server, /data]
+          envFrom:
+            - secretRef: { name: plugin-smoke-minio }
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: 9000 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  selector: { app: plugin-smoke-minio }
+  ports:
+    - { port: 9000, targetPort: 9000 }
