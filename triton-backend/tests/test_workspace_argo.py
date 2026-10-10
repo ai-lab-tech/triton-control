@@ -235,6 +235,20 @@ class WorkspaceArgoApiTests(unittest.TestCase):
                          f"app=training,team=ml,{workspace_access.OWNER_LABEL}=7")
         self.assertEqual(query["listOptions.limit"], "10")
 
+    def test_empty_argo_list_with_null_items_is_accepted(self):
+        # Arrange
+        with (
+            patch.object(workspace_access, "authenticate_workspace", return_value=self.claims),
+            patch.object(workspace_access, "get_config", return_value=SimpleNamespace(namespace="control")),
+            patch.object(proxy, "proxy_http", AsyncMock(return_value=Response(b'{"items":null}'))),
+        ):
+            # Act
+            response = self.client.get(self.base, headers=self.headers)
+
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
     def test_listing_checks_protected_owner_annotation_and_closes_upstream(self):
         # Arrange
         items = [{"metadata": {"name": name, "labels": {workspace_access.OWNER_LABEL: "7"}, "annotations": {
