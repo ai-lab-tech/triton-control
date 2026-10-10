@@ -42,8 +42,14 @@ The deploy command reads its name from the deployment annotation. Keep the model
 
 ## 4. Run
 
-Open **Workflows** in Triton Control and submit the edited YAML through the embedded Argo UI.
-Wait for both **train** and **deploy** to succeed.
+1. Open **Workflows** in Triton Control.
+2. In the embedded Argo UI, click **Submit New Workflow**.
+3. Select **Edit using full workflow options** and paste the complete edited [workflow.yaml](workflow.yaml), or select it with **Upload File**.
+4. Check your S3 profile name, script key, workflow name, and deployment name.
+5. Click **Submit**, then open the created workflow.
+6. Click the **train** node and open its logs to follow training.
+7. After **train** succeeds, **deploy** starts automatically. Open its logs to follow deployment.
+8. Wait until both nodes show **Succeeded**, then continue to verification below.
 
 Triton Control injects credentials automatically and records your user as the MLflow run creator.
 You do not need to copy a login token or set a creator tag.
