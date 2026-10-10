@@ -112,6 +112,77 @@ Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server
 does not prompt users to mark the folder as trusted on each new workspace.
 
+## Connect to MLflow
+
+Enable **MLflow** in Triton Control, then open your workspace's integrated terminal.
+Managed workspaces receive `MLFLOW_TRACKING_URI` and `MLFLOW_TRACKING_TOKEN`
+automatically; no login token needs to be copied.
+
+Install the client if needed:
+
+```bash
+python3 -m pip install --user "mlflow>=3,<4"
+```
+
+Test the connection:
+
+```bash
+python3 - <<'PY'
+from mlflow import MlflowClient
+
+for experiment in MlflowClient().search_experiments():
+    print(experiment.experiment_id, experiment.name)
+print("MLflow connection OK")
+PY
+```
+
+Expected: experiment names followed by `MLflow connection OK`.
+If the environment variables are missing, reopen the terminal after the workspace
+has restarted following the automatic MLflow migration.
+
+## Connect to Argo Workflows
+
+Run in the code-server terminal. Triton Control automatically injects the URL
+and credentials; no extra Python packages are needed.
+
+```python
+import json
+import os
+from urllib.request import Request, urlopen
+
+request = Request(
+    os.environ["TRITON_CONTROL_ARGO_URL"],
+    headers={"Authorization": f"Bearer {os.environ['TRITON_CONTROL_ARGO_TOKEN']}"},
+)
+with urlopen(request, timeout=10) as response:
+    print("Argo connection OK:", response.status)
+    for workflow in json.load(response).get("items") or []:
+        print(workflow["metadata"]["name"])
+```
+
+Expected: `Argo connection OK: 200` and your workflow names.
+For existing workspaces missing these variables, see
+[Argo REST from code-server](https://github.com/ai-lab-tech/triton-control/blob/main/charts/triton-control/README.md#argo-rest-from-code-server).
+
+### Use the Argo CLI
+
+With the [Argo CLI](https://argo-workflows.readthedocs.io/en/latest/cli/argo/) installed
+in your workspace, run:
+
+```bash
+argo list
+argo submit workflow.yaml
+argo get <workflow-name>
+argo delete <workflow-name>
+```
+
+The injected `ARGO_*` variables configure HTTP access through Triton Control;
+no token export or kubeconfig is needed. You can also suspend, resume, stop, or
+terminate your workflows. Templates, retries, logs, watch, and administrative APIs
+are outside this workspace credential's scope. Use `argo get` to check progress.
+For existing workspaces, an administrator must run the workspace upgrade described
+in the link above, then reopen the terminal after the workspace restarts.
+
 ## S3 Profiles and S3 Browser
 
 The bundled **Triton Control Deploy** extension displays saved S3 profiles as

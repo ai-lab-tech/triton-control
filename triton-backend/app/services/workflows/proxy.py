@@ -17,7 +17,7 @@ from starlette.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketDisconnect
 
 from app.exceptions import BadGatewayError
-from app.services.workflows import mlflow_delegation
+from app.services.workflows import auth, mlflow_delegation
 from app.services.workflows.config import get_config
 from app.services.workflows.tracking_policy import validate_proxy_write
 
@@ -60,6 +60,7 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None 
     target = _http_url(config.server_url, path, list(request.query_params.multi_items()))
     headers = {key: value for key, value in request.headers.items() if key.lower() not in _REQUEST_SKIP_HEADERS}
     headers["x-forwarded-prefix"] = config.base_path.rstrip("/")
+    headers.update(await asyncio.to_thread(auth.authorization_headers))
     body = await request.body()
     secret_name: str | None = None
     secret_namespace: str | None = None
@@ -144,6 +145,7 @@ async def proxy_websocket(path: str, websocket: WebSocket) -> None:
         upstream = await websockets.connect(
             upstream_url,
             subprotocols=cast(Any, requested_protocols or None),
+            additional_headers=await asyncio.to_thread(auth.authorization_headers),
             proxy=None,
             max_size=None,
         )

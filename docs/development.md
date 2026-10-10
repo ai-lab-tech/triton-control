@@ -107,3 +107,33 @@ npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 cd triton-frontend
 npm run test:smoke
 ```
+
+### Workspace Connections to MLflow and Argo
+
+The **Backend CI → workspace-connections-smoke** job runs automatically on
+backend, extension, and chart changes. It creates an isolated Kind cluster,
+installs Triton Control and Argo, creates MLflow and a code-server workspace
+through the API, and tests both connections with the injected credentials.
+Missing or incorrect credentials must be rejected. The cluster is deleted after
+the test; failures fail the CI job.
+The real Argo CLI also lists, submits, reads, and deletes a test workflow through
+the workspace proxy, and verifies rejection of an incorrect credential.
+
+To reproduce the complete CI test locally, run from the repository root with
+Docker, Kind, Helm, kubectl, and Python 3 installed:
+
+```bash
+bash triton-backend/scripts/ci_workspace_connections.sh
+```
+
+To check an existing workspace instead:
+
+```bash
+kubectl exec -i -n triton-control <workspace-pod> -c code-server -- python3 - \
+  < triton-backend/scripts/smoke_workspace_connections.py
+```
+
+Replace `<workspace-pod>` with your code-server pod name. The test runs inside
+the workspace using its injected credentials. It lists experiments and workflows,
+checks that missing or incorrect credentials are rejected, and exits nonzero on
+failure. It creates no resources and prints no tokens.

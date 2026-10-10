@@ -1,0 +1,25 @@
+{{- if and .Values.argoWorkflows.enabled .Values.argoIntegration.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "triton-control.fullname" . }}-argo-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: {{ .Values.argoWorkflows.server.name | quote }}
+      app.kubernetes.io/part-of: argo-workflows
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "triton-control.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: app
+      ports:
+        - protocol: TCP
+          port: 2746
+{{- end }}

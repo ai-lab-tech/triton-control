@@ -16,6 +16,14 @@ from app.services.workflows import config, credentials, proxy, status
 
 
 class WorkflowsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        auth_patch = patch(
+            "app.services.workflows.auth.authorization_headers",
+            return_value={"authorization": "Bearer backend-token"},
+        )
+        auth_patch.start()
+        self.addCleanup(auth_patch.stop)
+
     def test_CaCertificate_ValidatesPemBundle(self) -> None:
         from datetime import timedelta
 
@@ -485,6 +493,7 @@ class WorkflowsTests(unittest.TestCase):
                 asyncio.run(proxy.proxy_http("", request))
 
     def test_ProxyHttp_StreamsResponseAndFiltersHeaders(self) -> None:
+        # Arrange
         upstream = MagicMock()
         upstream.status_code = 302
         upstream.headers = {
@@ -503,7 +512,7 @@ class WorkflowsTests(unittest.TestCase):
         client.aclose = AsyncMock()
         request = SimpleNamespace(
             method="GET",
-            headers={"cookie": "private", "x-request": "ok"},
+            headers={"cookie": "private", "x-request": "ok", "Authorization": "Bearer forged-browser-token"},
             query_params=SimpleNamespace(multi_items=lambda: [("x", "1")]),
             body=AsyncMock(return_value=b""),
         )
@@ -518,9 +527,15 @@ class WorkflowsTests(unittest.TestCase):
             ),
             patch("app.services.workflows.proxy.httpx.AsyncClient", return_value=client),
         ):
+            # Act
             response = asyncio.run(proxy.proxy_http("api/v1", request))
             body = asyncio.run(self._collect_stream(response))
 
+        # Assert
+        forwarded_headers = client.build_request.call_args.kwargs["headers"]
+        self.assertEqual(forwarded_headers["authorization"], "Bearer backend-token")
+        self.assertNotIn("Authorization", forwarded_headers)
+        self.assertNotIn("cookie", forwarded_headers)
         self.assertEqual(body, b"hello")
         self.assertEqual(response.headers["location"], "/api/workflows/proxy/workflows")
         self.assertEqual(response.headers["x-test"], "yes")

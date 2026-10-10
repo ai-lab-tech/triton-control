@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import secrets
 import time
 from pathlib import Path
 from typing import Any, cast
 
+import httpx
 import yaml  # type: ignore[import-untyped]
 
 from app.exceptions import BadGatewayError, BadRequestError
@@ -88,6 +90,25 @@ def delete_namespace(namespace: str) -> str:
         raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
 
 
+def tracking_upgrade_required(namespace: str, deployment_name: str) -> bool:
+    """Detect legacy deployments and interrupted gateway migrations."""
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    api = _client()
+    deployment = client.AppsV1Api(api).read_namespaced_deployment(deployment_name, namespace)
+    containers = deployment.spec.template.spec.containers
+    if not any(container.name == "tracking-gateway" for container in containers):
+        return True
+    try:
+        secret = client.CoreV1Api(api).read_namespaced_secret(tracking.gateway_secret_name(deployment_name), namespace)
+    except ApiException as exc:
+        if exc.status == 404:
+            return True
+        raise
+    return not (secret.data or {}).get("gateway-token")
+
+
 def upgrade_installation_resources(namespace: str, deployment_name: str, service_name: str) -> list[str]:
     """Retain private-registry credentials when adding the tracking gateway."""
     from kubernetes import client
@@ -107,7 +128,25 @@ def upgrade_installation_resources(namespace: str, deployment_name: str, service
         namespace=namespace, deployment_name=deployment_name, service_name=service_name,
     )
     _wait_for_current_deployment(_client(), namespace, deployment_name)
+    _wait_for_gateway(namespace, deployment_name, service_name)
     return applied
+
+
+def _wait_for_gateway(namespace: str, deployment_name: str, service_name: str) -> None:
+    token = _gateway_token(_client(), namespace, deployment_name)
+    with httpx.Client(timeout=5, trust_env=False) as http:
+        for _ in range(_POD_WAIT_ATTEMPTS):
+            try:
+                response = http.get(
+                    f"{service_url(namespace, service_name)}/health",
+                    headers={"X-Triton-Mlflow-Gateway": token},
+                )
+                if response.status_code == 200:
+                    return
+            except httpx.HTTPError:
+                pass
+            time.sleep(_POD_WAIT_INTERVAL_SECONDS)
+    raise BadGatewayError("MLflow tracking gateway authentication did not become ready")
 
 
 def _wait_for_current_deployment(api: Any, namespace: str, deployment_name: str) -> None:
@@ -229,7 +268,14 @@ def _manifests(
         gateway_image=q(os.getenv("MLFLOW_GATEWAY_IMAGE", "nginx:1.28-alpine")),
     )
     manifests = [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
-    manifests.append(tracking.gateway_manifest(namespace, deployment_name, gateway_token or secrets.token_urlsafe(32)))
+    gateway = tracking.gateway_manifest(namespace, deployment_name, gateway_token or secrets.token_urlsafe(32))
+    checksum = hashlib.sha256(gateway["stringData"]["nginx.conf"].encode()).hexdigest()
+    for manifest in manifests:
+        if manifest["kind"] == "Deployment":
+            manifest["spec"]["template"]["metadata"].setdefault("annotations", {})[
+                "triton-control.ai/mlflow-gateway-checksum"
+            ] = checksum
+    manifests.append(gateway)
     # The gateway configuration must exist before its pod is scheduled.
     return sorted(manifests, key=lambda manifest: manifest["kind"] != "Secret")
 
@@ -246,7 +292,7 @@ def _gateway_token(api: Any, namespace: str, deployment_name: str) -> str:
         raise
     token = base64.b64decode((secret.data or {}).get("gateway-token", "")).decode()
     if not token:
-        raise BadGatewayError("MLflow gateway Secret has no credential")
+        return secrets.token_urlsafe(32)
     return token
 
 

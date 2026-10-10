@@ -35,16 +35,22 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(request.session["user"]["access_allowed"])
         self.assertEqual(request.session["user"]["credential_version"], 3)
 
-    def test_Startup_InitializesDatabaseAndHealthRefresher(self) -> None:
-        with patch("app.main.init_db") as init_db, patch.object(main.instance_health_refresher, "start") as start:
-            main.on_startup()
+    async def test_Startup_InitializesDatabaseAndHealthRefresher(self) -> None:
+        # Arrange
+        with patch("app.main.init_db") as init_db, patch.object(main.instance_health_refresher, "start") as start, \
+                patch.object(main.mlflow_migration, "start") as migrate:
+            # Act
+            await main.on_startup()
 
+        # Assert
         init_db.assert_called_once()
         start.assert_called_once()
+        migrate.assert_called_once()
 
     async def test_Shutdown_StopsBackgroundWorkersAndClients(self) -> None:
         with (
             patch.object(main.instance_health_refresher, "stop", AsyncMock()) as stop,
+            patch.object(main.mlflow_migration, "stop", AsyncMock()) as stop_migration,
             patch.object(
                 main.TritonService,
                 "close_all_clients",
@@ -54,6 +60,7 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
             await main.on_shutdown()
 
         stop.assert_awaited_once()
+        stop_migration.assert_awaited_once()
         close_all_clients.assert_awaited_once()
 
     async def test_RequestValidationError_ResponseDoesNotEchoSensitiveInput(self) -> None:
