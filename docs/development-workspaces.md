@@ -140,6 +140,30 @@ Expected: experiment names followed by `MLflow connection OK`.
 If the environment variables are missing, reopen the terminal after the workspace
 has restarted following the automatic MLflow migration.
 
+## Connect to Argo Workflows
+
+Run in the code-server terminal. Triton Control automatically injects the URL
+and credentials; no extra Python packages are needed.
+
+```python
+import json
+import os
+from urllib.request import Request, urlopen
+
+request = Request(
+    os.environ["TRITON_CONTROL_ARGO_URL"],
+    headers={"Authorization": f"Bearer {os.environ['TRITON_CONTROL_ARGO_TOKEN']}"},
+)
+with urlopen(request, timeout=10) as response:
+    print("Argo connection OK:", response.status)
+    for workflow in json.load(response).get("items") or []:
+        print(workflow["metadata"]["name"])
+```
+
+Expected: `Argo connection OK: 200` and your workflow names.
+For existing workspaces missing these variables, see
+[Argo REST from code-server](../charts/triton-control/README.md#argo-rest-from-code-server).
+
 ## S3 Profiles and S3 Browser
 
 The bundled **Triton Control Deploy** extension displays saved S3 profiles as
