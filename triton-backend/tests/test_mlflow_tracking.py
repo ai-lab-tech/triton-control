@@ -17,13 +17,55 @@ from starlette.responses import Response
 from app.api import mlflow_api
 from app.core.security import get_claims
 from app.db.entities import CodeServerEntity, UserEntity
-from app.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
+from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.services.development import kubernetes as workspace_k8s
 from app.services.mlflow import installer, proxy, tracking
 from app.services.mlflow import kubernetes as mlflow_k8s
 
 
+class GatewayMigrationTests(unittest.TestCase):
+    def test_missing_gateway_returns_actionable_service_unavailable(self):
+        # Arrange
+        with patch.object(tracking, "api_client"), patch.object(tracking.client, "CoreV1Api") as core:
+            core.return_value.read_namespaced_secret.side_effect = ApiException(status=404)
+
+            # Act
+            with self.assertRaises(ServiceUnavailableError) as raised:
+                tracking.gateway_header("http://mlflow-service.triton-control.svc.cluster.local:5000")
+
+            # Assert
+            self.assertIn("POST /api/mlflow/upgrade", str(raised.exception))
+            core.return_value.read_namespaced_secret.assert_called_once_with(
+                "mlflow-tracking-gateway", "triton-control",
+            )
+
+
 class CreatorEnforcementTests(unittest.TestCase):
+    def test_trace_read_post_requests_are_allowed_with_payload_unchanged(self):
+        # Arrange
+        payload = b'{"locations": [{"mlflow_experiment": {"experiment_id": "1"}}]}'
+        for prefix in ("api/", "ajax-api/"):
+            for action in ("search", "batchGetInfos", "calculate-filter-correlation", "metrics"):
+                with self.subTest(prefix=prefix, action=action):
+                    # Act
+                    result = tracking.enforce_creator(
+                        prefix + "3.0/mlflow/traces/" + action, "POST", payload, {"email": "owner@example.com"},
+                    )
+                    # Assert
+                    self.assertEqual(result, payload)
+
+    def test_trace_read_allowlist_does_not_allow_writes(self):
+        # Arrange
+        for path, method in (
+            ("api/3.0/mlflow/traces/search", "PATCH"),
+            ("ajax-api/3.0/mlflow/traces/delete-traces", "POST"),
+            ("api/3.0/mlflow/traces", "POST"),
+        ):
+            with self.subTest(path=path, method=method):
+                # Act / Assert
+                with self.assertRaises(ForbiddenError):
+                    tracking.enforce_creator(path, method, b"{}", {"email": "owner@example.com"})
+
     def setUp(self):
         self.claims = {"email": "owner@example.com", "role": "member"}
 

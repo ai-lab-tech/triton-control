@@ -14,7 +14,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from starlette.responses import Response
 
 from app.db.database import session_factory
-from app.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
+from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.repositories import developments, users
 from app.services.kubernetes_client import api_client
 
@@ -86,6 +86,14 @@ def enforce_creator(path: str, method: str, body: bytes, claims: dict[str, Any])
     if "%" in path or "\\" in path:
         raise BadRequestError("Invalid MLflow API path")
     if method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return body
+    if method.upper() == "POST" and path in {
+        "api/3.0/mlflow/traces/search",
+        "api/3.0/mlflow/traces/batchGetInfos",
+        "api/3.0/mlflow/traces/calculate-filter-correlation",
+        "api/3.0/mlflow/traces/metrics",
+    }:
+        # MLflow's trace UI uses POST for read-only queries in its v3 API.
         return body
     prefix = "api/2.0/mlflow/"
     if path in {"graphql", "api/2.0/mlflow/graphql"}:
@@ -192,10 +200,18 @@ def gateway_header(server_url: str) -> dict[str, str]:
 
     namespace, service_name = _service_identity(server_url)
     deployment_name = service_name.removesuffix("-service")
-    secret = client.CoreV1Api(api_client()).read_namespaced_secret(gateway_secret_name(deployment_name), namespace)
+    try:
+        secret = client.CoreV1Api(api_client()).read_namespaced_secret(gateway_secret_name(deployment_name), namespace)
+    except ApiException as exc:
+        if exc.status != 404:
+            raise
+        raise ServiceUnavailableError(
+            "MLflow tracking gateway is not configured; an administrator must upgrade "
+            "the installation using POST /api/mlflow/upgrade"
+        ) from exc
     token = base64.b64decode((secret.data or {}).get("gateway-token", "")).decode()
     if not token:
-        raise UnauthorizedError("MLflow tracking gateway is not configured; upgrade the installation")
+        raise ServiceUnavailableError("MLflow tracking gateway is not configured; upgrade the installation")
     return {_HEADER: token}
 
 

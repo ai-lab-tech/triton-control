@@ -334,3 +334,12 @@ curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
 
 The exact output names are also written to `training-metadata.json` in the S3
 model directory.
+
+### Submit from the code-server terminal
+
+Managed workspaces receive `TRITON_CONTROL_ARGO_URL` and
+`TRITON_CONTROL_ARGO_TOKEN` automatically. Use this owner-scoped endpoint to
+submit the workflow without copying your personal Triton Control login token.
+The workflow still undergoes Secret validation and inherits your user identity.
+See [Argo REST from code-server](../../../charts/triton-control/README.md#argo-rest-from-code-server)
+for submission examples and the one-time migration for existing workspaces.

@@ -3564,6 +3564,33 @@
         }
       }
     },
+    "/api/workflows/upgrade-workspaces": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Upgrade Workspace Argo Access",
+        "description": "Migrate existing workspace credentials and environment without deleting data.",
+        "operationId": "upgrade_workspace_argo_access_api_workflows_upgrade_workspaces_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceArgoUpgradeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/auth/me": {
       "get": {
         "summary": "Auth Me",
@@ -7046,6 +7073,24 @@
           "region"
         ],
         "title": "WorkflowS3ProfileChoice"
+      },
+      "WorkspaceArgoUpgradeResponse": {
+        "properties": {
+          "upgraded_workspaces": {
+            "type": "integer",
+            "title": "Upgraded Workspaces"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upgraded_workspaces",
+          "message"
+        ],
+        "title": "WorkspaceArgoUpgradeResponse"
       }
     },
     "securitySchemes": {

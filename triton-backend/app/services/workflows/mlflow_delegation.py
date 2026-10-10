@@ -19,6 +19,7 @@ from app.services.kubernetes_client import api_client, in_cluster_namespace
 from app.services.mlflow import tracking
 from app.services.workflows.artifact_repository import REPOSITORY_KEY
 from app.services.workflows.tracking_policy import validate_workflow
+from app.services.workflows.workspace_access import OWNER_LABEL
 
 _SUBMIT_PATH = re.compile(r"api/v1/workflows/([a-z0-9-]+)\Z")
 _DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -80,6 +81,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if tracking.WORKFLOW_OWNER_ANNOTATION in metadata.get("annotations", {}):
             raise BadRequestError("MLflow workflow owner is managed by Triton Control")
         metadata.setdefault("annotations", {})[tracking.WORKFLOW_OWNER_ANNOTATION] = str(owner_id)
+        metadata.setdefault("labels", {})[OWNER_LABEL] = str(owner_id)
         workflow["metadata"] = metadata
         if has_deployment_secret:
             # Keep the deployment credential in its existing Secret.

@@ -229,13 +229,15 @@ that tag from being changed or deleted. Binary artifacts and model registry
 operations use the same proxy. This attributes new runs; it does not hide
 other users' runs or change the creator of existing runs.
 
-After deploying this backend to an existing installation, an administrator
-must call **POST `/api/mlflow/upgrade`** once with their normal Triton Control
-authentication. This adds the gateway and updates existing workspace
+After deploying this backend to an existing installation, the backend
+automatically detects and upgrades legacy MLflow deployments in the background.
+Failed or interrupted migrations are retried every 60 seconds without delaying
+backend startup. This adds the gateway and updates existing workspace
 environments in place, retaining MLflow and workspace PVCs and existing S3
 credentials. Workspace pods roll to inherit the new environment. Previously
 submitted workflows keep their old configuration; submit a new workflow after
-the upgrade. New MLflow installations and workspaces need no upgrade call.
+the upgrade. Installations with the gateway already configured are left unchanged.
+Administrators can still trigger **POST `/api/mlflow/upgrade`** manually.
 
 For example, from the internal code-server terminal with an administrator's
 local-login token already exported:
@@ -389,6 +391,59 @@ protected file containing a Kubernetes bearer token with the same permissions;
 a kubeconfig with only a client certificate does not supply this Argo credential.
 For an independently managed Argo Server, configure client mode and equivalent
 RBAC/network restrictions in that installation as well.
+
+### Argo REST from code-server
+
+New workspaces automatically receive `TRITON_CONTROL_ARGO_URL` and
+`TRITON_CONTROL_ARGO_TOKEN`. The URL points to a dedicated Triton Control
+endpoint, not directly to Argo Server. The random credential is separate from
+MLflow tracking, S3 profile access, and the privileged backend ServiceAccount
+credential. Users do not need to export a personal login token.
+
+From the code-server terminal, list your workflows:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $TRITON_CONTROL_ARGO_TOKEN" \
+  "$TRITON_CONTROL_ARGO_URL"
+```
+
+Submit an inline workflow using the same JSON wrapper as the Argo REST API:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $TRITON_CONTROL_ARGO_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"workflow":{"metadata":{"generateName":"workspace-hello-"},"spec":{"entrypoint":"main","templates":[{"name":"main","container":{"image":"python:3.12-slim","command":["python","-c"],"args":["print(42)"]}}]}}}' \
+  "$TRITON_CONTROL_ARGO_URL"
+```
+
+The backend resolves the workspace owner, checks that they are active and have
+member/admin access, and applies the embedded UI's submission validation.
+Created workflows receive that user's managed tracking identity and owner
+label. Workspace credentials can list the owner's labelled workflows, read or
+delete an owned workflow at `/$WORKFLOW_NAME`, and `PUT` an owned workflow's
+`/suspend`, `/resume`, `/terminate`, or `/stop` endpoint. Other creation APIs,
+retries, templates, and administration endpoints are outside this credential's
+scope. Changing or omitting list selectors cannot remove the owner filter.
+Older workflows without the new owner label are omitted from listings; they can
+still be addressed by name if they have the matching managed owner annotation.
+Deleting the workspace or its Secret revokes access; disabling its owner or
+removing their member/admin role also blocks subsequent requests.
+
+Existing workspaces require a one-time **admin** call to
+`POST /api/workflows/upgrade-workspaces` after deploying the updated backend:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $TRITON_CONTROL_TOKEN" \
+  http://triton-control.triton-control.svc.cluster.local:8000/api/workflows/upgrade-workspaces
+```
+
+This adds the separate credential and environment in place, preserving PVCs,
+S3 and MLflow tokens. Workspace pods roll to inherit the new environment;
+repeating the migration preserves existing Argo tokens. MLflow does not need
+to be installed to enable workspace Argo access.
 
 ### User Workflow Images
 

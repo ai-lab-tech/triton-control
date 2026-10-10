@@ -88,6 +88,25 @@ def delete_namespace(namespace: str) -> str:
         raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
 
 
+def tracking_upgrade_required(namespace: str, deployment_name: str) -> bool:
+    """Detect legacy deployments and interrupted gateway migrations."""
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    api = _client()
+    deployment = client.AppsV1Api(api).read_namespaced_deployment(deployment_name, namespace)
+    containers = deployment.spec.template.spec.containers
+    if not any(container.name == "tracking-gateway" for container in containers):
+        return True
+    try:
+        secret = client.CoreV1Api(api).read_namespaced_secret(tracking.gateway_secret_name(deployment_name), namespace)
+    except ApiException as exc:
+        if exc.status == 404:
+            return True
+        raise
+    return not (secret.data or {}).get("gateway-token")
+
+
 def upgrade_installation_resources(namespace: str, deployment_name: str, service_name: str) -> list[str]:
     """Retain private-registry credentials when adding the tracking gateway."""
     from kubernetes import client

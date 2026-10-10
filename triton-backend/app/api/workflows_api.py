@@ -2,14 +2,16 @@
 
 from typing import Any
 
+import anyio
 from fastapi import APIRouter, Depends, Request, WebSocket
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
-from app.core.access_control import is_member_or_admin, require_member_or_admin
+from app.core.access_control import is_member_or_admin, require_admin, require_member_or_admin
 from app.core.identity import require_user_entity
 from app.core.security import get_claims
 from app.db.database import get_session
+from app.exceptions import UnauthorizedError
 from app.repositories import s3_profiles
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
@@ -17,8 +19,8 @@ from app.schemas import (
     WorkflowS3CredentialDeleteResponse,
     WorkflowS3CredentialDTO,
 )
-from app.schemas.workflows import WorkflowS3ProfileChoice
-from app.services.workflows import credentials, proxy, status
+from app.schemas.workflows import WorkflowS3ProfileChoice, WorkspaceArgoUpgradeResponse
+from app.services.workflows import credentials, proxy, status, workspace_access
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -90,6 +92,47 @@ def delete_workflow_s3_credential(
     """Delete a workflow S3 credential and its mirrored Kubernetes secret."""
     require_member_or_admin(claims)
     return credentials.delete_credential(session, credential_id)
+
+
+@router.post("/upgrade-workspaces", response_model=WorkspaceArgoUpgradeResponse)
+@translate_app_errors
+def upgrade_workspace_argo_access(claims: dict[str, Any] = Depends(get_claims)) -> WorkspaceArgoUpgradeResponse:
+    """Migrate existing workspace credentials and environment without deleting data."""
+    require_admin(claims)
+    count = workspace_access.upgrade_workspaces()
+    return WorkspaceArgoUpgradeResponse(
+        upgraded_workspaces=count, message="Managed Argo access enabled; workspace pods roll to load the environment.",
+    )
+
+
+@router.api_route(
+    "/workspaces/{namespace}/{workspace_name}/workflows", methods=["GET", "POST"], include_in_schema=False,
+)
+@router.api_route(
+    "/workspaces/{namespace}/{workspace_name}/workflows/{workflow_name}",
+    methods=["GET", "DELETE"], include_in_schema=False,
+)
+@router.api_route(
+    "/workspaces/{namespace}/{workspace_name}/workflows/{workflow_name}/{action}",
+    methods=["PUT"], include_in_schema=False,
+)
+@translate_app_errors
+async def proxy_workspace_workflows(
+    request: Request, namespace: str, workspace_name: str,
+) -> Any:
+    """Scope workspace credentials to validated submissions and their owner's workflows."""
+    workflow_name = request.path_params.get("workflow_name", "")
+    action = request.path_params.get("action", "")
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer":
+        raise UnauthorizedError("Argo workspace authentication required")
+    claims = await anyio.to_thread.run_sync(workspace_access.authenticate_workspace, namespace, workspace_name, token)
+    path = await anyio.to_thread.run_sync(workspace_access.workflow_path, workflow_name, action, claims)
+    listing = not workflow_name and request.method == "GET"
+    if listing:
+        request = workspace_access.owner_filtered_request(request, claims)
+    response = await proxy.proxy_http(path, request, claims)
+    return await workspace_access.filter_list_response(response, claims) if listing else response
 
 
 @router.api_route(

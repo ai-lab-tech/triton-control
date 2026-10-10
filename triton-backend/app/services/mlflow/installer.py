@@ -40,6 +40,9 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
 
     ready, message = k8s.read_installation_readiness(entity.namespace, entity.deployment_name)
     status = (entity.status or "").strip() or "creating"
+    if status == "upgrading":
+        ready = False
+        message = entity.status_message
     if status == "ready" and not ready:
         status = "creating"
     return MlflowStatusResponse(
@@ -137,17 +140,20 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
         entity = mlflow.get(session)
         if entity is None:
             raise BadRequestError("MLflow is not installed")
+        entity.status = "upgrading"
+        entity.status_message = "Automatically configuring the MLflow tracking gateway."
+        mlflow.save(session, entity)
         entity.applied_resources = k8s.upgrade_installation_resources(
             entity.namespace, entity.deployment_name, entity.service_name,
         )
-        entity.status = "ready"
-        entity.status_message = "MLflow tracking gateway is ready."
-        entity.last_transition_at = datetime.utcnow()
-        entity = mlflow.save(session, entity)
         for workspace in developments.list_all(session):
             workspace_k8s.enable_mlflow_tracking(
                 workspace.namespace, workspace.statefulset_name, workspace.secret_name,
             )
+        entity.status = "ready"
+        entity.status_message = "MLflow tracking gateway is ready."
+        entity.last_transition_at = datetime.utcnow()
+        entity = mlflow.save(session, entity)
         return _to_dto(entity)
     finally:
         _install_lock.release()
