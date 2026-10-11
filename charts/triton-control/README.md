@@ -313,6 +313,34 @@ Optional aggregate ClusterRoles and ClusterWorkflowTemplates are disabled.
 Argo CRDs remain cluster-scoped because Kubernetes custom resource definitions
 cannot be namespace-scoped.
 
+### Approved External Triton Endpoints
+
+Manually registered Triton servers and metrics endpoints require exact administrator-approved
+hosts and ports. An empty `TRITON_ALLOWED_ENDPOINTS` denies external connections, including
+connections to previously registered instances. Configure this before upgrading if you use
+external Triton servers:
+
+```yaml
+app:
+  env:
+    - name: TRITON_ALLOWED_ENDPOINTS
+      value: "triton.example.com:8000,triton.example.com:8002"
+```
+
+Add this entry to your existing `app.env` list and deploy with `helm upgrade`. Users then enter
+their usual Triton and metrics URLs. Each host and port must match exactly; wildcards, URLs,
+and paths are not allowlist entries. HTTP and HTTPS are supported; an omitted URL port means
+80 or 443 respectively. IPv6 entries require brackets, for example `[2001:db8::1]:8000`.
+Approve only destinations and DNS names controlled by trusted infrastructure administrators.
+Private endpoints can be explicitly approved; there is no blanket private-network permission.
+
+Triton deployments created through Triton Control need no allowlist entry. Backend HTTP traffic
+uses their verified Kubernetes Service, independent of the displayed ingress URL. The backend
+must be able to resolve and reach cluster Service DNS. If running the backend outside the
+cluster, expose and register an external endpoint with an explicit allowlist entry instead.
+Services selecting unrelated deployments, ExternalName Services, and Services with external
+IPs are rejected. Redirects are not followed.
+
 ### User Workflow Images
 
 The public Argo system image configuration does not grant access to private

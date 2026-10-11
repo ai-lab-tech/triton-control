@@ -40,6 +40,10 @@ app:
       value: "http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200"
     - name: BACKEND_VERBOSE
       value: "false"
+    # Exact host:port pairs for external Triton and metrics endpoints.
+    # Managed Triton Services are verified automatically. Empty denies external access.
+    - name: TRITON_ALLOWED_ENDPOINTS
+      value: ""
     # Optional local-account invitation and recovery. No mail server is
     # required while disabled. Use "manual-link" for closed environments.
     - name: EMAIL_CONFIG_SOURCE

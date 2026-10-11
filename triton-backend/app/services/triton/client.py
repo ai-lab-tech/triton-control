@@ -28,6 +28,12 @@ from urllib.parse import quote
 import httpx
 
 from app.core.tls import create_default_context_with_extra_ca
+from app.db.entities import TritonInstanceEntity
+from app.services.triton import endpoints
+
+
+def managed_connection_options(instance: TritonInstanceEntity) -> dict[str, Any]:
+    return {"managed_instance": instance} if instance.is_self_deployed else {}
 
 
 class TritonService:
@@ -40,6 +46,8 @@ class TritonService:
         verify_ssl: bool = False,
         ca_certificate: str = "",
         timeout: float = 30.0,
+        *,
+        managed_instance: TritonInstanceEntity | None = None,
     ):
         """
         Initialize Triton service.
@@ -54,6 +62,15 @@ class TritonService:
         self.verify = self._build_verify()
         self.verify_cache_key = self._build_verify_cache_key()
         self.trust_env = self._trust_env()
+        self._managed_identity = None
+        self._managed_urls: dict[str, str] | None = None
+        if managed_instance is not None and managed_instance.is_self_deployed:
+            self._managed_identity = (
+                managed_instance.deployment_namespace or "",
+                managed_instance.deployment_service_name or "",
+                managed_instance.deployment_name or "",
+            )
+            self.trust_env = False
 
     def _build_verify(self) -> bool | ssl.SSLContext:
         if not self.verify_ssl:
@@ -80,9 +97,33 @@ class TritonService:
         if client is not None:
             return client
 
-        client = httpx.AsyncClient(timeout=self.timeout, verify=self.verify, trust_env=self.trust_env)
+        client = httpx.AsyncClient(
+            timeout=self.timeout, verify=self.verify, trust_env=self.trust_env, follow_redirects=False,
+        )
         self._clients[key] = client
         return client
+
+    async def _approved_url(self, url: str, *, metrics: bool = False) -> str:
+        if self._managed_identity is None:
+            return endpoints.approved_external_url(url)
+        if self._managed_urls is None:
+            self._managed_urls = await asyncio.to_thread(endpoints.managed_service_urls, *self._managed_identity)
+        if metrics:
+            if "metrics" not in self._managed_urls:
+                raise ValueError("Managed Triton Service has no metrics port")
+            return self._managed_urls["metrics"]
+        # All Triton API paths are built below from this instance's base URL.
+        if not url.startswith(self.triton_url + "/"):
+            raise ValueError("Invalid managed Triton API path")
+        return self._managed_urls["http"] + url[len(self.triton_url):]
+
+    async def _get(self, url: str, *, metrics: bool = False) -> httpx.Response:
+        approved = await self._approved_url(url, metrics=metrics)
+        return await self._get_client().get(approved)
+
+    async def _post(self, url: str, **kwargs: Any) -> httpx.Response:
+        approved = await self._approved_url(url)
+        return await self._get_client().post(approved, **kwargs)
 
     @classmethod
     async def close_all_clients(cls) -> None:
@@ -100,19 +141,17 @@ class TritonService:
         """
         try:
             url = f"{self.triton_url}/v2/health/ready"
-            response = await self._get_client().get(url)
+            response = await self._get(url)
             return response.status_code == 200
         except Exception:
             return False
 
     async def collect_runtime_snapshot(self, include_metadata: bool = True) -> Dict[str, Any]:
         """Collect health endpoints and optionally /v2 metadata in one pass."""
-        client = self._get_client()
-
         async def _fetch_metadata() -> tuple[Dict[str, Any] | None, str | None]:
             metadata_url = f"{self.triton_url}/v2"
             try:
-                response = await client.get(metadata_url)
+                response = await self._get(metadata_url)
                 if response.status_code == 200:
                     payload = response.json()
                     if isinstance(payload, dict):
@@ -125,7 +164,7 @@ class TritonService:
         async def _fetch_health(name: str, path: str) -> tuple[bool, str | None]:
             url = f"{self.triton_url}{path}"
             try:
-                response = await client.get(url)
+                response = await self._get(url)
                 healthy = response.status_code == 200
                 return healthy, None if healthy else f"{name} returned HTTP {response.status_code}"
             except Exception as exc:
@@ -169,7 +208,7 @@ class TritonService:
             }
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get(metrics_url, metrics=True)
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             metrics = self._parse_prometheus_metrics(text)
@@ -195,7 +234,7 @@ class TritonService:
             return {"series": {}, "error": "Metrics endpoint is not configured."}
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get(metrics_url, metrics=True)
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             return {
@@ -208,7 +247,7 @@ class TritonService:
     async def collect_inference_stats_snapshot(self) -> Dict[str, Any]:
         """Fetch cumulative Triton model statistics for inference latency."""
         try:
-            response = await self._get_client().get(f"{self.triton_url}/v2/models/stats")
+            response = await self._get(f"{self.triton_url}/v2/models/stats")
             response.raise_for_status()
             payload = response.json()
             return {
@@ -511,17 +550,16 @@ class TritonService:
         url = f"{self.triton_url}/v2/repository/index"
 
         try:
-            client = self._get_client()
             # Triton Model Repository Index is a POST endpoint.
-            response = await client.post(url, json={"ready": True})
+            response = await self._post(url, json={"ready": True})
 
             # Backward/variant fallback if server rejects POST body.
             if response.status_code == 405:
-                response = await client.post(url)
+                response = await self._post(url)
 
             # Extremely old/variant fallback (some proxies incorrectly allow GET).
             if response.status_code == 405:
-                response = await client.get(url)
+                response = await self._get(url)
 
             response.raise_for_status()
 
@@ -562,14 +600,13 @@ class TritonService:
         url = f"{self.triton_url}/v2/repository/index"
 
         try:
-            client = self._get_client()
-            response = await client.post(url, json={"ready": False})
+            response = await self._post(url, json={"ready": False})
 
             if response.status_code == 405:
-                response = await client.post(url)
+                response = await self._post(url)
 
             if response.status_code == 405:
-                response = await client.get(url)
+                response = await self._get(url)
 
             response.raise_for_status()
 
@@ -588,7 +625,7 @@ class TritonService:
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/config"
 
-        response = await self._get_client().get(url)
+        response = await self._get(url)
         response.raise_for_status()
         return response.json()
 
@@ -597,7 +634,7 @@ class TritonService:
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/load"
 
-        response = await self._get_client().post(url)
+        response = await self._post(url)
         response.raise_for_status()
 
     async def unload_model(self, model_name: str) -> None:
@@ -605,7 +642,7 @@ class TritonService:
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/unload"
 
-        response = await self._get_client().post(url)
+        response = await self._post(url)
         response.raise_for_status()
 
     async def infer_model(self, model_name: str, version: str, payload: Any) -> httpx.Response:
@@ -614,7 +651,7 @@ class TritonService:
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
 
-        response = await self._get_client().post(url, json=payload)
+        response = await self._post(url, json=payload)
         response.raise_for_status()
         return response
 
@@ -624,7 +661,7 @@ class TritonService:
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
 
-        response = await self._get_client().post(
+        response = await self._post(
             url,
             content=payload,
             headers={"content-type": content_type or "application/json"},
@@ -637,7 +674,7 @@ class TritonService:
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/generate"
 
-        response = await self._get_client().post(
+        response = await self._post(
             url,
             content=payload,
             headers={"content-type": content_type or "application/json"},

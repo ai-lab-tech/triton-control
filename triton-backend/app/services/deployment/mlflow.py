@@ -11,7 +11,7 @@ from app.exceptions import NotFoundError
 from app.repositories import instances
 from app.schemas import DeploymentDeleteResponse
 from app.services.deployment import deployment
-from app.services.triton.client import TritonService
+from app.services.triton.client import TritonService, managed_connection_options
 
 
 def _owned(session: Session, claims: dict[str, Any], name: str) -> Any:
@@ -28,7 +28,10 @@ async def describe(row: Any) -> dict[str, Any]:
     state = "starting"
     detail = row.health_error or "Waiting for Triton model readiness"
     if row.url and row.mlflow_model_name:
-        service = TritonService(row.url, row.triton_verify_ssl, row.triton_ca_certificate, timeout=5.0)
+        service = TritonService(
+            row.url, row.triton_verify_ssl, row.triton_ca_certificate, timeout=5.0,
+            **managed_connection_options(row),
+        )
         if await service.is_ready():
             entries = await service.get_repository_index()
             for entry in entries:

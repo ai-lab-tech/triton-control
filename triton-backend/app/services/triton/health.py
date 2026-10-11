@@ -28,7 +28,7 @@ from app.db.entities import DashboardAlertEntity, TritonInstanceEntity
 from app.repositories import dashboard_alerts, instances
 from app.services.deployment import kubernetes as deployment_k8s
 from app.services.storage.s3_client import build_s3_client, format_s3_error, is_s3_configured
-from app.services.triton.client import TritonService
+from app.services.triton.client import TritonService, managed_connection_options
 from app.services.triton.repository_snapshot import (
     normalize_repository_models,
     repository_model_names,
@@ -199,6 +199,7 @@ class InstanceHealthRefresher:
             triton_verify_ssl,
             triton_ca_certificate,
             timeout=health_request_timeout_seconds(),
+            **managed_connection_options(instance),
         )
         snapshot = await triton_service.collect_runtime_snapshot(include_metadata=include_metadata)
         metrics_snapshot = None

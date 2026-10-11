@@ -250,6 +250,7 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
             False,
             "",
             timeout=DEFAULT_HEALTH_REQUEST_TIMEOUT_SECONDS,
+            managed_instance=instance,
         )
 
     async def test_RefreshInstance_SelfDeployedPodNotReady_StoresWaitingState(self):
@@ -473,6 +474,7 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
             False,
             "",
             timeout=DEFAULT_HEALTH_REQUEST_TIMEOUT_SECONDS,
+            managed_instance=instance,
         )
 
     async def test_RefreshInstance_RepositoryIndexFailure_LogsAndKeepsHealthResult(self):

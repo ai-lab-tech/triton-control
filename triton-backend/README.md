@@ -130,3 +130,15 @@ python scripts/export_openapi.py
 The frontend keeps a copy at
 `../triton-frontend/openapi/triton-backend/openapi.json` for generated Angular
 API client updates. Backend CI verifies that both spec copies are current.
+## Triton Endpoint Approval
+
+Set `TRITON_ALLOWED_ENDPOINTS` to a comma-separated list of exact external `host:port` pairs,
+for example `triton.example.com:8000,triton.example.com:8002`. Both inference and metrics
+destinations require approval; an empty setting blocks manually registered endpoints,
+including existing database records. Add existing external endpoints before upgrading and
+restart the backend after changing the setting. Only approve administrator-controlled DNS
+names and destinations. URL credentials, non-HTTP(S) protocols, and redirects are rejected.
+
+Triton Control deployments use verified internal Kubernetes Services automatically and need
+no allowlist entries. Their displayed ingress URLs are not used for backend HTTP requests.
+See [Helm endpoint configuration](../charts/triton-control/README.md#approved-external-triton-endpoints).

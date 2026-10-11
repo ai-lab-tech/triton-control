@@ -13,6 +13,7 @@ All HTTP interactions are replaced with a ``FakeClient`` that replays
 pre-configured responses without any network I/O.
 """
 
+import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -65,6 +66,9 @@ class FakeClient:
 
 class TritonServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        allowed = patch.dict(os.environ, {"TRITON_ALLOWED_ENDPOINTS": "triton:80,triton:8002"})
+        allowed.start()
+        self.addCleanup(allowed.stop)
         await TritonService.close_all_clients()
 
     async def asyncTearDown(self):

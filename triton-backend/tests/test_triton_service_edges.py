@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import os
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -78,6 +79,13 @@ class TritonConfigEdgeTests(unittest.TestCase):
 
 
 class TritonInstanceEdgeTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        allowed = patch.dict(os.environ, {
+            "TRITON_ALLOWED_ENDPOINTS": "triton:443,triton:80,new:443,duplicate:80,new-triton:8000,test20.localtest.me:80,bad:80",
+        })
+        allowed.start()
+        self.addCleanup(allowed.stop)
+
     def test_TritonConnectionValidationTimeout_DefaultAndEnvOverride(self):
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(triton_instances.triton_connection_validation_timeout_seconds(), 5.0)
@@ -141,7 +149,7 @@ class TritonInstanceEdgeTests(unittest.IsolatedAsyncioTestCase):
     async def test_UpdateInstance_DuplicateUrl_RaisesConflictBeforeConnecting(self):
         # Arrange
         request = UpdateTritonInstanceRequest(url="http://duplicate")
-        instance = SimpleNamespace(id=1, name="a")
+        instance = SimpleNamespace(id=1, name="a", is_self_deployed=False)
         duplicate = SimpleNamespace(id=2)
 
         # Act / Assert
@@ -310,7 +318,7 @@ class TritonInstanceEdgeTests(unittest.IsolatedAsyncioTestCase):
 class TritonModelEdgeTests(unittest.IsolatedAsyncioTestCase):
     async def test_GetModelConfig_Triton404_RaisesNotFound(self):
         # Arrange
-        instance = SimpleNamespace(url="http://triton", triton_verify_ssl=False, triton_ca_certificate="")
+        instance = SimpleNamespace(is_self_deployed=False, url="http://triton", triton_verify_ssl=False, triton_ca_certificate="")
         exc = Exception("missing")
         exc.response = SimpleNamespace(status_code=404)
         service = SimpleNamespace(get_model_config=AsyncMock(side_effect=exc))
@@ -325,7 +333,7 @@ class TritonModelEdgeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_LoadAndUnloadModel_TritonError_UsesErrorDetail(self):
         # Arrange
-        instance = SimpleNamespace(url="http://triton", triton_verify_ssl=False, triton_ca_certificate="")
+        instance = SimpleNamespace(is_self_deployed=False, url="http://triton", triton_verify_ssl=False, triton_ca_certificate="")
         response = SimpleNamespace(json=lambda: {"error": "model broken"}, text="", status_code=400)
         exc = Exception("bad")
         exc.response = response

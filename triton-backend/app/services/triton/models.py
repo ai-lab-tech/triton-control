@@ -26,7 +26,7 @@ from app.core.access_control import require_member_or_admin
 from app.exceptions import BadGatewayError, BadRequestError, NotFoundError
 from app.schemas import ModelRepositoryActionResponse, TritonRepositoryModelDTO
 from app.services.access import get_instance_or_404
-from app.services.triton.client import TritonService
+from app.services.triton.client import TritonService, managed_connection_options
 from app.services.triton.config import extract_triton_error_detail
 
 GENERATE_ENDPOINT_BACKENDS = {"vllm", "tensorrtllm", "tensorrt_llm", "trtllm"}
@@ -79,6 +79,7 @@ async def get_model_config(
             instance.url,
             instance.triton_verify_ssl,
             instance.triton_ca_certificate,
+            **managed_connection_options(instance),
         ).get_model_config(model_name, version)
     except Exception as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
@@ -102,6 +103,7 @@ async def load_model(
             instance.url,
             instance.triton_verify_ssl,
             instance.triton_ca_certificate,
+            **managed_connection_options(instance),
         ).load_model(model_name)
         return ModelRepositoryActionResponse(status="ok", message="Model load requested.")
     except Exception as exc:
@@ -123,6 +125,7 @@ async def unload_model(
             instance.url,
             instance.triton_verify_ssl,
             instance.triton_ca_certificate,
+            **managed_connection_options(instance),
         ).unload_model(model_name)
         return ModelRepositoryActionResponse(status="ok", message="Model unload requested.")
     except Exception as exc:
@@ -148,6 +151,7 @@ async def infer_model(
         instance.triton_verify_ssl,
         instance.triton_ca_certificate,
         timeout=triton_inference_timeout_seconds(),
+        **managed_connection_options(instance),
     )
     use_metrics = bool(instance.metrics_url)
     metrics_before = (

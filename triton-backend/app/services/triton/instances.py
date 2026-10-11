@@ -35,7 +35,8 @@ from app.services.access import ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.storage.s3 import discover_instance_repository_backends
-from app.services.triton.client import TritonService
+from app.services.triton.client import TritonService, managed_connection_options
+from app.services.triton.endpoints import approved_external_url
 from app.services.triton.repository_snapshot import normalize_repository_models, repository_model_names
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ async def create_instance(
     claims: dict[str, Any],
 ) -> TritonInstanceDTO:
     require_member_or_admin(claims)
+
+    _validate_external_endpoints(request.url, request.metrics_url)
 
     try:
         triton_service = TritonService(
@@ -155,6 +158,9 @@ async def update_instance(
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
+    if not instance.is_self_deployed:
+        _validate_external_endpoints(request.url, request.metrics_url)
+
     existing_by_url = instances.find_by_url(session, request.url)
     if existing_by_url and existing_by_url.id != instance.id:
         raise ConflictError(f"Instance URL '{request.url}' already exists")
@@ -165,6 +171,7 @@ async def update_instance(
             request.verify_ssl,
             request.ca_certificate,
             timeout=triton_connection_validation_timeout_seconds(),
+            **managed_connection_options(instance),
         )
     except RuntimeError as exc:
         raise BadRequestError(str(exc)) from exc
@@ -212,6 +219,15 @@ def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -
 
     rows = instances.list_visible(session, limit=limit, assigned_names=assigned)
     return [entity_to_dto(row) for row in rows]
+
+
+def _validate_external_endpoints(url: str, metrics_url: str | None) -> None:
+    try:
+        approved_external_url(url)
+        if metrics_url:
+            approved_external_url(metrics_url)
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
 
 
 def get_instance(session: Session, claims: dict[str, Any], instance_id: int) -> TritonInstanceDTO:

@@ -7,6 +7,7 @@ infrastructure.
 """
 
 import itertools
+import os
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -661,6 +662,11 @@ class ApiHelperTests(unittest.TestCase):
 
 
 class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        allowed = patch.dict(os.environ, {"TRITON_ALLOWED_ENDPOINTS": "triton:8000,triton-new:8000"})
+        allowed.start()
+        self.addCleanup(allowed.stop)
+
     async def _instance_session(self):
         instance = TritonInstanceEntity(
             id=1,
