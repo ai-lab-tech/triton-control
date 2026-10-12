@@ -837,7 +837,8 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(exc.exception.status_code, 503)
         self.assertIn("unable to get local issuer certificate", exc.exception.detail)
 
-    async def test_DeleteInstance_AdminDeletesAndMemberForbidden(self):
+    @patch("app.services.triton.instances.prepare_instance_deletion", return_value=None)
+    async def test_DeleteInstance_AdminDeletesAndMemberForbidden(self, _prepare_perf):
         # Arrange
         session, instance = await self._instance_session()
         user = UserEntity(
@@ -867,7 +868,8 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
             delete_instance(1, session=session, claims={"role": "member"})
         self.assertEqual(exc.exception.status_code, 403)
 
-    async def test_DeleteInstance_SelfDeployed_DeletesNamespaceBeforeDbRecord(self):
+    @patch("app.services.triton.instances.prepare_instance_deletion", return_value=None)
+    async def test_DeleteInstance_SelfDeployed_DeletesNamespaceBeforeDbRecord(self, _prepare_perf):
         # Arrange
         session, instance = await self._instance_session()
         instance.is_self_deployed = True
@@ -886,7 +888,8 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         delete_namespace.assert_called_once_with("triton-one")
         self.assertEqual(session.deleted, [instance])
 
-    async def test_DeleteInstance_SelfDeployedNamespaceDeleteFails_DoesNotDeleteDbRecord(self):
+    @patch("app.services.triton.instances.prepare_instance_deletion", return_value=None)
+    async def test_DeleteInstance_SelfDeployedNamespaceDeleteFails_DoesNotDeleteDbRecord(self, _prepare_perf):
         # Arrange
         session, instance = await self._instance_session()
         instance.is_self_deployed = True

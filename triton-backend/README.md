@@ -87,9 +87,17 @@ S3/R2 Explorer is optional and is installed manually by the user when needed.
 
 ## Perf Analyzer Notes
 
-When running Perf Analyzer in Kubernetes, JSON input payloads are written to
-`/dev/shm/pa_input.json` inside the Perf Analyzer pod before execution. This
-avoids failures in restricted containers where `/tmp` is mounted read-only.
+Each model benchmark runs in its own non-root Kubernetes Job. JSON input is
+mounted from a run-owned Secret at `/perf-input/input.json`; temporary volumes
+remain writable by UID/GID 10001. See [Model performance Jobs](../docs/model-performance-jobs.md)
+for concurrency, cancellation, configuration, and migration details.
+
+The base Job manifest is maintained in
+[`perf_analyzer_job.yaml`](app/services/perf_analyzer/perf_analyzer_job.yaml).
+`jobs_kubernetes.py` parses the template and fills dynamic fields and optional
+Secret references. Shared command preparation lives in `commands.py`;
+`jobs.py` handles lifecycle reconciliation and preserves captured output when
+final logs are unavailable.
 
 ## Auth Session and Token Timeout
 

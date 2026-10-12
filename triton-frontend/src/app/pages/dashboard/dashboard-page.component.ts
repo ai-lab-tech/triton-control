@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject } from "@angular/core";
+import { Component, effect, inject } from "@angular/core";
 
 import { MatCardModule } from "@angular/material/card";
 import { MatButtonModule } from "@angular/material/button";
@@ -24,10 +24,6 @@ import {
   type AlertItem,
   type StatCard,
 } from "../../state/dashboard/dashboard.reducer";
-import {
-  selectActiveRunKey,
-  selectProfileRunning,
-} from "../../state/instances-profile/instances-profile.selectors";
 
 @Component({
   selector: "app-dashboard-page",
@@ -57,36 +53,6 @@ export class DashboardPageComponent {
   });
   readonly alerts = toSignal(this.store.select(selectDashboardAlerts), {
     initialValue: [] as AlertItem[],
-  });
-  readonly perfProfileRunning = toSignal(this.store.select(selectProfileRunning), {
-    initialValue: false,
-  });
-  readonly activeProfileRunKey = toSignal(this.store.select(selectActiveRunKey), {
-    initialValue: "",
-  });
-  readonly activeProfileRun = computed(() => {
-    if (!this.perfProfileRunning() || !this.activeProfileRunKey()) {
-      return null;
-    }
-
-    const parts = this.activeProfileRunKey().split(":");
-    if (parts.length < 3) {
-      return null;
-    }
-
-    const instanceId = parts[0];
-    const version = parts[parts.length - 1];
-    const modelName = parts.slice(1, -1).join(":");
-    const instanceName = this.instances().find((row) => row.id === instanceId)?.name || instanceId;
-
-    return {
-      instanceId,
-      instanceName,
-      modelName,
-      version,
-      label: `${instanceName} · ${modelName}:${version}`,
-      route: ["/instances", instanceId, "models", modelName, "versions", version, "profile"],
-    };
   });
 
   readonly displayedColumns = ["name", "url", "models", "createdAt"];

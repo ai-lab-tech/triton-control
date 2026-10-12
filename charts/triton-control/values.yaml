@@ -376,3 +376,15 @@ securityContext: {}
 #   capabilities:
 #     drop:
 #       - ALL
+
+# Each model benchmark gets an independent non-root Job in the control namespace.
+perfAnalyzer:
+  image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
+  deadlineSeconds: 3600
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
