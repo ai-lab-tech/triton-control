@@ -110,7 +110,7 @@ async def proxy_argo_workflows(
 ) -> Any:
     """Proxy an authenticated member or admin request to Argo Server."""
     require_member_or_admin(claims)
-    return await proxy.proxy_http(path, request)
+    return await proxy.proxy_http(path, request, claims)
 
 
 @router.websocket("/proxy")

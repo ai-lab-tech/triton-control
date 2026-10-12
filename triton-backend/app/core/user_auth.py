@@ -49,7 +49,9 @@ def _jwt_secret() -> str:
     return os.getenv("JWT_SECRET") or os.getenv("SESSION_SECRET") or "change-me-in-production"
 
 
-def issue_access_token(user: Dict[str, Any], expires_minutes: int = 60) -> str:
+def issue_access_token(
+    user: Dict[str, Any], expires_minutes: int = 60, extra_claims: Dict[str, Any] | None = None
+) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user.get("email"),
@@ -61,6 +63,11 @@ def issue_access_token(user: Dict[str, Any], expires_minutes: int = 60) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
     }
+    if extra_claims:
+        reserved = set(payload)
+        if reserved.intersection(extra_claims):
+            raise ValueError("Extra token claims cannot replace identity or expiry")
+        payload.update(extra_claims)
     token = _jwt.encode({"alg": "HS256"}, payload, _jwt_secret())
     return token.decode("ascii")
 

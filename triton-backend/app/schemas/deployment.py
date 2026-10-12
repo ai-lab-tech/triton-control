@@ -24,9 +24,12 @@ class CreateDeploymentRequest(SQLModel):
     """Request body for ``POST /api/deployments``."""
 
     deployment_name: str
-    s3_url: str
-    s3_access_key: str
-    s3_secret_key: str
+    s3_url: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_profile_id: Optional[int] = Field(default=None, gt=0)
+    repository_prefix: Optional[str] = None
+    model_uri: Optional[str] = None
     s3_region: str = "us-east-1"
     s3_ca_certificate: Optional[str] = None
     image: str
@@ -51,6 +54,18 @@ class CreateDeploymentRequest(SQLModel):
     def validate_repository_modes(self) -> CreateDeploymentRequest:
         if self.repository_sync_mode == "init" and self.model_control_mode != "explicit":
             raise ValueError("init repository sync supports only explicit model control mode")
+        if self.s3_profile_id is None:
+            if not all((self.s3_url, self.s3_access_key, self.s3_secret_key)):
+                raise ValueError("s3_url, s3_access_key and s3_secret_key are required")
+            if self.repository_prefix is not None or self.model_uri is not None:
+                raise ValueError("profile repository fields require s3_profile_id")
+        else:
+            if any((self.s3_url, self.s3_access_key, self.s3_secret_key)):
+                raise ValueError("s3_profile_id cannot be combined with S3 credentials")
+            if not all((self.repository_prefix, self.model_uri, self.model_name)):
+                raise ValueError("repository_prefix, model_uri and model_name are required")
+            if self.model_control_mode != "explicit":
+                raise ValueError("profile deployments require explicit model control")
         return self
 
     @model_validator(mode="before")
@@ -75,9 +90,6 @@ class CreateDeploymentRequest(SQLModel):
 
     @field_validator(
         "deployment_name",
-        "s3_url",
-        "s3_access_key",
-        "s3_secret_key",
         "s3_region",
         "image",
     )
@@ -99,7 +111,9 @@ class CreateDeploymentRequest(SQLModel):
     @field_validator("s3_url")
     @classmethod
     def validate_s3_url(cls, value: str) -> str:
-        normalized = value
+        normalized = value.strip()
+        if not normalized:
+            return ""
         if normalized.startswith("http://") or normalized.startswith("https://"):
             normalized = f"s3://{normalized}"
         if not normalized.startswith("s3://"):
@@ -111,6 +125,16 @@ class CreateDeploymentRequest(SQLModel):
     def normalize_optional_text(cls, value: str | None) -> str | None:
         cleaned = (value or "").strip()
         return cleaned or None
+
+    @field_validator("s3_access_key", "s3_secret_key")
+    @classmethod
+    def normalize_credential_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("repository_prefix", "model_uri")
+    @classmethod
+    def normalize_profile_text(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
 
     @field_validator("memory", "memory_limit", mode="before")
     @classmethod

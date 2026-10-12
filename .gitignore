@@ -6,6 +6,7 @@ openspec/
 .agents/
 skills-lock.json
 agent/
+/mlruns/
 
 triton-backend/.venv/
 triton-backend/.env

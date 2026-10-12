@@ -6,18 +6,19 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from sqlmodel import SQLModel
 
 
 class InstallMlflowRequest(SQLModel):
     """Request body for ``POST /api/mlflow``."""
 
+    model_config = ConfigDict(extra="forbid")
+
     installation_name: str = "mlflow"
-    image: str = "ghcr.io/mlflow/mlflow:v3.14.0"
     dockerconfigjson: Optional[str] = None
 
-    @field_validator("installation_name", "image")
+    @field_validator("installation_name")
     @classmethod
     def strip_required_text(cls, value: str) -> str:
         cleaned = (value or "").strip()
@@ -54,6 +55,7 @@ class MlflowStatusResponse(SQLModel):
     """Response describing singleton MLflow installation and UI proxy base path."""
 
     installed: bool
+    configured_version: str = ""
     status: str = "not_installed"
     ready: bool = False
     status_message: str = ""

@@ -14,6 +14,7 @@ describe("MlflowPageComponent", () => {
   let http: HttpTestingController;
   const notInstalledStatus = {
     installed: false,
+    configured_version: "3.14.0",
     status: "not_installed",
     ready: false,
     status_message: "",
@@ -22,6 +23,7 @@ describe("MlflowPageComponent", () => {
   };
   const creatingStatus = {
     installed: true,
+    configured_version: "3.14.0",
     status: "creating",
     ready: false,
     status_message: "Installation exists. Waiting for MLflow pod to reach Running state.",
@@ -68,6 +70,22 @@ describe("MlflowPageComponent", () => {
   function flushInitialStatus(status = notInstalledStatus): void {
     http.expectOne("/api/mlflow").flush(status);
   }
+
+  it("shows the configured MLflow version before installation", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(MlflowPageComponent);
+    await flushMicrotasks();
+
+    // Act
+    flushInitialStatus({ ...notInstalledStatus, configured_version: "3.16.1" });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Assert
+    const version = fixture.nativeElement.querySelector('[data-testid="mlflow-install-version"]');
+    expect(version.textContent.trim()).toBe("3.16.1");
+    expect(fixture.nativeElement.querySelector("#mlflow-image")).toBeNull();
+  });
 
   it("loads status and embeds iframe when ready", async () => {
     const fixture = TestBed.createComponent(MlflowPageComponent);
@@ -164,13 +182,17 @@ describe("MlflowPageComponent", () => {
   });
 
   it("can install when fields are present and not installed", async () => {
+    // Arrange
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
     flushInitialStatus();
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
 
-    expect(component.canInstall()).toBeTrue();
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeTrue();
   });
 
   it("restores top bar on destroy", async () => {
@@ -202,6 +224,7 @@ describe("MlflowPageComponent", () => {
   });
 
   it("installs and reloads status", async () => {
+    // Arrange
     const fixture = TestBed.createComponent(MlflowPageComponent);
     const component = fixture.componentInstance;
     await flushMicrotasks();
@@ -209,14 +232,12 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
-    expect(component.canInstall()).toBeTrue();
+
+    // Act
     const installPromise = component.install();
     await flushMicrotasks();
 
     const installReq = http.expectOne("/api/mlflow");
-    expect(installReq.request.method).toBe("POST");
-    expect(installReq.request.body.installation_name).toBe("mlflow");
     installReq.flush({
       namespace: "triton-control",
       deployment_name: "mlflow",
@@ -243,6 +264,10 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
     await installPromise;
 
+    // Assert
+    expect(installReq.request.method).toBe("POST");
+    expect(installReq.request.body.installation_name).toBe("mlflow");
+    expect(installReq.request.body.image).toBeUndefined();
     expect(component.messageTone()).toBe("success");
     expect(component.frameUrl()).not.toBeNull();
   });
@@ -254,7 +279,6 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     expect(component.canInstall()).toBeTrue();
     const installPromise = component.install();
     await flushMicrotasks();
@@ -272,7 +296,6 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     component.installationName = "mlflow";
-    component.image = "ghcr.io/mlflow/mlflow:v3.14.0";
     const installPromise = component.install();
     await flushMicrotasks();
 

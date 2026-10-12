@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +14,7 @@ import yaml  # type: ignore[import-untyped]
 from app.exceptions import BadGatewayError, BadRequestError
 from app.schemas import InstallMlflowRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
+from app.services.mlflow import config, tracking
 
 _TEMPLATE = Path(__file__).with_name("mlflow_deployment.yaml")
 _POD_WAIT_ATTEMPTS = 120
@@ -44,11 +48,12 @@ def apply_installation_resources(
         api = _client()
         _ensure_namespace(api, namespace)
         applied = []
-        for manifest in _manifests(request, namespace, deployment_name, service_name):
+        token = _gateway_token(api, namespace, deployment_name)
+        for manifest in _manifests(request, namespace, deployment_name, service_name, gateway_token=token):
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
-        _wait_for_running_pod(api, namespace, deployment_name)
+        _wait_for_ready_pod(api, namespace, deployment_name)
         return applied
     except ConfigException as exc:
         raise BadRequestError("Kubernetes configuration could not be loaded") from exc
@@ -83,6 +88,47 @@ def delete_namespace(namespace: str) -> str:
         raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
 
 
+def upgrade_installation_resources(namespace: str, deployment_name: str, service_name: str) -> list[str]:
+    """Retain private-registry credentials when adding the tracking gateway."""
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    dockerconfigjson = None
+    try:
+        secret = client.CoreV1Api(_client()).read_namespaced_secret(
+            _image_pull_secret_name(deployment_name), namespace,
+        )
+        dockerconfigjson = base64.b64decode((secret.data or {}).get(".dockerconfigjson", "")).decode() or None
+    except ApiException as exc:
+        if exc.status != 404:
+            raise
+    applied = apply_installation_resources(
+        InstallMlflowRequest(installation_name=deployment_name, dockerconfigjson=dockerconfigjson),
+        namespace=namespace, deployment_name=deployment_name, service_name=service_name,
+    )
+    _wait_for_current_deployment(_client(), namespace, deployment_name)
+    return applied
+
+
+def _wait_for_current_deployment(api: Any, namespace: str, deployment_name: str) -> None:
+    from kubernetes import client
+
+    apps = client.AppsV1Api(api)
+    for _ in range(_POD_WAIT_ATTEMPTS):
+        deployment = apps.read_namespaced_deployment(deployment_name, namespace)
+        desired = deployment.spec.replicas or 1
+        status = deployment.status
+        if (
+            (status.observed_generation or 0) >= deployment.metadata.generation
+            and status.updated_replicas == desired
+            and status.ready_replicas == desired
+            and status.replicas == desired
+        ):
+            return
+        time.sleep(_POD_WAIT_INTERVAL_SECONDS)
+    raise BadGatewayError("MLflow tracking gateway rollout did not complete")
+
+
 def delete_installation_resources(namespace: str, deployment_name: str, service_name: str) -> str:
     """Delete MLflow resources in-place without deleting namespace."""
     from kubernetes import client
@@ -106,6 +152,7 @@ def delete_installation_resources(namespace: str, deployment_name: str, service_
     _delete(core.delete_namespaced_service, "Service", service_name)
     _delete(core.delete_namespaced_persistent_volume_claim, "PersistentVolumeClaim", _data_pvc_name(deployment_name))
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(deployment_name))
+    _delete(core.delete_namespaced_secret, "Secret", tracking.gateway_secret_name(deployment_name))
     return ", ".join(deleted) if deleted else "No MLflow resources found to delete."
 
 
@@ -115,13 +162,13 @@ def read_installation_readiness(namespace: str, deployment_name: str) -> tuple[b
 
     try:
         api = _client()
-        pod_name = _running_pod_name(api, namespace, deployment_name)
+        pod_name = _ready_pod_name(api, namespace, deployment_name)
         if pod_name:
-            return True, f"MLflow pod '{pod_name}' is Running."
+            return True, f"MLflow pod '{pod_name}' is Ready."
         reason = _pod_error_reason(api, namespace, deployment_name)
         if reason:
             return False, f"MLflow pod not ready: {reason}"
-        return False, "MLflow installation exists but pod is not Running yet."
+        return False, "MLflow installation exists but pod is not Ready yet."
     except ConfigException:
         return False, "Kubernetes configuration could not be loaded"
     except Exception as exc:
@@ -155,6 +202,8 @@ def _manifests(
     namespace: str,
     deployment_name: str,
     service_name: str,
+    *,
+    gateway_token: str | None = None,
 ) -> list[dict[str, Any]]:
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
@@ -174,10 +223,31 @@ def _manifests(
         deployment_name=q(deployment_name),
         service_name=q(service_name),
         data_pvc_name=q(_data_pvc_name(deployment_name)),
-        image=q(request.image),
+        image=q(config.server_image()),
         allowed_hosts=q(_allowed_hosts(namespace, service_name)),
+        gateway_secret_name=q(tracking.gateway_secret_name(deployment_name)),
+        gateway_image=q(os.getenv("MLFLOW_GATEWAY_IMAGE", "nginx:1.28-alpine")),
     )
-    return [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
+    manifests = [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
+    manifests.append(tracking.gateway_manifest(namespace, deployment_name, gateway_token or secrets.token_urlsafe(32)))
+    # The gateway configuration must exist before its pod is scheduled.
+    return sorted(manifests, key=lambda manifest: manifest["kind"] != "Secret")
+
+
+def _gateway_token(api: Any, namespace: str, deployment_name: str) -> str:
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+
+    try:
+        secret = client.CoreV1Api(api).read_namespaced_secret(tracking.gateway_secret_name(deployment_name), namespace)
+    except ApiException as exc:
+        if exc.status == 404:
+            return secrets.token_urlsafe(32)
+        raise
+    token = base64.b64decode((secret.data or {}).get("gateway-token", "")).decode()
+    if not token:
+        raise BadGatewayError("MLflow gateway Secret has no credential")
+    return token
 
 
 def _client() -> Any:
@@ -199,9 +269,9 @@ def _ensure_namespace(api: Any, namespace: str) -> None:
             raise
 
 
-def _wait_for_running_pod(api: Any, namespace: str, deployment_name: str) -> None:
+def _wait_for_ready_pod(api: Any, namespace: str, deployment_name: str) -> None:
     for _ in range(_POD_WAIT_ATTEMPTS):
-        if _running_pod_name(api, namespace, deployment_name):
+        if _ready_pod_name(api, namespace, deployment_name):
             return
         error = _pod_error_reason(api, namespace, deployment_name)
         if error:
@@ -209,7 +279,7 @@ def _wait_for_running_pod(api: Any, namespace: str, deployment_name: str) -> Non
                 f"MLflow pod in namespace '{namespace}' failed to start: {error}"
             )
         time.sleep(_POD_WAIT_INTERVAL_SECONDS)
-    raise BadGatewayError(f"MLflow pod in namespace '{namespace}' did not reach Running")
+    raise BadGatewayError(f"MLflow pod in namespace '{namespace}' did not become Ready")
 
 
 def _pod_error_reason(api: Any, namespace: str, deployment_name: str) -> str:
@@ -232,7 +302,7 @@ def _pod_error_reason(api: Any, namespace: str, deployment_name: str) -> str:
     return ""
 
 
-def _running_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
+def _ready_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
     from kubernetes import client
 
     pods = client.CoreV1Api(api).list_namespaced_pod(
@@ -242,7 +312,13 @@ def _running_pod_name(api: Any, namespace: str, deployment_name: str) -> str:
     for pod in pods:
         phase = (getattr(getattr(pod, "status", None), "phase", "") or "").strip()
         name = (getattr(getattr(pod, "metadata", None), "name", "") or "").strip()
-        if phase == "Running" and name:
+        conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
+        ready = any(
+            getattr(condition, "type", None) == "Ready"
+            and getattr(condition, "status", None) == "True"
+            for condition in conditions
+        )
+        if phase == "Running" and ready and name:
             return name
     return ""
 
