@@ -27,11 +27,11 @@ Jobs use the control namespace, resolved from the backend pod or `TRITON_CONTROL
 
 ## Implementation
 
-The base Job definition lives in [`perf_analyzer_job.yaml`](../triton-backend/app/services/perf_analyzer/perf_analyzer_job.yaml). It contains the suspended Job structure, security settings, default resource requests and limits, and writable temporary volumes. The template is included in the backend Python package.
+The base Job definition lives in [`perf_analyzer_job.yaml`](https://github.com/ai-lab-tech/triton-control/blob/main/triton-backend/app/services/perf_analyzer/perf_analyzer_job.yaml). It contains the suspended Job structure, security settings, default resource requests and limits, and writable temporary volumes. The template is included in the backend Python package.
 
-[`jobs_kubernetes.py`](../triton-backend/app/services/perf_analyzer/jobs_kubernetes.py) parses a fresh template for each run with `yaml.safe_load`, then assigns the run identity, image, command, deadline, and resource overrides to the parsed fields. It attaches input and registry Secret references only when needed. Dynamic values are not inserted through raw YAML string substitution, and optional fields cannot carry over between runs.
+[`jobs_kubernetes.py`](https://github.com/ai-lab-tech/triton-control/blob/main/triton-backend/app/services/perf_analyzer/jobs_kubernetes.py) parses a fresh template for each run with `yaml.safe_load`, then assigns the run identity, image, command, deadline, and resource overrides to the parsed fields. It attaches input and registry Secret references only when needed. Dynamic values are not inserted through raw YAML string substitution, and optional fields cannot carry over between runs.
 
-[`commands.py`](../triton-backend/app/services/perf_analyzer/commands.py) exposes command preparation and input conversion helpers. [`jobs.py`](../triton-backend/app/services/perf_analyzer/jobs.py) handles lifecycle reconciliation and persistence; `jobs_kubernetes.py` handles Kubernetes operations. Legacy saved-result lookup remains in `installer.py`.
+[`commands.py`](https://github.com/ai-lab-tech/triton-control/blob/main/triton-backend/app/services/perf_analyzer/commands.py) exposes command preparation and input conversion helpers. [`jobs.py`](https://github.com/ai-lab-tech/triton-control/blob/main/triton-backend/app/services/perf_analyzer/jobs.py) handles lifecycle reconciliation and persistence; `jobs_kubernetes.py` handles Kubernetes operations. Legacy saved-result lookup remains in `installer.py`.
 
 ## API
 
