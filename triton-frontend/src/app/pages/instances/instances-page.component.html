@@ -5,15 +5,6 @@
       <p class="page-subtitle">
         Manage runtime health, model catalogs, and S3 connectivity per instance.
       </p>
-      @if (perfProfileRunning()) {
-        <div class="deployment-progress-panel" role="status" aria-live="polite">
-          <span class="deployment-spinner" aria-hidden="true"></span>
-          <div class="deployment-progress-copy">
-            <div class="deployment-progress-title">Perf Analyzer</div>
-            <div class="deployment-progress-text">{{ activeProfileRunLabel() }}</div>
-          </div>
-        </div>
-      }
     </div>
   </div>
 

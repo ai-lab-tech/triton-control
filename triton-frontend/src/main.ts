@@ -19,8 +19,6 @@ import { BASE_PATH, Configuration } from "./app/api/generated/index";
 import { environment } from "./environments/environment";
 import { InstancesInferEffects } from "./app/state/instances-infer/instances-infer.effects";
 import { instancesInferFeature } from "./app/state/instances-infer/instances-infer.reducer";
-import { InstancesProfileEffects } from "./app/state/instances-profile/instances-profile.effects";
-import { instancesProfileFeature } from "./app/state/instances-profile/instances-profile.reducer";
 import { InstancesDetailEffects } from "./app/state/instances-detail/instances-detail.effects";
 import { instancesDetailFeature } from "./app/state/instances-detail/instances-detail.reducer";
 import { InstancesListEffects } from "./app/state/instances-list/instances-list.effects";
@@ -49,7 +47,6 @@ bootstrapApplication(AppComponent, {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideStore(),
     provideState(instancesInferFeature),
-    provideState(instancesProfileFeature),
     provideState(instancesDetailFeature),
     provideState(instancesListFeature),
     provideState(instancesS3Feature),
@@ -59,7 +56,6 @@ bootstrapApplication(AppComponent, {
     provideState(DASHBOARD_FEATURE_KEY, dashboardReducer),
     provideEffects([
       InstancesInferEffects,
-      InstancesProfileEffects,
       InstancesDetailEffects,
       InstancesListEffects,
       InstancesS3Effects,

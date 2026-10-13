@@ -2,6 +2,9 @@
 
 Modern Angular Material admin UI for managing Triton instances, user access, and OIDC settings.
 
+For real code-server extension compatibility tests and upgrade checks, see
+[Code-server plugin smoke tests](../docs/code-server-plugin-smoke.md).
+
 ## Setup
 
 ```bash
@@ -50,7 +53,7 @@ npm run -s generate:api
 - `/instances`
 - `/development`
 - `/deployments/new`
-- `/perf-analyzers`
+- `/instances/:id/models/:modelName/versions/:version/profile` — model Perf controls and results
 - `/s3-profiles`
 - `/workflows` - embedded global Argo Workflows UI through Triton Control
 - `/mlflow` - embedded managed MLflow tracking UI through Triton Control

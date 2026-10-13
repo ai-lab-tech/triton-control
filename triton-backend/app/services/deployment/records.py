@@ -5,8 +5,8 @@ Public surface: ``upsert_deployed_instance``, ``delete_instance_record``,
 functions persist deployment state, S3 metadata, ownership assignments, and
 deployment logs into the database.
 
-Repository-facing helper module for the deployment service; no HTTP handlers or
-Kubernetes client calls.
+Repository-facing helper module for the deployment service. Deletion first
+coordinates benchmark cleanup through its lifecycle service.
 """
 
 from __future__ import annotations
@@ -23,11 +23,13 @@ from app.exceptions import BadRequestError, ConflictError
 from app.repositories import dashboard_alerts, instances, users
 from app.repositories import perf_analyzer as perf_analyzer_repo
 from app.schemas import CreateDeploymentRequest
+from app.services.perf_analyzer.jobs import prepare_instance_deletion
 
 
 def delete_instance_record(session: Session, instance: Any) -> None:
     if instance.id is None:
         raise BadRequestError("Instance has no database id")
+    prepare_instance_deletion(session, instance.id)
     perf_analyzer_repo.delete_runs_for_instance(session, instance.id)
     dashboard_alerts.delete_for_instance(session, instance.id, instance.name)
     for user in users.list_all(session):

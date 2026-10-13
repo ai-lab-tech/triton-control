@@ -7,3 +7,7 @@ src/app/api/generated
 dist
 *.pem 
 coverage
+
+# Playwright smoke artifacts
+test-results/
+playwright-report/
