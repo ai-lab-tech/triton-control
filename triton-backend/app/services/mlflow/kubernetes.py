@@ -11,6 +11,8 @@ from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
+from app.core.crypto import decrypt_secret
+from app.db.entities import S3ProfileEntity
 from app.exceptions import BadGatewayError, BadRequestError
 from app.schemas import InstallMlflowRequest
 from app.services.kubernetes_client import api_client, in_cluster_namespace, is_running_in_cluster
@@ -37,6 +39,7 @@ def apply_installation_resources(
     namespace: str,
     deployment_name: str,
     service_name: str,
+    storage: dict[str, str] | None = None,
 ) -> list[str]:
     """Apply namespace-scoped resources needed for an MLflow server."""
     from kubernetes import utils  # type: ignore[import-untyped]
@@ -49,7 +52,10 @@ def apply_installation_resources(
         _ensure_namespace(api, namespace)
         applied = []
         token = _gateway_token(api, namespace, deployment_name)
-        for manifest in _manifests(request, namespace, deployment_name, service_name, gateway_token=token):
+        manifests = _manifests(
+            request, namespace, deployment_name, service_name, gateway_token=token, storage=storage,
+        )
+        for manifest in manifests:
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
@@ -88,7 +94,9 @@ def delete_namespace(namespace: str) -> str:
         raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
 
 
-def upgrade_installation_resources(namespace: str, deployment_name: str, service_name: str) -> list[str]:
+def upgrade_installation_resources(
+    namespace: str, deployment_name: str, service_name: str, *, require_s3_storage: bool = False,
+) -> list[str]:
     """Retain private-registry credentials when adding the tracking gateway."""
     from kubernetes import client
     from kubernetes.client.rest import ApiException
@@ -102,9 +110,23 @@ def upgrade_installation_resources(namespace: str, deployment_name: str, service
     except ApiException as exc:
         if exc.status != 404:
             raise
+    storage = None
+    try:
+        secret = client.CoreV1Api(_client()).read_namespaced_secret(_storage_secret_name(deployment_name), namespace)
+        storage = {key: base64.b64decode(value).decode() for key, value in (secret.data or {}).items()}
+    except ApiException as exc:
+        if exc.status != 404:
+            raise
+        if require_s3_storage:
+            raise BadGatewayError("MLflow storage Secret is missing; restore it before upgrading") from exc
+    if storage is not None and not all(storage.get(key) for key in (
+        "MLFLOW_BACKEND_STORE_URI", "MLFLOW_ARTIFACTS_DESTINATION", "MLFLOW_S3_ENDPOINT_URL",
+        "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+    )):
+        raise BadGatewayError("MLflow storage Secret is incomplete; restore it before upgrading")
     applied = apply_installation_resources(
-        InstallMlflowRequest(installation_name=deployment_name, dockerconfigjson=dockerconfigjson),
-        namespace=namespace, deployment_name=deployment_name, service_name=service_name,
+        InstallMlflowRequest.model_construct(installation_name=deployment_name, dockerconfigjson=dockerconfigjson),
+        namespace=namespace, deployment_name=deployment_name, service_name=service_name, storage=storage,
     )
     _wait_for_current_deployment(_client(), namespace, deployment_name)
     return applied
@@ -153,6 +175,7 @@ def delete_installation_resources(namespace: str, deployment_name: str, service_
     _delete(core.delete_namespaced_persistent_volume_claim, "PersistentVolumeClaim", _data_pvc_name(deployment_name))
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(deployment_name))
     _delete(core.delete_namespaced_secret, "Secret", tracking.gateway_secret_name(deployment_name))
+    _delete(core.delete_namespaced_secret, "Secret", _storage_secret_name(deployment_name))
     return ", ".join(deleted) if deleted else "No MLflow resources found to delete."
 
 
@@ -204,11 +227,13 @@ def _manifests(
     service_name: str,
     *,
     gateway_token: str | None = None,
+    storage: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
 
-    rendered = _TEMPLATE.read_text(encoding="utf-8").format(
+    template = _TEMPLATE if storage is not None else _TEMPLATE.with_name("mlflow_legacy_deployment.yaml")
+    rendered = template.read_text(encoding="utf-8").format(
         image_pull_secret_manifest=_image_pull_secret_manifest(
             request.dockerconfigjson,
             namespace,
@@ -226,9 +251,16 @@ def _manifests(
         image=q(config.server_image()),
         allowed_hosts=q(_allowed_hosts(namespace, service_name)),
         gateway_secret_name=q(tracking.gateway_secret_name(deployment_name)),
+        storage_secret_name=q(_storage_secret_name(deployment_name)),
         gateway_image=q(os.getenv("MLFLOW_GATEWAY_IMAGE", "nginx:1.28-alpine")),
     )
     manifests = [manifest for manifest in yaml.safe_load_all(rendered) if manifest]
+    if storage is not None:
+        manifests.append({
+            "apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+            "metadata": {"name": _storage_secret_name(deployment_name), "namespace": namespace},
+            "stringData": storage,
+        })
     manifests.append(tracking.gateway_manifest(namespace, deployment_name, gateway_token or secrets.token_urlsafe(32)))
     # The gateway configuration must exist before its pod is scheduled.
     return sorted(manifests, key=lambda manifest: manifest["kind"] != "Secret")
@@ -370,3 +402,35 @@ def _api_error(exc: Exception) -> str:
     else:
         details = reason or body or "Kubernetes API request failed"
     return f"Kubernetes API error {status}: {details}" if status else details
+
+
+def _storage_secret_name(deployment_name: str) -> str:
+    return f"{deployment_name[:55].rstrip('-')}-storage"
+
+
+def storage_configuration(profile: S3ProfileEntity, backend_uri: str) -> dict[str, str]:
+    """Snapshot the selected connection into a server-only Kubernetes Secret."""
+    prefix = (profile.prefix or "").strip("/")
+    if any(part in {".", "..", ""} for part in prefix.split("/")) and prefix:
+        raise BadRequestError("S3 profile prefix contains invalid path components")
+    if not profile.endpoint.startswith(("http://", "https://")):
+        raise BadRequestError("S3 profile endpoint must be an HTTP(S) URL")
+    secret_key = decrypt_secret(profile.secret_key_enc or "")
+    if not secret_key:
+        raise BadRequestError("S3 profile credentials are missing")
+    root = f"s3://{profile.bucket}/" + "/".join(part for part in (prefix, "mlflow") if part)
+    result = {
+        "MLFLOW_BACKEND_STORE_URI": backend_uri,
+        "MLFLOW_ARTIFACTS_DESTINATION": root,
+        "MLFLOW_S3_ENDPOINT_URL": profile.endpoint.rstrip("/"),
+        "AWS_ACCESS_KEY_ID": profile.access_key,
+        "AWS_SECRET_ACCESS_KEY": secret_key,
+        "AWS_DEFAULT_REGION": profile.region or "us-east-1",
+        "aws-config": "[default]\ns3 =\n    addressing_style = " + (
+            "path" if profile.force_path_style else "virtual"
+        ) + "\n",
+    }
+    if profile.ca_certificate:
+        result["ca.pem"] = profile.ca_certificate
+        result["AWS_CA_BUNDLE"] = "/etc/mlflow-storage/ca.pem"
+    return result

@@ -11,6 +11,7 @@ from fastapi import Request, Response
 
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError
+from app.repositories import mlflow
 from app.services.kubernetes_client import api_client, is_running_in_cluster
 from app.services.mlflow import config, installer, tracking
 
@@ -49,6 +50,14 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 
 async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Response:
     """Proxy authenticated request to the singleton MLflow server."""
+    if path.strip("/") == "api/2.0/mlflow/triton-control/artifact-store" and request.method == "GET":
+        from starlette.responses import JSONResponse
+
+        with session_factory() as session:
+            installation = mlflow.get(session)
+            if installation is None or not installation.artifact_root:
+                raise BadGatewayError("MLflow S3 artifact storage is not configured")
+            return JSONResponse({"artifact_root": installation.artifact_root})
     body = tracking.enforce_creator(path, request.method, await request.body(), claims)
     headers = {
         key: value

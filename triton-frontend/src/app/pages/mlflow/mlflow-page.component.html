@@ -26,6 +26,26 @@
           </div>
 
           <div class="form-grid">
+            <div class="form-row">
+              <label class="field-label" for="mlflow-s3-profile">Artifact storage S3 profile</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="mlflow-s3-profile" [(ngModel)]="s3ProfileId" required>
+                  @for (profile of s3Profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} — {{ profile.bucket }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+              <div class="field-hint">
+                All MLflow model uploads use this bucket and its profile prefix.
+              </div>
+              @if (!s3Profiles().length) {
+                <a [routerLink]="['/s3-profiles']"
+                  >Create an S3 profile before installing MLflow.</a
+                >
+              }
+            </div>
             @if (status()?.configured_version; as version) {
               <div class="form-row">
                 <span class="field-label">Version to install</span>

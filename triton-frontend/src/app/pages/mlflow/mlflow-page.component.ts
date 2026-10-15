@@ -11,6 +11,7 @@ import { MatCardModule } from "@angular/material/card";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
+import { MatSelectModule } from "@angular/material/select";
 import { MatInputModule } from "@angular/material/input";
 import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 
@@ -39,6 +40,7 @@ type MlflowStatusResponse = {
 };
 
 type InstallMlflowRequest = {
+  s3_profile_id: number;
   installation_name: string;
   dockerconfigjson?: string;
 };
@@ -54,6 +56,7 @@ type InstallMlflowRequest = {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatSelectModule,
     MonacoEditorModule,
     RouterLink,
   ],
@@ -79,6 +82,8 @@ export class MlflowPageComponent implements OnDestroy {
     .replace(/\/$/, "");
 
   installationName = "mlflow";
+  s3ProfileId: number | null = null;
+  readonly s3Profiles = signal<{ id: number; name: string; bucket: string; prefix: string }[]>([]);
   dockerconfigjson = "";
   readonly dockerconfigjsonEditorOptions = {
     theme: "vs-dark",
@@ -126,6 +131,9 @@ export class MlflowPageComponent implements OnDestroy {
         this.http.get<MlflowStatusResponse>(`${this.basePath}/api/mlflow`),
       );
       this.status.set(status);
+      if (!status.installed) {
+        await this.loadS3Profiles();
+      }
       if (status.installed && status.ready) {
         this.openFrame(status.base_path || "/api/mlflow/proxy/");
       } else {
@@ -194,7 +202,10 @@ export class MlflowPageComponent implements OnDestroy {
 
   canInstall(): boolean {
     return (
-      !this.installing() && !this.status()?.installed && this.installationName.trim().length > 0
+      !this.installing() &&
+      !this.status()?.installed &&
+      this.installationName.trim().length > 0 &&
+      this.s3Profiles().some((profile) => profile.id === this.s3ProfileId)
     );
   }
 
@@ -207,6 +218,7 @@ export class MlflowPageComponent implements OnDestroy {
     this.setMessage("Installing MLflow and waiting for pod readiness.", "info");
     try {
       const payload: InstallMlflowRequest = {
+        s3_profile_id: this.s3ProfileId!,
         installation_name: this.installationName.trim(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
       };
@@ -264,12 +276,22 @@ export class MlflowPageComponent implements OnDestroy {
       this.frameUrl.set(null);
       this.frameRawUrl.set(null);
       this.frameLoading.set(false);
+      await this.loadS3Profiles();
       this.setMessage(response.message, "success");
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to uninstall MLflow."), "error");
     } finally {
       this.uninstalling.set(false);
     }
+  }
+
+  private async loadS3Profiles(): Promise<void> {
+    const profiles = await firstValueFrom(
+      this.http.get<{ id: number; name: string; bucket: string; prefix: string }[]>(
+        `${this.basePath}/api/s3-profiles`,
+      ),
+    );
+    this.s3Profiles.set(profiles);
   }
 
   private openFrame(path: string): void {

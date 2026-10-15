@@ -29,14 +29,17 @@ class TritonFlavorTests(unittest.TestCase):
 
         # Assert
         self.assertEqual(
-            (destination / "model/1/model.onnx").read_bytes(), b"onnx model"
+            (destination / "model/iris_classifier/1/model.onnx").read_bytes(),
+            b"onnx model",
         )
         self.assertEqual(
-            (destination / "model/config.pbtxt").read_text(), 'name: "iris_classifier"'
+            (destination / "model/iris_classifier/config.pbtxt").read_text(),
+            'name: "iris_classifier"',
         )
         saved = Model.load(destination / "MLmodel")
         self.assertEqual(
-            saved.flavors["triton"], {"data": "model", "model_name": "iris_classifier"}
+            saved.flavors["triton"],
+            {"data": "model/iris_classifier", "model_name": "iris_classifier"},
         )
 
     def test_load_returns_triton_repository_directory(self):
@@ -48,7 +51,21 @@ class TritonFlavorTests(unittest.TestCase):
             result = triton.load_model("models:/iris-serving/1")
 
         # Assert
-        self.assertEqual(result, destination / "model")
+        self.assertEqual(result, destination / "model/iris_classifier")
+
+    def test_load_accepts_legacy_model_directory(self):
+        destination = self.root / "legacy"
+        triton.save_model(self.source, destination)
+        (destination / "model/iris_classifier").rename(destination / "legacy-data")
+        (destination / "model").rmdir()
+        (destination / "legacy-data").rename(destination / "model")
+        saved = Model.load(destination / "MLmodel")
+        saved.flavors["triton"]["data"] = "model"
+        saved.save(destination / "MLmodel")
+        with patch.object(triton, "download_artifacts", return_value=str(destination)):
+            self.assertEqual(
+                triton.load_model("models:/legacy/1"), destination / "model"
+            )
 
     def test_log_model_forwards_registry_name_to_mlflow(self):
         # Arrange

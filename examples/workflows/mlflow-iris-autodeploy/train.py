@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
+from urllib.request import Request, urlopen
 
 import mlflow
 import mlflow.sklearn
 import numpy as np
 import onnx
 from mlflow import MlflowClient
-from mlflow_triton_control import triton
 from mlflow.models import infer_signature
+from mlflow_triton_control import triton
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
 from sklearn.datasets import load_iris
@@ -82,6 +84,32 @@ def _update_best_checkpoint_alias(
         version=version,
     )
     return True
+
+
+def _repository_s3_uri(model_info) -> str:
+    """Resolve MLflow's proxy location using the server's persisted S3 root."""
+    location = mlflow.get_logged_model(model_info.model_id).artifact_location
+    parsed = urlsplit(location)
+    if parsed.scheme == "s3":
+        root = location.rstrip("/")
+    elif parsed.scheme == "mlflow-artifacts" and not parsed.netloc:
+        request = Request(
+            mlflow.get_tracking_uri().rstrip("/")
+            + "/api/2.0/mlflow/triton-control/artifact-store",
+            headers={"Authorization": "Bearer " + os.environ["MLFLOW_TRACKING_TOKEN"]},
+        )
+        with urlopen(request, timeout=30) as response:
+            destination = json.load(response)["artifact_root"]
+        parts = unquote(parsed.path).strip("/").split("/")
+        if any(part in {"", ".", ".."} for part in parts) or parsed.query or parsed.fragment:
+            raise RuntimeError("Invalid MLflow artifact location")
+        root = destination.rstrip("/") + "/" + "/".join(parts)
+    else:
+        raise RuntimeError(f"Unsupported artifact location for S3 deployment: {location}")
+    data_path = model_info.flavors["triton"]["data"]
+    if data_path != f"model/{MODEL_NAME}":
+        raise RuntimeError("Install mlflow-triton-control >=0.3.0 to preserve the Triton model name")
+    return root + "/" + data_path
 
 
 def main() -> None:
@@ -196,6 +224,8 @@ def main() -> None:
             key="deployment_status",
             value="candidate",
         )
+        repository_uri = _repository_s3_uri(triton_model_info)
+        Path(os.environ["TRITON_MODEL_URI_OUTPUT"]).write_text(repository_uri, encoding="utf-8")
         triton_version_output = os.getenv("TRITON_MODEL_VERSION_OUTPUT")
         if triton_version_output:
             Path(triton_version_output).write_text(
@@ -213,6 +243,7 @@ def main() -> None:
                 ),
                 "sklearn_best_checkpoint_promoted": best_checkpoint_promoted,
                 "triton_model": str(model_root),
+                "triton_repository_s3_uri": repository_uri,
                 "triton_registered_model": triton_registry_name,
                 "triton_registered_model_version": triton_model_info.registered_model_version,
                 "sklearn_registered_model_alias": BEST_CHECKPOINT_ALIAS,

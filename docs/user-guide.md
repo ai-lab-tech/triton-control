@@ -289,19 +289,27 @@ by Triton Control. Members and admins can install it in Kubernetes, use its UI
 through the authenticated backend proxy, refresh its readiness state, and
 uninstall it.
 
-Installation settings include the Kubernetes resource name, MLflow image, and
-optional `.dockerconfigjson` credentials for a private image registry. The
-managed workload uses a 10 GiB `ReadWriteOnce` PersistentVolumeClaim named from
-the installation (for the default name, `mlflow-data`). MLflow stores its SQLite
-tracking database and local artifacts on this volume.
+Installation requires a user-owned S3 profile, in addition to the Kubernetes
+resource name and optional `.dockerconfigjson` credentials for a private image
+registry. MLflow stores all artifacts in `s3://<bucket>/<profile-prefix>/mlflow`,
+with paths allocated per experiment and logged model. Credentials, the endpoint,
+path-style configuration, and an optional CA certificate are stored in a
+server-only Kubernetes Secret. Workflows upload through the tracking proxy.
 
-The Triton Control service account therefore requires namespace-scoped create,
-update, patch, and delete permissions for PersistentVolumeClaims. The Helm chart
-provides these permissions when `rbac.create=true`.
+New installations use the existing PostgreSQL connection in the isolated
+`mlflow_tracking` schema for tracking and registry metadata. The database must
+be reachable from the MLflow pod, and its user must be allowed to create that
+schema. No MLflow PersistentVolumeClaim is created. The default MLflow image
+installs boto3 and psycopg2 into temporary storage if they are missing; use an
+image with these dependencies preinstalled in clusters without package-index access.
 
-Uninstalling the managed MLflow instance deletes its Deployment, Service,
-image-pull Secret, and PersistentVolumeClaim. Export or retain required tracking
-data before uninstalling.
+Profiles used by an installed MLflow cannot be changed or deleted. Uninstalling
+removes Kubernetes workloads and Secrets, but retains S3 artifacts and PostgreSQL
+tracking data. Reinstall with the same endpoint, bucket and prefix to keep proxy
+artifact references valid. Existing SQLite/PVC installations retain their storage
+when using the tracking upgrade endpoint; migration to PostgreSQL/S3 is a separate
+operation and is not performed automatically. Legacy uninstall behavior still
+deletes the old PVC; export required legacy data first.
 
 ## S3 Profiles
 

@@ -19,6 +19,17 @@ from app.services.mlflow import kubernetes as k8s
 
 
 class MlflowTests(unittest.TestCase):
+    def setUp(self):
+        for target, value in (
+            ("app.services.mlflow.installer.require_user_entity", SimpleNamespace(id=7)),
+            ("app.services.mlflow.installer.s3_profiles.find_for_owner", SimpleNamespace(id=3)),
+            ("app.services.mlflow.installer.mlflow.prepare_backend_store", "postgresql://fixture"),
+            ("app.services.mlflow.installer.k8s.storage_configuration", {"MLFLOW_ARTIFACTS_DESTINATION": "s3://artifacts/mlflow"}),
+        ):
+            patcher = patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_Status_NotInstalled_ReportsConfiguredVersion(self) -> None:
         # Arrange
         session = SimpleNamespace()
@@ -59,6 +70,7 @@ class MlflowTests(unittest.TestCase):
     def _request(self) -> InstallMlflowRequest:
         return InstallMlflowRequest(
             installation_name="mlflow",
+            s3_profile_id=3,
         )
 
     def test_InstallMlflow_NameProvided_AppliesNamedResources(self) -> None:
@@ -77,7 +89,7 @@ class MlflowTests(unittest.TestCase):
             ),
         ):
             # Act
-            response = installer.install_mlflow(request, session)
+            response = installer.install_mlflow(request, session, {"role": "member"})
 
         # Assert
         apply_resources.assert_called_once()
@@ -150,7 +162,7 @@ class MlflowTests(unittest.TestCase):
     def test_InstallMlflow_ExistingInstallation_RaisesConflict(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=object()):
             with self.assertRaises(ConflictError):
-                installer.install_mlflow(self._request(), SimpleNamespace())
+                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
 
     def test_InstallMlflow_ApplyFails_CleansUpDatabaseRecord(self) -> None:
         saved: list[MlflowEntity] = []
@@ -172,7 +184,7 @@ class MlflowTests(unittest.TestCase):
             patch("app.services.mlflow.installer.mlflow.delete") as delete,
         ):
             with self.assertRaises(BadGatewayError):
-                installer.install_mlflow(self._request(), SimpleNamespace())
+                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
 
         self.assertEqual(saved[-1].status, "failed")
         delete.assert_called_once()

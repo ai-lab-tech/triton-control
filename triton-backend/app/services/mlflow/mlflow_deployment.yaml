@@ -1,16 +1,4 @@
-{image_pull_secret_manifest}apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {data_pvc_name}
-  namespace: {namespace}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: apps/v1
+{image_pull_secret_manifest}apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {deployment_name}
@@ -46,17 +34,21 @@ spec:
                 - ALL
           command:
             - /bin/sh
-            - -c
+            - -ec
           args:
             - >
-              mkdir -p /mlflow-data/artifacts &&
+              export PYTHONPATH=/tmp/mlflow-packages;
+              if ! python -c 'import boto3, psycopg2' 2>/dev/null; then
+              python -m pip install --no-cache-dir --target /tmp/mlflow-packages
+              'boto3==1.34.122' 'psycopg2-binary==2.9.11'; fi;
+
               exec mlflow server
               --host 127.0.0.1
               --port 5001
               --allowed-hosts {allowed_hosts}
-              --backend-store-uri sqlite:////mlflow-data/mlflow.db
+              --backend-store-uri "$MLFLOW_BACKEND_STORE_URI"
               --serve-artifacts
-              --artifacts-destination /mlflow-data/artifacts
+              --artifacts-destination "$MLFLOW_ARTIFACTS_DESTINATION"
           readinessProbe:
             exec:
               command:
@@ -65,9 +57,55 @@ spec:
                 - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=2)"
             periodSeconds: 2
             timeoutSeconds: 2
+          env:
+            - name: AWS_CA_BUNDLE
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: AWS_CA_BUNDLE
+                  optional: true
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: AWS_DEFAULT_REGION
+                  optional: false
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: false
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: AWS_ACCESS_KEY_ID
+                  optional: false
+            - name: MLFLOW_S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: MLFLOW_S3_ENDPOINT_URL
+                  optional: false
+            - name: MLFLOW_ARTIFACTS_DESTINATION
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: MLFLOW_ARTIFACTS_DESTINATION
+                  optional: false
+            - name: MLFLOW_BACKEND_STORE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {storage_secret_name}
+                  key: MLFLOW_BACKEND_STORE_URI
+                  optional: false
+            - name: AWS_CONFIG_FILE
+              value: /etc/mlflow-storage/aws-config
           volumeMounts:
-            - name: data
-              mountPath: /mlflow-data
+            - name: storage-config
+              mountPath: /etc/mlflow-storage
+              readOnly: true
         - name: tracking-gateway
           image: {gateway_image}
           imagePullPolicy: IfNotPresent
@@ -98,9 +136,9 @@ spec:
         - name: gateway-config
           secret:
             secretName: {gateway_secret_name}
-        - name: data
-          persistentVolumeClaim:
-            claimName: {data_pvc_name}
+        - name: storage-config
+          secret:
+            secretName: {storage_secret_name}
 ---
 apiVersion: v1
 kind: Service

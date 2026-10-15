@@ -51,9 +51,10 @@ def save_model(triton_model_path, path, mlflow_model=None):
         )
 
     destination.mkdir(parents=True)
-    shutil.copytree(source, destination / _MODEL_DATA)
+    data_path = f"{_MODEL_DATA}/{source.name}"
+    shutil.copytree(source, destination / data_path)
     model = mlflow_model or Model()
-    model.add_flavor(FLAVOR_NAME, data=_MODEL_DATA, model_name=source.name)
+    model.add_flavor(FLAVOR_NAME, data=data_path, model_name=source.name)
     model.save(str(destination / "MLmodel"))
 
 
