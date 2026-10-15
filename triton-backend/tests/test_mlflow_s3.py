@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastapi import Request
-from kubernetes.client.rest import ApiException
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from pydantic import ValidationError
 from sqlalchemy.engine import make_url
 
