@@ -34,8 +34,14 @@ def main() -> None:
     print("Creating the CI user", file=sys.stderr)
     request("/api/auth/bootstrap/register", {"email": "smoke@example.test", "password": password, "name": "CI Smoke"})
     token = request("/api/auth/login", {"email": "smoke@example.test", "password": password})["access_token"]
+    print("Creating the MLflow S3 profile", file=sys.stderr)
+    profile = request("/api/s3-profiles", {
+        "name": "smoke-artifacts", "endpoint": "http://workspace-smoke-s3:5000",
+        "bucket": "mlflow-artifacts", "access_key": "smoke-access", "secret_key": "smoke-secret",
+        "force_path_style": True,
+    })
     print("Installing MLflow", file=sys.stderr)
-    request("/api/mlflow", {"installation_name": "mlflow"})
+    request("/api/mlflow", {"installation_name": "mlflow", "s3_profile_id": profile["id"]})
     print("Creating the code-server workspace", file=sys.stderr)
     workspace = request("/api/development", {
         "name": "smoke", "image": "triton-workspace-smoke:ci", "image_has_code_server": True,

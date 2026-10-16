@@ -14,7 +14,7 @@ COPY triton-backend/app/ ./app/
 COPY triton-backend/protobuff/ ./protobuff/
 COPY code-server-extensions/ /opt/code-server-extensions/
 RUN ln -s /opt/triton-backend/protobuff /opt/triton-backend/app/protobuff \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir . 'moto[server]==5.1.15'
 RUN chown -R 10001:10001 "/opt/code-server-${CODE_SERVER_VERSION}-linux-amd64"
 ENV PYTHONPATH=/opt/triton-backend PYTHONUNBUFFERED=1
 USER 10001:10001

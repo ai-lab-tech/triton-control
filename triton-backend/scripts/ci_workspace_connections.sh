@@ -30,6 +30,10 @@ helm upgrade --install triton-control charts/triton-control \
   --set-string "app.secretEnv.SESSION_SECRET=$(openssl rand -hex 32)" \
   --set-string "app.secretEnv.S3_SECRET_ENCRYPTION_KEY=$(openssl rand -hex 32)" \
   --wait --timeout 10m
+kubectl apply -n triton-control -f triton-backend/scripts/workspace-smoke-s3.yaml
+kubectl rollout status -n triton-control deployment/workspace-smoke-s3 --timeout=120s
+kubectl exec -n triton-control deployment/workspace-smoke-s3 -- python -c \
+  'import boto3; boto3.client("s3", endpoint_url="http://127.0.0.1:5000", aws_access_key_id="smoke-access", aws_secret_access_key="smoke-secret", region_name="us-east-1").create_bucket(Bucket="mlflow-artifacts")'
 kubectl port-forward -n triton-control service/triton-control 18000:8000 >"$smoke_tmp/port-forward.log" 2>&1 &
 smoke_forward_pid=$!
 smoke_pod=$(python3 triton-backend/scripts/prepare_workspace_smoke.py)
