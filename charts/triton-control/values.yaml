@@ -161,6 +161,9 @@ postgresql:
 # Connection consumed by the Triton Control backend proxy. Leave serverUrl and
 # serviceName empty to derive the Service created by the bundled subchart.
 argoIntegration:
+  # Requires a NetworkPolicy-capable CNI; authentication is enforced independently.
+  networkPolicy:
+    enabled: true
   serverUrl: ""
   serviceName: ""
   basePath: /api/workflows/proxy/
@@ -296,8 +299,9 @@ argoWorkflows:
   server:
     enabled: true
     baseHref: /api/workflows/proxy/
+    # Only authenticated Kubernetes clients can access the workflow API.
     authModes:
-      - server
+      - client
     image:
       # Override `registry` to pull from an internal artifactory mirror.
       registry: quay.io

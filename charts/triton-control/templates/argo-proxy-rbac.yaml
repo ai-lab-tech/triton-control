@@ -1,0 +1,37 @@
+{{- if .Values.argoWorkflows.enabled }}
+{{- if or .Values.argoWorkflows.server.authMode (ne (toJson .Values.argoWorkflows.server.authModes) "[\"client\"]") }}
+{{- fail "Embedded Argo requires server.authModes=[client] and an empty server.authMode; server mode bypasses Triton Control validation" }}
+{{- end }}
+{{- end }}
+{{- if and .Values.argoWorkflows.enabled .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "triton-control.fullname" . }}-argo-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtemplates", "cronworkflows", "workfloweventbindings"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "triton-control.fullname" . }}-argo-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "triton-control.fullname" . }}-argo-proxy
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "triton-control.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

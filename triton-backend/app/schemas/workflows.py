@@ -89,3 +89,8 @@ class WorkflowS3CredentialDeleteResponse(SQLModel):
     status: str
     message: str
     id: int
+
+
+class WorkspaceArgoUpgradeResponse(SQLModel):
+    upgraded_workspaces: int
+    message: str

@@ -56,6 +56,7 @@ from app.core.logging import configure_logging, get_log_level_name, is_verbose_l
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
 from app.services import error_logs
+from app.services.mlflow import migration as mlflow_migration
 from app.services.perf_analyzer.jobs import reconciler as perf_job_reconciler
 from app.services.triton.client import TritonService
 from app.services.triton.health import instance_health_refresher
@@ -169,11 +170,12 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def on_startup() -> None:
+async def on_startup() -> None:
     """Initialize database tables on startup."""
     init_db()
     instance_health_refresher.start()
     perf_job_reconciler.start()
+    mlflow_migration.start()
 
 
 @app.on_event("shutdown")
@@ -181,6 +183,7 @@ async def on_shutdown() -> None:
     """Stop background workers."""
     await instance_health_refresher.stop()
     await asyncio.to_thread(perf_job_reconciler.stop)
+    await mlflow_migration.stop()
     await TritonService.close_all_clients()
 
 

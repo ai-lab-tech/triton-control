@@ -7,6 +7,35 @@ from app.services.workflows.tracking_policy import validate_proxy_write, validat
 
 
 class WorkflowTrackingPolicyTests(unittest.TestCase):
+    def test_parameter_cannot_inject_secret_into_pod_patch(self):
+        # Arrange
+        workflow = self.workflow({"podSpecPatch":
+            '{"containers":[{"name":"main","image":"{{workflow.parameters.image}}"}]}'})
+        workflow["spec"]["arguments"] = {"parameters": [{
+            "name": "image", "value": 'python:3.12","envFrom":[{"secretRef":{"name":"foreign"}}],"workingDir":"/tmp',
+        }]}
+
+        # Act / Assert
+        with self.assertRaises(ForbiddenError):
+            validate_workflow(workflow, set())
+
+    def test_repository_reference_requires_owned_configmap_and_fixed_key(self):
+        # Arrange
+        references = [
+            {"configMap": "foreign-s3", "key": "repository"},
+            {"configMap": "owned-s3", "key": "other"},
+            {"configMap": "{{workflow.parameters.repository}}", "key": "repository"},
+            {},
+        ]
+
+        # Act / Assert
+        for reference in references:
+            with self.subTest(reference=reference), self.assertRaises(ForbiddenError):
+                validate_workflow({"spec": {"artifactRepositoryRef": reference}}, {"owned-s3"})
+        validate_workflow({"spec": {"artifactRepositoryRef": {
+            "configMap": "owned-s3", "key": "repository",
+        }}}, {"owned-s3"})
+
     def test_alternate_argo_write_apis_cannot_bypass_validation(self):
         for method, path in (
             ("POST", "api/v1/workflows/control/submit"),

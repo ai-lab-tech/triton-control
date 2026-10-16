@@ -118,7 +118,7 @@ spec:
             : "${TRITON_CONTROL_S3_PROFILE_ID:?S3 profile ID was not injected from the selected S3 profile}"
             mlflow deployments create \
               --target triton-control://triton-control:8000 \
-              --name iris-classifier \
+              --name "{{workflow.annotations.triton-control.ai/mlflow-deployment-name}}" \
               --model-uri "$TRITON_MODEL_URI" \
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \

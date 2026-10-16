@@ -7,6 +7,7 @@ import re
 import secrets
 from typing import Any
 
+import yaml  # type: ignore[import-untyped]
 from kubernetes import client  # type: ignore[import-untyped]
 
 from app.core.access_control import require_member_or_admin
@@ -19,6 +20,7 @@ from app.services.kubernetes_client import api_client, in_cluster_namespace
 from app.services.mlflow import tracking
 from app.services.workflows.artifact_repository import REPOSITORY_KEY
 from app.services.workflows.tracking_policy import validate_workflow
+from app.services.workflows.workspace_access import OWNER_LABEL
 
 _SUBMIT_PATH = re.compile(r"api/v1/workflows/([a-z0-9-]+)\Z")
 _DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -47,6 +49,18 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
             if row.namespace == namespace and row.created_by_user_id == owner_id
         }
     validate_workflow(workflow, allowed_secrets)
+    repository_ref = workflow.get("spec", {}).get("artifactRepositoryRef")
+    if repository_ref:
+        repository = client.CoreV1Api(api_client()).read_namespaced_config_map(
+            name=repository_ref["configMap"], namespace=namespace,
+        )
+        try:
+            resolved = yaml.safe_load((repository.data or {})[REPOSITORY_KEY])
+        except (KeyError, yaml.YAMLError) as exc:
+            raise BadRequestError("Invalid linked S3 artifact repository") from exc
+        if not isinstance(resolved, dict):
+            raise BadRequestError("Invalid linked S3 artifact repository")
+        validate_workflow({"spec": resolved}, allowed_secrets)
     body, secret_name, _ = _prepare_deployment_submission(path, body, claims)
     has_deployment_secret = secret_name is not None
     payload = json.loads(body)
@@ -80,6 +94,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if tracking.WORKFLOW_OWNER_ANNOTATION in metadata.get("annotations", {}):
             raise BadRequestError("MLflow workflow owner is managed by Triton Control")
         metadata.setdefault("annotations", {})[tracking.WORKFLOW_OWNER_ANNOTATION] = str(owner_id)
+        metadata.setdefault("labels", {})[OWNER_LABEL] = str(owner_id)
         workflow["metadata"] = metadata
         if has_deployment_secret:
             # Keep the deployment credential in its existing Secret.

@@ -1,0 +1,19 @@
+app:
+  image:
+    repository: triton-workspace-smoke
+    tag: ci
+    pullPolicy: Never
+  command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, "8000"]
+  env:
+    - {name: OIDC_ENABLED, value: "false"}
+    - {name: OIDC_CONFIG_SOURCE, value: env}
+    - {name: KUBERNETES_ENABLED, value: "true"}
+  resources:
+    limits:
+      cpu: "2"
+      memory: 1Gi
+postgresql:
+  persistence:
+    size: 1Gi
+argoWorkflows:
+  enabled: true

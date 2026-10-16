@@ -1,286 +1,110 @@
-# MLflow Iris Training with Automatic Triton Deployment
+# Train and Deploy Iris with MLflow
 
-This workflow trains a scikit-learn Iris classifier, logs the training
-checkpoint in MLflow, exports an ONNX Triton repository, registers that
-repository in the MLflow Model Registry with the plugin's Triton flavor, and
-stores both models through MLflow in its configured S3 artifact store for deployment through Triton Control.
+Train an Iris classifier, register it in MLflow, and deploy its ONNX model to Triton Control.
 
-```text
-train -> MLflow run + sklearn checkpoint -> MLflow Registry + best-checkpoint alias
-      -> Triton repository -> MLflow Registry (triton flavor) + candidate alias
-                         `-> MLflow S3 artifacts -> Triton Control -> Triton -> champion alias
-```
+## 1. Prepare
 
-## MLflow Artifacts and Registry
+- Enable **MLflow** and **Argo Workflows** in Triton Control. Install MLflow with an S3 artifact profile.
+- Save an S3 profile under **Account → S3 Profiles** with read/write access to your bucket.
+- Link it under **Workflows → Configure S3 Secrets**. The workflow profile must also reach the MLflow artifact endpoint and bucket, with read permission for the logged models.
+- Allow workflow pods to download Python packages. The workflow installs `mlflow-triton-control==0.3.0`; publish that version to the package index used by the pods before running it.
 
-The training step logs the sklearn checkpoint as an MLflow Logged Model named
-`sklearn-checkpoint` and registers it as `iris-classifier-sklearn`. It then
-packages the complete Triton repository with
-`mlflow_triton_control.triton.log_model()` and registers that model as
-`iris-classifier-triton`. Each workflow run creates a new version of both
-registered models. The sklearn version receives a `validation_accuracy` tag and
-becomes `best-checkpoint` only when its accuracy is higher than the previous
-best version. The new Triton version starts as `candidate`. The Triton
-Registry version has the `triton` flavor and contains the repository files,
-including `config.pbtxt` and the numbered ONNX model.
+## 2. Upload `train.py` with Code-Server
 
-### Why the Registry Contains Two Models
+1. Open **Development** and create a workspace:
+   - Image: `nvcr.io/nvidia/tritonserver:26.06-py3`
+   - **Image already has Development installed**: disabled
+   - Storage: at least `5Gi`; GPUs: `0`
+2. Wait for readiness and open code-server.
+3. Copy [train.py](train.py) and [workflow.yaml](workflow.yaml) into `/workspace/mlflow-iris-autodeploy/`.
+4. In **Explorer**, right-click the folder → **S3 Operations → Choose Profile…** and select your linked S3 profile.
+5. Under **S3 · <profile> · <bucket>**, create `workflows/mlflow-iris-autodeploy/`.
+6. Drag the local `train.py` into that S3 folder and wait for the upload to finish.
 
-- **`iris-classifier-sklearn`** is the original trained scikit-learn pipeline.
-  Keep it for loading in Python, evaluation, or later training. Its
-  `best-checkpoint` alias identifies the version with the highest validation
-  accuracy.
-- **`iris-classifier-triton`** is the exported ONNX model packaged as a Triton
-  repository. Its `champion` alias identifies the successfully deployed
-  version. This is the model served by Triton Control.
+If your profile has a prefix such as `team-a`, include it in the full object key:
+`team-a/workflows/mlflow-iris-autodeploy/train.py`.
 
-The aliases can point to different version numbers. For example, after three
-workflow runs, `best-checkpoint` may still point to sklearn Version 1 if neither
-later run improved its accuracy, while `champion` points to Triton Version 3
-after that version was successfully deployed. The sklearn checkpoint is not
-deployed to Triton Control.
+## 3. Configure `workflow.yaml`
+
+| Value | Example |
+| --- | --- |
+| `metadata.name`: unused workflow name | `mlflow-iris-autodeploy` |
+| Annotation `triton-control.ai/mlflow-s3-profile-name`: your profile name | `workflow-training` |
+| Annotation `triton-control.ai/mlflow-deployment-name`: deployment name | `iris-classifier` |
+| Parameter `s3-script-key`: uploaded script's full object key | `workflows/mlflow-iris-autodeploy/train.py` |
+| Parameter `triton-image`: serving image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+
+MLflow stores both logged models under its configured S3 artifact root. The training
+step returns the concrete Triton repository URI as an Argo output parameter; the
+deploy step uses that URI directly. Its path is independent of the script key.
+You only upload `train.py`; no separate model upload or repository-path input is needed.
+
+The deploy command reads its name from the deployment annotation. Keep the model name `iris_classifier`.
+
+## 4. Run
+
+1. Open **Workflows** in Triton Control.
+2. In the embedded Argo UI, click **Submit New Workflow**.
+3. Select **Edit using full workflow options** and paste the complete edited [workflow.yaml](workflow.yaml), or select it with **Upload File**.
+4. Check your S3 profile name, script key, workflow name, and deployment name.
+5. Click **Submit**, then open the created workflow.
+6. Click the **train** node and open its logs to follow training.
+7. After **train** succeeds, **deploy** starts automatically. Open its logs to follow deployment.
+8. Wait until both nodes show **Succeeded**, then continue to verification below.
+
+Triton Control injects credentials automatically and records your user as the MLflow run creator.
+You do not need to copy a login token or set a creator tag.
+
+For another run, choose unused workflow and deployment names, or delete the previous ones first.
+The deployment plugin creates new deployments; it does not update existing ones.
+
+## 5. Verify
+
+In **MLflow**:
+
+- Open experiment **triton-autodeploy** to see the run and accuracy.
+- Open **Model Registry**:
+
+| Registered model | Purpose | Check |
+| --- | --- | --- |
+| `iris-classifier-sklearn` | Original Python checkpoint; kept for evaluation or later training | `best-checkpoint` alias and `validation_accuracy` tag |
+| `iris-classifier-triton` | Exported ONNX repository served by Triton | Deployed version has `candidate`, `champion`, and `deployment_status=deployed` |
+
+Both models are saved through the MLflow proxy to its S3 artifact store.
+Argo does not make a separate serving-repository copy.
+Each run creates new versions; `best-checkpoint` changes only when accuracy improves.
+The registered Triton model version has a `triton_model_uri` tag containing the
+concrete S3 repository URI. Copy that value for manual deployment. Artifacts are
+uploaded when `log_model()` runs; registration records a version referencing them.
 
 A later training run can load the selected sklearn checkpoint directly:
 
 ```python
-model = mlflow.sklearn.load_model(
-    "models:/iris-classifier-sklearn@best-checkpoint"
-)
+model = mlflow.sklearn.load_model("models:/iris-classifier-sklearn@best-checkpoint")
 ```
 
-MLflow uploads both model variants to its central S3 artifact bucket. The training
-step saves the concrete repository URI as the `triton_model_uri` tag on the
-registered Triton model version. Open **Models**, select the Triton model and its
-version, and copy this tag's value for a manual deployment. Artifacts are uploaded
-when `log_model()` runs; registration records the version referencing those files.
-The training step resolves the Triton Logged Model's artifact location against the server's
-configured S3 root and returns the concrete `s3://` repository URI as an Argo
-output parameter. The deploy step passes that URI directly to the existing
-plugin. Argo does not upload a second model copy. After readiness, the deploy
-step sets `deployment_status=deployed` and the `champion` alias.
+In **Triton Control**:
 
-## Prerequisites
+1. Open **Triton Instances → iris-classifier** and check readiness.
+2. Open **Models → iris_classifier**, version **1**, then click **Infer**.
+3. Replace **JSON Body** with:
 
-- MLflow is installed with an S3 profile; Argo Workflows is enabled.
-- The MLflow server uses PostgreSQL for tracking and S3 for artifacts; no MLflow PVC is needed.
-- An S3 profile is linked under **Workflows -> Configure S3 Secrets**.
-- The workflow profile points to the same endpoint and bucket as MLflow and can read
-  the MLflow artifact prefix for Triton deployments. It also reads the training script.
-  The credentials may differ from the server credentials.
-- The selected S3 bucket and Triton Control service are reachable from the
-  workflow namespace.
-- The workflow pods can download Python packages from the configured package
-  index.
-
-## 1. Plugin Package
-
-Both steps require `mlflow-triton-control==0.3.0`, whose Triton flavor preserves
-the model-name directory inside `model/`. Build and publish this repository's
-0.3.0 package to the package index used by the pods before running the workflow;
-it must be available to `pip`. Older models with flavor data `model` remain
-loadable, but this example requires the new `model/iris_classifier` layout.
-
-## 2. Upload the Training Code and Configure S3 Access
-
-Save your bucket's S3 profile under the account menu's **S3 Profiles**, then
-link the same profile under **Workflows -> Configure S3 Secrets**. Upload the
-training script to that bucket using the exact object key configured in the
-workflow:
-
-| Local file | S3 object key |
-| --- | --- |
-| `examples/workflows/mlflow-iris-autodeploy/train.py` | `workflows/mlflow-iris-autodeploy/train.py` |
-
-### Start Code-Server and Upload with the S3 Plugin
-
-1. Open **Development** in Triton Control and create a CPU-only workspace:
-   use `nvcr.io/nvidia/tritonserver:26.06-py3`, disable **Image already has
-   Development installed**, set workspace storage to at least `5Gi`, and set
-   GPU count to `0`.
-2. Wait until the workspace is ready, then open code-server from
-   **Development**. Triton Control installs code-server and the bundled
-   **Triton Control Deploy** plugin with its S3 browser in **Explorer**.
-3. Create `/workspace/mlflow-iris-autodeploy` and copy or upload this example's
-   `train.py` and `workflow.yaml` into it.
-4. In **Explorer**, right-click the workspace folder and choose
-   **S3 Operations → Choose Profile…**. Select the same S3 profile linked under
-   **Workflows -> Configure S3 Secrets**. If already connected, use
-   **S3 Operations → Switch Profile…**.
-5. Expand **S3 · <profile name> · <bucket>** and create or open
-   `workflows/mlflow-iris-autodeploy/` under that S3 root.
-6. Drag the local `train.py` from the workspace tree onto that S3 folder.
-   This copies the file and keeps the local source. Wait for the transfer to
-   finish, then open `train.py` from the S3 tree to verify the upload.
-
-You can also use **S3 Operations → Copy** on the workspace file and
-**S3 Operations → Paste** on the destination S3 folder.
-
-If the S3 profile has a browsing prefix such as `team-a`, the S3 root starts at
-that prefix. The full uploaded object key is then
-`team-a/workflows/mlflow-iris-autodeploy/train.py`; set `s3-script-key` in
-`workflow.yaml` to that full key.
-
-### Alternative: AWS CLI
-
-To upload from the workspace terminal, follow the
-[AWS CLI setup instructions](../sklearn-iris-training/README.md#aws-cli).
-AWS CLI profiles are configured separately from Triton Control S3 profiles.
-From the repository root in a workspace with a configured AWS CLI profile:
-
-```bash
-aws --profile workflow-training --endpoint-url https://<your-s3-endpoint> \
-  s3 cp examples/workflows/mlflow-iris-autodeploy/train.py \
-  s3://<profile-bucket>/workflows/mlflow-iris-autodeploy/train.py
+```json
+{
+  "inputs": [{
+    "name": "input",
+    "shape": [1, 4],
+    "datatype": "FP32",
+    "data": [5.1, 3.5, 1.4, 0.2]
+  }],
+  "outputs": [{"name": "label"}, {"name": "probabilities"}]
+}
 ```
 
-The bucket and endpoint come from your S3 profile; the workflow contains only
-the script's object key. Both steps use `python:3.12-slim` and install their Python
-dependencies at runtime. The `triton-image` parameter selects the separate
-NVIDIA Triton image that serves the exported model.
-
-## 3. Configure the Workflow
-
-Edit [workflow.yaml](workflow.yaml) before submitting it:
-
-| Location | Required value | Example |
-| --- | --- | --- |
-| `metadata.name` | A fixed, unused Kubernetes workflow name | `mlflow-iris-autodeploy` |
-| `metadata.annotations/...s3-profile-name` | Name of your S3 profile | `workflow-training` (replace with your saved profile name) |
-| `s3-script-key` | Full bucket key of the uploaded `train.py`, including any profile prefix | `workflows/mlflow-iris-autodeploy/train.py` or `team-a/workflows/mlflow-iris-autodeploy/train.py` |
-| `triton-image` | Triton server image used for the deployment | `nvcr.io/nvidia/tritonserver:26.06-py3` |
-
-The script key only identifies the training code. MLflow chooses a distinct
-artifact path for each logged model; the serving path is no longer derived
-from the script directory. `train.py` writes the concrete S3 URI to
-`/tmp/triton-model-uri`, and Argo passes it to the dependent deployment task.
-The script queries the authenticated tracking proxy's
-`api/2.0/mlflow/triton-control/artifact-store` discovery endpoint for the S3 root;
-no S3 credentials are provided to the training container.
-
-Triton Control resolves the selected profile's linked Argo artifact-repository
-ConfigMap and bucket when the authenticated proxy receives the workflow. No
-ConfigMap name or bucket parameter is needed in this manifest.
-Triton Control automatically injects `MLFLOW_TRACKING_URI` and
-`MLFLOW_TRACKING_TOKEN` into the training and deployment containers. Tracking
-requests go through its authenticated proxy, which records the submitting
-user's email as the run creator. Scripts do not need to set a creator tag;
-supplied creator values are overwritten and later edits are rejected. Direct
-requests to the internal MLflow Service require a backend-only credential.
-
-The MLflow deployment name is `iris-classifier` in the annotation and the
-deployment command. The Triton model name is `iris_classifier` in `train.py`,
-the S3 model URI, and the Triton flavor data directory. Keep each name consistent in those
-locations if you rename it. The bucket must match the selected S3 profile.
-
-For reproducible runs, use a unique S3 key for each training-script version
-instead of overwriting a file used by existing workflows. The plugin version
-is pinned in the `deploy` command.
-
-The fixed workflow name is required by the current token delegation. Delete a
-completed workflow before submitting it again, or change `metadata.name` for
-the next run.
-
-## 4. Submit through Triton Control
-
-Open **Workflows** in Triton Control and submit the edited manifest through its
-Argo UI. The request must pass through Triton Control's authenticated Argo
-proxy. A direct request to Argo Server bypasses deployment-token injection.
-
-For an opted-in workflow, Triton Control:
-
-1. resolves the annotated S3 profile name and its linked Argo artifact
-   repository for the current user;
-2. creates a short-lived token limited to `iris-classifier` and that profile;
-3. injects `TRITON_CONTROL_TOKEN` through a temporary Kubernetes Secret and
-   injects `TRITON_CONTROL_S3_PROFILE_ID` and `TRITON_CONTROL_S3_BUCKET` into
-   the `deploy` template;
-4. attaches the Secret to the Workflow for garbage collection.
-
-Tracking credentials are also injected into ordinary inline container/script
-workflows submitted through this proxy, without the deployment annotations.
-They identify the submitter and are invalidated when the Workflow's Secret is
-deleted. Use `volumeClaimTemplates` for workflow storage and the configured
-executor ServiceAccount. To protect tracking credentials, managed submissions
-cannot mount unrelated Secrets or existing PVCs, use privileged/host access,
-or reference external/resource templates.
-
-The `train` task records parameters, accuracy, and tags; registers the sklearn
-checkpoint as a new version of `iris-classifier-sklearn`; and registers the
-Triton repository as a new version of `iris-classifier-triton`. It updates
-`best-checkpoint` when the new sklearn version has the best accuracy and assigns
-`candidate` to the new Triton version. MLflow stores its serving files here:
-
-```text
-s3://<mlflow-bucket>/<profile-prefix>/mlflow/<logged-model-path>/model/iris_classifier/
-|-- config.pbtxt
-|-- training-metadata.json
-`-- 1/
-    `-- model.onnx
-```
-
-After the MLflow uploads finish, the dependent `deploy` task runs:
-
-```bash
-mlflow deployments create \
-  -t triton-control://<triton-control-service>:8000 \
-  --name iris-classifier \
-  -m "$TRITON_MODEL_URI" \
-  -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
-  -C image=nvcr.io/nvidia/tritonserver:26.06-py3
-```
-
-Use the actual Triton Control Service name. For clients in another namespace,
-use `triton-control://<service>.<namespace>.svc.cluster.local:8000`.
-
-The command finishes only after the Triton server and the concrete
-`iris_classifier` model report readiness. The deploy step then tags the exact
-Triton Registry version passed from the train step as deployed and assigns its
-`champion` alias. The `candidate` alias remains available on that version.
-`mlflow deployments create` returns HTTP 409 if a deployment named
-`iris-classifier` already exists; this plugin version does not support updating
-deployments. To run the example again, delete the existing deployment first or
-choose a new deployment name in both the Workflow annotation and command.
-
-## 5. Verify the Deployment
-
-The workflow should contain successful `train` and `deploy` nodes. In MLflow,
-open the `triton-autodeploy` experiment to inspect the training run and accuracy.
-Then open **Model Registry** from the MLflow menu:
-
-- Select **iris-classifier-sklearn** and verify that the best model version has
-  the `best-checkpoint` alias and a `validation_accuracy` tag.
-- Select **iris-classifier-triton** and open the deployed model version. Verify
-  that it has the `candidate` and `champion` aliases plus the
-  `deployment_status=deployed` tag.
-
-### Verify and Test in Triton Control
-
-1. Open **Triton Instances** and select **iris-classifier** to check that the
-   deployed server is live and ready.
-2. Open its **Models** tab and check that **iris_classifier**, version **1**,
-   is ready, then click **Infer** on that model.
-3. In the **Model Inference** page, replace the **JSON Body** with:
-
-   ```json
-   {
-     "inputs": [{
-       "name": "input",
-       "shape": [1, 4],
-       "datatype": "FP32",
-       "data": [5.1, 3.5, 1.4, 0.2]
-     }],
-     "outputs": [
-       {"name": "label"},
-       {"name": "probabilities"}
-     ]
-   }
-   ```
-
-4. Click **Send / Infer** and inspect the **Response** for the predicted
-   label and class probabilities.
+4. Click **Send / Infer**. The response contains a label and class probabilities.
 
 
-### Alternative: Verify from the Internal Code-Server Terminal
+## 6. Manual CLI Verification
 
 Open your workspace's code-server from **Development**, then open its integrated
 terminal. Run these commands inside that workspace using the cluster-internal
