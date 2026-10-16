@@ -155,7 +155,6 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
         mlflow.save(session, entity)
         entity.applied_resources = k8s.upgrade_installation_resources(
             entity.namespace, entity.deployment_name, entity.service_name,
-            require_s3_storage=bool(entity.artifact_root),
         )
         for workspace in developments.list_all(session):
             workspace_k8s.enable_mlflow_tracking(

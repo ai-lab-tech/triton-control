@@ -225,6 +225,12 @@ def main() -> None:
             value="candidate",
         )
         repository_uri = _repository_s3_uri(triton_model_info)
+        client.set_model_version_tag(
+            name=triton_registry_name,
+            version=triton_model_info.registered_model_version,
+            key="triton_model_uri",
+            value=repository_uri,
+        )
         Path(os.environ["TRITON_MODEL_URI_OUTPUT"]).write_text(repository_uri, encoding="utf-8")
         triton_version_output = os.getenv("TRITON_MODEL_VERSION_OUTPUT")
         if triton_version_output:

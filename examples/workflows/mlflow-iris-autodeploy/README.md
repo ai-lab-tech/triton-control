@@ -7,7 +7,7 @@ Train an Iris classifier, register it in MLflow, and deploy its ONNX model to Tr
 - Enable **MLflow** and **Argo Workflows** in Triton Control. Install MLflow with an S3 artifact profile.
 - Save an S3 profile under **Account → S3 Profiles** with read/write access to your bucket.
 - Link it under **Workflows → Configure S3 Secrets**. The workflow profile must also reach the MLflow artifact endpoint and bucket, with read permission for the logged models.
-- Allow workflow pods to download Python packages. The workflow installs the MLflow plugin automatically.
+- Allow workflow pods to download Python packages. The workflow installs `mlflow-triton-control==0.3.0`; publish that version to the package index used by the pods before running it.
 
 ## 2. Upload `train.py` with Code-Server
 
@@ -73,6 +73,15 @@ In **MLflow**:
 Both models are saved through the MLflow proxy to its S3 artifact store.
 Argo does not make a separate serving-repository copy.
 Each run creates new versions; `best-checkpoint` changes only when accuracy improves.
+The registered Triton model version has a `triton_model_uri` tag containing the
+concrete S3 repository URI. Copy that value for manual deployment. Artifacts are
+uploaded when `log_model()` runs; registration records a version referencing them.
+
+A later training run can load the selected sklearn checkpoint directly:
+
+```python
+model = mlflow.sklearn.load_model("models:/iris-classifier-sklearn@best-checkpoint")
+```
 
 In **Triton Control**:
 
@@ -95,17 +104,62 @@ In **Triton Control**:
 4. Click **Send / Infer**. The response contains a label and class probabilities.
 
 
-## 6. S3 Integration Check
+## 6. Manual CLI Verification
 
-With the example's Python dependencies, this repository's plugin (version 0.3.0),
-and `moto[server]` installed, run from the repository root:
+Open your workspace's code-server from **Development**, then open its integrated
+terminal. Run these commands inside that workspace using the cluster-internal
+Triton Control Service address. To get your local user token:
+
+1. Sign in to Triton Control with your local email and password.
+2. In that Triton Control browser tab, open the browser's developer tools and
+   select **Application → Local Storage** (or **Storage → Local Storage** in
+   Firefox).
+3. Select the Triton Control site and copy the value of `triton_access_token`.
+4. Paste it inside the quotes in the code-server terminal command below.
+
+If that storage entry is missing, use the **Network** tab in developer tools:
+sign in again with your local email and password, select the `POST /api/auth/login`
+request, and copy `access_token` from its JSON response. Inspect the Triton
+Control browser tab, rather than the embedded MLflow or code-server frame.
+An existing browser session can authenticate through its cookie without a
+token in Local Storage. OIDC/SSO login also uses a browser session and does not
+provide this local-login token; the instructions above require a local account.
+
+This is your login access token; if it expires, sign in again and copy the new
+value. The workflow's temporary deployment token is injected automatically and
+does not need to be copied for workflow execution.
 
 ```bash
-python -m unittest discover -s examples/workflows/mlflow-iris-autodeploy -p 'test_*.py'
+python3 -m pip install --user "mlflow-triton-control==0.3.0"
+export PATH="$HOME/.local/bin:$PATH"
+export TRITON_CONTROL_TOKEN="<paste-your-login-access-token>"
+
+mlflow deployments get \
+  -t triton-control://triton-control.triton-control.svc.cluster.local:8000 \
+  --name iris-classifier
 ```
 
-The check starts a local MLflow HTTP server and an S3 emulator, logs both models,
-and verifies that the output URI points at the uploaded Triton config and ONNX
-files. S3-root discovery and the deployment API are substituted; uploads use
-MLflow's real artifact proxy. The test uses temporary SQLite rather than the
-production PostgreSQL backend.
+From the same code-server terminal, send an inference request to the Triton
+instance's internal HTTP endpoint. Use the instance URL shown in Triton Control
+for `<triton-endpoint>` (host and port), adjusting the Service name or namespace
+if your installation uses different values:
+
+```bash
+curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "inputs": [{
+      "name": "input",
+      "shape": [1, 4],
+      "datatype": "FP32",
+      "data": [5.1, 3.5, 1.4, 0.2]
+    }],
+    "outputs": [
+      {"name": "label"},
+      {"name": "probabilities"}
+    ]
+  }'
+```
+
+The exact output names are also written to `training-metadata.json` in the S3
+model directory.

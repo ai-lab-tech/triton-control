@@ -284,7 +284,7 @@ class ManagedInstallationTests(unittest.TestCase):
 
         # Act
         templates = [next(item for item in mlflow_k8s._manifests(
-            request, "control", "mlflow", "mlflow-service", gateway_token=token,
+            request, "control", "mlflow", "mlflow-service", gateway_token=token, storage={},
         ) if item["kind"] == "Deployment")["spec"]["template"] for token in ("old", "new", "new")]
 
         # Assert
@@ -327,7 +327,11 @@ class ManagedInstallationTests(unittest.TestCase):
             mlflow_k8s, "apply_installation_resources", return_value=["Deployment/mlflow"]
         ) as apply, patch.object(mlflow_k8s, "_wait_for_current_deployment"), patch.object(mlflow_k8s, "_wait_for_gateway"):
             core.return_value.read_namespaced_secret.side_effect = [
-                SimpleNamespace(data={".dockerconfigjson": pull}), ApiException(status=404),
+                SimpleNamespace(data={".dockerconfigjson": pull}),
+                SimpleNamespace(data={key: base64.b64encode(b"fixture").decode() for key in (
+                    "MLFLOW_BACKEND_STORE_URI", "MLFLOW_ARTIFACTS_DESTINATION",
+                    "MLFLOW_S3_ENDPOINT_URL", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+                )}),
             ]
             mlflow_k8s.upgrade_installation_resources("control", "mlflow", "mlflow-service")
             self.assertEqual(apply.call_args.args[0].dockerconfigjson,
@@ -357,9 +361,9 @@ class ManagedInstallationTests(unittest.TestCase):
 
         manifests = mlflow_k8s._manifests(
             InstallMlflowRequest(installation_name="mlflow", s3_profile_id=3), "control", "mlflow", "mlflow-service",
-            gateway_token="test-upstream-credential",
+            gateway_token="test-upstream-credential", storage={},
         )
-        secret = next(item for item in manifests if item["kind"] == "Secret")
+        secret = next(item for item in manifests if item["kind"] == "Secret" and "nginx.conf" in item["stringData"])
         self.assertIn('if ($http_x_triton_mlflow_gateway != "test-upstream-credential") { return 401; }',
                       secret["stringData"]["nginx.conf"])
         pod = next(item for item in manifests if item["kind"] == "Deployment")["spec"]["template"]["spec"]

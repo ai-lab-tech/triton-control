@@ -306,10 +306,9 @@ image with these dependencies preinstalled in clusters without package-index acc
 Profiles used by an installed MLflow cannot be changed or deleted. Uninstalling
 removes Kubernetes workloads and Secrets, but retains S3 artifacts and PostgreSQL
 tracking data. Reinstall with the same endpoint, bucket and prefix to keep proxy
-artifact references valid. Existing SQLite/PVC installations retain their storage
-when using the tracking upgrade endpoint; migration to PostgreSQL/S3 is a separate
-operation and is not performed automatically. Legacy uninstall behavior still
-deletes the old PVC; export required legacy data first.
+artifact references valid. SQLite/PVC installations are no longer supported by
+the tracking upgrade endpoint. Export their data and migrate to PostgreSQL/S3
+before upgrading.
 
 ## S3 Profiles
 
