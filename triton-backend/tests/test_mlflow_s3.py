@@ -106,7 +106,7 @@ class MlflowS3Tests(unittest.TestCase):
             core.return_value.read_namespaced_secret.side_effect = ApiException(status=404)
             with self.assertRaises(BadGatewayError):
                 kubernetes.upgrade_installation_resources(
-                    "control", "mlflow", "mlflow-service", require_s3_storage=True,
+                    "control", "mlflow", "mlflow-service",
                 )
             apply.assert_not_called()
 
