@@ -5343,6 +5343,11 @@
             ],
             "title": "S3 Profile Id"
           },
+          "s3_profile_name": {
+            "type": "string",
+            "title": "S3 Profile Name",
+            "default": ""
+          },
           "artifact_root": {
             "type": "string",
             "title": "Artifact Root",

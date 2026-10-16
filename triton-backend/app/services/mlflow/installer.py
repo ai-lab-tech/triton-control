@@ -52,7 +52,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
         status_message=message or entity.status_message,
         base_path=config.base_path(),
         service_url=k8s.service_url(entity.namespace, entity.service_name),
-        installation=_to_dto(entity),
+        installation=_to_dto(entity, session),
     )
 
 
@@ -101,7 +101,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict
             entity.status_message = "MLflow server is ready."
             entity.last_transition_at = datetime.utcnow()
             entity = mlflow.save(session, entity)
-            return _to_dto(entity)
+            return _to_dto(entity, session)
         except Exception:
             entity.status = "failed"
             entity.status_message = "MLflow installation failed."
@@ -159,7 +159,7 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
             workspace_k8s.enable_mlflow_tracking(
                 workspace.namespace, workspace.statefulset_name, workspace.secret_name,
             )
-        return _to_dto(entity)
+        return _to_dto(entity, session)
     finally:
         _install_lock.release()
 
@@ -174,7 +174,8 @@ def get_proxy_server_url(session: Session) -> str:
     return k8s.service_url(entity.namespace, entity.service_name)
 
 
-def _to_dto(entity: MlflowEntity) -> MlflowInstallResponse:
+def _to_dto(entity: MlflowEntity, session: Session) -> MlflowInstallResponse:
+    profile = s3_profiles.get(session, entity.s3_profile_id) if entity.s3_profile_id is not None else None
     return MlflowInstallResponse(
         namespace=entity.namespace,
         deployment_name=entity.deployment_name,
@@ -182,5 +183,6 @@ def _to_dto(entity: MlflowEntity) -> MlflowInstallResponse:
         image=entity.image,
         applied_resources=list(entity.applied_resources or []),
         s3_profile_id=entity.s3_profile_id,
+        s3_profile_name=profile.name if profile else "",
         artifact_root=entity.artifact_root,
     )

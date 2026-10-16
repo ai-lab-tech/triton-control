@@ -51,6 +51,7 @@ class MlflowInstallResponse(SQLModel):
     image: str
     applied_resources: List[str]
     s3_profile_id: int | None = None
+    s3_profile_name: str = ""
     artifact_root: str = ""
 
 

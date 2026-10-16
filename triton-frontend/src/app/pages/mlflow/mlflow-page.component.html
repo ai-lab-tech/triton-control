@@ -19,7 +19,12 @@
       <mat-card class="card create-card">
         <div class="section">
           <div>
-            <div class="section-title">Installation</div>
+            <div class="section-title">
+              Install MLflow
+              @if (status()?.configured_version; as version) {
+                <span data-testid="mlflow-install-version">{{ version }}</span>
+              }
+            </div>
             <div class="section-subtitle">
               Only one MLflow installation is managed per Triton Control deployment.
             </div>
@@ -46,14 +51,8 @@
                 >
               }
             </div>
-            @if (status()?.configured_version; as version) {
-              <div class="form-row">
-                <span class="field-label">Version to install</span>
-                <span data-testid="mlflow-install-version">{{ version }}</span>
-              </div>
-            }
             <div class="form-row">
-              <label class="field-label" for="mlflow-installation-name">Installation name</label>
+              <label class="field-label" for="mlflow-installation-name">Kubernetes resource name</label>
               <mat-form-field appearance="outline">
                 <input
                   id="mlflow-installation-name"
@@ -142,6 +141,17 @@
             @if (current.installation?.service_name) {
               <span class="metadata-divider"
                 >Service: <code>{{ current.installation?.service_name }}</code></span
+              >
+            }
+            @if (current.installation?.s3_profile_id; as profileId) {
+              <span class="metadata-divider"
+                >S3 profile:
+                <code>{{ current.installation?.s3_profile_name || 'Profile #' + profileId }}</code></span
+              >
+            }
+            @if (current.installation?.artifact_root; as artifactRoot) {
+              <span class="metadata-divider"
+                >Artifacts: <code>{{ artifactRoot }}</code></span
               >
             }
           </div>

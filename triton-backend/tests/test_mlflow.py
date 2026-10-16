@@ -23,6 +23,7 @@ class MlflowTests(unittest.TestCase):
         for target, value in (
             ("app.services.mlflow.installer.require_user_entity", SimpleNamespace(id=7)),
             ("app.services.mlflow.installer.s3_profiles.find_for_owner", SimpleNamespace(id=3)),
+            ("app.services.mlflow.installer.s3_profiles.get", SimpleNamespace(id=3, name="artifacts")),
             ("app.services.mlflow.installer.mlflow.prepare_backend_store", "postgresql://fixture"),
             ("app.services.mlflow.installer.k8s.storage_configuration", {"MLFLOW_ARTIFACTS_DESTINATION": "s3://artifacts/mlflow"}),
         ):

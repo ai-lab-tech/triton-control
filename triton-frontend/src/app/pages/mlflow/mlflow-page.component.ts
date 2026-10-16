@@ -26,6 +26,9 @@ type MlflowInstallResponse = {
   service_name: string;
   image: string;
   applied_resources: string[];
+  s3_profile_id?: number | null;
+  s3_profile_name?: string;
+  artifact_root?: string;
 };
 
 type MlflowStatusResponse = {
