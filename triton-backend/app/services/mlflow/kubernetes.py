@@ -117,7 +117,10 @@ def upgrade_installation_resources(
     except ApiException as exc:
         if exc.status != 404:
             raise
-        raise BadGatewayError("MLflow storage Secret is missing; restore it before upgrading. SQLite/PVC installations are no longer supported") from exc
+        raise BadGatewayError(
+            "MLflow storage Secret is missing; restore it before upgrading. "
+            "SQLite/PVC installations are no longer supported"
+        ) from exc
     if storage is not None and not all(storage.get(key) for key in (
         "MLFLOW_BACKEND_STORE_URI", "MLFLOW_ARTIFACTS_DESTINATION", "MLFLOW_S3_ENDPOINT_URL",
         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
