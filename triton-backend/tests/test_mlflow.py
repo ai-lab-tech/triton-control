@@ -293,7 +293,7 @@ class MlflowTests(unittest.TestCase):
         self.assertIn("--allowed-hosts", command)
         self.assertIn("mlflow-service.mlflow.svc.cluster.local:5000", command)
         self.assertIn("--serve-artifacts", command)
-        self.assertIn("--artifacts-destination /mlflow-data/artifacts", command)
+        self.assertIn('--artifacts-destination "$MLFLOW_ARTIFACTS_DESTINATION"', command)
         self.assertNotIn("--default-artifact-root /mlflow-data/artifacts", command)
 
     def test_ApiStatus_ViewerIsRejected(self) -> None:

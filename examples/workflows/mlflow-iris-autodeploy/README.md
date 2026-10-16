@@ -339,5 +339,3 @@ curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
 
 The exact output names are also written to `training-metadata.json` in the S3
 model directory.
-
-It uses temporary SQLite for the test server, not the production installation.
