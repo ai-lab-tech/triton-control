@@ -49,7 +49,11 @@ model = mlflow.sklearn.load_model(
 ```
 
 MLflow uploads both model variants to its central S3 artifact bucket. The training
-step resolves the Triton Logged Model's artifact location against the server's
+step saves the concrete repository URI as the `triton_model_uri` tag on the
+registered Triton model version. Open **Models**, select the Triton model and its
+version, and copy this tag's value for a manual deployment. Artifacts are uploaded
+when `log_model()` runs; registration records the version referencing those files.
+The training step resolves the Triton Logged Model's artifact location against the server's
 configured S3 root and returns the concrete `s3://` repository URI as an Argo
 output parameter. The deploy step passes that URI directly to the existing
 plugin. Argo does not upload a second model copy. After readiness, the deploy
@@ -336,16 +340,4 @@ curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
 The exact output names are also written to `training-metadata.json` in the S3
 model directory.
 
-## Local integration check
-
-With the example's Python dependencies, this repository's plugin, and
-`moto[server]` installed, run:
-
-```bash
-python -m unittest discover -s examples/workflows/mlflow-iris-autodeploy -p 'test_*.py'
-```
-
-The check starts a local MLflow HTTP server and an S3 emulator, logs both models,
-and verifies that the output URI points at the uploaded Triton config and ONNX
-files. Only S3-root discovery is substituted; uploads use MLflow's real proxy.
 It uses temporary SQLite for the test server, not the production installation.

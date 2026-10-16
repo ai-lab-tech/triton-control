@@ -67,7 +67,7 @@ class MlflowTests(unittest.TestCase):
             "MLFLOW_IMAGE_REPOSITORY": "registry.example/mlflow",
         }):
             # Act
-            manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service")
+            manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service", storage={})
 
         # Assert
         deployment = next(item for item in manifests if item["kind"] == "Deployment")
@@ -251,22 +251,21 @@ class MlflowTests(unittest.TestCase):
         dockerconfigjson = '{"auths":{"registry.example":{"auth":"token"}}}'
         request = self._request().model_copy(update={"dockerconfigjson": dockerconfigjson})
 
-        manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service")
+        manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service", storage={})
 
         secret = manifests[0]
-        pvc = next(item for item in manifests if item["kind"] == "PersistentVolumeClaim")
         deployment = next(item for item in manifests if item["kind"] == "Deployment")
         service = next(item for item in manifests if item["kind"] == "Service")
         probe = deployment["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]
         self.assertIn("127.0.0.1:5001/health", probe["exec"]["command"][-1])
         self.assertEqual(secret["kind"], "Secret")
         self.assertEqual(secret["stringData"][".dockerconfigjson"], dockerconfigjson)
-        self.assertEqual(pvc["kind"], "PersistentVolumeClaim")
+        self.assertFalse(any(item["kind"] == "PersistentVolumeClaim" for item in manifests))
         self.assertEqual(deployment["spec"]["template"]["spec"]["imagePullSecrets"], [{"name": "mlflow-pull-secret"}])
         self.assertEqual(service["metadata"]["name"], "mlflow-service")
 
     def test_Manifests_MlflowPod_UsesRestrictedSecurityContext(self) -> None:
-        manifests = k8s._manifests(self._request(), "mlflow", "mlflow", "mlflow-service")
+        manifests = k8s._manifests(self._request(), "mlflow", "mlflow", "mlflow-service", storage={})
 
         deployment = next(manifest for manifest in manifests if manifest["kind"] == "Deployment")
         pod_spec = deployment["spec"]["template"]["spec"]

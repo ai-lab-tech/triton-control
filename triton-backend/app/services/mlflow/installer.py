@@ -149,7 +149,6 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
             raise BadRequestError("MLflow is not installed")
         entity.applied_resources = k8s.upgrade_installation_resources(
             entity.namespace, entity.deployment_name, entity.service_name,
-            require_s3_storage=bool(entity.artifact_root),
         )
         entity.status = "ready"
         entity.status_message = "MLflow tracking gateway is ready."

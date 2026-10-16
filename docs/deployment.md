@@ -538,8 +538,8 @@ pod and the database user must be allowed to create this schema. No new MLflow
 PVC is created. The default server image installs the S3/PostgreSQL drivers at
 startup when missing; for restricted networks, preinstall boto3 and psycopg2.
 
-The tracking upgrade endpoint preserves existing SQLite/PVC installations and
-existing S3 storage configuration. It does not migrate old runs. Back up SQLite
-and artifacts before any migration or legacy uninstall. S3 installations retain
+The tracking upgrade endpoint requires and preserves existing S3 storage
+configuration. SQLite/PVC installations must be migrated before upgrading; old
+runs are not migrated automatically. S3 installations retain
 artifacts and PostgreSQL metadata when uninstalled; reinstall against the same
 artifact endpoint and root to retain valid proxy references.

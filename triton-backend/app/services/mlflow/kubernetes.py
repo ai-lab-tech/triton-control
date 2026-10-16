@@ -95,7 +95,7 @@ def delete_namespace(namespace: str) -> str:
 
 
 def upgrade_installation_resources(
-    namespace: str, deployment_name: str, service_name: str, *, require_s3_storage: bool = False,
+    namespace: str, deployment_name: str, service_name: str,
 ) -> list[str]:
     """Retain private-registry credentials when adding the tracking gateway."""
     from kubernetes import client
@@ -117,8 +117,7 @@ def upgrade_installation_resources(
     except ApiException as exc:
         if exc.status != 404:
             raise
-        if require_s3_storage:
-            raise BadGatewayError("MLflow storage Secret is missing; restore it before upgrading") from exc
+        raise BadGatewayError("MLflow storage Secret is missing; restore it before upgrading. SQLite/PVC installations are no longer supported") from exc
     if storage is not None and not all(storage.get(key) for key in (
         "MLFLOW_BACKEND_STORE_URI", "MLFLOW_ARTIFACTS_DESTINATION", "MLFLOW_S3_ENDPOINT_URL",
         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
@@ -232,8 +231,9 @@ def _manifests(
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
 
-    template = _TEMPLATE if storage is not None else _TEMPLATE.with_name("mlflow_legacy_deployment.yaml")
-    rendered = template.read_text(encoding="utf-8").format(
+    if storage is None:
+        raise BadRequestError("MLflow requires an S3 storage configuration")
+    rendered = _TEMPLATE.read_text(encoding="utf-8").format(
         image_pull_secret_manifest=_image_pull_secret_manifest(
             request.dockerconfigjson,
             namespace,

@@ -130,9 +130,15 @@ loadable. See the Iris auto-deployment workflow for the complete example.
 
 ## Publishing
 
-The `Publish MLflow plugin` GitHub Actions workflow builds and tests distributions,
-then uploads them using PyPI Trusted Publishing. Configure the existing PyPI
-project with owner `ai-lab-tech`, repository `triton-control`, workflow filename
-`mlflow-plugin-publish.yml`, and environment `pypi`. Push a matching tag such as
-`mlflow-plugin-v0.3.0` after review, or start the workflow manually. No PyPI token
-is stored in the repository.
+Publish manually from the repository root, using a fresh output directory for
+each release:
+
+```bash
+python -m pip install --upgrade build twine
+python -m build --outdir dist/mlflow-triton-control-0.3.0 plugins/mlflow-triton-control
+python -m twine check dist/mlflow-triton-control-0.3.0/*
+python -m twine upload dist/mlflow-triton-control-0.3.0/*
+```
+
+When prompted, enter `__token__` as the username and a PyPI API token scoped to
+`mlflow-triton-control` as the password.
