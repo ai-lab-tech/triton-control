@@ -118,3 +118,21 @@ Workflow owner reference for garbage collection.
 
 The opted-in Workflow must have a fixed `metadata.name` and run in the Triton
 Control namespace. Direct submissions to Argo bypass this token injection.
+
+## S3 deployment of logged models (0.3.0)
+
+The Triton flavor now stores data under `model/<original-model-name>/` inside
+the MLflow Model. Pass the concrete S3 URI of that subdirectory to the deployment
+plugin, using an S3 profile that can read the artifact bucket. Resolve proxy
+artifact locations against the managed server's S3 root; the deployment client
+continues to accept only S3 URIs. Existing models using `data: model` remain
+loadable. See the Iris auto-deployment workflow for the complete example.
+
+## Publishing
+
+The `Publish MLflow plugin` GitHub Actions workflow builds and tests distributions,
+then uploads them using PyPI Trusted Publishing. Configure the existing PyPI
+project with owner `ai-lab-tech`, repository `triton-control`, workflow filename
+`mlflow-plugin-publish.yml`, and environment `pypi`. Push a matching tag such as
+`mlflow-plugin-v0.3.0` after review, or start the workflow manually. No PyPI token
+is stored in the repository.

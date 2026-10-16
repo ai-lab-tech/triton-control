@@ -64,6 +64,7 @@
 
 .form-row {
   display: grid;
+  align-content: start;
   gap: 0.4rem;
 }
 
@@ -271,10 +272,8 @@
 .workspace-subtitle {
   color: #64748b;
   font-size: 0.76rem;
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .metadata-divider::before {

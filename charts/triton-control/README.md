@@ -269,8 +269,12 @@ By default, the chart creates namespace-scoped RBAC (least privilege):
 - `rbac.clusterWide=false`
 - `rbac.manageNamespaces=false`
 
-The namespace-scoped Role includes PVC permissions because the embedded MLflow
-installer applies and removes its `mlflow-data` PersistentVolumeClaim.
+New MLflow installations require an S3 profile selected in the installation UI.
+Artifacts use `s3://<bucket>/<profile-prefix>/mlflow`; tracking and registry data use
+the existing PostgreSQL database in the isolated `mlflow_tracking` schema. The
+MLflow pod must reach that database. New installations create no MLflow PVC.
+The namespace-scoped Role retains PVC permissions for development workspaces
+and legacy MLflow installations using `mlflow-data`.
 
 Enable cluster-wide RBAC only when needed:
 

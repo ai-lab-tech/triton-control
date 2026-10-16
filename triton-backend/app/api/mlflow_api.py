@@ -52,7 +52,7 @@ def install_mlflow(
 ) -> MlflowInstallResponse:
     """Install singleton MLflow on Kubernetes."""
     require_member_or_admin(claims)
-    return installer.install_mlflow(request, session)
+    return installer.install_mlflow(request, session, claims)
 
 
 @router.delete("", response_model=MlflowDeleteResponse)

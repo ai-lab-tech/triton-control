@@ -67,8 +67,13 @@ describe("MlflowPageComponent", () => {
     }
   }
 
-  function flushInitialStatus(status = notInstalledStatus): void {
+  async function flushInitialStatus(status = notInstalledStatus): Promise<void> {
     http.expectOne("/api/mlflow").flush(status);
+    await flushMicrotasks();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 3, name: "artifacts", bucket: "models", prefix: "" }]);
+    await flushMicrotasks();
   }
 
   it("shows the configured MLflow version before installation", async () => {
@@ -77,7 +82,7 @@ describe("MlflowPageComponent", () => {
     await flushMicrotasks();
 
     // Act
-    flushInitialStatus({ ...notInstalledStatus, configured_version: "3.16.1" });
+    await flushInitialStatus({ ...notInstalledStatus, configured_version: "3.16.1" });
     await flushMicrotasks();
     fixture.detectChanges();
 
@@ -185,20 +190,49 @@ describe("MlflowPageComponent", () => {
     // Arrange
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
     component.installationName = "mlflow";
+    component.s3ProfileId = 3;
 
     // Act
+    await flushMicrotasks();
     const canInstall = component.canInstall();
 
     // Assert
     expect(canInstall).toBeTrue();
   });
 
+  it("requires an S3 profile before installing", async () => {
+    // Arrange
+    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
+    await flushMicrotasks();
+    await flushInitialStatus();
+
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeFalse();
+  });
+
+  it("rejects an S3 profile outside the available profiles", async () => {
+    // Arrange
+    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
+    await flushMicrotasks();
+    await flushInitialStatus();
+    component.s3ProfileId = 999;
+
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeFalse();
+  });
+
   it("restores top bar on destroy", async () => {
     const fixture = TestBed.createComponent(MlflowPageComponent);
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
 
     fixture.destroy();
 
@@ -209,7 +243,7 @@ describe("MlflowPageComponent", () => {
   it("validates pull secret payload", async () => {
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
 
     expect(component.pullSecretStatus().label).toBe("Not configured");
 
@@ -228,10 +262,11 @@ describe("MlflowPageComponent", () => {
     const fixture = TestBed.createComponent(MlflowPageComponent);
     const component = fixture.componentInstance;
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
     await flushMicrotasks();
 
     component.installationName = "mlflow";
+    component.s3ProfileId = 3;
 
     // Act
     const installPromise = component.install();
@@ -268,6 +303,7 @@ describe("MlflowPageComponent", () => {
     expect(installReq.request.method).toBe("POST");
     expect(installReq.request.body.installation_name).toBe("mlflow");
     expect(installReq.request.body.image).toBeUndefined();
+    expect(installReq.request.body.s3_profile_id).toBe(3);
     expect(component.messageTone()).toBe("success");
     expect(component.frameUrl()).not.toBeNull();
   });
@@ -275,10 +311,11 @@ describe("MlflowPageComponent", () => {
   it("handles install failure", async () => {
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
     await flushMicrotasks();
 
     component.installationName = "mlflow";
+    component.s3ProfileId = 3;
     expect(component.canInstall()).toBeTrue();
     const installPromise = component.install();
     await flushMicrotasks();
@@ -292,10 +329,11 @@ describe("MlflowPageComponent", () => {
   it("recovers status after install transport failure", async () => {
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
-    flushInitialStatus();
+    await flushInitialStatus();
     await flushMicrotasks();
 
     component.installationName = "mlflow";
+    component.s3ProfileId = 3;
     const installPromise = component.install();
     await flushMicrotasks();
 
@@ -390,6 +428,10 @@ describe("MlflowPageComponent", () => {
       message: "MLflow uninstalled",
       namespace: "triton-control",
     });
+    await flushMicrotasks();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 3, name: "artifacts", bucket: "models", prefix: "" }]);
     await uninstallPromise;
 
     expect(component.status()?.installed).toBeFalse();

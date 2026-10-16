@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from sqlmodel import SQLModel
 
 
@@ -15,6 +15,7 @@ class InstallMlflowRequest(SQLModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    s3_profile_id: int = Field(gt=0)
     installation_name: str = "mlflow"
     dockerconfigjson: Optional[str] = None
 
@@ -49,6 +50,9 @@ class MlflowInstallResponse(SQLModel):
     service_name: str
     image: str
     applied_resources: List[str]
+    s3_profile_id: int | None = None
+    s3_profile_name: str = ""
+    artifact_root: str = ""
 
 
 class MlflowStatusResponse(SQLModel):

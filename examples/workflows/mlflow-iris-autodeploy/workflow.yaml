@@ -9,7 +9,7 @@ metadata:
   annotations:
     triton-control.ai/mlflow-deploy-template: deploy
     triton-control.ai/mlflow-deployment-name: iris-classifier
-    # Name of an S3 profile owned by the user submitting this workflow.
+    # User-owned profile for the script and Triton reads; must reach the MLflow artifact bucket.
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 spec:
   entrypoint: pipeline
@@ -36,6 +36,8 @@ spec:
               parameters:
                 - name: triton-model-version
                   value: "{{tasks.train.outputs.parameters.triton-model-version}}"
+                - name: triton-model-uri
+                  value: "{{tasks.train.outputs.parameters.triton-model-uri}}"
 
     - name: train
       inputs:
@@ -54,8 +56,8 @@ spec:
           - |
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
-              "mlflow>=3,<4" \
-              "mlflow-triton-control==0.2.0" \
+              "mlflow>=3.14,<4" \
+              "mlflow-triton-control==0.3.0" \
               "numpy>=1.26,<3" \
               "onnx>=1.17,<2" \
               "scikit-learn>=1.5,<2" \
@@ -73,6 +75,8 @@ spec:
             value: "{{workflow.name}}"
           - name: ARGO_WORKFLOW_UID
             value: "{{workflow.uid}}"
+          - name: TRITON_MODEL_URI_OUTPUT
+            value: /tmp/triton-model-uri
           - name: TRITON_MODEL_VERSION_OUTPUT
             value: /tmp/triton-model-version
         resources:
@@ -91,19 +95,15 @@ spec:
           - name: triton-model-version
             valueFrom:
               path: /tmp/triton-model-version
-        artifacts:
-          - name: triton-model
-            path: /tmp/model-repository/iris_classifier
-            archive:
-              none: {}
-            s3:
-              # Store the serving model beside the training script.
-              key: "{{=sprig.trimPrefix('./', sprig.dir(workflow.parameters['s3-script-key']) + '/iris_classifier')}}"
+          - name: triton-model-uri
+            valueFrom:
+              path: /tmp/triton-model-uri
 
     - name: deploy
       inputs:
         parameters:
           - name: triton-model-version
+          - name: triton-model-uri
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -112,20 +112,21 @@ spec:
           - |
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
-              "mlflow-triton-control==0.2.0"
+              "mlflow-triton-control==0.3.0"
             export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             export PATH="/tmp/python-packages/bin:$PATH"
-            : "${TRITON_CONTROL_S3_BUCKET:?S3 bucket was not injected from the selected S3 profile}"
             : "${TRITON_CONTROL_S3_PROFILE_ID:?S3 profile ID was not injected from the selected S3 profile}"
             mlflow deployments create \
               --target triton-control://triton-control:8000 \
               --name "{{workflow.annotations.triton-control.ai/mlflow-deployment-name}}" \
-              --model-uri "s3://$TRITON_CONTROL_S3_BUCKET/{{=sprig.trimPrefix('./', sprig.dir(workflow.parameters['s3-script-key']) + '/iris_classifier')}}" \
+              --model-uri "$TRITON_MODEL_URI" \
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600
             python -c 'import os; from mlflow import MlflowClient; client = MlflowClient(); name = os.environ["MLFLOW_TRITON_REGISTERED_MODEL_NAME"]; version = os.environ["MLFLOW_TRITON_MODEL_VERSION"]; client.set_model_version_tag(name=name, version=version, key="deployment_status", value="deployed"); client.set_registered_model_alias(name=name, alias="champion", version=version)'
         env:
+          - name: TRITON_MODEL_URI
+            value: "{{inputs.parameters.triton-model-uri}}"
           - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
             value: iris-classifier-triton
           - name: MLFLOW_TRITON_MODEL_VERSION
