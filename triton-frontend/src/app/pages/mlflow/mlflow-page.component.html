@@ -52,7 +52,9 @@
               }
             </div>
             <div class="form-row">
-              <label class="field-label" for="mlflow-installation-name">Kubernetes resource name</label>
+              <label class="field-label" for="mlflow-installation-name"
+                >Kubernetes resource name</label
+              >
               <mat-form-field appearance="outline">
                 <input
                   id="mlflow-installation-name"
@@ -146,7 +148,9 @@
             @if (current.installation?.s3_profile_id; as profileId) {
               <span class="metadata-divider"
                 >S3 profile:
-                <code>{{ current.installation?.s3_profile_name || 'Profile #' + profileId }}</code></span
+                <code>{{
+                  current.installation?.s3_profile_name || "Profile #" + profileId
+                }}</code></span
               >
             }
             @if (current.installation?.artifact_root; as artifactRoot) {
