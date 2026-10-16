@@ -3,6 +3,7 @@
 import asyncio
 import json
 import unittest
+from threading import get_ident
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -64,17 +65,30 @@ class MlflowS3Tests(unittest.TestCase):
         self.assertIn('--artifacts-destination "$MLFLOW_ARTIFACTS_DESTINATION"', pod["containers"][0]["args"][0])
 
     def test_backend_uses_separate_schema_and_preserves_connection_options(self):
+        # Arrange
         session = MagicMock()
         session.connection.return_value.engine.url = make_url("postgresql://user:p%40ss@postgres/db?sslmode=require")
+
+        # Act
         uri = mlflow.prepare_backend_store(session)
+
+        # Assert
         parsed = make_url(uri)
         self.assertEqual(parsed.password, "p@ss")
         self.assertEqual(parsed.query["sslmode"], "require")
         self.assertEqual(parsed.query["options"], "-csearch_path=mlflow_tracking")
         self.assertIn("CREATE SCHEMA", str(session.execute.call_args.args[0]))
+
+    def test_backend_rejects_sqlite_before_creating_schema(self):
+        # Arrange
+        session = MagicMock()
         session.connection.return_value.engine.url = make_url("sqlite:///local.db")
+
+        # Act / Assert
         with self.assertRaises(BadRequestError):
             mlflow.prepare_backend_store(session)
+        session.execute.assert_not_called()
+        session.commit.assert_not_called()
 
     def test_profile_in_use_cannot_be_deleted_or_changed(self):
         with patch.object(s3_profiles, "require_user_entity", return_value=SimpleNamespace(id=7)), patch.object(
@@ -97,17 +111,30 @@ class MlflowS3Tests(unittest.TestCase):
             apply.assert_not_called()
 
     def test_artifact_discovery_returns_only_persisted_nonsecret_root(self):
+        # Arrange
+        request_thread = get_ident()
+        database_threads = []
         session = MagicMock()
         session.__enter__.return_value = session
         request = Request({"type": "http", "method": "GET", "headers": []})
-        with patch.object(proxy, "session_factory", return_value=session), patch.object(
+
+        def open_session():
+            database_threads.append(get_ident())
+            return session
+
+        with patch.object(proxy, "session_factory", side_effect=open_session), patch.object(
             proxy.mlflow, "get", return_value=MlflowEntity(
                 namespace="control", deployment_name="mlflow", service_name="mlflow-service", image="mlflow:test",
                 s3_profile_id=3, artifact_root="s3://models/team/mlflow",
             )
         ), patch.object(proxy, "_proxy_http_sync") as upstream:
+            # Act
             response = asyncio.run(proxy.proxy_http(
                 "api/2.0/mlflow/triton-control/artifact-store", request, {"role": "member"},
             ))
+
+        # Assert
         self.assertEqual(json.loads(response.body), {"artifact_root": "s3://models/team/mlflow"})
+        self.assertEqual(len(database_threads), 1)
+        self.assertNotEqual(database_threads[0], request_thread)
         upstream.assert_not_called()

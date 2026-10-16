@@ -53,11 +53,8 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Res
     if path.strip("/") == "api/2.0/mlflow/triton-control/artifact-store" and request.method == "GET":
         from starlette.responses import JSONResponse
 
-        with session_factory() as session:
-            installation = mlflow.get(session)
-            if installation is None or not installation.artifact_root:
-                raise BadGatewayError("MLflow S3 artifact storage is not configured")
-            return JSONResponse({"artifact_root": installation.artifact_root})
+        artifact_root = await anyio.to_thread.run_sync(_artifact_root)
+        return JSONResponse({"artifact_root": artifact_root})
     body = tracking.enforce_creator(path, request.method, await request.body(), claims)
     headers = {
         key: value
@@ -77,6 +74,14 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Res
         body,
     )
     return tracking.expose_creator(path, response)
+
+
+def _artifact_root() -> str:
+    with session_factory() as session:
+        installation = mlflow.get(session)
+        if installation is None or not installation.artifact_root:
+            raise BadGatewayError("MLflow S3 artifact storage is not configured")
+        return installation.artifact_root
 
 
 def _proxy_server_url() -> str:

@@ -46,11 +46,17 @@ class MlflowTests(unittest.TestCase):
 
     def test_InstallRequest_ImageOverride_IsRejected(self) -> None:
         # Arrange
-        payload = {"image": "ghcr.io/mlflow/mlflow:v2.0.0"}
+        payload = {"s3_profile_id": 3, "image": "ghcr.io/mlflow/mlflow:v2.0.0"}
 
         # Act / Assert
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError) as raised:
             InstallMlflowRequest.model_validate(payload)
+
+        # Assert
+        self.assertEqual(
+            [(error["loc"], error["type"]) for error in raised.exception.errors()],
+            [(("image",), "extra_forbidden")],
+        )
 
     def test_Manifests_Image_ComesFromOperatorConfiguration(self) -> None:
         # Arrange

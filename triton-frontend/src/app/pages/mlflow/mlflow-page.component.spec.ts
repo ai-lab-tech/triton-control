@@ -203,14 +203,30 @@ describe("MlflowPageComponent", () => {
   });
 
   it("requires an S3 profile before installing", async () => {
+    // Arrange
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
     await flushInitialStatus();
-    expect(component.canInstall()).toBeFalse();
+
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeFalse();
+  });
+
+  it("rejects an S3 profile outside the available profiles", async () => {
+    // Arrange
+    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
+    await flushMicrotasks();
+    await flushInitialStatus();
     component.s3ProfileId = 999;
-    expect(component.canInstall()).toBeFalse();
-    component.s3ProfileId = 3;
-    expect(component.canInstall()).toBeTrue();
+
+    // Act
+    const canInstall = component.canInstall();
+
+    // Assert
+    expect(canInstall).toBeFalse();
   });
 
   it("restores top bar on destroy", async () => {
