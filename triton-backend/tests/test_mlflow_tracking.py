@@ -226,10 +226,13 @@ class ManagedInstallationTests(unittest.TestCase):
         with patch.object(mlflow_k8s, "_client"), patch("kubernetes.client.CoreV1Api") as core, patch.object(
             mlflow_k8s, "apply_installation_resources", return_value=["Deployment/mlflow"]
         ) as apply, patch.object(mlflow_k8s, "_wait_for_current_deployment"):
-            core.return_value.read_namespaced_secret.return_value = SimpleNamespace(data={".dockerconfigjson": pull})
+            core.return_value.read_namespaced_secret.side_effect = [
+                SimpleNamespace(data={".dockerconfigjson": pull}), ApiException(status=404),
+            ]
             mlflow_k8s.upgrade_installation_resources("control", "mlflow", "mlflow-service")
             self.assertEqual(apply.call_args.args[0].dockerconfigjson,
                              '{"auths":{"private.example":{"auth":"fixture"}}}')
+            core.return_value.read_namespaced_secret.side_effect = None
             core.return_value.read_namespaced_secret.return_value = SimpleNamespace(data={
                 "gateway-token": base64.b64encode(b"existing-credential").decode(),
             })
@@ -253,7 +256,7 @@ class ManagedInstallationTests(unittest.TestCase):
         from app.schemas import InstallMlflowRequest
 
         manifests = mlflow_k8s._manifests(
-            InstallMlflowRequest(installation_name="mlflow"), "control", "mlflow", "mlflow-service",
+            InstallMlflowRequest(installation_name="mlflow", s3_profile_id=3), "control", "mlflow", "mlflow-service",
             gateway_token="test-upstream-credential",
         )
         secret = next(item for item in manifests if item["kind"] == "Secret")

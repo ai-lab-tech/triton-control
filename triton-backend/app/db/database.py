@@ -420,6 +420,10 @@ def _migrate_s3_profiles_table() -> None:
 def _migrate_mlflow_table() -> None:
     """Apply lightweight schema migration for mlflow singleton table."""
     with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE mlflow ADD COLUMN IF NOT EXISTS s3_profile_id INTEGER REFERENCES s3_profiles(id)"
+        ))
+        conn.execute(text("ALTER TABLE mlflow ADD COLUMN IF NOT EXISTS artifact_root VARCHAR NOT NULL DEFAULT ''"))
         conn.execute(
             text(
                 """

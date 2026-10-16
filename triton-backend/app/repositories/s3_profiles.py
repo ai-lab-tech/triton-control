@@ -9,6 +9,10 @@ from sqlmodel import Session, select
 from app.db.entities import S3ProfileEntity
 
 
+def get(session: Session, profile_id: int) -> S3ProfileEntity | None:
+    return session.get(S3ProfileEntity, profile_id)
+
+
 def list_for_owner(session: Session, owner_user_id: int) -> list[S3ProfileEntity]:
     query = (
         select(S3ProfileEntity)

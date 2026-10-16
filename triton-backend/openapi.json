@@ -5012,6 +5012,11 @@
       },
       "InstallMlflowRequest": {
         "properties": {
+          "s3_profile_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "S3 Profile Id"
+          },
           "installation_name": {
             "type": "string",
             "title": "Installation Name",
@@ -5031,6 +5036,9 @@
         },
         "additionalProperties": false,
         "type": "object",
+        "required": [
+          "s3_profile_id"
+        ],
         "title": "InstallMlflowRequest",
         "description": "Request body for ``POST /api/mlflow``."
       },
@@ -5323,6 +5331,27 @@
             },
             "type": "array",
             "title": "Applied Resources"
+          },
+          "s3_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Profile Id"
+          },
+          "s3_profile_name": {
+            "type": "string",
+            "title": "S3 Profile Name",
+            "default": ""
+          },
+          "artifact_root": {
+            "type": "string",
+            "title": "Artifact Root",
+            "default": ""
           }
         },
         "type": "object",

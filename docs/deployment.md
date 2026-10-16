@@ -523,3 +523,23 @@ Ingress recommendation:
 - Use TLS for every externally reachable Triton Control endpoint.
 - Manage Ingress hosts, TLS secrets, annotations, and controller-specific
   settings through GitOps.
+
+## Managed MLflow storage
+
+New MLflow installations require a saved S3 profile selected in the installation
+form. The server writes artifacts to `s3://<bucket>/<profile-prefix>/mlflow` using
+a server-only Kubernetes Secret. Profile endpoint, region, addressing style and
+custom CA settings are included. Clients use the authenticated MLflow proxy and
+do not receive the S3 credentials.
+
+Tracking and registry metadata use the application's PostgreSQL connection in the
+isolated `mlflow_tracking` schema. PostgreSQL must be reachable from the MLflow
+pod and the database user must be allowed to create this schema. No new MLflow
+PVC is created. The default server image installs the S3/PostgreSQL drivers at
+startup when missing; for restricted networks, preinstall boto3 and psycopg2.
+
+The tracking upgrade endpoint preserves existing SQLite/PVC installations and
+existing S3 storage configuration. It does not migrate old runs. Back up SQLite
+and artifacts before any migration or legacy uninstall. S3 installations retain
+artifacts and PostgreSQL metadata when uninstalled; reinstall against the same
+artifact endpoint and root to retain valid proxy references.

@@ -283,6 +283,9 @@ class MlflowEntity(SQLModel, table=True):
 
     __tablename__ = "mlflow"
 
+    s3_profile_id: int | None = Field(default=None, foreign_key="s3_profiles.id")
+    artifact_root: str = ""
+
     id: Optional[int] = Field(default=1, primary_key=True)
     namespace: str
     deployment_name: str
