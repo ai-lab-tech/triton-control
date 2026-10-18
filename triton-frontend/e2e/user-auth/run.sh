@@ -40,9 +40,10 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-python3 "$SCRIPT_DIR/prepare.py" "$RUNTIME" "$REPO_ROOT"
-export AUTH_SMOKE_PASSWORD
-AUTH_SMOKE_PASSWORD=$(cat "$RUNTIME/password")
+# Capture first so a preparation failure is not hidden by eval.
+CONFIG=$(python3 "$SCRIPT_DIR/prepare.py" "$RUNTIME" "$REPO_ROOT")
+eval "$CONFIG"
+unset CONFIG
 export AUTH_SMOKE_URL=http://127.0.0.1:18080
 export AUTH_SMOKE_MAIL_URL=http://127.0.0.1:18025
 export AUTH_SMOKE_OIDC_URL=http://127.0.0.1:18081
@@ -67,11 +68,15 @@ wait_http "$AUTH_SMOKE_MAIL_URL/api/v1/messages"
 if [[ " $MODES " == *" oidc "* ]]; then
   oidc="$PREFIX-oidc"
   CONTAINERS+=("$oidc")
+  # Keycloak requires an import file. Keep it in container memory only.
   docker create --name "$oidc" --network host \
-    -v "$RUNTIME/smoke-realm.json:/opt/keycloak/data/import/smoke-realm.json:ro" quay.io/keycloak/keycloak:26.7.4 \
+    --tmpfs /opt/keycloak/data/import:rw,noexec,nosuid,nodev,mode=0700,uid=1000,gid=1000 \
+    --env AUTH_SMOKE_REALM --entrypoint /bin/bash quay.io/keycloak/keycloak:26.7.4 \
+    -ec 'umask 077; printf "%s" "$AUTH_SMOKE_REALM" > /opt/keycloak/data/import/smoke-realm.json
+         unset AUTH_SMOKE_REALM
+         exec /opt/keycloak/bin/kc.sh "$@"' -- \
     start-dev --http-host=127.0.0.1 --http-port=18081 --http-management-port=19081 \
     --hostname="$AUTH_SMOKE_OIDC_URL" --import-realm >/dev/null
-  # The realm includes disposable credentials and must be readable by Keycloak's UID.
   docker start "$oidc" >/dev/null
   wait_http "$AUTH_SMOKE_OIDC_URL/realms/smoke/.well-known/openid-configuration"
 fi
@@ -81,9 +86,14 @@ for mode in $MODES; do
   db="$PREFIX-$mode-db"
   app="$PREFIX-$mode-app"
   CONTAINERS+=("$db" "$app")
-  docker run -d --name "$db" --env-file "$RUNTIME/postgres.env" \
+  docker run -d --name "$db" --env POSTGRES_PASSWORD --env POSTGRES_USER --env POSTGRES_DB \
     -p 127.0.0.1:15432:5432 postgres:16.6-alpine >/dev/null
-  docker create --name "$app" --network host --env-file "$RUNTIME/$mode.env" \
+  export OIDC_ENABLED=false EMAIL_DELIVERY_MODE=$mode
+  if [[ $mode == oidc ]]; then
+    export OIDC_ENABLED=true EMAIL_DELIVERY_MODE=disabled
+  fi
+  docker create --name "$app" --network host "${APP_ENV_ARGS[@]}" \
+    --env OIDC_ENABLED --env EMAIL_DELIVERY_MODE \
     triton-control:user-auth-smoke >/dev/null
   docker cp "$RUNTIME/nginx.conf" "$app:/etc/nginx/nginx.conf"
   docker start "$app" >/dev/null

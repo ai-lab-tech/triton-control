@@ -2,9 +2,9 @@
 
 import base64
 import json
-import os
 from pathlib import Path
 import secrets
+import shlex
 import sys
 
 root = Path(sys.argv[1])
@@ -13,10 +13,6 @@ password = "Smoke1!" + secrets.token_hex(16)
 client_secret = secrets.token_hex(32)
 database_password = secrets.token_hex(32)
 base = "http://127.0.0.1:18080"
-(root / "password").write_text(password)
-(root / "postgres.env").write_text(
-    f"POSTGRES_PASSWORD={database_password}\nPOSTGRES_USER=smoke\nPOSTGRES_DB=smoke\n"
-)
 common = {
     "DATABASE_URL": f"postgresql://smoke:{database_password}@127.0.0.1:15432/smoke",
     "SESSION_SECRET": secrets.token_hex(32),
@@ -43,12 +39,6 @@ common = {
     "APP_BASE_URL": base,
     "OIDC_ADMIN_EMAILS": "admin@example.test",
 }
-for mode in ("smtp", "manual-link", "disabled", "oidc"):
-    env = common | {
-        "OIDC_ENABLED": str(mode == "oidc").lower(),
-        "EMAIL_DELIVERY_MODE": mode if mode != "oidc" else "disabled",
-    }
-    (root / f"{mode}.env").write_text("".join(f"{key}={value}\n" for key, value in env.items()))
 
 realm = {
     "realm": "smoke", "enabled": True, "sslRequired": "none",
@@ -65,13 +55,21 @@ realm = {
         "credentials": [{"type": "password", "value": password, "temporary": False}],
     } for name in ("admin", "member", "viewer", "pending")],
 }
-(root / "smoke-realm.json").write_text(json.dumps(realm))
+# Send credentials through a pipe to the runner, never to host files.
+# Quote every value because the runner evaluates these shell assignments.
+values = common | {
+    "AUTH_SMOKE_PASSWORD": password,
+    "POSTGRES_PASSWORD": database_password,
+    "POSTGRES_USER": "smoke",
+    "POSTGRES_DB": "smoke",
+    "AUTH_SMOKE_REALM": json.dumps(realm),
+}
+for key, value in values.items():
+    print(f"export {key}={shlex.quote(value)}")
+print("APP_ENV_ARGS=(" + " ".join(f"--env {key}" for key in common) + ")")
 # Preserve the production proxy configuration, changing only the listening ports.
 nginx = (repo / "docker/nginx.conf").read_text()
 (root / "nginx.conf").write_text(
     nginx.replace("listen 8080;", "listen 127.0.0.1:18080;")
     .replace("127.0.0.1:8000", "127.0.0.1:18000")
 )
-# Containers use non-root UIDs; docker cp copies these into their private filesystems.
-for path in root.iterdir():
-    os.chmod(path, 0o644 if path.suffix in {".json", ".conf"} else 0o600)

@@ -167,8 +167,10 @@ AUTH_SMOKE_MODE=smtp bash triton-frontend/e2e/user-auth/run.sh
 
 `AUTH_SMOKE_SKIP_BUILD=true` reuses `triton-control:user-auth-smoke`; leave it
 unset to build the current checkout. The runner generates disposable
-credentials, binds test services to loopback, and cleans up its named containers,
-database volumes, mock server and temporary credentials on exit. Mailpit only
+credentials and passes them through the process environment without writing
+credential files on the host. Keycloak's realm import uses a private container
+`tmpfs`. The runner binds test services to loopback and cleans up its named
+containers, database volumes, mock server and temporary configuration on exit. Mailpit only
 captures mail; no external recipients are contacted.
 
 The Keycloak realm uses the documented
