@@ -28,13 +28,27 @@ async def _get_claims_with_access_policy(
     allow_pending: bool = False,
 ) -> Dict[str, Any]:
     source_claims = await extract_claims(request, creds)
+    if source_claims.get("token_use") == "mlflow_workflow":
+        path, method = request.url.path, request.method
+        mlflow_path = path == "/api/deployments/mlflow" or path.startswith("/api/deployments/mlflow/")
+        permitted = (
+            (path == "/api/deployments" and method == "POST")
+            or (mlflow_path and method in {"GET", "DELETE"})
+        )
+        if not permitted:
+            raise HTTPException(status_code=403, detail="Workflow token cannot access this API")
     # A saturated SQLAlchemy pool must not block the ASGI loop (including
     # health checks and completion of requests returning their connections).
-    return await anyio.to_thread.run_sync(_resolve_access_claims, request, source_claims, allow_pending)
+    return await anyio.to_thread.run_sync(
+        _resolve_access_claims, request, source_claims, allow_pending, creds
+    )
 
 
 def _resolve_access_claims(
-    request: Request, source_claims: Dict[str, Any], allow_pending: bool,
+    request: Request,
+    source_claims: Dict[str, Any],
+    allow_pending: bool,
+    creds: HTTPAuthorizationCredentials,
 ) -> Dict[str, Any]:
     try:
         with session_factory() as session:
@@ -50,6 +64,26 @@ def _resolve_access_claims(
             claims = _identity.claims_from_user(user, source_claims)
             if not allow_pending and not claims["access_allowed"]:
                 raise ForbiddenError("Account pending admin approval")
+            # A local API call uses the Bearer token, but browser navigation to
+            # code-server uses only the session cookie. Keep that cookie in sync
+            # after a fresh local login or credential change.
+            if (
+                creds is not None
+                and creds.scheme.lower() == "bearer"
+                and claims["auth_provider"] == "local"
+                and not source_claims.get("token_use")
+            ):
+                session_user = {
+                    "sub": user.email,
+                    "email": user.email,
+                    "name": user.name,
+                    "role": user.role,
+                    "auth_provider": "local",
+                    "access_allowed": claims["access_allowed"],
+                    "credential_version": user.credential_version,
+                }
+                if request.session.get("user") != session_user:
+                    request.session["user"] = session_user
             return claims
     except AppError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

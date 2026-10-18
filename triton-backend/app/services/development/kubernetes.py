@@ -23,6 +23,8 @@ from app.services.kubernetes_client import (
     in_cluster_namespace,
     is_running_in_cluster,
 )
+from app.services.mlflow import tracking
+from app.services.workflows import workspace_access
 
 logger = logging.getLogger(__name__)
 
@@ -235,8 +237,56 @@ def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
         "kind": "Secret",
         "metadata": {"name": secret_name, "namespace": namespace},
         "type": "Opaque",
-        "stringData": {"AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32)},
+        "stringData": {
+            "AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32),
+            tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32),
+            workspace_access.TOKEN_KEY: secrets.token_urlsafe(32),
+        },
     }
+
+
+def enable_mlflow_tracking(namespace: str, statefulset_name: str, secret_name: str) -> None:
+    """Upgrade an existing workspace in place, preserving its PVC and S3 token."""
+    from kubernetes import client
+
+    core = client.CoreV1Api(api_client())
+    secret = core.read_namespaced_secret(secret_name, namespace)
+    if not (secret.data or {}).get(tracking.TRACKING_TOKEN_KEY):
+        core.patch_namespaced_secret(secret_name, namespace, {
+            "stringData": {tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32)},
+        })
+    client.AppsV1Api(api_client()).patch_namespaced_stateful_set(statefulset_name, namespace, {
+        "spec": {"template": {"spec": {"containers": [{
+            "name": "code-server", "env": [
+                {"name": "MLFLOW_TRACKING_URI", "value": tracking.tracking_uri(
+                    "workspaces", namespace, statefulset_name,
+                ), "valueFrom": None},
+                {"name": "MLFLOW_TRACKING_TOKEN", "value": None, "valueFrom": {"secretKeyRef": {
+                    "name": secret_name, "key": tracking.TRACKING_TOKEN_KEY,
+                }}},
+            ],
+        }]}}},
+    })
+
+
+
+def enable_argo_access(namespace: str, statefulset_name: str, secret_name: str) -> None:
+    """Add managed Argo access without rotating other credentials or touching PVCs."""
+    from kubernetes import client
+
+    core = client.CoreV1Api(api_client())
+    secret = core.read_namespaced_secret(secret_name, namespace)
+    if not (secret.data or {}).get(workspace_access.TOKEN_KEY):
+        core.patch_namespaced_secret(secret_name, namespace, {
+            "stringData": {workspace_access.TOKEN_KEY: secrets.token_urlsafe(32)},
+        })
+    environment = workspace_access.environment(namespace, statefulset_name, secret_name)
+    # Strategic merge must clear the alternate field on any existing env entry.
+    for item in environment:
+        item["value" if "valueFrom" in item else "valueFrom"] = None
+    client.AppsV1Api(api_client()).patch_namespaced_stateful_set(statefulset_name, namespace, {
+        "spec": {"template": {"spec": {"containers": [{"name": "code-server", "env": environment}]}}},
+    })
 
 
 def _statefulset_manifest(
@@ -383,7 +433,20 @@ def _statefulset_manifest(
                             "readOnlyRootFilesystem": False,
                             "capabilities": {"drop": ["ALL"]},
                         },
-                        "env": [
+                        "env": workspace_access.environment(
+                            namespace, statefulset_name, secret_name or f"{statefulset_name}-secret",
+                        ) + [
+                            {
+                                "name": "MLFLOW_TRACKING_URI",
+                                "value": tracking.tracking_uri("workspaces", namespace, statefulset_name),
+                            },
+                            {
+                                "name": "MLFLOW_TRACKING_TOKEN",
+                                "valueFrom": {"secretKeyRef": {
+                                    "name": secret_name or f"{statefulset_name}-secret",
+                                    "key": tracking.TRACKING_TOKEN_KEY,
+                                }},
+                            },
                             {
                                 "name": "TRITON_CONTROL_PROFILE_URL",
                                 "value": (

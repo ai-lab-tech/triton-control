@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
+from app.exceptions import ServiceUnavailableError
 from app.schemas import ArgoWorkflowsStatusResponse
+from app.services.workflows import auth
 from app.services.workflows.config import get_config
 
 
@@ -33,8 +37,13 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             service_url=config.server_url,
         )
     try:
-        response = httpx.get(config.server_url + "/", timeout=5, follow_redirects=False, trust_env=False)
-        ready = response.status_code < 500
+        namespace = quote(config.namespace or "triton-control", safe="")
+        response = httpx.get(
+            f"{config.server_url}/api/v1/workflows/{namespace}",
+            params={"listOptions.limit": "1"}, headers=auth.authorization_headers(),
+            timeout=5, follow_redirects=False, trust_env=False,
+        )
+        ready = response.status_code < 400
         message = (
             f"Argo Server responded with HTTP {response.status_code}."
             if ready
@@ -50,7 +59,7 @@ def get_status() -> ArgoWorkflowsStatusResponse:
             base_path=config.base_path,
             service_url=config.server_url,
         )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ServiceUnavailableError) as exc:
         return ArgoWorkflowsStatusResponse(
             enabled=True,
             ready=False,

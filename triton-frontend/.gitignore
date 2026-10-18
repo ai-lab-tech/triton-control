@@ -8,5 +8,6 @@ dist
 *.pem 
 coverage
 
-playwright-report/
+# Playwright smoke artifacts
 test-results/
+playwright-report/

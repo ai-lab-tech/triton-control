@@ -4,18 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime
 from threading import Lock
+from typing import Any
 
 from sqlmodel import Session
 
+from app.core.identity import require_user_entity
 from app.db.entities import MlflowEntity
-from app.exceptions import BadRequestError, ConflictError
-from app.repositories import mlflow
+from app.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.repositories import developments, mlflow, s3_profiles
 from app.schemas import (
     InstallMlflowRequest,
     MlflowDeleteResponse,
     MlflowInstallResponse,
     MlflowStatusResponse,
 )
+from app.services.development import kubernetes as workspace_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.mlflow import config
 from app.services.mlflow import kubernetes as k8s
@@ -30,6 +33,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
     if entity is None:
         return MlflowStatusResponse(
             installed=False,
+            configured_version=config.server_version(),
             status="not_installed",
             ready=False,
             status_message="",
@@ -38,20 +42,24 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
 
     ready, message = k8s.read_installation_readiness(entity.namespace, entity.deployment_name)
     status = (entity.status or "").strip() or "creating"
+    if status == "upgrading":
+        ready = False
+        message = entity.status_message
     if status == "ready" and not ready:
         status = "creating"
     return MlflowStatusResponse(
         installed=True,
+        configured_version=config.server_version(),
         status=status,
         ready=ready,
         status_message=message or entity.status_message,
         base_path=config.base_path(),
         service_url=k8s.service_url(entity.namespace, entity.service_name),
-        installation=_to_dto(entity),
+        installation=_to_dto(entity, session),
     )
 
 
-def install_mlflow(request: InstallMlflowRequest, session: Session) -> MlflowInstallResponse:
+def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict[str, Any]) -> MlflowInstallResponse:
     """Install MLflow resources and return applied Kubernetes resources."""
     if not _install_lock.acquire(blocking=False):
         raise ConflictError("MLflow installation is already in progress")
@@ -60,16 +68,23 @@ def install_mlflow(request: InstallMlflowRequest, session: Session) -> MlflowIns
         if mlflow.get(session) is not None:
             raise ConflictError("MLflow is already installed")
 
+        owner = require_user_entity(session, claims)
+        profile = s3_profiles.find_for_owner(session, owner.id or 0, request.s3_profile_id)
+        if profile is None:
+            raise NotFoundError("S3 profile not found")
+        storage = k8s.storage_configuration(profile, mlflow.prepare_backend_store(session))
         name = request.installation_name
         namespace = _MLFLOW_NAMESPACE
         service_name = f"{name}-service"
         entity = mlflow.save(
             session,
             MlflowEntity(
+                s3_profile_id=profile.id,
+                artifact_root=storage["MLFLOW_ARTIFACTS_DESTINATION"],
                 namespace=namespace,
                 deployment_name=name,
                 service_name=service_name,
-                image=request.image,
+                image=config.server_image(),
                 applied_resources=[],
                 status="creating",
                 status_message="Creating Kubernetes resources and waiting for pod readiness.",
@@ -82,13 +97,14 @@ def install_mlflow(request: InstallMlflowRequest, session: Session) -> MlflowIns
                 namespace=namespace,
                 deployment_name=name,
                 service_name=service_name,
+                storage=storage,
             )
             entity.applied_resources = applied
             entity.status = "ready"
-            entity.status_message = "MLflow pod is Running."
+            entity.status_message = "MLflow server is ready."
             entity.last_transition_at = datetime.utcnow()
             entity = mlflow.save(session, entity)
-            return _to_dto(entity)
+            return _to_dto(entity, session)
         except Exception:
             entity.status = "failed"
             entity.status_message = "MLflow installation failed."
@@ -126,6 +142,33 @@ def uninstall_mlflow(session: Session) -> MlflowDeleteResponse:
     return MlflowDeleteResponse(status="deleted", message=message, namespace=namespace)
 
 
+def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
+    """Protect an existing MLflow installation and configure existing workspaces."""
+    if not _install_lock.acquire(blocking=False):
+        raise ConflictError("MLflow installation is already in progress")
+    try:
+        entity = mlflow.get(session)
+        if entity is None:
+            raise BadRequestError("MLflow is not installed")
+        entity.status = "upgrading"
+        entity.status_message = "Automatically configuring the MLflow tracking gateway."
+        mlflow.save(session, entity)
+        entity.applied_resources = k8s.upgrade_installation_resources(
+            entity.namespace, entity.deployment_name, entity.service_name,
+        )
+        for workspace in developments.list_all(session):
+            workspace_k8s.enable_mlflow_tracking(
+                workspace.namespace, workspace.statefulset_name, workspace.secret_name,
+            )
+        entity.status = "ready"
+        entity.status_message = "MLflow tracking gateway is ready."
+        entity.last_transition_at = datetime.utcnow()
+        entity = mlflow.save(session, entity)
+        return _to_dto(entity, session)
+    finally:
+        _install_lock.release()
+
+
 def get_proxy_server_url(session: Session) -> str:
     """Return internal MLflow server URL for proxying."""
     entity = mlflow.get(session)
@@ -136,11 +179,15 @@ def get_proxy_server_url(session: Session) -> str:
     return k8s.service_url(entity.namespace, entity.service_name)
 
 
-def _to_dto(entity: MlflowEntity) -> MlflowInstallResponse:
+def _to_dto(entity: MlflowEntity, session: Session) -> MlflowInstallResponse:
+    profile = s3_profiles.get(session, entity.s3_profile_id) if entity.s3_profile_id is not None else None
     return MlflowInstallResponse(
         namespace=entity.namespace,
         deployment_name=entity.deployment_name,
         service_name=entity.service_name,
         image=entity.image,
         applied_resources=list(entity.applied_resources or []),
+        s3_profile_id=entity.s3_profile_id,
+        s3_profile_name=profile.name if profile else "",
+        artifact_root=entity.artifact_root,
     )

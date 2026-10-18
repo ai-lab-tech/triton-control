@@ -9,9 +9,11 @@ import anyio
 import httpx
 from fastapi import Request, Response
 
+from app.db.database import session_factory
 from app.exceptions import BadGatewayError
+from app.repositories import mlflow
 from app.services.kubernetes_client import api_client, is_running_in_cluster
-from app.services.mlflow import config, installer
+from app.services.mlflow import config, installer, tracking
 
 _HOP_BY_HOP_HEADERS = {
     "connection",
@@ -30,6 +32,8 @@ _REQUEST_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
     "cookie",
     "origin",
     "referer",
+    "authorization",
+    "x-triton-mlflow-gateway",
     # Prevent Kubernetes service proxy from turning browser cache validation
     # requests into ApiException(304) errors.
     "if-none-match",
@@ -44,9 +48,14 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 }
 
 
-async def proxy_http(path: str, request: Request, session: Any) -> Response:
+async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Response:
     """Proxy authenticated request to the singleton MLflow server."""
-    body = await request.body()
+    if path.strip("/") == "api/2.0/mlflow/triton-control/artifact-store" and request.method == "GET":
+        from starlette.responses import JSONResponse
+
+        artifact_root = await anyio.to_thread.run_sync(_artifact_root)
+        return JSONResponse({"artifact_root": artifact_root})
+    body = tracking.enforce_creator(path, request.method, await request.body(), claims)
     headers = {
         key: value
         for key, value in request.headers.items()
@@ -54,8 +63,8 @@ async def proxy_http(path: str, request: Request, session: Any) -> Response:
     }
     headers["x-forwarded-prefix"] = config.base_path().rstrip("/")
     query_params = list(request.query_params.multi_items())
-    server_url = installer.get_proxy_server_url(session)
-    return await anyio.to_thread.run_sync(
+    server_url = await anyio.to_thread.run_sync(_proxy_server_url)
+    response = await anyio.to_thread.run_sync(
         _proxy_http_sync,
         server_url,
         path,
@@ -64,6 +73,22 @@ async def proxy_http(path: str, request: Request, session: Any) -> Response:
         query_params,
         body,
     )
+    return tracking.expose_creator(path, response)
+
+
+def _artifact_root() -> str:
+    with session_factory() as session:
+        installation = mlflow.get(session)
+        if installation is None or not installation.artifact_root:
+            raise BadGatewayError("MLflow S3 artifact storage is not configured")
+        return installation.artifact_root
+
+
+def _proxy_server_url() -> str:
+    # Release the database connection before waiting for the upstream server.
+    # Pool waits must run outside the request loop so health probes keep working.
+    with session_factory() as session:
+        return installer.get_proxy_server_url(session)
 
 
 def _proxy_http_sync(
@@ -74,6 +99,7 @@ def _proxy_http_sync(
     query_params: list[tuple[str, str]],
     body: bytes,
 ) -> Response:
+    headers = {**headers, **tracking.gateway_header(server_url)}
     if is_running_in_cluster():
         return _direct_proxy_http_sync(server_url, path, method, headers, query_params, body)
     return _kubernetes_proxy_http_sync(server_url, path, method, headers, query_params, body)

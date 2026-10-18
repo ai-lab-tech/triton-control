@@ -17,8 +17,10 @@ from app.exceptions import BadRequestError
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
+from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
+from app.services.perf_analyzer.jobs import prepare_instance_deletion
 
 
 def create_deployment(
@@ -27,6 +29,7 @@ def create_deployment(
     claims: dict[str, Any],
     schedule_task: Callable[..., None] | None = None,
 ) -> DeploymentResponse:
+    request = resolve_profile_request(request, session, claims)
     name = request.deployment_name
     control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
     ns = control_ns or name
@@ -78,6 +81,7 @@ def delete_deployment_instance(session: Session, claims: dict[str, Any], instanc
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.is_self_deployed:
         raise BadRequestError("Instance is not managed by Kubernetes deployment")
+    prepare_instance_deletion(session, instance_id)
     namespace = (instance.deployment_namespace or "").strip()
     message = "No Kubernetes namespace was recorded for this instance."
     if namespace:

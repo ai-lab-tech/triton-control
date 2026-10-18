@@ -84,6 +84,7 @@ def init_db() -> None:
         EmailConfigEntity,
         ErrorEventEntity,
         MlflowEntity,
+        ModelPerfJobEntity,
         OidcConfigEntity,
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
@@ -96,6 +97,10 @@ def init_db() -> None:
     )
 
     SQLModel.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE triton_instances ADD COLUMN IF NOT EXISTS perf_deleting BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
     _migrate_users_account_lifecycle()
     _migrate_triton_instances_table()
     _migrate_oidc_config_table()
@@ -167,6 +172,8 @@ def _migrate_oidc_config_table() -> None:
 def _migrate_triton_instances_table() -> None:
     """Apply lightweight schema migration for triton_instances."""
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_uri VARCHAR"))
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_name VARCHAR"))
         conn.execute(
             text(
                 """
@@ -413,6 +420,10 @@ def _migrate_s3_profiles_table() -> None:
 def _migrate_mlflow_table() -> None:
     """Apply lightweight schema migration for mlflow singleton table."""
     with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE mlflow ADD COLUMN IF NOT EXISTS s3_profile_id INTEGER REFERENCES s3_profiles(id)"
+        ))
+        conn.execute(text("ALTER TABLE mlflow ADD COLUMN IF NOT EXISTS artifact_root VARCHAR NOT NULL DEFAULT ''"))
         conn.execute(
             text(
                 """

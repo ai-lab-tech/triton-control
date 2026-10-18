@@ -8,6 +8,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import httpx
 from fastapi import HTTPException
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from app.api import mlflow_api
 from app.db.entities import MlflowEntity
@@ -18,13 +19,71 @@ from app.services.mlflow import kubernetes as k8s
 
 
 class MlflowTests(unittest.TestCase):
+    def setUp(self):
+        for target, value in (
+            ("app.services.mlflow.installer.require_user_entity", SimpleNamespace(id=7)),
+            ("app.services.mlflow.installer.s3_profiles.find_for_owner", SimpleNamespace(id=3)),
+            ("app.services.mlflow.installer.s3_profiles.get", SimpleNamespace(id=3, name="artifacts")),
+            ("app.services.mlflow.installer.mlflow.prepare_backend_store", "postgresql://fixture"),
+            ("app.services.mlflow.installer.k8s.storage_configuration", {"MLFLOW_ARTIFACTS_DESTINATION": "s3://artifacts/mlflow"}),
+        ):
+            patcher = patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_Status_NotInstalled_ReportsConfiguredVersion(self) -> None:
+        # Arrange
+        session = SimpleNamespace()
+        with (
+            patch.dict("os.environ", {"MLFLOW_VERSION": "3.16.1"}),
+            patch("app.services.mlflow.installer.mlflow.get", return_value=None),
+        ):
+            # Act
+            result = installer.get_mlflow_status(session)
+
+        # Assert
+        self.assertFalse(result.installed)
+        self.assertEqual(result.configured_version, "3.16.1")
+
+    def test_InstallRequest_ImageOverride_IsRejected(self) -> None:
+        # Arrange
+        payload = {"s3_profile_id": 3, "image": "ghcr.io/mlflow/mlflow:v2.0.0"}
+
+        # Act / Assert
+        with self.assertRaises(ValidationError) as raised:
+            InstallMlflowRequest.model_validate(payload)
+
+        # Assert
+        self.assertEqual(
+            [(error["loc"], error["type"]) for error in raised.exception.errors()],
+            [(("image",), "extra_forbidden")],
+        )
+
+    def test_Manifests_Image_ComesFromOperatorConfiguration(self) -> None:
+        # Arrange
+        request = self._request()
+        with patch.dict("os.environ", {
+            "MLFLOW_VERSION": "3.14.0",
+            "MLFLOW_IMAGE_REPOSITORY": "registry.example/mlflow",
+        }):
+            # Act
+            manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service", storage={})
+
+        # Assert
+        deployment = next(item for item in manifests if item["kind"] == "Deployment")
+        image = deployment["spec"]["template"]["spec"]["containers"][0]["image"]
+        self.assertEqual(image, "registry.example/mlflow:v3.14.0")
+
     def _request(self) -> InstallMlflowRequest:
         return InstallMlflowRequest(
             installation_name="mlflow",
-            image="ghcr.io/mlflow/mlflow:v3.14.0",
+            s3_profile_id=3,
         )
 
     def test_InstallMlflow_NameProvided_AppliesNamedResources(self) -> None:
+        # Arrange
+        request = self._request()
+        session = SimpleNamespace()
         with (
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
             patch(
@@ -36,12 +95,15 @@ class MlflowTests(unittest.TestCase):
                 side_effect=lambda _session, entity: entity,
             ),
         ):
-            response = installer.install_mlflow(self._request(), SimpleNamespace())
+            # Act
+            response = installer.install_mlflow(request, session, {"role": "member"})
 
+        # Assert
         apply_resources.assert_called_once()
         self.assertEqual(response.namespace, "triton-control")
         self.assertEqual(response.deployment_name, "mlflow")
         self.assertEqual(response.service_name, "mlflow-service")
+        self.assertEqual(response.image, "ghcr.io/mlflow/mlflow:v3.14.0")
         self.assertIn("Deployment/mlflow", response.applied_resources)
 
     def test_Status_NotInstalled_ReturnsDefaultBasePath(self) -> None:
@@ -107,7 +169,7 @@ class MlflowTests(unittest.TestCase):
     def test_InstallMlflow_ExistingInstallation_RaisesConflict(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=object()):
             with self.assertRaises(ConflictError):
-                installer.install_mlflow(self._request(), SimpleNamespace())
+                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
 
     def test_InstallMlflow_ApplyFails_CleansUpDatabaseRecord(self) -> None:
         saved: list[MlflowEntity] = []
@@ -129,7 +191,7 @@ class MlflowTests(unittest.TestCase):
             patch("app.services.mlflow.installer.mlflow.delete") as delete,
         ):
             with self.assertRaises(BadGatewayError):
-                installer.install_mlflow(self._request(), SimpleNamespace())
+                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
 
         self.assertEqual(saved[-1].status, "failed")
         delete.assert_called_once()
@@ -189,20 +251,21 @@ class MlflowTests(unittest.TestCase):
         dockerconfigjson = '{"auths":{"registry.example":{"auth":"token"}}}'
         request = self._request().model_copy(update={"dockerconfigjson": dockerconfigjson})
 
-        manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service")
+        manifests = k8s._manifests(request, "mlflow", "mlflow", "mlflow-service", storage={})
 
         secret = manifests[0]
-        pvc = manifests[1]
-        deployment = manifests[2]
-        service = manifests[3]
+        deployment = next(item for item in manifests if item["kind"] == "Deployment")
+        service = next(item for item in manifests if item["kind"] == "Service")
+        probe = deployment["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]
+        self.assertIn("127.0.0.1:5001/health", probe["exec"]["command"][-1])
         self.assertEqual(secret["kind"], "Secret")
         self.assertEqual(secret["stringData"][".dockerconfigjson"], dockerconfigjson)
-        self.assertEqual(pvc["kind"], "PersistentVolumeClaim")
+        self.assertFalse(any(item["kind"] == "PersistentVolumeClaim" for item in manifests))
         self.assertEqual(deployment["spec"]["template"]["spec"]["imagePullSecrets"], [{"name": "mlflow-pull-secret"}])
         self.assertEqual(service["metadata"]["name"], "mlflow-service")
 
     def test_Manifests_MlflowPod_UsesRestrictedSecurityContext(self) -> None:
-        manifests = k8s._manifests(self._request(), "mlflow", "mlflow", "mlflow-service")
+        manifests = k8s._manifests(self._request(), "mlflow", "mlflow", "mlflow-service", storage={})
 
         deployment = next(manifest for manifest in manifests if manifest["kind"] == "Deployment")
         pod_spec = deployment["spec"]["template"]["spec"]
@@ -229,6 +292,9 @@ class MlflowTests(unittest.TestCase):
         command = " ".join(container["args"])
         self.assertIn("--allowed-hosts", command)
         self.assertIn("mlflow-service.mlflow.svc.cluster.local:5000", command)
+        self.assertIn("--serve-artifacts", command)
+        self.assertIn('--artifacts-destination "$MLFLOW_ARTIFACTS_DESTINATION"', command)
+        self.assertNotIn("--default-artifact-root /mlflow-data/artifacts", command)
 
     def test_ApiStatus_ViewerIsRejected(self) -> None:
         with self.assertRaises(HTTPException) as raised:
@@ -288,7 +354,6 @@ class MlflowTests(unittest.TestCase):
                 mlflow_api.proxy_mlflow(
                     request=SimpleNamespace(),
                     path="api/2.0/mlflow/experiments/list",
-                    session=SimpleNamespace(),
                     claims={"role": "member"},
                 )
             )
@@ -312,7 +377,7 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="mlflow-123",
             ),
         ):
@@ -321,7 +386,7 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="",
             ),
             patch("app.services.mlflow.kubernetes._pod_error_reason", return_value="ImagePullBackOff"),
@@ -333,17 +398,30 @@ class MlflowTests(unittest.TestCase):
         with (
             patch("app.services.mlflow.kubernetes._client", return_value=object()),
             patch(
-                "app.services.mlflow.kubernetes._running_pod_name",
+                "app.services.mlflow.kubernetes._ready_pod_name",
                 return_value="",
             ),
             patch("app.services.mlflow.kubernetes._pod_error_reason", return_value=""),
         ):
-            self.assertIn("not Running yet", k8s.read_installation_readiness("ns", "mlflow")[1])
+            self.assertIn("not Ready yet", k8s.read_installation_readiness("ns", "mlflow")[1])
+
+    def test_InstallationWaitsUntilPodIsReady(self) -> None:
+        with (
+            patch("app.services.mlflow.kubernetes._ready_pod_name", side_effect=["", "mlflow-123"]) as ready,
+            patch("app.services.mlflow.kubernetes._pod_error_reason", return_value=""),
+            patch("app.services.mlflow.kubernetes.time.sleep") as sleep,
+        ):
+            k8s._wait_for_ready_pod(object(), "ns", "mlflow")
+        self.assertEqual(ready.call_count, 2)
+        sleep.assert_called_once_with(k8s._POD_WAIT_INTERVAL_SECONDS)
 
     def test_KubernetesPodHelpers_DetectRunningAndTerminalReasons(self) -> None:
         running = SimpleNamespace(
             metadata=SimpleNamespace(name="mlflow-123"),
-            status=SimpleNamespace(phase="Running", container_statuses=[]),
+            status=SimpleNamespace(
+                phase="Running", container_statuses=[],
+                conditions=[SimpleNamespace(type="Ready", status="True")],
+            ),
         )
         failed = SimpleNamespace(
             metadata=SimpleNamespace(name="mlflow-456"),
@@ -360,7 +438,11 @@ class MlflowTests(unittest.TestCase):
         )
         with patch("kubernetes.client.CoreV1Api") as core:
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[running])
-            self.assertEqual(k8s._running_pod_name(object(), "ns", "mlflow"), "mlflow-123")
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "mlflow-123")
+            running.status.conditions[0].status = "False"
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "")
+            running.status.conditions = []
+            self.assertEqual(k8s._ready_pod_name(object(), "ns", "mlflow"), "")
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[failed])
             self.assertEqual(k8s._pod_error_reason(object(), "ns", "mlflow"), "Failed")
             core.return_value.list_namespaced_pod.return_value = SimpleNamespace(items=[waiting])

@@ -34,6 +34,7 @@ from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTr
 from app.services.access import ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
+from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.storage.s3 import discover_instance_repository_backends
 from app.services.triton.client import TritonService
 from app.services.triton.repository_snapshot import normalize_repository_models, repository_model_names
@@ -225,6 +226,7 @@ def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) 
     if not instance:
         raise NotFoundError("Instance not found")
 
+    prepare_instance_deletion(session, instance_id)
     instance_name = instance.name
     deployment_namespace = (instance.deployment_namespace or "").strip()
     if instance.is_self_deployed and deployment_namespace:

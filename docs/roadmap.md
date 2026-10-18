@@ -12,19 +12,6 @@ This roadmap outlines planned features that are not yet active in the current re
 
 ### 1) Deployment, Operations, and Performance
 
-#### Parallel Execution for Perf Analyzer
-
-Today:
-
-- Perf Analyzer runs as a singleton workload.
-- Profiling runs are executed sequentially.
-
-Goal:
-
-- Enable parallel profiling runs.
-- Replace the singleton model with isolated Kubernetes Jobs per run.
-- Support multiple concurrent runs across different instance/model targets.
-
 #### Resource Management for Triton Instances
 
 Goal:
@@ -84,7 +71,6 @@ Goal:
 
 ### Next
 
-- Perf Analyzer parallel execution
 - TLS configuration in the Add Deployment flow
 - OpenAI API integration for Triton Server
 
@@ -93,3 +79,7 @@ Goal:
 - Resource management for Triton deployments (GPU/RAM/CPU)
 - User management with groups
 - S3 Browser: rename and move
+
+## Delivered
+
+- [Per-model performance Jobs](model-performance-jobs.md): independent non-root Jobs, model-scoped status, and cancellation.

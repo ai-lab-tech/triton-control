@@ -23,10 +23,6 @@ import {
   selectInstances,
   selectInstancesListLoading,
 } from "../../state/instances-list/instances-list.selectors";
-import {
-  selectActiveRunKey,
-  selectProfileRunning,
-} from "../../state/instances-profile/instances-profile.selectors";
 import { isSelfDeployedStarting } from "../../state/instances.utils";
 import { type Instance } from "./instances.data";
 
@@ -74,25 +70,7 @@ export class InstancesPageComponent implements OnInit {
   readonly loading = toSignal(this.store.select(selectInstancesListLoading), {
     initialValue: false,
   });
-  readonly perfProfileRunning = toSignal(this.store.select(selectProfileRunning), {
-    initialValue: false,
-  });
-  readonly activeProfileRunKey = toSignal(this.store.select(selectActiveRunKey), {
-    initialValue: "",
-  });
   readonly canDeleteInstances = this.auth.isAdmin;
-  readonly activeProfileRunLabel = computed(() => {
-    if (!this.perfProfileRunning() || !this.activeProfileRunKey()) {
-      return "";
-    }
-    const parts = this.activeProfileRunKey().split(":");
-    if (parts.length < 3) {
-      return "Perf Analyzer run in progress";
-    }
-    const runVersion = parts[parts.length - 1];
-    const runModel = parts.slice(1, -1).join(":");
-    return `Perf Analyzer running for ${runModel}:${runVersion}`;
-  });
 
   readonly filteredInstances = computed(() => {
     const q = this._query().trim().toLowerCase();

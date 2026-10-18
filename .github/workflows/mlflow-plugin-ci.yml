@@ -1,0 +1,65 @@
+name: MLflow plugin CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      mlflow_version:
+        description: "Additional MLflow version to smoke test (e.g. 3.15.0)"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: "0 6 * * 1"
+  push:
+    paths:
+      - "plugins/mlflow-triton-control/**"
+      - "charts/triton-control/values.yaml"
+      - ".github/workflows/mlflow-plugin-ci.yml"
+  pull_request:
+    paths:
+      - "plugins/mlflow-triton-control/**"
+      - "charts/triton-control/values.yaml"
+      - ".github/workflows/mlflow-plugin-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mlflow: ["chart"]
+        include:
+          - mlflow: ${{ inputs.mlflow_version || 'chart' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build and install wheel
+        working-directory: plugins/mlflow-triton-control
+        env:
+          MLFLOW_VERSION: ${{ matrix.mlflow }}
+        run: |
+          python -m pip install build ruff pyyaml
+          python -m build
+          if [ "$MLFLOW_VERSION" = chart ]; then
+            MLFLOW_VERSION=$(python -c 'import yaml; print(yaml.safe_load(open("../../charts/triton-control/values.yaml"))["mlflow"]["version"])')
+          fi
+          if [ "$MLFLOW_VERSION" = latest ]; then
+            python -m pip install --upgrade dist/*.whl "mlflow>=3.14,<4"
+          else
+            python -m pip install dist/*.whl "mlflow==$MLFLOW_VERSION"
+          fi
+          python -m pip check
+          python -c 'import mlflow; print("Testing MLflow", mlflow.__version__)'
+      - name: Smoke tests
+        env:
+          MLFLOW_DISABLE_AGENT_HINT: "1"
+        run: |
+          ruff check plugins/mlflow-triton-control/mlflow_triton_control plugins/mlflow-triton-control/tests
+          ruff format --check plugins/mlflow-triton-control/mlflow_triton_control plugins/mlflow-triton-control/tests
+          mlflow deployments help -t triton-control
+          python -m unittest discover -s plugins/mlflow-triton-control/tests -v

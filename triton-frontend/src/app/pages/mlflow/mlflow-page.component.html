@@ -19,7 +19,12 @@
       <mat-card class="card create-card">
         <div class="section">
           <div>
-            <div class="section-title">Installation</div>
+            <div class="section-title">
+              Install MLflow
+              @if (status()?.configured_version; as version) {
+                <span data-testid="mlflow-install-version">{{ version }}</span>
+              }
+            </div>
             <div class="section-subtitle">
               Only one MLflow installation is managed per Triton Control deployment.
             </div>
@@ -27,24 +32,35 @@
 
           <div class="form-grid">
             <div class="form-row">
-              <label class="field-label" for="mlflow-installation-name">Installation name</label>
+              <label class="field-label" for="mlflow-s3-profile">Artifact storage S3 profile</label>
+              <mat-form-field appearance="outline">
+                <mat-select id="mlflow-s3-profile" [(ngModel)]="s3ProfileId" required>
+                  @for (profile of s3Profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} — {{ profile.bucket }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+              <div class="field-hint">
+                All MLflow model uploads use this bucket and its profile prefix.
+              </div>
+              @if (!s3Profiles().length) {
+                <a [routerLink]="['/s3-profiles']"
+                  >Create an S3 profile before installing MLflow.</a
+                >
+              }
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="mlflow-installation-name"
+                >Kubernetes resource name</label
+              >
               <mat-form-field appearance="outline">
                 <input
                   id="mlflow-installation-name"
                   matInput
                   [(ngModel)]="installationName"
                   placeholder="mlflow"
-                />
-              </mat-form-field>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="mlflow-image">Image</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="mlflow-image"
-                  matInput
-                  [(ngModel)]="image"
-                  placeholder="ghcr.io/mlflow/mlflow:v3.14.0"
                 />
               </mat-form-field>
             </div>
@@ -127,6 +143,19 @@
             @if (current.installation?.service_name) {
               <span class="metadata-divider"
                 >Service: <code>{{ current.installation?.service_name }}</code></span
+              >
+            }
+            @if (current.installation?.s3_profile_id; as profileId) {
+              <span class="metadata-divider"
+                >S3 profile:
+                <code>{{
+                  current.installation?.s3_profile_name || "Profile #" + profileId
+                }}</code></span
+              >
+            }
+            @if (current.installation?.artifact_root; as artifactRoot) {
+              <span class="metadata-divider"
+                >Artifacts: <code>{{ artifactRoot }}</code></span
               >
             }
           </div>

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-smoke-s3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-smoke-s3
+  template:
+    metadata:
+      labels:
+        app: workspace-smoke-s3
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: s3
+          image: triton-workspace-smoke:ci
+          imagePullPolicy: Never
+          command: [python, -m, moto.server, -H, 0.0.0.0, -p, "5000"]
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-smoke-s3
+spec:
+  selector:
+    app: workspace-smoke-s3
+  ports:
+    - port: 5000
+      targetPort: 5000

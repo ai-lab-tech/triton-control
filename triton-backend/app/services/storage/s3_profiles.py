@@ -13,7 +13,7 @@ from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secr
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.repositories import s3_profiles, workflow_s3_credentials
+from app.repositories import mlflow, s3_profiles, workflow_s3_credentials
 from app.schemas import CreateS3ProfileRequest, S3ProfileDTO, UpdateS3ProfileRequest
 from app.services.workflows.credentials import sync_profile_credentials
 
@@ -62,6 +62,9 @@ def update_profile(
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
     profile = _get_profile(session, owner.id or 0, profile_id)
+    installation = mlflow.get(session)
+    if installation is not None and installation.s3_profile_id == profile_id:
+        raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
     if request.name is not None:
         name = _clean_required(request.name, "Profile name")
         existing = s3_profiles.find_by_name_for_owner(session, owner.id or 0, name)
@@ -100,6 +103,9 @@ def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) ->
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
     profile = _get_profile(session, owner.id or 0, profile_id)
+    installation = mlflow.get(session)
+    if installation is not None and installation.s3_profile_id == profile_id:
+        raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
     if workflow_s3_credentials.list_for_profile(session, profile_id):
         raise ConflictError("Delete linked workflow S3 credentials before deleting this profile")
     s3_profiles.delete(session, profile)

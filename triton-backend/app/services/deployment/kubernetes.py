@@ -255,7 +255,6 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
                 if phase in {"Failed", "Succeeded"}:
                     detail = "\n".join(part for part in [f"{phase}: {reason}".strip(), message] if part)
                     chunks.append(f"--- pod/{name} status ---\n{detail or phase}")
-                    continue
                 containers = getattr(getattr(pod, "spec", None), "containers", None) or []
                 container_names = [
                     getattr(container, "name", "")
@@ -266,6 +265,15 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
                     label = f"pod/{name}"
                     if container_name:
                         label = f"{label} container/{container_name}"
+                    if container_name == "triton":
+                        try:
+                            previous = _read_previous_pod_log(
+                                v1, namespace=namespace, name=name, container=container_name
+                            )
+                            if previous:
+                                chunks.append(f"--- {label} previous ---\n{previous}")
+                        except ApiException as exc:
+                            chunks.append(f"--- {label} previous unavailable ---\n{_api_error(exc)}")
                     try:
                         log = v1.read_namespaced_pod_log(
                             name=name,
@@ -276,13 +284,6 @@ def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> 
                         chunks.append(f"--- {label} ---\n{log}")
                     except ApiException as exc:
                         chunks.append(f"--- {label} unavailable ---\n{_api_error(exc)}")
-                        continue
-                    if container_name == "triton":
-                        previous = _read_previous_pod_log(
-                            v1, namespace=namespace, name=name, container=container_name
-                        )
-                        if previous:
-                            chunks.append(f"--- {label} previous ---\n{previous}")
         return "\n\n".join(chunks).strip()
     except ApiException as exc:
         raise BadGatewayError(_api_error(exc)) from exc

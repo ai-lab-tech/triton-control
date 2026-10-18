@@ -53,6 +53,26 @@ spec:
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
           env:
+            - name: PERF_ANALYZER_IMAGE
+              value: {{ .Values.perfAnalyzer.image | quote }}
+            - name: PERF_ANALYZER_DEADLINE_SECONDS
+              value: {{ .Values.perfAnalyzer.deadlineSeconds | quote }}
+            - name: PERF_ANALYZER_CPU_REQUEST
+              value: {{ .Values.perfAnalyzer.resources.requests.cpu | quote }}
+            - name: PERF_ANALYZER_MEMORY_REQUEST
+              value: {{ .Values.perfAnalyzer.resources.requests.memory | quote }}
+            - name: PERF_ANALYZER_CPU_LIMIT
+              value: {{ .Values.perfAnalyzer.resources.limits.cpu | quote }}
+            - name: PERF_ANALYZER_MEMORY_LIMIT
+              value: {{ .Values.perfAnalyzer.resources.limits.memory | quote }}
+            - name: MLFLOW_VERSION
+              value: {{ .Values.mlflow.version | quote }}
+            - name: MLFLOW_IMAGE_REPOSITORY
+              value: {{ .Values.mlflow.image.repository | quote }}
+            - name: MLFLOW_GATEWAY_IMAGE
+              value: {{ .Values.mlflow.gatewayImage | quote }}
+            - name: ARGO_WORKFLOWS_WORKFLOW_SERVICE_ACCOUNT
+              value: {{ .Values.argoWorkflows.controller.workflowDefaults.spec.serviceAccountName | quote }}
             - name: TRITON_DEPLOY_S3_SYNC_IMAGE
               value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
             - name: TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE
