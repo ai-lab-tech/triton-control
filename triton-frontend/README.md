@@ -3,7 +3,7 @@
 Modern Angular Material admin UI for managing Triton instances, user access, and OIDC settings.
 
 For real code-server extension compatibility tests and upgrade checks, see
-[Code-server plugin smoke tests](../docs/code-server-plugin-smoke.md).
+[Code-server plugin smoke tests](../docs/development.md#code-server-plugin-smoke-tests).
 
 ## Setup
 
