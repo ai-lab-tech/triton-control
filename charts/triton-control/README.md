@@ -212,12 +212,13 @@ mlflow:
 ```
 
 The server uses `<repository>:v<version>`. If you use the separately installed
-[`mlflow-triton-control`](../../plugins/mlflow-triton-control/README.md) deployment
+[`mlflow-triton-control`](https://github.com/ai-lab-tech/mlflow-plugin) deployment
 plugin, test it before changing your client
 MLflow version:
 
 ```bash
-bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
+# From a checkout of https://github.com/ai-lab-tech/mlflow-plugin
+bash smoke-latest.sh 3.14.0
 ```
 
 MLflow listens on pod loopback behind a gateway that accepts only a credential
