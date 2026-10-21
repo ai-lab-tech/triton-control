@@ -20,6 +20,7 @@ from app.services.kubernetes_client import api_client, in_cluster_namespace
 from app.services.mlflow import tracking
 from app.services.workflows.artifact_repository import REPOSITORY_KEY
 from app.services.workflows.tracking_policy import validate_workflow
+from app.services.workflows.training_s3 import prepare_training_s3
 from app.services.workflows.workspace_access import OWNER_LABEL
 
 _SUBMIT_PATH = re.compile(r"api/v1/workflows/([a-z0-9-]+)\Z")
@@ -48,6 +49,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
             row.secret_name for row in workflow_s3_credentials.list_all(session)
             if row.namespace == namespace and row.created_by_user_id == owner_id
         }
+        prepare_training_s3(workflow, session, owner_id or 0, namespace)
     validate_workflow(workflow, allowed_secrets)
     repository_ref = workflow.get("spec", {}).get("artifactRepositoryRef")
     if repository_ref:
@@ -61,7 +63,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if not isinstance(resolved, dict):
             raise BadRequestError("Invalid linked S3 artifact repository")
         validate_workflow({"spec": resolved}, allowed_secrets)
-    body, secret_name, _ = _prepare_deployment_submission(path, body, claims)
+    body, secret_name, _ = _prepare_deployment_submission(path, json.dumps(payload).encode(), claims)
     has_deployment_secret = secret_name is not None
     payload = json.loads(body)
     workflow = payload["workflow"]

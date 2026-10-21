@@ -195,20 +195,20 @@ class DeploymentServiceTests(unittest.TestCase):
 
     def test_ParseS3Url_HttpsEndpointOnPort443_SetsHttpsFlag(self) -> None:
         # Act
-        parsed = records._parse_s3_url("s3://https://s3-nue1.datev.cloud:443/tax-value-extraction")
+        parsed = records._parse_s3_url("s3://https://s3-nue1.datev.cloud:443/example-training-models")
 
         # Assert
         self.assertEqual(parsed["endpoint"], "https://s3-nue1.datev.cloud:443")
-        self.assertEqual(parsed["bucket"], "tax-value-extraction")
+        self.assertEqual(parsed["bucket"], "example-training-models")
         self.assertTrue(parsed["use_https"])
 
     def test_ParseS3Url_HttpEndpointOnPort443_NormalizesToHttps(self) -> None:
         # Act
-        parsed = records._parse_s3_url("s3://http://s3-nue1.datev.cloud:443/tax-value-extraction")
+        parsed = records._parse_s3_url("s3://http://s3-nue1.datev.cloud:443/example-training-models")
 
         # Assert
         self.assertEqual(parsed["endpoint"], "https://s3-nue1.datev.cloud:443")
-        self.assertEqual(parsed["bucket"], "tax-value-extraction")
+        self.assertEqual(parsed["bucket"], "example-training-models")
         self.assertTrue(parsed["use_https"])
 
     def test_UpsertDeployedInstance_HttpsS3WithCaCertificate_PersistsS3CaForControlPlane(self) -> None:

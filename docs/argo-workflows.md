@@ -161,6 +161,25 @@ not automatically prepended to Argo artifact keys.
 
 ### Use the Profile in a Workflow
 
+Training-only workflows submitted through Triton Control can select an owned,
+linked profile by name instead of hardcoding a repository or Kubernetes Secrets:
+
+```yaml
+metadata:
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
+```
+
+The backend sets `artifactRepositoryRef` and supplies containers and scripts with
+`S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ADDRESSING_STYLE`, `AWS_DEFAULT_REGION`, and
+AWS credential Secret references. For a custom HTTPS CA it also mounts the public
+certificate and sets `AWS_CA_BUNDLE`. Leave these managed environment variables
+out of the submitted YAML. The profile must be linked in the submission namespace
+and owned by the submitting user. No deployment annotation is needed for training.
+
+For a workflow that only needs Argo artifact transfers, you can also select the
+repository directly:
+
 Copy the dialog's reference under workflow `spec`:
 
 ```yaml

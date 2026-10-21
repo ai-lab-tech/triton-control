@@ -172,7 +172,7 @@ class WorkflowsTests(unittest.TestCase):
             ready=True,
             status="ready",
             status_message="ok",
-            namespace="tax-argo",
+            namespace="training-argo",
             service_name="argo-server",
             base_path="/api/workflows/proxy/",
         )
@@ -464,13 +464,13 @@ class WorkflowsTests(unittest.TestCase):
     def test_ProxyUrl_PreservesPathAndQuery(self) -> None:
         result = proxy._http_url(
             "http://argo:2746",
-            "api/v1/workflows/tax-argo",
+            "api/v1/workflows/training-argo",
             [("listOptions.labelSelector", "app=test")],
         )
 
         self.assertEqual(
             result,
-            "http://argo:2746/api/v1/workflows/tax-argo?listOptions.labelSelector=app%3Dtest",
+            "http://argo:2746/api/v1/workflows/training-argo?listOptions.labelSelector=app%3Dtest",
         )
 
     def test_ProxyHelpers_WebsocketUrlAndProtocols(self) -> None:
