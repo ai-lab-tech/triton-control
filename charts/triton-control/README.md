@@ -211,14 +211,9 @@ mlflow:
   gatewayImage: nginx:1.28-alpine
 ```
 
-The server uses `<repository>:v<version>`. If you use the separately installed
-[`mlflow-triton-control`](../../plugins/mlflow-triton-control/README.md) deployment
-plugin, test it before changing your client
-MLflow version:
-
-```bash
-bash plugins/mlflow-triton-control/smoke-latest.sh 3.14.0
-```
+The server uses `<repository>:v<version>`. The separately installed
+[`mlflow-triton-control`](https://github.com/ai-lab-tech/mlflow-plugin) deployment
+plugin is maintained in its own repository.
 
 MLflow listens on pod loopback behind a gateway that accepts only a credential
 held by the Triton Control backend. Argo containers submitted through Triton
