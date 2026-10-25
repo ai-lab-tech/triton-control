@@ -1,130 +1,108 @@
-# Test `triton.log_training_artifacts()` with Iris
+# Iris sklearn: model, code and requirements
 
-Train an Iris classifier, log its training source and installed Python environment
-with `triton.log_training_artifacts()`, then register and deploy its ONNX model.
+Train an Iris classifier and use `mlflow.sklearn.log_model()` to save its
+trained model, training source and automatically inferred model dependencies.
+A simulated generator builds an ONNX Triton repository, uploads it once, and
+returns its S3 URI. The wrapper completes the Logged Model and registers it;
+the deploy step passes the concrete S3 URI to Triton Control.
 
-## Intended generation and deployment flow
+The classifier is a StandardScaler + LogisticRegression pipeline. The simulation
+loads the saved pipeline and converts it to ONNX with class labels and probabilities.
+
+This example uses Triton's ONNX Runtime backend. The real generator is simulated
+in `train.py`; the `triton-model-generator` repository is not called.
+
+## Generation and deployment flow
 
 ```mermaid
 flowchart TD
-    Code["Training code, including model class"] --> Log["triton.log_training_artifacts()"]
-    Env["Current training environment"] --> Log
-    Log --> Artifacts["MLflow artifacts: training code + requirements.txt"]
-    Artifacts --> Generate["generate: build Triton repository"]
-    Raw["Trained raw model / weights"] --> Generate
-    Generate --> Repository["Triton structure: model directory, version directory,<br/>config.pbtxt, model.py and model files"]
-    Repository --> LogModel["triton.log_model(): log completed repository"]
-    LogModel --> Deploy["Deploy repository with Triton Control"]
-    Deploy --> Serve["Triton serves the model"]
+    Source["Trained sklearn model + training source"] --> Log["mlflow.sklearn.log_model(code_paths=...)"]
+    Log --> Bundle["MLflow model in S3: model files + code/ + requirements.txt + MLmodel"]
+    Bundle --> Wrapper["generate_triton_repo(): allocate Logged Model"]
+    Wrapper --> Generator["simulate_triton_repository_generation(): download, convert, upload"]
+    Generator --> URI["Return repository S3 URI"]
+    URI --> Register["Add MLmodel, set READY, register model"]
+    Register --> Deploy["Deploy with Triton Control"]
 ```
 
-`log_training_artifacts()` captures the training code and automatically freezes
-the installed environment into `requirements.txt`. The generator then receives
-these artifacts together with the separately saved raw model and creates the
-Triton repository. Only after that repository exists is it logged with
-`triton.log_model()` and deployed.
+The simulator receives the saved model URI and the allocated output model ID.
+It downloads model files, code and requirements itself and loads the saved model.
+It copies requirements unchanged and records source files and URI in
+`training-metadata.json`. It uses predefined conversion and Triton configuration;
+it does not infer serving logic or dependencies from the source.
 
-The separate generator step shown here is the intended process. This example
-currently builds its ONNX repository directly in `train.py`; it does not yet
-invoke an external generator. A generated `model.py` applies to the Python backend;
-the ONNX backend uses the exported model file instead.
+`generate_triton_repo()` creates `triton-repository` using
+`MlflowClient.create_logged_model()`. The simulator uploads directly into that
+model's artifact location using `log_model_artifacts()`, resolving the managed
+MLflow artifact proxy to S3. The wrapper adds the `MLmodel` Triton-flavor descriptor,
+sets `READY`, and registers `models:/<model-id>`. Failures before completion mark
+the Logged Model `FAILED`. Repository files are uploaded once; only the descriptor
+is added afterward. There is no separate `triton.log_model()` call.
 
 ## 1. Prepare
 
-- Enable **MLflow** and **Argo Workflows** in Triton Control. Install MLflow with an S3 artifact profile.
-- Save an S3 profile under **Account → S3 Profiles** with read/write access to your bucket.
-- Link it under **Workflows → Configure S3 Secrets**. The workflow profile must also reach the MLflow artifact endpoint and bucket, with read permission for the logged models.
-- Allow workflow pods to download Python packages. Install a plugin release that
-  contains `triton.log_training_artifacts()` using the `mlflow-plugin-package`
-  parameter (a package version or wheel URL). The previously published `0.3.0`
-  does not contain this new function. The implementation in the separate
-  `mlflow-plugin` repository must be published or supplied as a wheel before running
-  this example.
+- Enable MLflow and Argo Workflows in Triton Control and configure MLflow with an S3 artifact profile.
+- Save an S3 profile under **Account → S3 Profiles** with read/write access to the bucket.
+- Link it under **Workflows → Configure S3 Secrets**. It must reach the MLflow artifact bucket and endpoint.
+- Allow workflow pods to install packages from PyPI. Deployment uses `mlflow-triton-control==0.3.1`.
 
-## 2. Upload `train.py` with Code-Server
+## 2. Upload source with Code-Server
 
-1. Open **Development** and create a workspace:
-   - Image: `nvcr.io/nvidia/tritonserver:26.06-py3`
-   - **Image already has Development installed**: disabled
-   - Storage: at least `5Gi`; GPUs: `0`
+1. Open **Development** and create a workspace with image `nvcr.io/nvidia/tritonserver:26.06-py3`, at least `5Gi` storage, and `0` GPUs. Disable **Image already has Development installed**.
 2. Wait for readiness and open code-server.
-3. Copy [train.py](train.py) and [workflow.yaml](workflow.yaml) into `/workspace/mlflow-iris-test-log_training_artifacts/`.
-4. In **Explorer**, right-click the folder → **S3 Operations → Choose Profile…** and select your linked S3 profile.
-5. Under **S3 · <profile> · <bucket>**, create `workflows/mlflow-iris-test-log_training_artifacts/`.
-6. Drag the local `train.py` into that S3 folder and wait for the upload to finish.
+3. Copy `train.py` and `workflow.yaml` into `/workspace/mlflow-iris-test-log_training_artifacts/`.
+4. In Explorer, right-click the folder → **S3 Operations → Choose Profile…** and select the linked S3 profile.
+5. Create `workflows/mlflow-iris-test-log_training_artifacts/` in the S3 browser.
+6. Upload `train.py` there and wait for completion.
 
-If your profile has a prefix such as `team-a`, include it in the full object key:
-`team-a/workflows/mlflow-iris-test-log_training_artifacts/train.py`.
+Include any profile prefix, such as `team-a/`, in the full workflow object keys.
 
 ## 3. Configure `workflow.yaml`
 
 | Value | Example |
 | --- | --- |
 | `metadata.name`: unused workflow name | `mlflow-iris-test-log-training-artifacts` |
-| Annotation `triton-control.ai/mlflow-s3-profile-name`: your profile name | `workflow-training` |
-| Annotation `triton-control.ai/mlflow-deployment-name`: deployment name | `iris-classifier` |
-| Parameter `s3-script-key`: uploaded script's full object key | `workflows/mlflow-iris-test-log_training_artifacts/train.py` |
-| Parameter `mlflow-plugin-package`: plugin distribution containing the new function | `mlflow-triton-control==<version-with-log-training-artifacts>` |
-| Parameter `triton-image`: serving image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+| Annotation `triton-control.ai/mlflow-s3-profile-name` | `workflow-training` |
+| Annotation `triton-control.ai/mlflow-deployment-name`: unused deployment name | `iris-classifier` |
+| `s3-script-key` | `workflows/mlflow-iris-test-log_training_artifacts/train.py` |
+| `mlflow-plugin-package` | `mlflow-triton-control==0.3.1` |
+| `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
-MLflow stores both logged models under its configured S3 artifact root. The training
-step returns the concrete Triton repository URI as an Argo output parameter; the
-deploy step uses that URI directly. Its path is independent of the script key.
-You only upload `train.py`; no separate model upload or repository-path input is needed.
-
-The deploy command reads its name from the deployment annotation. Keep the model name `iris_classifier`.
+The training step returns the generated repository's concrete S3 URI as an Argo
+output parameter. The deploy step uses that URI directly. The wrapper registers
+`iris-classifier-triton` and sets its `triton_model_uri` tag. No model upload or
+repository-path input is needed beyond uploading the source files.
 
 ## 4. Run
 
-1. Open **Workflows** in Triton Control.
-2. In the embedded Argo UI, click **Submit New Workflow**.
-3. Select **Edit using full workflow options** and paste the complete edited [workflow.yaml](workflow.yaml), or select it with **Upload File**.
-4. Check your S3 profile name, script key, workflow name, and deployment name.
-5. Click **Submit**, then open the created workflow.
-6. Click the **train** node and open its logs to follow training.
-7. After **train** succeeds, **deploy** starts automatically. Open its logs to follow deployment.
-8. Wait until both nodes show **Succeeded**, then continue to verification below.
+1. Open **Workflows** in Triton Control and click **Submit New Workflow** in Argo.
+2. Select **Edit using full workflow options** and paste the edited `workflow.yaml`, or use **Upload File**.
+3. Check profile, script keys, workflow name and deployment name, then submit.
+4. Follow the **train** logs; **deploy** starts after training succeeds.
+5. Wait until both nodes show **Succeeded**.
 
-Triton Control injects credentials automatically and records your user as the MLflow run creator.
-You do not need to copy a login token or set a creator tag.
-
-For another run, choose unused workflow and deployment names, or delete the previous ones first.
-The deployment plugin creates new deployments; it does not update existing ones.
+Triton Control injects credentials and records the submitting user as run creator.
+Use unused workflow and deployment names for another run, or remove the previous
+ones first. The deployment plugin creates deployments rather than updating them.
 
 ## 5. Verify
 
-In **MLflow**:
+In MLflow, open experiment **triton-autodeploy**:
 
-- Open experiment **triton-autodeploy** to see the run and accuracy.
-- In the run artifacts, check `training-artifacts/code/train.py` and
-  `training-artifacts/requirements.txt`. The plugin captures requirements with
-  `pip freeze` using the training process's Python interpreter. They describe the
-  installed training environment.
-- Open **Model Registry**:
+- `sklearn-checkpoint` must contain the serialized model, `code/train.py`, `requirements.txt` and `MLmodel`.
+- `triton-repository` must be `READY` and contain root `MLmodel` plus `iris_classifier/config.pbtxt`, `1/model.onnx`, `requirements.txt` and `training-metadata.json`.
+- Generated requirements must match the raw checkpoint's inferred requirements.
+- Registry entries `iris-classifier-sklearn` and `iris-classifier-triton` must reference the raw and generated models. Check the Triton version's `triton_model_uri` tag.
 
-| Registered model | Purpose | Check |
-| --- | --- | --- |
-| `iris-classifier-sklearn` | Original Python checkpoint; kept for evaluation or later training | `best-checkpoint` alias and `validation_accuracy` tag |
-| `iris-classifier-triton` | Exported ONNX repository served by Triton | Deployed version has `candidate`, `champion`, and `deployment_status=deployed` |
-
-Both models are saved through the MLflow proxy to its S3 artifact store.
-Argo does not make a separate serving-repository copy.
-Each run creates new versions; `best-checkpoint` changes only when accuracy improves.
-The registered Triton model version has a `triton_model_uri` tag containing the
-concrete S3 repository URI. Copy that value for manual deployment. Artifacts are
-uploaded when `log_model()` runs; registration records a version referencing them.
-
-A later training run can load the selected sklearn checkpoint directly:
+Load the raw checkpoint later with the corresponding MLflow flavor:
 
 ```python
-model = mlflow.sklearn.load_model("models:/iris-classifier-sklearn@best-checkpoint")
+model = mlflow.sklearn.load_model("models:/iris-classifier-sklearn/1")
 ```
 
-In **Triton Control**:
-
-1. Open **Triton Instances → iris-classifier** and check readiness.
-2. Open **Models → iris_classifier**, version **1**, then click **Infer**.
-3. Replace **JSON Body** with:
+In Triton Control, open **Triton Instances → iris-classifier** (or your chosen name)
+and check readiness. Under **Models → iris_classifier**, version **1**, click **Infer**
+and submit:
 
 ```json
 {
@@ -138,10 +116,10 @@ In **Triton Control**:
 }
 ```
 
-4. Click **Send / Infer**. The response contains a label and class probabilities.
-
+The response contains one class label and three class probabilities.
 
 ## 6. Manual CLI Verification
+
 
 Open your workspace's code-server from **Development**, then open its integrated
 terminal. Run these commands inside that workspace using the cluster-internal
@@ -167,7 +145,7 @@ value. The workflow's temporary deployment token is injected automatically and
 does not need to be copied for workflow execution.
 
 ```bash
-python3 -m pip install --user "mlflow-triton-control"
+python3 -m pip install --user "mlflow-triton-control==0.3.1"
 export PATH="$HOME/.local/bin:$PATH"
 export TRITON_CONTROL_TOKEN="<paste-your-login-access-token>"
 
@@ -198,5 +176,4 @@ curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
   }'
 ```
 
-The exact output names are also written to `training-metadata.json` in the S3
-model directory.
+The output names are also recorded in `training-metadata.json`.

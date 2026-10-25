@@ -1,0 +1,254 @@
+"""CIFAR-10 training from kuangliu/pytorch-cifar with a configurable entry point.
+
+See ../upstream-info.json and ../upstream.patch for provenance and local changes.
+Model architecture files are unchanged from upstream.
+"""
+
+import argparse
+from pathlib import Path
+
+import models
+import torch
+import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+
+MODEL_FACTORIES = {
+    "SimpleDLA": models.SimpleDLA,
+    "ResNet18": models.ResNet18,
+    "ResNet50": models.ResNet50,
+}
+
+
+def progress_bar(current, total, message):
+    """Report progress without upstream utils.py's mandatory stty/TTY lookup."""
+    if current == 0 or current + 1 == total or (current + 1) % 50 == 0:
+        print(f"[{current + 1}/{total}] {message}", flush=True)
+
+
+def run_training(
+    *,
+    epochs=200,
+    batch_size=128,
+    test_batch_size=100,
+    lr=0.1,
+    model_name="SimpleDLA",
+    data_dir="./data",
+    checkpoint_dir="./checkpoint",
+    device="auto",
+    num_workers=2,
+    resume=False,
+    on_epoch_end=None,
+):
+    """Run the original augmentation, SGD training and best-checkpoint evaluation.
+
+    Return the final network, metrics, normalized real input samples and checkpoint
+    path. on_epoch_end(epoch, metrics) lets the caller log without importing MLflow
+    here. Resume restores the upstream best weights, not optimizer/scheduler state.
+    """
+    if (
+        epochs < 1
+        or batch_size < 1
+        or test_batch_size < 1
+        or num_workers < 0
+        or lr <= 0
+    ):
+        raise ValueError(
+            "Epochs, batch sizes and learning rate must be positive; workers >= 0"
+        )
+    if model_name not in MODEL_FACTORIES:
+        raise ValueError(f"Choose a model from {tuple(MODEL_FACTORIES)}")
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device not in {"cpu", "cuda"}:
+        raise ValueError("device must be auto, cpu or cuda")
+    if device == "cuda" and not torch.cuda.is_available():
+        raise ValueError("CUDA was requested, but no CUDA GPU is available")
+    checkpoint_path = Path(checkpoint_dir) / "ckpt.pth"
+    if checkpoint_path.exists() and not resume:
+        raise FileExistsError("Use a fresh checkpoint directory or enable resume")
+    best_acc = 0  # best test accuracy
+    start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+
+    # Data
+    print("==> Preparing data..")
+    transform_train = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+
+    transform_test = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+
+    trainset = torchvision.datasets.CIFAR10(
+        root=str(data_dir), train=True, download=True, transform=transform_train
+    )
+    trainloader = torch.utils.data.DataLoader(
+        trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+    )
+
+    testset = torchvision.datasets.CIFAR10(
+        root=str(data_dir), train=False, download=True, transform=transform_test
+    )
+    testloader = torch.utils.data.DataLoader(
+        testset, batch_size=test_batch_size, shuffle=False, num_workers=num_workers
+    )
+
+    classes = (
+        "plane",
+        "car",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck",
+    )
+
+    # Model
+    print("==> Building model..")
+    net = MODEL_FACTORIES[model_name]()
+    net = net.to(device)
+    if device == "cuda":
+        net = torch.nn.DataParallel(net)
+        cudnn.benchmark = True
+
+    if resume:
+        # Load checkpoint.
+        print("==> Resuming from checkpoint..")
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+        net.load_state_dict(checkpoint["net"])
+        best_acc = checkpoint["acc"]
+        start_epoch = checkpoint["epoch"] + 1
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+    # Training
+    def train(epoch):
+        print("\nEpoch: %d" % epoch)
+        net.train()
+        train_loss = 0
+        correct = 0
+        total = 0
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+
+            progress_bar(
+                batch_idx,
+                len(trainloader),
+                "Loss: %.3f | Acc: %.3f%% (%d/%d)"
+                % (
+                    train_loss / (batch_idx + 1),
+                    100.0 * correct / total,
+                    correct,
+                    total,
+                ),
+            )
+
+        return {
+            "train_loss": train_loss / len(trainloader),
+            "train_accuracy": correct / total,
+        }
+
+    def test(epoch):
+        nonlocal best_acc
+        net.eval()
+        test_loss = 0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(testloader):
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = net(inputs)
+                loss = criterion(outputs, targets)
+
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+
+                progress_bar(
+                    batch_idx,
+                    len(testloader),
+                    "Loss: %.3f | Acc: %.3f%% (%d/%d)"
+                    % (
+                        test_loss / (batch_idx + 1),
+                        100.0 * correct / total,
+                        correct,
+                        total,
+                    ),
+                )
+
+        # Save checkpoint.
+        acc = 100.0 * correct / total
+        if acc > best_acc or not checkpoint_path.exists():
+            print("Saving..")
+            state = {
+                "net": net.state_dict(),
+                "acc": acc,
+                "epoch": epoch,
+            }
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(state, checkpoint_path)
+            best_acc = acc
+
+        return {"test_loss": test_loss / len(testloader), "test_accuracy": acc / 100.0}
+
+    for epoch in range(start_epoch, start_epoch + epochs):
+        metrics = {**train(epoch), **test(epoch)}
+        scheduler.step()
+        if on_epoch_end is not None:
+            on_epoch_end(epoch, metrics)
+
+    return {
+        "model": net,
+        "metrics": {**metrics, "best_test_accuracy": best_acc / 100.0},
+        "input_example": torch.stack([testset[index][0] for index in range(2)]),
+        "classes": classes,
+        "checkpoint": checkpoint_path,
+    }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="PyTorch CIFAR-10 training")
+    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--test-batch-size", type=int, default=100)
+    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument(
+        "--model",
+        dest="model_name",
+        choices=tuple(MODEL_FACTORIES),
+        default="SimpleDLA",
+    )
+    parser.add_argument("--data-dir", default="./data")
+    parser.add_argument("--checkpoint-dir", default="./checkpoint")
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--num-workers", type=int, default=2)
+    parser.add_argument("--resume", action="store_true")
+    result = run_training(**vars(parser.parse_args()))
+    print(result["metrics"])

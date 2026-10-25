@@ -1,0 +1,100 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: mlflow-cifar-pytorch
+  labels:
+    app.kubernetes.io/name: mlflow-cifar-pytorch
+    app.kubernetes.io/part-of: triton-control-examples
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
+spec:
+  entrypoint: train
+  ttlStrategy:
+    secondsAfterCompletion: 86400
+  arguments:
+    parameters:
+      - name: s3-source-key
+        value: workflows/mlflow-cifar-pytorch/source.tar.gz
+      - name: training-image
+        value: nvcr.io/nvidia/pytorch:26.06-py3
+      - name: model
+        value: SimpleDLA
+      - name: epochs
+        value: "1"
+      - name: batch-size
+        value: "128"
+      - name: test-batch-size
+        value: "100"
+      - name: learning-rate
+        value: "0.1"
+      - name: device
+        value: cuda
+      - name: num-workers
+        value: "2"
+      - name: registered-model-name
+        value: cifar10-pytorch
+  templates:
+    - name: train
+      inputs:
+        artifacts:
+          - name: training-source
+            path: /workspace/source
+            archive:
+              tar: {}
+            s3:
+              key: "{{workflow.parameters.s3-source-key}}"
+      container:
+        image: "{{workflow.parameters.training-image}}"
+        imagePullPolicy: IfNotPresent
+        command: [sh, -ec]
+        args:
+          - |
+            python -m pip install --no-cache-dir --target /tmp/mlflow-packages "mlflow>=3.14,<4"
+            export PYTHONPATH="/tmp/mlflow-packages${PYTHONPATH:+:$PYTHONPATH}"
+            python /workspace/source/train.py \
+              --model "$CIFAR_MODEL" --epochs "$CIFAR_EPOCHS" \
+              --batch-size "$CIFAR_BATCH_SIZE" --test-batch-size "$CIFAR_TEST_BATCH_SIZE" \
+              --lr "$CIFAR_LR" --device "$CIFAR_DEVICE" \
+              --num-workers "$CIFAR_WORKERS" --registered-model-name "$CIFAR_REGISTRY"
+        env:
+          - name: TRAINING_IMAGE
+            value: "{{workflow.parameters.training-image}}"
+          - name: MLFLOW_EXPERIMENT_NAME
+            value: cifar-pytorch
+          - name: ARGO_WORKFLOW_NAME
+            value: "{{workflow.name}}"
+          - name: MLFLOW_MODEL_URI_OUTPUT
+            value: /tmp/mlflow-model-uri
+          - name: CIFAR_MODEL
+            value: "{{workflow.parameters.model}}"
+          - name: CIFAR_EPOCHS
+            value: "{{workflow.parameters.epochs}}"
+          - name: CIFAR_BATCH_SIZE
+            value: "{{workflow.parameters.batch-size}}"
+          - name: CIFAR_TEST_BATCH_SIZE
+            value: "{{workflow.parameters.test-batch-size}}"
+          - name: CIFAR_LR
+            value: "{{workflow.parameters.learning-rate}}"
+          - name: CIFAR_DEVICE
+            value: "{{workflow.parameters.device}}"
+          - name: CIFAR_WORKERS
+            value: "{{workflow.parameters.num-workers}}"
+          - name: CIFAR_REGISTRY
+            value: "{{workflow.parameters.registered-model-name}}"
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+      outputs:
+        parameters:
+          - name: mlflow-model-uri
+            valueFrom:
+              path: /tmp/mlflow-model-uri

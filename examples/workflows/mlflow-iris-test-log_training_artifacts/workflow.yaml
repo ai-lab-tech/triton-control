@@ -22,7 +22,7 @@ spec:
       - name: s3-script-key
         value: workflows/mlflow-iris-test-log_training_artifacts/train.py
       - name: mlflow-plugin-package
-        value: mlflow-triton-control
+        value: mlflow-triton-control==0.3.1
       - name: triton-image
         value: nvcr.io/nvidia/tritonserver:26.06-py3
   templates:
@@ -36,8 +36,6 @@ spec:
             template: deploy
             arguments:
               parameters:
-                - name: triton-model-version
-                  value: "{{tasks.train.outputs.parameters.triton-model-version}}"
                 - name: triton-model-uri
                   value: "{{tasks.train.outputs.parameters.triton-model-uri}}"
 
@@ -59,7 +57,7 @@ spec:
             export HOME=/tmp
             python -m pip install --no-cache-dir --target /tmp/python-packages \
               "mlflow>=3.14,<4" \
-              "{{workflow.parameters.mlflow-plugin-package}}" \
+              "httpx>=0.27,<1" \
               "numpy>=1.26,<3" \
               "onnx>=1.17,<2" \
               "scikit-learn>=1.5,<2" \
@@ -79,8 +77,6 @@ spec:
             value: "{{workflow.uid}}"
           - name: TRITON_MODEL_URI_OUTPUT
             value: /tmp/triton-model-uri
-          - name: TRITON_MODEL_VERSION_OUTPUT
-            value: /tmp/triton-model-version
         resources:
           requests:
             cpu: 250m
@@ -94,9 +90,6 @@ spec:
             drop: ["ALL"]
       outputs:
         parameters:
-          - name: triton-model-version
-            valueFrom:
-              path: /tmp/triton-model-version
           - name: triton-model-uri
             valueFrom:
               path: /tmp/triton-model-uri
@@ -104,7 +97,6 @@ spec:
     - name: deploy
       inputs:
         parameters:
-          - name: triton-model-version
           - name: triton-model-uri
       container:
         image: python:3.12-slim
@@ -125,14 +117,9 @@ spec:
               -C s3_profile_id="$TRITON_CONTROL_S3_PROFILE_ID" \
               -C image="{{workflow.parameters.triton-image}}" \
               -C wait_timeout_seconds=600
-            python -c 'import os; from mlflow import MlflowClient; client = MlflowClient(); name = os.environ["MLFLOW_TRITON_REGISTERED_MODEL_NAME"]; version = os.environ["MLFLOW_TRITON_MODEL_VERSION"]; client.set_model_version_tag(name=name, version=version, key="deployment_status", value="deployed"); client.set_registered_model_alias(name=name, alias="champion", version=version)'
         env:
           - name: TRITON_MODEL_URI
             value: "{{inputs.parameters.triton-model-uri}}"
-          - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
-            value: iris-classifier-triton
-          - name: MLFLOW_TRITON_MODEL_VERSION
-            value: "{{inputs.parameters.triton-model-version}}"
         resources:
           requests:
             cpu: 100m

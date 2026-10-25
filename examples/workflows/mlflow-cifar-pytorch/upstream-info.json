@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/kuangliu/pytorch-cifar",
+  "commit": "49b7aa97b0c12fe0d4054e670403a16b6b834ddd",
+  "archive_url": "https://codeload.github.com/kuangliu/pytorch-cifar/tar.gz/49b7aa97b0c12fe0d4054e670403a16b6b834ddd",
+  "archive_sha256": "fa444ec7e3e387f003e71de666edeb5adb1a7bfe761ad6f9754c4b827c21a0e1",
+  "original_file_sha256": {
+    "LICENSE": "c1ae623a43452c53afe03e2e04c81aee0cb1e06e9274a06de8c60908c9d048f0",
+    "README.md": "5e6cbde3f442b11e44cf875af9e8054c657076b8c564d060ecb64b637a10851a",
+    "main.py": "4c6f2ea40e48ad05f2963efa66ff46b36b6c921f1846583dc3b213c3fcf0a2d0",
+    "models/__init__.py": "52e08c404afcaffc95c5d38ea4f2850f3ba66742fcac3409464ebf61a35ff3f3",
+    "models/densenet.py": "617c3a85b760e5606d75e45453ee3c90f7eedea4bf0070ffafc6ed4424249290",
+    "models/dla.py": "110e9b7317f74d51a1c859bb672ff9e9ca7016a389b7abf0491228fb528c0d59",
+    "models/dla_simple.py": "c7454baa2ed7e71406275f4232f29e2b4d4a9034cc9cc3d724e65839f62beea1",
+    "models/dpn.py": "d99b63939f23dd1cbc18c1432de2b8f63a7d4248729f45d31e9092d7919c1b37",
+    "models/efficientnet.py": "58adf6107ffbe8cf073d03da21c804e38fde8593695542ef7ae5e7c32d86f333",
+    "models/googlenet.py": "165d505255db8e9f38d1dc041a7f1541904aa2f229aff725262ce00bbf2cdd70",
+    "models/lenet.py": "bb87a7053653351d346f3b69a7f3713567cd9a9fa74a5d3454af9f5e24b867db",
+    "models/mobilenet.py": "3f6ef2c6371289b50908f1b60c4c533c025ec120294e802861c373fe853761ff",
+    "models/mobilenetv2.py": "7e5ee0d8d9ecd923fb9acb28499d44554d57091f5f81375e1a731d8624d928b0",
+    "models/pnasnet.py": "f6421290b066d8e1ea9d983def4c390431c8679a73c58faabf67dd6bee34cecf",
+    "models/preact_resnet.py": "3cb4ae02d7c419dc3b9adccc47617e0310805c3cfa07dfee1b73816a5ff2a04a",
+    "models/regnet.py": "a694137f828af1ba5eca57a28f8d8c59c5932b5361bd86b33a241c3cd0013c32",
+    "models/resnet.py": "7bcbe6bba6544645a5da6037bf3e5ddf90e97d0b3ef4183be90e17a0443b4510",
+    "models/resnext.py": "da94de29613d495384ec8ae4a24031149798e1a541b96bca0d7323da6a70b098",
+    "models/senet.py": "d790bd677eec6ff126c686731624f8634361d7d21742ddeea0aa37cad72f6071",
+    "models/shufflenet.py": "49e88cb68accd64351bf4bcccc53ce8de7f9a45b8d9c0c36e5d534f6b2a91390",
+    "models/shufflenetv2.py": "5fa2c82d48ee9feec75c44126f75bfe33050c63f8b1e626251635b9c86678f25",
+    "models/vgg.py": "20f9a5ef048ef91c3144ecbb22708347d48299ad419bbfc122b74ceed89d3016",
+    "utils.py": "ac04aa21d03d96c4273b779ff9de0956cd37d073d93cfcf1e1f92e9bb5f17b20"
+  },
+  "modified_file_sha256": {
+    "main.py": "f6133349ba82f2704b8c7e9d7edc4fac9a5535d2ffbf6e3474876bca4e3f816a"
+  },
+  "patch_sha256": "3b4ee3ef229cd60e288f7fa32db005bace155a53c0139f8052ba00a0a799d3d1"
+}
