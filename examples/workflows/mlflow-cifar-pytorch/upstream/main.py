@@ -44,7 +44,7 @@ def run_training(
 ):
     """Run the original augmentation, SGD training and best-checkpoint evaluation.
 
-    Return the final network, metrics, normalized real input samples and checkpoint
+    Return the final network, metrics and checkpoint
     path. on_epoch_end(epoch, metrics) lets the caller log without importing MLflow
     here. Resume restores the upstream best weights, not optimizer/scheduler state.
     """
@@ -102,19 +102,6 @@ def run_training(
     )
     testloader = torch.utils.data.DataLoader(
         testset, batch_size=test_batch_size, shuffle=False, num_workers=num_workers
-    )
-
-    classes = (
-        "plane",
-        "car",
-        "bird",
-        "cat",
-        "deer",
-        "dog",
-        "frog",
-        "horse",
-        "ship",
-        "truck",
     )
 
     # Model
@@ -227,8 +214,6 @@ def run_training(
     return {
         "model": net,
         "metrics": {**metrics, "best_test_accuracy": best_acc / 100.0},
-        "input_example": torch.stack([testset[index][0] for index in range(2)]),
-        "classes": classes,
         "checkpoint": checkpoint_path,
     }
 

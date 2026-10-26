@@ -1,0 +1,129 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: mlflow-t5-billsum
+  labels:
+    app.kubernetes.io/name: mlflow-t5-billsum
+    app.kubernetes.io/part-of: triton-control-examples
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
+spec:
+  entrypoint: train
+  podSpecPatch: '{"runtimeClassName":"nvidia"}'
+  ttlStrategy:
+    secondsAfterCompletion: 86400
+  arguments:
+    parameters:
+      - name: s3-source-key
+        value: workflows/mlflow-t5-billsum/source.tar.gz
+      - name: training-image
+        value: nvcr.io/nvidia/tritonserver:26.06-py3
+      - name: model
+        value: google-t5/t5-small
+      - name: epochs
+        value: "1"
+      - name: batch-size
+        value: "4"
+      - name: eval-batch-size
+        value: "4"
+      - name: learning-rate
+        value: "0.00005"
+      - name: max-source-length
+        value: "512"
+      - name: max-target-length
+        value: "128"
+      - name: max-train-samples
+        value: "0"
+      - name: max-eval-samples
+        value: "0"
+      - name: device
+        value: cuda
+      - name: registered-model-name
+        value: t5-billsum
+  templates:
+    - name: train
+      inputs:
+        artifacts:
+          - name: training-source
+            path: /workspace/source
+            archive:
+              tar: {}
+            s3:
+              key: "{{workflow.parameters.s3-source-key}}"
+      container:
+        image: "{{workflow.parameters.training-image}}"
+        imagePullPolicy: IfNotPresent
+        command: [sh, -ec]
+        args:
+          - |
+            python3 -m venv --system-site-packages --without-pip /tmp/training-env
+            if [ "$T5_DEVICE" = "cpu" ]; then
+              T5_TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+            else
+              T5_TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
+            fi
+            python3 -m pip --python /tmp/training-env install --no-cache-dir \
+              "torch==2.11.0" "torchvision==0.26.0" --index-url "$T5_TORCH_INDEX_URL"
+            python3 -m pip --python /tmp/training-env install --no-cache-dir \
+              -r /workspace/source/requirements-training.txt
+            /tmp/training-env/bin/python /workspace/source/train.py \
+              --model "$T5_MODEL" --epochs "$T5_EPOCHS" \
+              --batch-size "$T5_BATCH_SIZE" --eval-batch-size "$T5_EVAL_BATCH_SIZE" \
+              --learning-rate "$T5_LR" --device "$T5_DEVICE" \
+              --max-source-length "$T5_SOURCE_LENGTH" --max-target-length "$T5_TARGET_LENGTH" \
+              --max-train-samples "$T5_TRAIN_SAMPLES" --max-eval-samples "$T5_EVAL_SAMPLES" \
+              --registered-model-name "$T5_REGISTRY"
+        env:
+          - name: TRAINING_IMAGE
+            value: "{{workflow.parameters.training-image}}"
+          - name: MLFLOW_EXPERIMENT_NAME
+            value: t5-billsum
+          - name: ARGO_WORKFLOW_NAME
+            value: "{{workflow.name}}"
+          - name: MLFLOW_MODEL_URI_OUTPUT
+            value: /tmp/mlflow-model-uri
+          - name: HF_HOME
+            value: /tmp/huggingface
+          - name: NLTK_DATA
+            value: /tmp/nltk_data
+          - name: TOKENIZERS_PARALLELISM
+            value: "false"
+          - name: T5_MODEL
+            value: "{{workflow.parameters.model}}"
+          - name: T5_EPOCHS
+            value: "{{workflow.parameters.epochs}}"
+          - name: T5_BATCH_SIZE
+            value: "{{workflow.parameters.batch-size}}"
+          - name: T5_EVAL_BATCH_SIZE
+            value: "{{workflow.parameters.eval-batch-size}}"
+          - name: T5_LR
+            value: "{{workflow.parameters.learning-rate}}"
+          - name: T5_SOURCE_LENGTH
+            value: "{{workflow.parameters.max-source-length}}"
+          - name: T5_TARGET_LENGTH
+            value: "{{workflow.parameters.max-target-length}}"
+          - name: T5_TRAIN_SAMPLES
+            value: "{{workflow.parameters.max-train-samples}}"
+          - name: T5_EVAL_SAMPLES
+            value: "{{workflow.parameters.max-eval-samples}}"
+          - name: T5_DEVICE
+            value: "{{workflow.parameters.device}}"
+          - name: T5_REGISTRY
+            value: "{{workflow.parameters.registered-model-name}}"
+        resources:
+          requests:
+            cpu: "2"
+            memory: 6Gi
+          limits:
+            cpu: "4"
+            memory: 12Gi
+            nvidia.com/gpu: "1"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+      outputs:
+        parameters:
+          - name: mlflow-model-uri
+            valueFrom:
+              path: /tmp/mlflow-model-uri

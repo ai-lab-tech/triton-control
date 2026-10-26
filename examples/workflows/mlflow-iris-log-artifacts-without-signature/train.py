@@ -14,7 +14,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import onnx
-from mlflow.models import Model, infer_signature
+from mlflow.models import Model
 from mlflow.tracking import MlflowClient
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
@@ -224,7 +224,6 @@ def main() -> None:
     )
     model.fit(x_train, y_train)
     predictions = model.predict(x_test)
-    model_outputs = predictions
     training_params = {
         "model": "StandardScaler + LogisticRegression",
         "max_iter": 250,
@@ -267,14 +266,11 @@ def main() -> None:
         ### log raw model ###
         ######################
         code_paths = [str(Path(__file__).resolve())]
-        logging_options = {
-            "name": f"{FRAMEWORK}-checkpoint",
-            "signature": infer_signature(x_test, model_outputs),
-            "input_example": x_test[:2],
-            "registered_model_name": raw_registry_name,
-        }
         raw_model_info = mlflow.sklearn.log_model(
-            sk_model=model, code_paths=code_paths, **logging_options
+            sk_model=model,
+            name=f"{FRAMEWORK}-checkpoint",
+            code_paths=code_paths,
+            registered_model_name=raw_registry_name,
         )
 
         ######################
@@ -288,6 +284,9 @@ def main() -> None:
         Path(os.environ["TRITON_MODEL_URI_OUTPUT"]).write_text(
             repository_uri, encoding="utf-8"
         )
+
+        #### 
+        # deploy 
 
     print(
         json.dumps(

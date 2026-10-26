@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/huggingface/transformers",
+  "revision": "v4.57.1",
+  "files_sha256": {
+    "run_summarization.py": "f725bd0411bc91add674b1250e1072d447aa64cbacf21b019b694580a29dcdbd",
+    "LICENSE": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049"
+  }
+}

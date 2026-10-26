@@ -55,7 +55,7 @@ the cosine schedule runs over that configured training duration.
 
 Training keeps the original random crop, horizontal flip, normalization,
 cross-entropy loss, SGD momentum/weight decay and cosine scheduler. The adapted
-entry point returns metrics and real normalized example images, and calls an
+entry point returns the trained model, metrics and checkpoint path, and calls an
 optional epoch callback. It uses plain log lines instead of importing the original
 TTY-dependent progress bar. Importing `main.py` does not download data or train.
 
@@ -129,21 +129,25 @@ Under **Models**, `pytorch-checkpoint` contains:
 - The actual final trained network under `data/` and the root `MLmodel` descriptor.
 - `code/models/`, original helper source, adapted `main.py`, and wrapper `train.py`.
 - MLflow's automatically inferred `requirements.txt`, `conda.yaml` and `python_env.yaml`.
-- License, upstream provenance, local patch and `inference-metadata.json` under `extra_files/`.
+- License, upstream provenance and local patch under `extra_files/`.
 
 The registry contains a new `cifar10-pytorch` version (unless overridden). The
 run's `checkpoints/ckpt.pth` retains the best evaluation checkpoint separately;
 the logged model is the final network. The workflow returns its
 `models:/<model-id>` URI as `mlflow-model-uri`.
 
-The model's native input is **normalized FP32 NCHW tensors** with shape
-`(batch, 3, 32, 32)`, not image bytes. Output is ten logits. Normalization happens
-in the original data transforms, outside `forward()`; its exact values and class
-order are recorded in the metadata for future generation. Training augmentation
-is not a serving operation.
+The logging step assumes the model's input interface is unknown. It does not
+extract an input example, run an additional prediction, infer a signature or
+write inference metadata. It saves the model using `serialization_format="pickle"`,
+which does not require `input_example`. Training retains its normal evaluation
+loop. A future generator can inspect the saved model and code to determine the
+serving interface.
 
 Requirements describe MLflow's inferred model environment. The workflow does not
 freeze every installed package or infer extra packages for a future Triton backend.
+Without an input example, dependency inference observes model loading; dependencies
+imported only during prediction may be missed. If inference fails, MLflow falls
+back to its default PyTorch requirements.
 NVIDIA images can contain vendor/pre-release PyTorch builds; reconstructing their
 environment from public PyPI alone may not work. Retain the training-image identity
 along with the captured dependency versions when testing generator portability.

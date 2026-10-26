@@ -7,13 +7,11 @@ import importlib.util
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import mlflow
 import mlflow.pytorch
 import torch
-from mlflow.models import infer_signature
 
 ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT / "upstream"
@@ -104,42 +102,23 @@ def main():
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
         model = model.cpu().eval()
-        input_example = result["input_example"].cpu()
-        with torch.no_grad():
-            predictions = model(input_example).numpy()
-        metadata = {
-            "classes": result["classes"],
-            "input": "normalized FP32 NCHW tensors, shape (batch, 3, 32, 32)",
-            "normalization": {
-                "mean": [0.4914, 0.4822, 0.4465],
-                "std": [0.2023, 0.1994, 0.2010],
-                "included_in_model_forward": False,
-            },
-            "output": "ten class logits in the documented class order",
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            metadata_file = Path(temp) / "inference-metadata.json"
-            metadata_file.write_text(json.dumps(metadata, indent=2))
-            info = mlflow.pytorch.log_model(
-                pytorch_model=model,
-                name="pytorch-checkpoint",
-                serialization_format="pickle",
-                code_paths=[
-                    str(UPSTREAM / "models"),
-                    str(UPSTREAM / "main.py"),
-                    str(UPSTREAM / "utils.py"),
-                    str(Path(__file__).resolve()),
-                ],
-                extra_files=[
-                    str(metadata_file),
-                    str(UPSTREAM / "LICENSE"),
-                    str(ROOT / "upstream-info.json"),
-                    str(ROOT / "upstream.patch"),
-                ],
-                input_example=input_example.numpy(),
-                signature=infer_signature(input_example.numpy(), predictions),
-                registered_model_name=args.registered_model_name,
-            )
+        info = mlflow.pytorch.log_model(
+            pytorch_model=model,
+            name="pytorch-checkpoint",
+            serialization_format="pickle",
+            code_paths=[
+                str(UPSTREAM / "models"),
+                str(UPSTREAM / "main.py"),
+                str(UPSTREAM / "utils.py"),
+                str(Path(__file__).resolve()),
+            ],
+            extra_files=[
+                str(UPSTREAM / "LICENSE"),
+                str(ROOT / "upstream-info.json"),
+                str(ROOT / "upstream.patch"),
+            ],
+            registered_model_name=args.registered_model_name,
+        )
         mlflow.log_metrics(result["metrics"])
         mlflow.log_artifact(str(result["checkpoint"]), artifact_path="checkpoints")
         output_file = os.getenv("MLFLOW_MODEL_URI_OUTPUT")

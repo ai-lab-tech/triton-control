@@ -11,22 +11,28 @@ from urllib.parse import unquote, urlsplit
 
 import httpx
 import mlflow
+import mlflow.sklearn
 import numpy as np
 import onnx
 from mlflow.models import Model, infer_signature
 from mlflow.tracking import MlflowClient
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 from sklearn.datasets import load_iris
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
-FRAMEWORK = "pytorch"
-MODEL_NAME = "iris_pytorch_classifier"
+FRAMEWORK = "sklearn"
+MODEL_NAME = "iris_classifier"
 OUTPUT_ROOT = Path(os.getenv("TRITON_REPOSITORY_DIR", "/tmp/model-repository"))
 
 
 # Simulates generator
 def simulate_triton_repository_generation(model_uri: str, output_model_id: str) -> str:
-    """Simulate generation from a complete saved MLflow pytorch model directory.
+    """Simulate generation from a complete saved MLflow sklearn model directory.
 
     Download model files, code and MLflow-inferred requirements together. Load the
     saved model rather than reuse the training process's in-memory model. The
@@ -76,40 +82,15 @@ output [
 '''
 
     version_dir.mkdir(parents=True, exist_ok=True)
-    import torch
-    from mlflow import pytorch as mlflow_pytorch
-
-    trained_raw_model = mlflow_pytorch.load_model(str(bundle), map_location="cpu")
-    trained_raw_model.eval()
-
-    class ServingModel(torch.nn.Module):
-        """Simulation-specific ONNX outputs for the saved Iris network."""
-
-        def __init__(self, model):
-            super().__init__()
-            self.model = model
-
-        def forward(self, features):
-            probabilities = torch.softmax(self.model(features), dim=1)
-            return torch.argmax(probabilities, dim=1), probabilities
-
-    with torch.no_grad():
-        torch.onnx.export(
-            ServingModel(trained_raw_model).eval(),
-            (torch.zeros(2, 4, dtype=torch.float32),),
-            str(version_dir / "model.onnx"),
-            input_names=["input"],
-            output_names=["label", "probabilities"],
-            dynamic_axes={
-                "input": {0: "batch"},
-                "label": {0: "batch"},
-                "probabilities": {0: "batch"},
-            },
-            opset_version=17,
-            dynamo=False,
-        )
-    onnx_model = onnx.load(version_dir / "model.onnx")
-    source_flavor = "pytorch"
+    trained_raw_model = mlflow.sklearn.load_model(str(bundle))
+    onnx_model = convert_sklearn(
+        trained_raw_model,
+        initial_types=[("input", FloatTensorType([None, 4]))],
+        options={id(trained_raw_model.named_steps["classifier"]): {"zipmap": False}},
+        target_opset=17,
+    )
+    onnx.save_model(onnx_model, version_dir / "model.onnx")
+    source_flavor = "sklearn"
     onnx.checker.check_model(onnx_model)
     output_names = [value.name for value in onnx_model.graph.output]
     if len(output_names) != 2:
@@ -235,30 +216,18 @@ def main() -> None:
         random_state=42,
         stratify=labels,
     )
-    import torch
-    from iris_pytorch import IrisClassifier
-
-    torch.manual_seed(42)
-    torch.set_num_threads(1)
-    model = IrisClassifier(x_train.mean(axis=0), x_train.std(axis=0))
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
-    criterion = torch.nn.CrossEntropyLoss()
-    features_tensor = torch.from_numpy(x_train)
-    labels_tensor = torch.from_numpy(y_train).long()
-    model.train()
-    for _ in range(250):
-        optimizer.zero_grad()
-        loss = criterion(model(features_tensor), labels_tensor)
-        loss.backward()
-        optimizer.step()
-    model.eval()
-    with torch.no_grad():
-        model_outputs = model(torch.from_numpy(x_test)).numpy()
-    predictions = model_outputs.argmax(axis=1)
+    model = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("classifier", LogisticRegression(max_iter=250, random_state=42)),
+        ]
+    )
+    model.fit(x_train, y_train)
+    predictions = model.predict(x_test)
+    model_outputs = predictions
     training_params = {
-        "model": "IrisClassifier",
-        "epochs": 250,
-        "learning_rate": 0.02,
+        "model": "StandardScaler + LogisticRegression",
+        "max_iter": 250,
     }
     accuracy = float(accuracy_score(y_test, predictions))
 
@@ -270,10 +239,10 @@ def main() -> None:
         mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "triton-autodeploy"))
     raw_registry_name = os.getenv(
-        "MLFLOW_PYTORCH_REGISTERED_MODEL_NAME", "iris-classifier-pytorch"
+        "MLFLOW_SKLEARN_REGISTERED_MODEL_NAME", "iris-classifier-sklearn"
     )
     triton_registry_name = os.getenv(
-        "MLFLOW_TRITON_REGISTERED_MODEL_NAME", "iris-pytorch-triton"
+        "MLFLOW_TRITON_REGISTERED_MODEL_NAME", "iris-classifier-triton"
     )
 
     with mlflow.start_run(run_name=os.getenv("ARGO_WORKFLOW_NAME", "iris-autodeploy")):
@@ -304,14 +273,8 @@ def main() -> None:
             "input_example": x_test[:2],
             "registered_model_name": raw_registry_name,
         }
-        from mlflow import pytorch as mlflow_pytorch
-
-        code_paths.append(str(Path(__file__).with_name("iris_pytorch.py").resolve()))
-        raw_model_info = mlflow_pytorch.log_model(
-            pytorch_model=model,
-            code_paths=code_paths,
-            serialization_format="pickle",
-            **logging_options,
+        raw_model_info = mlflow.sklearn.log_model(
+            sk_model=model, code_paths=code_paths, **logging_options
         )
 
         ######################
@@ -325,6 +288,9 @@ def main() -> None:
         Path(os.environ["TRITON_MODEL_URI_OUTPUT"]).write_text(
             repository_uri, encoding="utf-8"
         )
+
+        #### 
+        # deploy 
 
     print(
         json.dumps(

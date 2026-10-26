@@ -2,13 +2,13 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   # Token delegation currently requires a fixed, DNS-compatible workflow name.
-  name: mlflow-iris-pytorch-test-log-training-artifacts
+  name: mlflow-iris-no-signature-1026
   labels:
-    app.kubernetes.io/name: mlflow-iris-pytorch-test-log-training-artifacts
+    app.kubernetes.io/name: mlflow-iris-log-artifacts-without-signature
     app.kubernetes.io/part-of: triton-control-examples
   annotations:
     triton-control.ai/mlflow-deploy-template: deploy
-    triton-control.ai/mlflow-deployment-name: iris-pytorch
+    triton-control.ai/mlflow-deployment-name: iris-classifier-no-signature
     # User-owned profile for the script and Triton reads; must reach the MLflow artifact bucket.
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 spec:
@@ -20,9 +20,7 @@ spec:
   arguments:
     parameters:
       - name: s3-script-key
-        value: workflows/mlflow-iris-pytorch-test-log_training_artifacts/train.py
-      - name: s3-model-code-key
-        value: workflows/mlflow-iris-pytorch-test-log_training_artifacts/iris_pytorch.py
+        value: workflows/mlflow-iris-log-artifacts-without-signature/train.py
       - name: mlflow-plugin-package
         value: mlflow-triton-control==0.3.1
       - name: triton-image
@@ -50,12 +48,6 @@ spec:
               none: {}
             s3:
               key: "{{workflow.parameters.s3-script-key}}"
-          - name: pytorch-model-code
-            path: /tmp/training-code/iris_pytorch.py
-            archive:
-              none: {}
-            s3:
-              key: "{{workflow.parameters.s3-model-code-key}}"
       container:
         image: python:3.12-slim
         imagePullPolicy: IfNotPresent
@@ -63,23 +55,22 @@ spec:
         args:
           - |
             export HOME=/tmp
-            python -m pip install --no-cache-dir --target /tmp/python-packages \
+            python -m pip install --no-cache-dir --retries 10 --timeout 120 --target /tmp/python-packages \
               "mlflow>=3.14,<4" \
               "httpx>=0.27,<1" \
               "numpy>=1.26,<3" \
               "onnx>=1.17,<2" \
-              "scikit-learn>=1.5,<2"
-            python -m pip install --no-cache-dir --target /tmp/torch-packages \
-              --index-url https://download.pytorch.org/whl/cpu "torch>=2.6,<3"
-            export PYTHONPATH="/tmp/python-packages:/tmp/torch-packages${PYTHONPATH:+:$PYTHONPATH}"
+              "scikit-learn>=1.5,<2" \
+              "skl2onnx>=1.17,<2"
+            export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
             python /tmp/training-code/train.py
         env:
           - name: MLFLOW_EXPERIMENT_NAME
             value: triton-autodeploy
-          - name: MLFLOW_PYTORCH_REGISTERED_MODEL_NAME
-            value: iris-classifier-pytorch
+          - name: MLFLOW_SKLEARN_REGISTERED_MODEL_NAME
+            value: iris-no-signature-sklearn
           - name: MLFLOW_TRITON_REGISTERED_MODEL_NAME
-            value: iris-pytorch-triton
+            value: iris-no-signature-triton
           - name: ARGO_WORKFLOW_NAME
             value: "{{workflow.name}}"
           - name: ARGO_WORKFLOW_UID
@@ -92,7 +83,7 @@ spec:
             memory: 512Mi
           limits:
             cpu: "1"
-            memory: 3Gi
+            memory: 2Gi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

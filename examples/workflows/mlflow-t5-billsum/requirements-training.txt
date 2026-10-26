@@ -1,0 +1,11 @@
+# Training dependencies; MLflow infers the saved model's requirements separately.
+# The workflow installs matching torch/torchvision from the official CPU or cu130 index.
+mlflow>=3.14,<4
+transformers==4.57.1
+datasets>=3,<5
+accelerate>=1,<2
+evaluate>=0.4,<0.5
+sentencepiece>=0.2,<0.3
+protobuf>=4,<7
+nltk>=3.9,<4
+rouge-score==0.1.2

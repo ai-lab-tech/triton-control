@@ -1,16 +1,16 @@
-# Iris PyTorch: model, code and requirements
+# Iris sklearn: model, code and requirements
 
-Train an Iris classifier and use `mlflow.pytorch.log_model()` to save its
+Train an Iris classifier and use `mlflow.sklearn.log_model()` to save its
 trained model, training source and automatically inferred model dependencies.
 A simulated generator builds an ONNX Triton repository, uploads it once, and
 returns its S3 URI. The wrapper completes the Logged Model and registers it;
 the deploy step passes the concrete S3 URI to Triton Control.
 
-A small CPU network (`4 → 16 → 3`) trains for 250 epochs. Its model class in
-[iris_pytorch.py](iris_pytorch.py) saves fitted normalization as model buffers.
-MLflow uses `serialization_format="pickle"` to save the `nn.Module` together
-with its class source. The simulation loads the saved network on CPU and exports
-labels and softmax probabilities to ONNX.
+This variant calls `mlflow.sklearn.log_model()` without a model signature or
+`input_example`.
+
+The classifier is a StandardScaler + LogisticRegression pipeline. The simulation
+loads the saved pipeline and converts it to ONNX with class labels and probabilities.
 
 This example uses Triton's ONNX Runtime backend. The real generator is simulated
 in `train.py`; the `triton-model-generator` repository is not called.
@@ -19,7 +19,7 @@ in `train.py`; the `triton-model-generator` repository is not called.
 
 ```mermaid
 flowchart TD
-    Source["Trained pytorch model + training source"] --> Log["mlflow.pytorch.log_model(code_paths=...)"]
+    Source["Trained sklearn model + training source"] --> Log["mlflow.sklearn.log_model(code_paths=...)"]
     Log --> Bundle["MLflow model in S3: model files + code/ + requirements.txt + MLmodel"]
     Bundle --> Wrapper["generate_triton_repo(): allocate Logged Model"]
     Wrapper --> Generator["simulate_triton_repository_generation(): download, convert, upload"]
@@ -48,16 +48,15 @@ is added afterward. There is no separate `triton.log_model()` call.
 - Save an S3 profile under **Account → S3 Profiles** with read/write access to the bucket.
 - Link it under **Workflows → Configure S3 Secrets**. It must reach the MLflow artifact bucket and endpoint.
 - Allow workflow pods to install packages from PyPI. Deployment uses `mlflow-triton-control==0.3.1`.
-- Also allow `https://download.pytorch.org/whl/cpu` for CPU PyTorch wheels. Training has a `3Gi` memory limit; no GPU is required.
 
 ## 2. Upload source with Code-Server
 
 1. Open **Development** and create a workspace with image `nvcr.io/nvidia/tritonserver:26.06-py3`, at least `5Gi` storage, and `0` GPUs. Disable **Image already has Development installed**.
 2. Wait for readiness and open code-server.
-3. Copy `train.py` and `iris_pytorch.py` and `workflow.yaml` into `/workspace/mlflow-iris-pytorch-test-log_training_artifacts/`.
+3. Copy `train.py` and `workflow.yaml` into `/workspace/mlflow-iris-log-artifacts-without-signature/`.
 4. In Explorer, right-click the folder → **S3 Operations → Choose Profile…** and select the linked S3 profile.
-5. Create `workflows/mlflow-iris-pytorch-test-log_training_artifacts/` in the S3 browser.
-6. Upload `train.py` and `iris_pytorch.py` there and wait for completion.
+5. Create `workflows/mlflow-iris-log-artifacts-without-signature/` in the S3 browser.
+6. Upload `train.py` there and wait for completion.
 
 Include any profile prefix, such as `team-a/`, in the full workflow object keys.
 
@@ -65,17 +64,16 @@ Include any profile prefix, such as `team-a/`, in the full workflow object keys.
 
 | Value | Example |
 | --- | --- |
-| `metadata.name`: unused workflow name | `mlflow-iris-pytorch-test-log-training-artifacts` |
+| `metadata.name`: unused workflow name | `mlflow-iris-no-signature-1026` |
 | Annotation `triton-control.ai/mlflow-s3-profile-name` | `workflow-training` |
-| Annotation `triton-control.ai/mlflow-deployment-name`: unused deployment name | `iris-pytorch` |
-| `s3-script-key` | `workflows/mlflow-iris-pytorch-test-log_training_artifacts/train.py` |
-| `s3-model-code-key` | `workflows/mlflow-iris-pytorch-test-log_training_artifacts/iris_pytorch.py` |
+| Annotation `triton-control.ai/mlflow-deployment-name`: unused deployment name | `iris-classifier-no-signature` |
+| `s3-script-key` | `workflows/mlflow-iris-log-artifacts-without-signature/train.py` |
 | `mlflow-plugin-package` | `mlflow-triton-control==0.3.1` |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
 The training step returns the generated repository's concrete S3 URI as an Argo
 output parameter. The deploy step uses that URI directly. The wrapper registers
-`iris-pytorch-triton` and sets its `triton_model_uri` tag. No model upload or
+`iris-no-signature-triton` and sets its `triton_model_uri` tag. No model upload or
 repository-path input is needed beyond uploading the source files.
 
 ## 4. Run
@@ -94,22 +92,19 @@ ones first. The deployment plugin creates deployments rather than updating them.
 
 In MLflow, open experiment **triton-autodeploy**:
 
-- `pytorch-checkpoint` must contain the serialized model, `code/train.py`, `requirements.txt` and `MLmodel`.
-- Also check `code/iris_pytorch.py` and the saved PyTorch model under `data/`.
-- `triton-repository` must be `READY` and contain root `MLmodel` plus `iris_pytorch_classifier/config.pbtxt`, `1/model.onnx`, `requirements.txt` and `training-metadata.json`.
+- `sklearn-checkpoint` must contain the serialized model, `code/train.py`, `requirements.txt` and `MLmodel`.
+- `triton-repository` must be `READY` and contain root `MLmodel` plus `iris_classifier/config.pbtxt`, `1/model.onnx`, `requirements.txt` and `training-metadata.json`.
 - Generated requirements must match the raw checkpoint's inferred requirements.
-- Registry entries `iris-classifier-pytorch` and `iris-pytorch-triton` must reference the raw and generated models. Check the Triton version's `triton_model_uri` tag.
+- Registry entries `iris-no-signature-sklearn` and `iris-no-signature-triton` must reference the raw and generated models. Check the Triton version's `triton_model_uri` tag.
 
 Load the raw checkpoint later with the corresponding MLflow flavor:
 
 ```python
-model = mlflow.pytorch.load_model(
-    "models:/iris-classifier-pytorch/1", map_location="cpu"
-)
+model = mlflow.sklearn.load_model("models:/iris-no-signature-sklearn/1")
 ```
 
-In Triton Control, open **Triton Instances → iris-pytorch** (or your chosen name)
-and check readiness. Under **Models → iris_pytorch_classifier**, version **1**, click **Infer**
+In Triton Control, open **Triton Instances → iris-classifier-no-signature**
+and check readiness. Under **Models → iris_classifier**, version **1**, click **Infer**
 and submit:
 
 ```json
@@ -159,7 +154,7 @@ export TRITON_CONTROL_TOKEN="<paste-your-login-access-token>"
 
 mlflow deployments get \
   -t triton-control://triton-control.triton-control.svc.cluster.local:8000 \
-  --name iris-pytorch
+  --name iris-classifier-no-signature
 ```
 
 From the same code-server terminal, send an inference request to the Triton
@@ -168,7 +163,7 @@ for `<triton-endpoint>` (host and port), adjusting the Service name or namespace
 if your installation uses different values:
 
 ```bash
-curl -sS http://<triton-endpoint>/v2/models/iris_pytorch_classifier/infer \
+curl -sS http://<triton-endpoint>/v2/models/iris_classifier/infer \
   -H 'Content-Type: application/json' \
   -d '{
     "inputs": [{
