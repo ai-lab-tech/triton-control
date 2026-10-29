@@ -8,6 +8,40 @@ from Triton Control's **Add Deployment** page.
 
 ## Flow
 
+### Build from a downloaded Hugging Face checkpoint
+
+Install the independent `triton-hf-builder` Python package into a Python
+environment available to code-server. For a checkout:
+
+```bash
+python3 -m pip install /path/to/triton-hf-builder
+```
+
+Set `tritonControlDeploy.hfBuilderPython` to that environment's Python executable
+if it differs from `python3`. The extension invokes `python -m triton_hf_builder`
+with argument arrays, without shell interpolation.
+
+1. Select **Build from Hugging Face** in the Triton Control workspace view or
+   **Triton Control: Build Repository from Hugging Face** in the command palette.
+2. Select the already downloaded HF model directory.
+3. Choose runtime, task, device, versioned serving image, model name and GPU count.
+4. Choose a parent output folder. The builder creates `<name>_triton_repository`;
+   an existing directory is preserved and reported as an error.
+5. Review the generated `requirements.txt`, `serving.json` and model config.
+   The final action can open the config or start the existing deployment form.
+
+The Python core supports Transformers text tasks, native vLLM, and TensorRT-LLM's
+public LLM API. It does metadata checks without loading weights or using a GPU.
+Actual serving compatibility still needs inference validation in the target image.
+The editor contains only the wizard and subprocess integration; generator and
+adapter logic live in https://github.com/ai-lab-tech/triton-hf-builder.
+
+When deploying a generated repository root, the form reads the image, GPU count
+and requirements from its serving metadata. These remain editable. Triton Control
+already installs `requirements_txt` before starting Triton, so no Dockerfile is
+needed for this workflow. Resolve/pin the dependencies against the target image;
+the generated requirements are starter specifications rather than a tested lock.
+
 ### Create a model repository
 
 1. Open a workspace folder in code-server.

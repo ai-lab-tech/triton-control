@@ -11,6 +11,7 @@ const {
   scaffoldSingleModelRepository,
 } = require("./scaffold");
 const { discoverWorkspaceRepositories } = require("./workspace-repositories");
+const { registerHfBuilder, readServingMetadata } = require("./hf-builder");
 
 let insecureWebviewWarningShown = false;
 let outputChannel;
@@ -25,6 +26,7 @@ function activate(context) {
   require("./s3-browser").registerS3Browser(context);
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
+  registerHfBuilder(context, vscode, outputChannel, scheduleRepositoryRefresh);
   actionsProvider = new TritonControlActionsProvider();
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(
@@ -142,6 +144,11 @@ class TritonControlActionsProvider {
         "New Model Repository",
         "tritonControl.newModelRepository",
         new vscode.ThemeIcon("new-folder"),
+      ),
+      new TritonControlActionItem(
+        "Build from Hugging Face",
+        "tritonControl.buildHuggingFaceRepository",
+        new vscode.ThemeIcon("package"),
       ),
       ...repositories,
     ];
@@ -660,6 +667,13 @@ function showSimpleUploadResult(form) {
 async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
   const s3x = vscode.workspace.getConfiguration("s3x");
+  let serving;
+  try {
+    serving = readServingMetadata(sourceFolder);
+  } catch (error) {
+    await vscode.window.showErrorMessage(`Cannot read generated serving metadata: ${error.message}`);
+    return null;
+  }
   const detectedModelName = detectModelName(sourceFolder);
   const detectedBackend = detectModelBackendOrPlatform(sourceFolder);
   const modelName = detectedModelName || await promptForModelName(sourceFolder);
@@ -672,7 +686,7 @@ async function initialFormValues(sourceFolder) {
   const initial = {
     sourceFolder,
     deploymentName,
-    image: defaultImageForBackend(detectedBackend, requiresTensorRtLlmImage),
+    image: serving?.image || defaultImageForBackend(detectedBackend, requiresTensorRtLlmImage),
     endpoint,
     bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
@@ -684,7 +698,7 @@ async function initialFormValues(sourceFolder) {
       cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
     ),
     s3CaCertificate: cfg.get("s3CaCertificate") || "",
-    requirementsTxt: "",
+    requirementsTxt: serving?.requirementsTxt || "",
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
     modelControlMode: "poll",
@@ -695,7 +709,7 @@ async function initialFormValues(sourceFolder) {
     profileName: "",
     cpu: "2",
     memoryGi: "4",
-    gpuCount: requiresTensorRtLlmImage ? "1" : "0",
+    gpuCount: serving?.gpuCount ?? (requiresTensorRtLlmImage ? "1" : "0"),
     ingressHost: "",
     ingressClassName: "",
   };
