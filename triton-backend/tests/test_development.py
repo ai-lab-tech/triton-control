@@ -285,15 +285,20 @@ class CodeServerTests(unittest.TestCase):
             )
 
     def test_TritonDeployExtensionVsix_IncludesScaffoldModule(self) -> None:
+        # Arrange
         extension_dir = k8s._triton_deploy_extension_dir()
         package_json = {"name": "triton-control-deploy", "version": "0.1.0", "publisher": "triton-control"}
 
+        # Act
         encoded = k8s._triton_deploy_extension_vsix_b64(extension_dir, package_json)
 
         with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded))) as archive:
             names = set(archive.namelist())
 
+        # Assert
         self.assertIn("extension/extension.js", names)
+        self.assertIn("extension/hf-builder.js", names)
+        self.assertIn("extension/hf-builder-client.js", names)
         self.assertIn("extension/profile-api.js", names)
         self.assertIn("extension/s3-browser.js", names)
         self.assertIn("extension/s3-client.js", names)
