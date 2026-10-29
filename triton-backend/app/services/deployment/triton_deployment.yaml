@@ -88,20 +88,7 @@ spec:
             - containerPort: 8002
               name: metrics
 {resources}
-          livenessProbe:
-            httpGet:
-              path: /v2/health/live
-              port: 8000
-            initialDelaySeconds: 180
-            periodSeconds: 10
-            failureThreshold: 6
-          readinessProbe:
-            httpGet:
-              path: /v2/health/ready
-              port: 8000
-            initialDelaySeconds: 15
-            periodSeconds: 10
-            failureThreshold: 12
+{health_probes}
       volumes:
 {s3_ca_volume_item_block}        - name: dshm
           emptyDir:

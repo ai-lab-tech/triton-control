@@ -26,6 +26,7 @@ import yaml  # type: ignore[import-untyped]
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateDeploymentRequest
+from app.services.deployment.probes import serving_probes
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
 from app.services.kubernetes_client import (
     api_client,
@@ -432,6 +433,7 @@ def _manifests(
     def q(value: str) -> str:
         return cast(str, yaml.safe_dump(value, default_style='"').strip())
 
+    probes = serving_probes()
     rendered = _TEMPLATE.read_text(encoding="utf-8").format(
         image_pull_secret_manifest=_image_pull_secret_manifest(
             request.dockerconfigjson,
@@ -461,6 +463,9 @@ def _manifests(
         s3_ca_volume_mount_block=_s3_ca_volume_mount_block(request.s3_ca_certificate),
         s3_ca_volume_item_block=_s3_ca_volume_item_block(request.s3_ca_certificate, secret_name),
         resources=_resources_block(request),
+        health_probes="\n".join(
+            "          " + line for line in yaml.safe_dump(probes, sort_keys=False).splitlines()
+        ),
         ingress_class_name=request.ingress_class_name or "nginx",
     )
     manifests = [m for m in yaml.safe_load_all(rendered) if m]

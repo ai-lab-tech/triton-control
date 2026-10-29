@@ -74,6 +74,22 @@ Backend logging is quiet by default. Set `BACKEND_VERBOSE=true` in `app.env`
 for info-level backend logs and Uvicorn access logs. Set `DATABASE_ECHO=1`
 only when SQL statement logging is needed.
 
+Serving pod health checks are configured under `tritonDeployments.probes` in both
+the chart defaults and the repository-root `values.yaml`. `app.probes` applies
+only to Triton Control itself. The startup probe waits for `/v2/health/ready`,
+allowing dependency installation and model loading to complete. Its default budget
+is 90 failures × 10 seconds = 15 minutes. Kubernetes runs liveness and readiness
+only after startup succeeds; their default initial delays are therefore zero.
+The pod receives no traffic until it is ready. See the
+[Kubernetes probe documentation](https://kubernetes.io/docs/concepts/workloads/pods/probes/).
+
+Helm passes these settings through `TRITON_DEPLOY_PROBES_JSON`; non-Helm deployments
+can set the same JSON environment variable. Delay values must be nonnegative
+integers; periods, timeouts and failure thresholds must be positive integers.
+Changes affect newly generated serving deployments after the updated backend
+image and Helm configuration are deployed. Existing serving Deployments are not
+rewritten automatically.
+
 ## Minimal Values Override
 
 ```yaml
@@ -93,6 +109,26 @@ tritonDeployments:
   # Optional emptyDir size limits for vLLM local sync.
   modelRepositoryEmptyDirSize: 20Gi
   s3SyncStagingEmptyDirSize: 20Gi
+  # Applied to newly created Triton serving pods; separate from app.probes.
+  probes:
+    startup:
+      path: /v2/health/ready
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 90
+    liveness:
+      path: /v2/health/live
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 6
+    readiness:
+      path: /v2/health/ready
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 12
 
 mlflow:
   version: "3.14.0"

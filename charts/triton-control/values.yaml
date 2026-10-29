@@ -114,9 +114,34 @@ app:
       initialDelaySeconds: 30
       periodSeconds: 20
 
-# Image used only by vLLM repository init containers and S3 sync sidecars.
+# Configuration for generated Triton serving deployments.
 tritonDeployments:
+  # Health probes for all serving adapters, separate from app.probes.
+  # Startup allows up to 15 minutes for dependency installation and model loading.
+  probes:
+    startup:
+      path: /v2/health/ready
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 90
+    liveness:
+      path: /v2/health/live
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 6
+    readiness:
+      path: /v2/health/ready
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 12
+
+  # Helper image for repository init containers and S3 sync sidecars.
   s3SyncImage: amazon/aws-cli:2.22.35
+
+  # Optional storage limits for local repository synchronization.
   modelRepositoryEmptyDirSize: ""
   s3SyncStagingEmptyDirSize: ""
 
