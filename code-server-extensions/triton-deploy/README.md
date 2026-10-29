@@ -27,8 +27,7 @@ with argument arrays, without shell interpolation.
 3. Choose runtime, device, versioned serving image, model name and GPU count.
    The task is inferred automatically from checkpoint metadata. A task dialog
    appears only when inference is ambiguous; detected tasks are shown in the output.
-4. Choose a parent output folder. The builder creates `<name>_triton_repository`;
-   an existing directory is preserved and reported as an error.
+4. Enter a new repository folder, using an absolute path or a path relative to the workspace.
 5. Review the generated `requirements.txt`, `serving.json` and model config.
    The final action can open the config or start the existing deployment form.
 

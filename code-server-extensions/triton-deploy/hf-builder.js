@@ -67,18 +67,29 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
         });
         if (parallel === undefined) return;
       }
-      const parent = (await vscode.window.showOpenDialog({
-        canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
-        openLabel: "Select parent folder for generated repository",
-      }))?.[0]?.fsPath;
-      if (!parent) return;
-      const output = path.join(parent, `${name}_triton_repository`);
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || path.dirname(source);
+      const destination = await vscode.window.showInputBox({
+        title: "HF Builder: Repository destination",
+        value: path.join(workspaceRoot, `${name}_triton_repository`),
+        prompt: "New repository folder: absolute path or relative to the workspace. This is the repository root; no extra folder is appended.",
+        validateInput: (value) => {
+          if (!value.trim()) return "Repository destination is required.";
+          if (fs.existsSync(path.resolve(workspaceRoot, value.trim()))) {
+            return "This path already exists. Choose a new repository folder.";
+          }
+          return undefined;
+        },
+        ignoreFocusOut: true,
+      });
+      if (destination === undefined) return;
+      const output = path.resolve(workspaceRoot, destination.trim());
       const args = ["build", source, "--output", output, "--name", name,
         "--runtime", runtime, "--device", device, "--image", image.trim(),
         "--tensor-parallel-size", parallel];
       if (task) args.push("--task", task);
       outputChannel.show(true);
       outputChannel.appendLine(`Building Triton repository from ${source}`);
+      outputChannel.appendLine(`Repository destination: ${output}`);
       outputChannel.appendLine(`Model task: ${task || inferredTask}${task ? " (selected)" : " (detected automatically)"}`);
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification, title: "Building Hugging Face Triton repository", cancellable: true,

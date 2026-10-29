@@ -31,7 +31,7 @@ function pythonModule(t, source) {
   });
 }
 
-function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask = "feature-extraction", cancelTask = false } = {}) {
+function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask = "feature-extraction", cancelTask = false, destination, cancelDestination = false, finalAction } = {}) {
   const root = fixture(t);
   const source = path.join(root, "checkpoint");
   fs.mkdirSync(source);
@@ -41,7 +41,7 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
     "args=sys.argv[1:]",
     `if args[0]=='inspect': print(${JSON.stringify(JSON.stringify({ inferred_task: inferredTask ?? null }))})`,
     "else:",
-    " out=pathlib.Path(args[args.index('--output')+1]); out.mkdir()",
+    " out=pathlib.Path(args[args.index('--output')+1]); out.mkdir(parents=True)",
     " (out/'invocation.json').write_text(json.dumps(args))",
     " print(json.dumps({'repository':str(out)}))",
   ].join("\n"));
@@ -49,14 +49,23 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
   const taskPrompts = [];
   const errors = [];
   const output = [];
+  const destinationPrompts = [];
+  const validationErrors = [];
+  const deploymentCalls = [];
+  const chosenDestination = destination ?? path.join(root, "chosen repository");
+  const destinationPath = path.resolve(root, chosenDestination);
   const inputs = ["test/serving:1", "demo", "1"];
   const vscode = {
     ProgressLocation: { Notification: 1 },
     commands: { registerCommand: (name, callback) => {
       callbacks.set(name, callback);
       return { dispose() {} };
-    } },
-    workspace: { getConfiguration: () => ({ get: () => "python3" }) },
+    }, executeCommand: async (...args) => { deploymentCalls.push(args); } },
+    Uri: { file: (fsPath) => ({ fsPath }) },
+    workspace: {
+      getConfiguration: () => ({ get: () => "python3" }),
+      workspaceFolders: [{ uri: { fsPath: root } }],
+    },
     window: {
       showQuickPick: async (items, options) => {
         if (options.title === "HF Builder: Serving runtime") return items.find(item => item.runtime === runtime);
@@ -67,26 +76,110 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
         }
         throw new Error(`Unexpected prompt: ${options.title}`);
       },
-      showInputBox: async () => inputs.shift(),
+      showInputBox: async (options) => {
+        if (options.title === "HF Builder: Repository destination") {
+          destinationPrompts.push(options);
+          if (cancelDestination) return undefined;
+          const error = options.validateInput(chosenDestination);
+          if (error) { validationErrors.push(error); return undefined; }
+          return chosenDestination;
+        }
+        return inputs.shift();
+      },
       showOpenDialog: async () => [{ fsPath: root }],
       withProgress: async (_options, work) => work({}, {
         isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }),
       }),
-      showInformationMessage: async () => undefined,
+      showInformationMessage: async () => finalAction,
       showErrorMessage: async error => { errors.push(error); },
     },
   };
   registerHfBuilder({ subscriptions: [] }, vscode, {
     show() {}, append() {}, appendLine(line) { output.push(line); },
   }, () => {});
-  const invocationPath = path.join(root, "demo_triton_repository/invocation.json");
+  const invocationPath = path.join(destinationPath, "invocation.json");
   return {
     run: (command = "tritonControl.buildHuggingFaceRepository") => callbacks.get(command)({ fsPath: source }),
     readInvocation: () => JSON.parse(fs.readFileSync(invocationPath, "utf8")),
     invocationExists: () => fs.existsSync(invocationPath),
-    taskPrompts, errors, output,
+    taskPrompts, errors, output, destinationPrompts, validationErrors, destinationPath, deploymentCalls,
   };
 }
+
+test("absolute destination is used directly without appending another repository folder", async (t) => {
+  // Arrange
+  const destination = path.join(fixture(t), "selected repository");
+  const wizard = builderWizard(t, { inferredTask: "text-generation", destination });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  const args = wizard.readInvocation();
+  assert.equal(args[args.indexOf("--output") + 1], destination);
+  assert.equal(fs.existsSync(path.join(destination, "demo_triton_repository")), false);
+});
+
+test("relative destination is resolved against the workspace without a model-name suffix", async (t) => {
+  // Arrange
+  const destination = path.join("exports", "my-classifier");
+  const wizard = builderWizard(t, { inferredTask: "text-classification", destination });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  const args = wizard.readInvocation();
+  assert.equal(args[args.indexOf("--output") + 1], wizard.destinationPath);
+  assert.equal(path.basename(wizard.destinationPath), "my-classifier");
+});
+
+test("existing destination is rejected by the dialog without generating or overwriting files", async (t) => {
+  // Arrange
+  const destination = fixture(t);
+  const preserved = path.join(destination, "keep.txt");
+  fs.writeFileSync(preserved, "existing data");
+  const wizard = builderWizard(t, { inferredTask: "text-generation", destination });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.equal(wizard.validationErrors.length, 1);
+  assert.match(wizard.validationErrors[0], /already exists/);
+  assert.equal(wizard.invocationExists(), false);
+  assert.equal(fs.readFileSync(preserved, "utf8"), "existing data");
+});
+
+test("empty destination is rejected by the dialog", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "text-generation", destination: "  " });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.equal(wizard.validationErrors.length, 1);
+  assert.match(wizard.validationErrors[0], /required/);
+  assert.equal(wizard.invocationExists(), false);
+});
+
+test("cancelling the destination stops generation", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "text-generation", cancelDestination: true });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.destinationPrompts.length, 1);
+  assert.equal(wizard.invocationExists(), false);
+});
+
+test("deployment handoff uses the chosen repository root", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "text-generation", finalAction: "Deploy repository" });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.deepEqual(wizard.deploymentCalls, [
+    ["tritonControl.deployModelRepository", { fsPath: wizard.destinationPath }],
+  ]);
+});
 
 for (const task of ["text-generation", "text-classification", "text2text-generation"]) {
   test(`detected ${task} skips the task dialog and leaves task inference to Python`, async (t) => {
@@ -344,7 +437,8 @@ test("editor wizard passes selected runtime and image to the independent CLI", a
   let callback;
   let refreshed = false;
   let reportedError;
-  const inputs = ["custom/vllm:1.0", "my_model", "2"];
+  const destination = path.join(root, "selected destination");
+  const inputs = ["custom/vllm:1.0", "my_model", "2", destination];
   const context = { subscriptions: [] };
   const vscode = {
     ProgressLocation: { Notification: 1 },
@@ -371,7 +465,7 @@ test("editor wizard passes selected runtime and image to the independent CLI", a
 
   // Assert
   assert.equal(reportedError, undefined);
-  const invocation = JSON.parse(fs.readFileSync(path.join(root, "my_model_triton_repository/invocation.json"), "utf8"));
+  const invocation = JSON.parse(fs.readFileSync(path.join(destination, "invocation.json"), "utf8"));
   assert.equal(invocation[invocation.indexOf("--runtime") + 1], "vllm");
   assert.equal(invocation[invocation.indexOf("--image") + 1], "custom/vllm:1.0");
   assert.equal(invocation[invocation.indexOf("--tensor-parallel-size") + 1], "2");
