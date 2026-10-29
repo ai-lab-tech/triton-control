@@ -10,7 +10,7 @@ const IMAGE_DEFAULTS = {
 const TASKS = ["text-generation", "text2text-generation", "text-classification", "feature-extraction"];
 
 function registerHfBuilder(context, vscode, outputChannel, refresh) {
-  context.subscriptions.push(vscode.commands.registerCommand("tritonControl.buildHuggingFaceRepository", async (resource) => {
+  const buildRepository = (chooseTask) => async (resource) => {
     try {
       let source = resource?.fsPath;
       if (!source || !fs.existsSync(path.join(source, "config.json"))) {
@@ -30,9 +30,16 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
       if (!choice) return;
       const runtime = choice.runtime;
       const tasks = runtime === "transformers" ? TASKS : ["text-generation"];
-      const orderedTasks = [...tasks].sort((a, b) => Number(b === info.inferred_task) - Number(a === info.inferred_task));
-      const task = await vscode.window.showQuickPick(orderedTasks, { title: "HF Builder: Model task" });
-      if (!task) return;
+      const inferredTask = TASKS.includes(info.inferred_task) ? info.inferred_task : null;
+      if (inferredTask && !tasks.includes(inferredTask)) {
+        throw new Error(`The ${runtime} runtime does not support the detected task ${inferredTask}. Choose Transformers / Python for this checkpoint.`);
+      }
+      let task;
+      if (chooseTask || !inferredTask) {
+        const orderedTasks = [...tasks].sort((a, b) => Number(b === inferredTask) - Number(a === inferredTask));
+        task = await vscode.window.showQuickPick(orderedTasks, { title: "HF Builder: Model task" });
+        if (!task) return;
+      }
       let device = "gpu";
       if (runtime === "transformers") {
         device = await vscode.window.showQuickPick(["gpu", "cpu"], { title: "HF Builder: Serving device" });
@@ -67,10 +74,12 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
       if (!parent) return;
       const output = path.join(parent, `${name}_triton_repository`);
       const args = ["build", source, "--output", output, "--name", name,
-        "--runtime", runtime, "--task", task, "--device", device, "--image", image.trim(),
+        "--runtime", runtime, "--device", device, "--image", image.trim(),
         "--tensor-parallel-size", parallel];
+      if (task) args.push("--task", task);
       outputChannel.show(true);
       outputChannel.appendLine(`Building Triton repository from ${source}`);
+      outputChannel.appendLine(`Model task: ${task || inferredTask}${task ? " (selected)" : " (detected automatically)"}`);
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification, title: "Building Hugging Face Triton repository", cancellable: true,
       }, async (_progress, token) => {
@@ -98,7 +107,13 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
       outputChannel.show(true);
       await vscode.window.showErrorMessage(error.message);
     }
-  }));
+  };
+  for (const [command, chooseTask] of [
+    ["tritonControl.buildHuggingFaceRepository", false],
+    ["tritonControl.buildHuggingFaceRepositoryWithTask", true],
+  ]) {
+    context.subscriptions.push(vscode.commands.registerCommand(command, buildRepository(chooseTask)));
+  }
 }
 
 module.exports = { registerHfBuilder, readServingMetadata, runBuilder };

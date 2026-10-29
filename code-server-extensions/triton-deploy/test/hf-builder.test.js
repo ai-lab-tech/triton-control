@@ -31,6 +31,128 @@ function pythonModule(t, source) {
   });
 }
 
+function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask = "feature-extraction", cancelTask = false } = {}) {
+  const root = fixture(t);
+  const source = path.join(root, "checkpoint");
+  fs.mkdirSync(source);
+  fs.writeFileSync(path.join(source, "config.json"), "{}");
+  pythonModule(t, [
+    "import sys,json,pathlib",
+    "args=sys.argv[1:]",
+    `if args[0]=='inspect': print(${JSON.stringify(JSON.stringify({ inferred_task: inferredTask ?? null }))})`,
+    "else:",
+    " out=pathlib.Path(args[args.index('--output')+1]); out.mkdir()",
+    " (out/'invocation.json').write_text(json.dumps(args))",
+    " print(json.dumps({'repository':str(out)}))",
+  ].join("\n"));
+  const callbacks = new Map();
+  const taskPrompts = [];
+  const errors = [];
+  const output = [];
+  const inputs = ["test/serving:1", "demo", "1"];
+  const vscode = {
+    ProgressLocation: { Notification: 1 },
+    commands: { registerCommand: (name, callback) => {
+      callbacks.set(name, callback);
+      return { dispose() {} };
+    } },
+    workspace: { getConfiguration: () => ({ get: () => "python3" }) },
+    window: {
+      showQuickPick: async (items, options) => {
+        if (options.title === "HF Builder: Serving runtime") return items.find(item => item.runtime === runtime);
+        if (options.title === "HF Builder: Serving device") return "cpu";
+        if (options.title === "HF Builder: Model task") {
+          taskPrompts.push(items);
+          return cancelTask ? undefined : selectedTask;
+        }
+        throw new Error(`Unexpected prompt: ${options.title}`);
+      },
+      showInputBox: async () => inputs.shift(),
+      showOpenDialog: async () => [{ fsPath: root }],
+      withProgress: async (_options, work) => work({}, {
+        isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }),
+      }),
+      showInformationMessage: async () => undefined,
+      showErrorMessage: async error => { errors.push(error); },
+    },
+  };
+  registerHfBuilder({ subscriptions: [] }, vscode, {
+    show() {}, append() {}, appendLine(line) { output.push(line); },
+  }, () => {});
+  const invocationPath = path.join(root, "demo_triton_repository/invocation.json");
+  return {
+    run: (command = "tritonControl.buildHuggingFaceRepository") => callbacks.get(command)({ fsPath: source }),
+    readInvocation: () => JSON.parse(fs.readFileSync(invocationPath, "utf8")),
+    invocationExists: () => fs.existsSync(invocationPath),
+    taskPrompts, errors, output,
+  };
+}
+
+for (const task of ["text-generation", "text-classification", "text2text-generation"]) {
+  test(`detected ${task} skips the task dialog and leaves task inference to Python`, async (t) => {
+    // Arrange
+    const wizard = builderWizard(t, { inferredTask: task });
+    // Act
+    await wizard.run();
+    // Assert
+    assert.deepEqual(wizard.errors, []);
+    assert.equal(wizard.taskPrompts.length, 0);
+    assert.equal(wizard.readInvocation().includes("--task"), false);
+    assert.ok(wizard.output.some(line => line.includes(`${task} (detected automatically)`)));
+  });
+}
+
+test("ambiguous metadata asks for a task and sends the selection to Python", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: null, selectedTask: "text-classification" });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.taskPrompts.length, 1);
+  const args = wizard.readInvocation();
+  assert.equal(args[args.indexOf("--task") + 1], "text-classification");
+});
+
+test("choose-task command lets users request feature extraction explicitly", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "text-generation", selectedTask: "feature-extraction" });
+  const command = "tritonControl.buildHuggingFaceRepositoryWithTask";
+  const metadata = JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf8"));
+  // Act
+  await wizard.run(command);
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.taskPrompts.length, 1);
+  const args = wizard.readInvocation();
+  assert.equal(args[args.indexOf("--task") + 1], "feature-extraction");
+  assert.ok(metadata.activationEvents.includes(`onCommand:${command}`));
+  assert.ok(metadata.contributes.commands.some(item => item.command === command));
+});
+
+test("incompatible runtime does not silently replace an inferred classification task", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "text-classification", runtime: "vllm" });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.equal(wizard.errors.length, 1);
+  assert.match(wizard.errors[0], /vllm.*does not support.*text-classification/);
+  assert.equal(wizard.taskPrompts.length, 0);
+  assert.equal(wizard.invocationExists(), false);
+});
+
+test("cancelling an ambiguous task stops before generating a repository", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: null, cancelTask: true });
+  // Act
+  await wizard.run();
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.taskPrompts.length, 1);
+  assert.equal(wizard.invocationExists(), false);
+});
+
 test("split UTF-8 output preserves non-ASCII model paths", async (t) => {
   // Arrange
   pythonModule(t, [
@@ -178,13 +300,11 @@ test("cancelled invocation produces a cancellation error", async () => {
 
 test("editor command is registered and a cancelled folder selection does no work", async () => {
   // Arrange
-  let callback;
-  let command;
+  const callbacks = new Map();
   const context = { subscriptions: [] };
   const vscode = {
     commands: { registerCommand: (name, handler) => {
-      command = name;
-      callback = handler;
+      callbacks.set(name, handler);
       return { dispose() {} };
     } },
     window: { showOpenDialog: async () => undefined },
@@ -192,11 +312,12 @@ test("editor command is registered and a cancelled folder selection does no work
 
   // Act
   registerHfBuilder(context, vscode, {}, () => {});
-  await callback();
+  await callbacks.get("tritonControl.buildHuggingFaceRepository")();
 
   // Assert
-  assert.equal(command, "tritonControl.buildHuggingFaceRepository");
-  assert.equal(context.subscriptions.length, 1);
+  assert.equal(callbacks.has("tritonControl.buildHuggingFaceRepository"), true);
+  assert.equal(callbacks.has("tritonControl.buildHuggingFaceRepositoryWithTask"), true);
+  assert.equal(context.subscriptions.length, 2);
 });
 
 test("editor wizard passes selected runtime and image to the independent CLI", async (t) => {
@@ -227,7 +348,10 @@ test("editor wizard passes selected runtime and image to the independent CLI", a
   const context = { subscriptions: [] };
   const vscode = {
     ProgressLocation: { Notification: 1 },
-    commands: { registerCommand: (_name, handler) => { callback = handler; return { dispose() {} }; } },
+    commands: { registerCommand: (name, handler) => {
+      if (name === "tritonControl.buildHuggingFaceRepository") callback = handler;
+      return { dispose() {} };
+    } },
     workspace: { getConfiguration: () => ({ get: () => "python3" }) },
     window: {
       showQuickPick: async (items) => items[1]?.runtime === "vllm" ? items[1] : items[0],
@@ -251,6 +375,7 @@ test("editor wizard passes selected runtime and image to the independent CLI", a
   assert.equal(invocation[invocation.indexOf("--runtime") + 1], "vllm");
   assert.equal(invocation[invocation.indexOf("--image") + 1], "custom/vllm:1.0");
   assert.equal(invocation[invocation.indexOf("--tensor-parallel-size") + 1], "2");
+  assert.equal(invocation.includes("--task"), false);
   assert.equal(invocation[1], source);
   assert.equal(refreshed, true);
 });

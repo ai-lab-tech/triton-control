@@ -15,6 +15,7 @@
     "onCommand:tritonControl.uploadModelRepositorySimple",
     "onCommand:tritonControl.newModelRepository",
     "onCommand:tritonControl.buildHuggingFaceRepository",
+    "onCommand:tritonControl.buildHuggingFaceRepositoryWithTask",
     "onCommand:tritonControl.openRepositorySetup",
     "onCommand:tritonControl.revealRepository",
     "onCommand:tritonControl.refreshRepositories",
@@ -28,6 +29,11 @@
       {
         "command": "tritonControl.buildHuggingFaceRepository",
         "title": "Triton Control: Build Repository from Hugging Face",
+        "icon": "$(package)"
+      },
+      {
+        "command": "tritonControl.buildHuggingFaceRepositoryWithTask",
+        "title": "Triton Control: Build Repository from Hugging Face (Choose Task)",
         "icon": "$(package)"
       },
       {
