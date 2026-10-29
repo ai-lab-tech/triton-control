@@ -16,6 +16,7 @@
     "format:check": "prettier . --check",
     "generate:api": "node scripts/generate-api.mjs",
     "test:smoke": "playwright test -c e2e/playwright.config.ts",
+    "test:smoke:auth": "playwright test -c e2e/user-auth/playwright.config.ts",
     "test:smoke:plugins": "playwright test -c e2e/code-server/playwright.config.ts"
   },
   "dependencies": {
