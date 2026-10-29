@@ -20,6 +20,53 @@ function captureError(action) {
   }
 }
 
+function pythonModule(t, source) {
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, "triton_hf_builder.py"), source);
+  const previous = process.env.PYTHONPATH;
+  process.env.PYTHONPATH = root;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PYTHONPATH;
+    else process.env.PYTHONPATH = previous;
+  });
+}
+
+test("split UTF-8 output preserves non-ASCII model paths", async (t) => {
+  // Arrange
+  pythonModule(t, [
+    "import os,time",
+    "data='\"模型\"'.encode('utf8')",
+    "os.write(1,data[:2])",
+    "time.sleep(0.05)",
+    "os.write(1,data[2:])",
+  ].join("\n"));
+  // Act
+  const result = await runBuilder("python3", []);
+  // Assert
+  assert.equal(result, "模型");
+});
+
+test("oversized builder output fails with a bounded output error", async (t) => {
+  // Arrange
+  pythonModule(t, "import sys\nsys.stdout.write('x' * (2 * 1024 * 1024))\n");
+  // Act
+  const error = await runBuilder("python3", []).then(() => null, failure => failure);
+  // Assert
+  assert.match(error.message, /exceeded 1 MiB/);
+});
+
+test("unsupported generated schema requires an extension update", (t) => {
+  // Arrange
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, "serving.json"), JSON.stringify({
+    generator: "triton-hf-builder", schema_version: 2,
+  }));
+  // Act
+  const error = captureError(() => readServingMetadata(root));
+  // Assert
+  assert.match(error.message, /Unsupported HF builder serving schema: 2/);
+});
+
 test("ordinary repositories have no generated serving metadata", (t) => {
   // Arrange
   const root = fixture(t);
