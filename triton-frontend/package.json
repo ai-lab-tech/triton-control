@@ -65,7 +65,7 @@
   },
   "overrides": {
     "@babel/core": "7.29.7",
-    "dompurify": "3.4.16",
+    "dompurify": "3.4.17",
     "esbuild": "0.28.1",
     "express-rate-limit": "8.5.1",
     "fast-uri": "3.1.8",
