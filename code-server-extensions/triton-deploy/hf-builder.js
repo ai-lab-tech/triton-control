@@ -20,7 +20,8 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
         }))?.[0]?.fsPath;
       }
       if (!source) return;
-      const python = vscode.workspace.getConfiguration("tritonControlDeploy").get("hfBuilderPython") || "python3";
+      const python = vscode.workspace.getConfiguration("tritonControlDeploy").get("hfBuilderPython")
+        || process.env.TRITON_CONTROL_HF_BUILDER_PYTHON || "python3";
       const info = await runBuilder(python, ["inspect", source]);
       const choice = await vscode.window.showQuickPick([
         { label: "Transformers / Python", runtime: "transformers", description: "Text generation, classification and raw features" },

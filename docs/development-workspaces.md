@@ -32,7 +32,8 @@ Open **Development** in the sidebar and configure the workspace:
 | --- | --- | --- | --- |
 | Workspace name | Yes | `workspace` | Name used to derive the user's Kubernetes resource names. |
 | Triton development image | Yes | `nvcr.io/nvidia/tritonserver:26.06-py3` | Container image used for the workspace pod. |
-| Image already has Development installed | No | disabled | Uses the `code-server` binary from the image instead of installing a standalone runtime during startup. Triton Control starts it on `0.0.0.0:8080`. |
+| Use preinstalled code-server | No | disabled | Uses the `code-server` binary from the image instead of installing a standalone runtime during startup. Triton Control starts it on `0.0.0.0:8080`. |
+| Install HF Triton Builder | No | enabled | Installs `triton-hf-builder` for Python code, Jupyter notebooks and the bundled **Build from Hugging Face** wizard. Disable to manage the Python package yourself. |
 | Workspace storage | Yes | `20Gi` | Persistent volume claim size mounted at `/workspace`. |
 | VS Code theme | Yes | `Default Dark+` | Initial code-server color theme. |
 | CPU request | No | unset | CPU request and limit for the workspace container. |
@@ -41,7 +42,7 @@ Open **Development** in the sidebar and configure the workspace:
 | Registry credentials | No | unset | Docker `.dockerconfigjson` used to pull a private workspace image. |
 
 In this field, **Development** refers to the code-server runtime. Enable
-**Image already has Development installed** only if `code-server` is available
+**Use preinstalled code-server** only if `code-server` is available
 on the image's `PATH`. Triton Control overrides the image startup command and
 starts that binary with `--bind-addr 0.0.0.0:8080`; the image does not need to
 start code-server itself. The resulting workspace must listen on container port
@@ -107,6 +108,49 @@ settings and user-installed extensions on that volume:
 These files survive pod restarts while the PVC remains available. New
 workspaces receive the Python extension when its marketplace installation
 succeeds and the bundled **Triton Control Deploy** extension.
+
+### HF Triton Builder
+
+**Install HF Triton Builder** is enabled by default when creating a workspace
+(`install_hf_builder: true` in the API). Startup installs
+[triton-hf-builder](https://pypi.org/project/triton-hf-builder/) and `ipykernel`
+using pip's user installation mode. Packages live in
+the workspace user's Python site directory on the PVC, making them available to ordinary `python3`
+scripts, the integrated terminal and notebooks without activating a virtual
+environment. Already importable packages are reused. The image needs Python
+3.10+, pip, user-site packages enabled and access to PyPI for installation. A
+setup failure stops startup and reports the reason in the pod logs.
+
+By default, installation uses the latest stable release. Set
+`DEVELOPMENT_HF_BUILDER_VERSION` (Helm: `development.hfBuilder.version`) to pin a
+version. Existing installations are reused when they match the configured pin,
+or when no pin is set.
+
+New editor settings default to `python3`. Startup also installs the Jupyter
+editor extension and registers **Python (Triton Control)** using the same Python
+interpreter. Open an `.ipynb` file and select that kernel. Both Python scripts
+and notebook cells can use:
+
+```python
+from triton_hf_builder import generate_repository
+```
+
+The bundled builder wizard automatically uses `python3`. An explicit
+`tritonControlDeploy.hfBuilderPython` setting overrides it. Custom Python
+environments and remote notebook kernels need their own package installation.
+
+Disable the checkbox to skip managed Python installation. The bundled extension,
+including S3 and deployment actions, remains available. For a manually installed
+builder, run:
+
+```bash
+python3 -m pip install --user triton-hf-builder
+```
+
+Set `tritonControlDeploy.hfBuilderPython` if you install into a separate virtual
+environment. Without a managed or explicitly configured interpreter, the
+extension uses `python3`. Existing workspaces are unchanged; install the package
+manually there or create a new workspace with the option enabled.
 
 Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server

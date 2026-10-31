@@ -4,6 +4,9 @@ import asyncio
 import base64
 import io
 import json
+import os
+import subprocess
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -21,6 +24,148 @@ from app.schemas import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
 from app.services.development import proxy as code_proxy
 from app.services.development import workspaces
+
+
+class HfBuilderStartupTests(unittest.TestCase):
+    def setUp(self) -> None:
+        configuration = patch.dict(os.environ, {"DEVELOPMENT_HF_BUILDER_VERSION": ""})
+        configuration.start()
+        self.addCleanup(configuration.stop)
+
+    def _environment(self) -> tuple[Path, dict[str, str]]:
+        temporary = tempfile.TemporaryDirectory(prefix="hf builder startup ")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        binary_dir = root / "bin"
+        binary_dir.mkdir()
+        python = binary_dir / "python3"
+        python.write_text(
+            '#!/bin/sh\n'
+            'printf "%s\\n" "$0 $*" >> "$HF_TEST_LOG"\n'
+            'if [ "$1" = "-c" ]; then\n'
+            '  case "$2" in\n'
+            '    *getusersitepackages*) printf "%s" "$HF_TEST_USER_SITE";;\n'
+            '    *) test -f "$0.ready";;\n'
+            '  esac\n'
+            'elif [ "$2" = "pip" ]; then\n'
+            '  if [ "$HF_TEST_PIP_FAIL" = "1" ]; then exit 1; fi\n'
+            '  touch "$0.ready"\n'
+            'elif [ "$2" = "ipykernel" ]; then\n'
+            '  if [ "$HF_TEST_KERNEL_FAIL" = "1" ]; then exit 1; fi\n'
+            '  printf "%s" "$0" > "$HF_TEST_KERNEL"\n'
+            'else exit 1; fi\n',
+            encoding="utf-8",
+        )
+        python.chmod(0o755)
+        return root, {
+            **os.environ,
+            "PATH": f"{binary_dir}:{os.environ['PATH']}",
+            "CODE_SERVER_RUNTIME": str(root / "runtime"),
+            "HF_TEST_LOG": str(root / "calls"),
+            "HF_TEST_PIP_FAIL": "0",
+            "HF_TEST_KERNEL_FAIL": "0",
+            "HF_TEST_KERNEL": str(root / "kernel-python"),
+            "HF_TEST_USER_SITE": str(root / "user-site"),
+        }
+
+    def _run_setup(self, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["/bin/sh", "-c", k8s._hf_builder_setup_command()
+             + 'printf "%s" "$TRITON_CONTROL_HF_BUILDER_PYTHON"'],
+            env=environment, capture_output=True, text=True, timeout=10,
+        )
+
+    def test_Setup_InstallsForDefaultPythonAndRegistersSameNotebookInterpreter(self) -> None:
+        # Arrange
+        root, environment = self._environment()
+
+        # Act
+        first = self._run_setup(environment)
+        second = self._run_setup(environment)
+
+        # Assert
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(first.stdout, "python3")
+        self.assertEqual(second.stdout, first.stdout)
+        calls = (root / "calls").read_text()
+        self.assertEqual(calls.count("-m pip install"), 1)
+        self.assertIn("-m pip install --user", calls)
+        self.assertNotIn("--break-system-packages", calls)
+        self.assertIn("triton-hf-builder", calls)
+        self.assertNotIn("triton-hf-builder==", calls)
+        self.assertIn("ipykernel>=6,<8", calls)
+        self.assertIn("-m ipykernel install --user --name triton-control", calls)
+        self.assertEqual((root / "kernel-python").read_text(), str(root / "bin/python3"))
+        self.assertFalse((root / "runtime/hf-builder").exists())
+
+    def test_Setup_PreinstalledPackage_SkipsDownloads(self) -> None:
+        # Arrange
+        root, environment = self._environment()
+        (root / "bin/python3.ready").touch()
+
+        # Act
+        result = self._run_setup(environment)
+
+        # Assert
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "python3")
+        self.assertNotIn("-m pip", (root / "calls").read_text())
+        self.assertTrue((root / "kernel-python").exists())
+
+    def test_Setup_ConfiguredVersion_PinsInstallationAndVersionCheck(self) -> None:
+        # Arrange
+        root, environment = self._environment()
+
+        # Act
+        with patch.dict(os.environ, {"DEVELOPMENT_HF_BUILDER_VERSION": " 0.2.0rc1 "}):
+            result = self._run_setup(environment)
+
+        # Assert
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = (root / "calls").read_text()
+        self.assertIn("triton-hf-builder==0.2.0rc1", calls)
+        self.assertIn("Version(version('triton-hf-builder')) == Version('0.2.0rc1')", calls)
+
+    def test_Setup_InvalidVersion_RejectsConfiguration(self) -> None:
+        # Arrange
+        configuration = {"DEVELOPMENT_HF_BUILDER_VERSION": "1.0; echo invalid"}
+
+        # Act
+        with patch.dict(os.environ, configuration):
+            with self.assertRaises(ValueError) as raised:
+                k8s._hf_builder_setup_command()
+
+        # Assert
+        self.assertIn("DEVELOPMENT_HF_BUILDER_VERSION", str(raised.exception))
+
+    def test_Setup_PackageInstallFails_StopsStartupWithActionableError(self) -> None:
+        # Arrange
+        _, environment = self._environment()
+        environment["HF_TEST_PIP_FAIL"] = "1"
+
+        # Act
+        result = self._run_setup(environment)
+
+        # Assert
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HF Triton Builder setup failed", result.stderr)
+        self.assertIn("disable Install HF Triton Builder", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_Setup_KernelRegistrationFails_StopsStartupWithActionableError(self) -> None:
+        # Arrange
+        root, environment = self._environment()
+        (root / "bin/python3.ready").touch()
+        environment["HF_TEST_KERNEL_FAIL"] = "1"
+
+        # Act
+        result = self._run_setup(environment)
+
+        # Assert
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed to register the Triton Control notebook kernel", result.stderr)
+        self.assertEqual(result.stdout, "")
 
 
 class CodeServerTests(unittest.TestCase):
@@ -57,6 +202,7 @@ class CodeServerTests(unittest.TestCase):
 
         self.assertEqual(request.name, "dev-workspace")
         self.assertFalse(request.image_has_code_server)
+        self.assertTrue(request.install_hf_builder)
 
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
@@ -186,6 +332,39 @@ class CodeServerTests(unittest.TestCase):
         container = manifests[2]["spec"]["template"]["spec"]["containers"][0]
 
         self.assertIn("\"workbench.colorTheme\":\"Monokai\"", container["args"][0])
+
+    def test_Manifests_HfBuilderEnabled_InstallsBeforeStartingEditor(self) -> None:
+        # Arrange
+        request = self._request()
+
+        # Act
+        manifest = k8s._statefulset_manifest(request, "dev", "workspace", "service", {})
+        command = manifest["spec"]["template"]["spec"]["containers"][0]["args"][0]
+
+        # Assert
+        self.assertIn("triton-hf-builder", command)
+        self.assertIn("python3 -m pip install --user", command)
+        self.assertIn("export TRITON_CONTROL_HF_BUILDER_PYTHON=python3", command)
+        self.assertIn('"python.defaultInterpreterPath":"python3"', command)
+        self.assertIn("--install-extension ms-toolsai.jupyter", command)
+        self.assertIn("--display-name 'Python (Triton Control)'", command)
+        self.assertNotIn("python3 -m venv", command)
+        self.assertLess(command.index("triton-hf-builder"), command.index('exec "$CODE_SERVER_BIN"'))
+
+    def test_Manifests_HfBuilderDisabled_KeepsEditorExtensionWithoutInstallingPythonPackage(self) -> None:
+        # Arrange
+        request = self._request().model_copy(update={"install_hf_builder": False})
+
+        # Act
+        manifest = k8s._statefulset_manifest(request, "dev", "workspace", "service", {})
+        command = manifest["spec"]["template"]["spec"]["containers"][0]["args"][0]
+
+        # Assert
+        self.assertNotIn("triton-hf-builder", command)
+        self.assertNotIn("TRITON_CONTROL_HF_BUILDER_PYTHON", command)
+        self.assertNotIn("ms-toolsai.jupyter", command)
+        self.assertNotIn("python.defaultInterpreterPath", command)
+        self.assertIn('--install-extension "$TRITON_DEPLOY_EXTENSION_VSIX"', command)
 
     def test_Manifests_UsesConfiguredCodeServerVersion(self) -> None:
         with patch.dict(

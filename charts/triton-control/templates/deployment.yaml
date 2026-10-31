@@ -85,6 +85,8 @@ spec:
               value: {{ printf "http://%s.%s.svc.cluster.local:%v" (include "triton-control.fullname" .) .Release.Namespace .Values.service.backendPort | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION
               value: {{ .Values.development.codeServer.version | quote }}
+            - name: DEVELOPMENT_HF_BUILDER_VERSION
+              value: {{ .Values.development.hfBuilder.version | quote }}
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

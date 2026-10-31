@@ -9,6 +9,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://triton:tritonpw@postgres:5432/triton_backend
+      DEVELOPMENT_HF_BUILDER_VERSION: "${DEVELOPMENT_HF_BUILDER_VERSION:-}"
       OIDC_CONFIG_SOURCE: env
       EMAIL_CONFIG_SOURCE: env
       EMAIL_DELIVERY_MODE: disabled

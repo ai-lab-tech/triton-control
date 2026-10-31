@@ -10,16 +10,16 @@ from Triton Control's **Add Deployment** page.
 
 ### Build from a downloaded Hugging Face checkpoint
 
-Install the independent `triton-hf-builder` Python package into a Python
-environment available to code-server. For a checkout:
+Enable **Install HF Triton Builder** when creating a workspace to use the builder
+in the wizard, Python code and the **Python (Triton Control)** notebook kernel.
+
+Manual installation (Python 3.10+):
 
 ```bash
-python3 -m pip install /path/to/triton-hf-builder
+python3 -m pip install triton-hf-builder
 ```
 
-Set `tritonControlDeploy.hfBuilderPython` to that environment's Python executable
-if it differs from `python3`. The extension invokes `python -m triton_hf_builder`
-with argument arrays, without shell interpolation.
+For a custom Python interpreter, set `tritonControlDeploy.hfBuilderPython`.
 
 1. Select **Build from Hugging Face** in the Triton Control workspace view or
    **Triton Control: Build Repository from Hugging Face** in the command palette.

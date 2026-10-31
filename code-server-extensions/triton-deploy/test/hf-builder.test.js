@@ -31,7 +31,7 @@ function pythonModule(t, source) {
   });
 }
 
-function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask = "feature-extraction", cancelTask = false, destination, cancelDestination = false, finalAction } = {}) {
+function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask = "feature-extraction", cancelTask = false, destination, cancelDestination = false, finalAction, python = "python3" } = {}) {
   const root = fixture(t);
   const source = path.join(root, "checkpoint");
   fs.mkdirSync(source);
@@ -63,7 +63,7 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
     }, executeCommand: async (...args) => { deploymentCalls.push(args); } },
     Uri: { file: (fsPath) => ({ fsPath }) },
     workspace: {
-      getConfiguration: () => ({ get: () => "python3" }),
+      getConfiguration: () => ({ get: () => python }),
       workspaceFolders: [{ uri: { fsPath: root } }],
     },
     window: {
@@ -105,6 +105,64 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
     taskPrompts, errors, output, destinationPrompts, validationErrors, destinationPath, deploymentCalls,
   };
 }
+
+test("managed workspace Python is used when no interpreter is configured", async (t) => {
+  // Arrange
+  const root = fixture(t);
+  const python = path.join(root, "managed python");
+  const marker = path.join(root, "managed-python-used");
+  fs.writeFileSync(python, '#!/bin/sh\ntouch "$(dirname "$0")/managed-python-used"\nexec python3 "$@"\n', { mode: 0o755 });
+  const previous = process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+  process.env.TRITON_CONTROL_HF_BUILDER_PYTHON = python;
+  t.after(() => {
+    if (previous === undefined) delete process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+    else process.env.TRITON_CONTROL_HF_BUILDER_PYTHON = previous;
+  });
+  const wizard = builderWizard(t, { inferredTask: "text-generation", python: "" });
+
+  // Act
+  await wizard.run();
+
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.invocationExists(), true);
+  assert.equal(fs.existsSync(marker), true);
+});
+
+test("explicit Python setting takes precedence over the managed interpreter", async (t) => {
+  // Arrange
+  const previous = process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+  process.env.TRITON_CONTROL_HF_BUILDER_PYTHON = "/missing/managed-python";
+  t.after(() => {
+    if (previous === undefined) delete process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+    else process.env.TRITON_CONTROL_HF_BUILDER_PYTHON = previous;
+  });
+  const wizard = builderWizard(t, { inferredTask: "text-generation", python: "python3" });
+
+  // Act
+  await wizard.run();
+
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.invocationExists(), true);
+});
+
+test("unmanaged workspace falls back to python3 with an empty interpreter setting", async (t) => {
+  // Arrange
+  const previous = process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+  delete process.env.TRITON_CONTROL_HF_BUILDER_PYTHON;
+  t.after(() => {
+    if (previous !== undefined) process.env.TRITON_CONTROL_HF_BUILDER_PYTHON = previous;
+  });
+  const wizard = builderWizard(t, { inferredTask: "text-generation", python: "" });
+
+  // Act
+  await wizard.run();
+
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.equal(wizard.invocationExists(), true);
+});
 
 test("absolute destination is used directly without appending another repository folder", async (t) => {
   // Arrange

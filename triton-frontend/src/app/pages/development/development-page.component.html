@@ -10,9 +10,7 @@
       <div class="header-row">
         <div>
           <div class="page-title">Create Workspace</div>
-          <p class="page-subtitle">
-            Create a StatefulSet-backed Development workspace pod with persistent workspace storage.
-          </p>
+          <p class="page-subtitle">Develop and test Triton models in a persistent workspace.</p>
         </div>
       </div>
 
@@ -45,14 +43,31 @@
               </mat-form-field>
             </div>
 
-            <div class="form-row wide image-code-server-row">
-              <mat-checkbox id="code-server-image-has-code-server" [(ngModel)]="imageHasCodeServer">
-                Image already has Development installed
+            <div class="form-row wide workspace-options" role="group" aria-label="Workspace tools">
+              <mat-checkbox
+                class="workspace-option"
+                id="code-server-image-has-code-server"
+                [(ngModel)]="imageHasCodeServer"
+              >
+                <span class="option-copy">
+                  <span class="option-title">Use preinstalled code-server</span>
+                  <span class="option-description"
+                    >Use the editor already included in your image.</span
+                  >
+                </span>
               </mat-checkbox>
-              <div class="field-hint">
-                Enable this only when the selected image already contains the Development binary. If
-                enabled incorrectly, workspace startup will fail.
-              </div>
+              <mat-checkbox
+                class="workspace-option"
+                id="code-server-install-hf-builder"
+                [(ngModel)]="installHfBuilder"
+              >
+                <span class="option-copy">
+                  <span class="option-title">Install HF Triton Builder</span>
+                  <span class="option-description"
+                    >Build Triton repositories from Python, notebooks or the editor.</span
+                  >
+                </span>
+              </mat-checkbox>
             </div>
 
             <div class="form-row">

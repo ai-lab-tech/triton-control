@@ -314,8 +314,8 @@
       "properties": {
         "tritonControlDeploy.hfBuilderPython": {
           "type": "string",
-          "default": "python3",
-          "description": "Python executable containing the independently installed triton-hf-builder package. May be an absolute virtualenv Python path."
+          "default": "",
+          "description": "Python executable containing triton-hf-builder. Leave empty to use the managed workspace installation, or python3 outside managed workspaces. May be an absolute virtualenv Python path."
         },
         "tritonControlDeploy.s3Endpoint": {
           "type": "string",

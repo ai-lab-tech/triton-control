@@ -154,6 +154,9 @@ mlflow:
   gatewayImage: nginx:1.28-alpine
 
 development:
+  hfBuilder:
+    # Empty uses the latest stable release when installation is needed; set to pin.
+    version: ""
   codeServer:
     # Pin code-server for reproducible Development workspaces.
     version: "4.125.0"
