@@ -551,22 +551,22 @@ def _statefulset_manifest(
 
 def _hf_builder_setup_command() -> str:
     """Make the builder importable in normal workspace Python and notebook kernels."""
-    configured_version = os.getenv("DEVELOPMENT_HF_BUILDER_VERSION", "").strip()
-    if configured_version:
-        try:
-            configured_version = str(Version(configured_version))
-        except InvalidVersion as exc:
-            raise ValueError("DEVELOPMENT_HF_BUILDER_VERSION must be a valid Python package version") from exc
-    requirement = f"triton-hf-builder=={configured_version}" if configured_version else "triton-hf-builder"
+    configured_version = os.getenv("DEVELOPMENT_HF_BUILDER_VERSION", "").strip() or (
+        Path(__file__).with_name("hf-builder-version.txt").read_text(encoding="utf-8").strip()
+    )
+    try:
+        configured_version = str(Version(configured_version))
+    except InvalidVersion as exc:
+        raise ValueError(
+            "DEVELOPMENT_HF_BUILDER_VERSION or the tested version must be a valid package version"
+        ) from exc
+    requirement = f"triton-hf-builder=={configured_version}"
     user_site = shlex.quote("import site; assert site.ENABLE_USER_SITE; print(site.getusersitepackages())")
-    check_code = "import triton_hf_builder, ipykernel; from importlib.metadata import version; "
-    if configured_version:
-        check_code += (
-            "from packaging.version import Version; "
-            f"assert Version(version('triton-hf-builder')) == Version({configured_version!r})"
-        )
-    else:
-        check_code += "version('triton-hf-builder')"
+    check_code = (
+        "import triton_hf_builder, ipykernel; from importlib.metadata import version; "
+        "from packaging.version import Version; "
+        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r})"
+    )
     check = shlex.quote(check_code)
     return (
         f"HF_BUILDER_USER_SITE=$(python3 -c {user_site}) || "

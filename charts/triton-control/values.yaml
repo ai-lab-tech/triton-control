@@ -155,7 +155,7 @@ mlflow:
 
 development:
   hfBuilder:
-    # Empty uses the latest stable release when installation is needed; set to pin.
+    # Empty uses the tested release shipped with the backend; set to override.
     version: ""
   codeServer:
     # Pin code-server for reproducible Development workspaces.

@@ -171,8 +171,8 @@ If `postgresql.enabled` is `true`, the chart injects `DATABASE_URL` into the app
 
 For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for example `256m` or `1g`).
 
-Set `development.hfBuilder.version` to pin the HF builder package. Leave it empty
-to install the latest stable release when needed and reuse existing installations.
+Set `development.hfBuilder.version` to override the tested HF builder release
+shipped with the backend. Leave it empty to follow the verified default.
 
 ## Development Workspace HTTPS Certificates
 

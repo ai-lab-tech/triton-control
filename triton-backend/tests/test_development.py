@@ -93,7 +93,8 @@ class HfBuilderStartupTests(unittest.TestCase):
         self.assertIn("-m pip install --user", calls)
         self.assertNotIn("--break-system-packages", calls)
         self.assertIn("triton-hf-builder", calls)
-        self.assertNotIn("triton-hf-builder==", calls)
+        tested_version = Path(k8s.__file__).with_name("hf-builder-version.txt").read_text().strip()
+        self.assertIn(f"triton-hf-builder=={tested_version}", calls)
         self.assertIn("ipykernel>=6,<8", calls)
         self.assertIn("-m ipykernel install --user --name triton-control", calls)
         self.assertEqual((root / "kernel-python").read_text(), str(root / "bin/python3"))
@@ -138,6 +139,18 @@ class HfBuilderStartupTests(unittest.TestCase):
 
         # Assert
         self.assertIn("DEVELOPMENT_HF_BUILDER_VERSION", str(raised.exception))
+
+    def test_Setup_EmptyTestedVersion_RejectsUnverifiedDefault(self) -> None:
+        # Arrange
+        configuration = {"DEVELOPMENT_HF_BUILDER_VERSION": ""}
+
+        # Act
+        with patch.dict(os.environ, configuration), patch.object(Path, "read_text", return_value=""):
+            with self.assertRaises(ValueError) as raised:
+                k8s._hf_builder_setup_command()
+
+        # Assert
+        self.assertIn("tested version", str(raised.exception))
 
     def test_Setup_PackageInstallFails_StopsStartupWithActionableError(self) -> None:
         # Arrange

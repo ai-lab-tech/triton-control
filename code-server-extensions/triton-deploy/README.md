@@ -10,6 +10,10 @@ from Triton Control's **Add Deployment** page.
 
 ### Build from a downloaded Hugging Face checkpoint
 
+<!-- hf-builder-version:start -->
+Tested builder version: `0.1.2`.
+<!-- hf-builder-version:end -->
+
 Enable **Install HF Triton Builder** when creating a workspace to use the builder
 in the wizard, Python code and the **Python (Triton Control)** notebook kernel.
 

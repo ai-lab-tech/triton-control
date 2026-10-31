@@ -1,0 +1,138 @@
+name: HF builder compatibility
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      builder_version:
+        description: "Published stable version; empty selects the latest stable PyPI release"
+        required: false
+        type: string
+      code_server_version:
+        description: "Optional code-server candidate to test through upgrade and fresh installation"
+        required: false
+        type: string
+      promote:
+        description: "Open and enable auto-merge for a successful newer builder version"
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [hf-builder-published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-builder-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      current: ${{ steps.resolve.outputs.current }}
+      newer: ${{ steps.resolve.outputs.newer }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check packaging
+      - name: Resolve stable non-yanked PyPI candidate
+        id: resolve
+        env:
+          CANDIDATE: ${{ inputs.builder_version || github.event.client_payload.version }}
+        run: python triton-backend/scripts/hf_builder_release.py resolve --version "$CANDIDATE"
+      - name: Record tested versions
+        env:
+          CURRENT: ${{ steps.resolve.outputs.current }}
+          CANDIDATE: ${{ steps.resolve.outputs.version }}
+        run: |
+          echo "Tested default: $CURRENT; candidate: $CANDIDATE" >> "$GITHUB_STEP_SUMMARY"
+
+  compatibility:
+    needs: candidate
+    uses: ./.github/workflows/code-server-smoke.yml
+    with:
+      hf_builder_version: ${{ needs.candidate.outputs.version }}
+      candidate_version: ${{ inputs.code_server_version || '' }}
+
+  promote:
+    needs: [candidate, compatibility]
+    if: >-
+      needs.candidate.outputs.newer == 'true' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name != 'workflow_dispatch' || inputs.promote)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      APP_ENABLED: ${{ vars.HF_BUILDER_APP_ID != '' && secrets.HF_BUILDER_APP_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check packaging
+      - name: Require the tested default-branch revision
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          current=$(git ls-remote --exit-code origin "refs/heads/$DEFAULT_BRANCH" | cut -f1)
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo '::error::The default branch changed during compatibility checks. Rerun before promoting a release.'
+            exit 1
+          fi
+      - name: Check updater credentials
+        env:
+          GH_TOKEN: ${{ secrets.HF_BUILDER_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ] && [ "$APP_ENABLED" != 'true' ]; then
+            echo '::error::Configure HF_BUILDER_APP_ID and HF_BUILDER_APP_PRIVATE_KEY, or HF_BUILDER_UPDATE_TOKEN, with repository contents and pull-request write access.'
+            exit 1
+          fi
+      - name: Create repository-scoped updater token
+        if: env.APP_ENABLED == 'true'
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.HF_BUILDER_APP_ID }}
+          private-key: ${{ secrets.HF_BUILDER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - name: Update tested default and generated README
+        env:
+          CANDIDATE: ${{ needs.candidate.outputs.version }}
+        run: |
+          python triton-backend/scripts/hf_builder_release.py resolve --version "$CANDIDATE"
+          python triton-backend/scripts/hf_builder_release.py promote --version "$CANDIDATE"
+      - name: Open compatibility update PR
+        id: pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app.outputs.token || secrets.HF_BUILDER_UPDATE_TOKEN }}
+          branch: automation/hf-builder-compatibility
+          base: ${{ github.event.repository.default_branch }}
+          delete-branch: true
+          add-paths: |
+            triton-backend/app/services/development/hf-builder-version.txt
+            code-server-extensions/triton-deploy/README.md
+          commit-message: "chore: update tested HF builder to ${{ needs.candidate.outputs.version }}"
+          title: "Update tested HF builder to ${{ needs.candidate.outputs.version }}"
+          body: |
+            Updates the tested HF builder default from ${{ needs.candidate.outputs.current }} to ${{ needs.candidate.outputs.version }}.
+
+            Published-package contract, Python/notebook and real code-server smoke checks passed:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Enable auto-merge after required PR checks
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.HF_BUILDER_UPDATE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR_NUMBER" --auto --squash
