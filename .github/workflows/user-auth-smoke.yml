@@ -1,0 +1,66 @@
+name: User authentication smoke
+
+on:
+  pull_request:
+    paths:
+      - "triton-backend/app/**"
+      - "triton-backend/pyproject.toml"
+      - "triton-frontend/src/app/pages/users/**"
+      - "triton-frontend/src/app/pages/login/**"
+      - "triton-frontend/src/app/pages/account-lifecycle/**"
+      - "triton-frontend/src/app/shared/auth/**"
+      - "triton-frontend/src/app/state/users/**"
+      - "triton-frontend/src/app/state/login/**"
+      - "triton-frontend/src/app/app.routes.ts"
+      - "triton-frontend/e2e/user-auth/**"
+      - "triton-frontend/e2e/mock-triton-server.mjs"
+      - "triton-frontend/package*.json"
+      - "Dockerfile"
+      - "docker/**"
+      - ".github/workflows/user-auth-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-auth-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [smtp, manual-link, disabled, oidc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: triton-frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: |
+          npm ci --prefix triton-frontend
+          cd triton-frontend
+          npx playwright install --with-deps chromium
+      - name: Test additional users and authentication
+        env:
+          AUTH_SMOKE_MODE: ${{ matrix.mode }}
+        run: bash triton-frontend/e2e/user-auth/run.sh
+      - name: Upload report and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-auth-smoke-${{ matrix.mode }}
+          path: |
+            triton-frontend/playwright-report/user-auth/
+            triton-frontend/test-results/user-auth/
+            triton-frontend/test-results/user-auth-runtime/
+          retention-days: 7
