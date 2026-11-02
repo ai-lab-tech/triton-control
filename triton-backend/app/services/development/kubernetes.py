@@ -15,6 +15,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from packaging.version import InvalidVersion, Version
+
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
 from app.services.kubernetes_client import (
@@ -318,6 +320,16 @@ def _statefulset_manifest(
             "fi; "
         )
 
+    hf_builder_setup = _hf_builder_setup_command() if request.install_hf_builder else ""
+    python_settings = '\"python.defaultInterpreterPath\":\"python3\",' if request.install_hf_builder else ""
+    jupyter_setup = (
+        'if ! "$CODE_SERVER_BIN" --extensions-dir "$CODE_SERVER_EXTENSIONS" '
+        "--list-extensions | grep -qx 'ms-toolsai.jupyter'; then "
+        '"$CODE_SERVER_BIN" --extensions-dir "$CODE_SERVER_EXTENSIONS" '
+        "--install-extension ms-toolsai.jupyter || "
+        "echo 'Warning: failed to install ms-toolsai.jupyter extension' >&2; "
+        "fi; "
+    ) if request.install_hf_builder else ""
     startup_command = (
         "CODE_SERVER_RUNTIME=/tmp/triton-control-code-server; "
         "CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions; "
@@ -333,6 +345,7 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/user-data/User\" "
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
+        + hf_builder_setup
         +
         'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
         'CODE_SERVER_ROOT=$(dirname "$(dirname "$CODE_SERVER_ENTRY")"); '
@@ -347,6 +360,7 @@ def _statefulset_manifest(
         "\"security.workspace.trust.enabled\":false,"
         "\"security.workspace.trust.startupPrompt\":\"never\","
         "\"s3x.forcePathStyle\":true,"
+        f"{python_settings}"
         f"\"workbench.colorTheme\":\"{request.theme}\"}}'; "
         "if mkdir -p /workspace/.triton-control \"$PERSISTENT_EXTENSIONS\" 2>/dev/null && "
         "touch \"$PERSISTENT_SETTINGS\" 2>/dev/null; then "
@@ -373,6 +387,8 @@ def _statefulset_manifest(
         "--install-extension ms-python.python || "
         "echo 'Warning: failed to install ms-python.python extension' >&2; "
         "fi; "
+        + jupyter_setup
+        +
         "if [ -f \"$TRITON_DEPLOY_EXTENSION_VSIX\" ]; then "
         "\"$CODE_SERVER_BIN\" "
         "--extensions-dir \"$CODE_SERVER_EXTENSIONS\" "
@@ -533,6 +549,46 @@ def _statefulset_manifest(
     }
 
 
+def _hf_builder_setup_command() -> str:
+    """Make the builder importable in normal workspace Python and notebook kernels."""
+    configured_version = os.getenv("DEVELOPMENT_HF_BUILDER_VERSION", "").strip() or (
+        Path(__file__).with_name("hf-builder-version.txt").read_text(encoding="utf-8").strip()
+    )
+    try:
+        configured_version = str(Version(configured_version))
+    except InvalidVersion as exc:
+        raise ValueError(
+            "DEVELOPMENT_HF_BUILDER_VERSION or the tested version must be a valid package version"
+        ) from exc
+    requirement = f"triton-hf-builder=={configured_version}"
+    user_site = shlex.quote("import site; assert site.ENABLE_USER_SITE; print(site.getusersitepackages())")
+    check_code = (
+        "import triton_hf_builder, ipykernel; from importlib.metadata import version; "
+        "from packaging.version import Version; "
+        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r})"
+    )
+    check = shlex.quote(check_code)
+    return (
+        f"HF_BUILDER_USER_SITE=$(python3 -c {user_site}) || "
+        "{ echo 'Error: HF Triton Builder requires Python user-site packages to be enabled.' >&2; exit 1; }; "
+        f"if ! python3 -c {check} >/dev/null 2>&1; then "
+        "if ! (PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --user --disable-pip-version-check "
+        f"{shlex.quote(requirement)} 'ipykernel>=6,<8' && "
+        f"python3 -c {check}); then "
+        "echo 'Error: HF Triton Builder setup failed. Use an image with Python 3.10+, pip and user-site packages, "
+        "allow PyPI access, or disable Install HF Triton Builder when creating the workspace.' >&2; "
+        "exit 1; "
+        "fi; "
+        "fi; "
+        "if ! python3 -m ipykernel install --user --name triton-control "
+        "--display-name 'Python (Triton Control)'; then "
+        "echo 'Error: failed to register the Triton Control notebook kernel.' >&2; exit 1; "
+        "fi; "
+        "export TRITON_CONTROL_HF_BUILDER_PYTHON=python3; "
+        'export PATH="$HF_BUILDER_USER_SITE/bin:$PATH"; '
+    )
+
+
 def _code_server_version() -> str:
     return os.getenv("DEVELOPMENT_CODE_SERVER_VERSION", _DEFAULT_CODE_SERVER_VERSION).strip()
 
@@ -564,6 +620,8 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
     files = {
         "extension/package.json": (extension_dir / "package.json").read_text(encoding="utf-8"),
         "extension/extension.js": (extension_dir / "extension.js").read_text(encoding="utf-8"),
+        "extension/hf-builder.js": (extension_dir / "hf-builder.js").read_text(encoding="utf-8"),
+        "extension/hf-builder-client.js": (extension_dir / "hf-builder-client.js").read_text(encoding="utf-8"),
         "extension/profile-api.js": (extension_dir / "profile-api.js").read_text(encoding="utf-8"),
         "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
         "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),

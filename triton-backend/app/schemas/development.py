@@ -29,6 +29,7 @@ class CreateCodeServerRequest(SQLModel):
     gpu_count: Optional[int] = None
     dockerconfigjson: Optional[str] = None
     image_has_code_server: bool = False
+    install_hf_builder: bool = True
 
     @field_validator("name", "image", "storage_size")
     @classmethod

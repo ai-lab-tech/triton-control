@@ -8,6 +8,51 @@ from Triton Control's **Add Deployment** page.
 
 ## Flow
 
+### Build from a downloaded Hugging Face checkpoint
+
+<!-- hf-builder-version:start -->
+Tested builder version: `0.1.2`.
+<!-- hf-builder-version:end -->
+
+Enable **Install HF Triton Builder** when creating a workspace to use the builder
+in the wizard, Python code and the **Python (Triton Control)** notebook kernel.
+
+Manual installation (Python 3.10+):
+
+```bash
+python3 -m pip install triton-hf-builder
+```
+
+For a custom Python interpreter, set `tritonControlDeploy.hfBuilderPython`.
+
+1. Select **Build from Hugging Face** in the Triton Control workspace view or
+   **Triton Control: Build Repository from Hugging Face** in the command palette.
+2. Select the already downloaded HF model directory.
+3. Choose runtime, device, versioned serving image, model name and GPU count.
+   The task is inferred automatically from checkpoint metadata. A task dialog
+   appears only when inference is ambiguous; detected tasks are shown in the output.
+4. Enter a new repository folder, using an absolute path or a path relative to the workspace.
+5. Review the generated `requirements.txt`, `serving.json` and model config.
+   The final action can open the config or start the existing deployment form.
+
+To override a detected task, use **Triton Control: Build Repository from Hugging Face
+(Choose Task)** from the command palette, for example to select `feature-extraction`.
+The normal command leaves the optional Python `task` argument unset when metadata
+is clear. A runtime incompatible with the detected task produces an error instead
+of changing the task automatically.
+
+The Python core supports Transformers text tasks, native vLLM, and TensorRT-LLM's
+public LLM API. It does metadata checks without loading weights or using a GPU.
+Actual serving compatibility still needs inference validation in the target image.
+The editor contains only the wizard and subprocess integration; generator and
+adapter logic live in https://github.com/ai-lab-tech/triton-hf-builder.
+
+When deploying a generated repository root, the form reads the image, GPU count
+and requirements from its serving metadata. These remain editable. Triton Control
+already installs `requirements_txt` before starting Triton, so no Dockerfile is
+needed for this workflow. Resolve/pin the dependencies against the target image;
+the generated requirements are starter specifications rather than a tested lock.
+
 ### Create a model repository
 
 1. Open a workspace folder in code-server.

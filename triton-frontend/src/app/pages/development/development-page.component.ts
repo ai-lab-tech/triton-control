@@ -77,6 +77,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   gpuCount: string | number = "";
   dockerconfigjson = "";
   imageHasCodeServer = false;
+  installHfBuilder = true;
 
   readonly loading = signal(false);
   readonly initialLoaded = signal(false);
@@ -260,6 +261,7 @@ export class DevelopmentPageComponent implements OnDestroy {
         gpu_count: this.parseGpuCount(),
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
         image_has_code_server: this.imageHasCodeServer,
+        install_hf_builder: this.installHfBuilder,
       };
       const workspace = await firstValueFrom(
         this.developmentApi.createCodeServerApiDevelopmentPost(payload),

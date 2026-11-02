@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { test, expect, BrowserContext, Page, FrameLocator, Frame } from "@playwright/test";
 
@@ -9,6 +10,10 @@ const model = "smoke_model";
 const prefix = "smoke";
 const s3Script = resolve(__dirname, "s3.py");
 const workspaceImage = "plugin-smoke-workspace:local";
+const hfTests = resolve(__dirname, "../../../code-server-extensions/triton-deploy/test");
+const hfSource = `hf-checkpoint-${phase}`;
+const hfRepository = `hf-repository-${phase}`;
+const hfModel = "hf_smoke_model";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -58,6 +63,74 @@ test.describe.serial("code-server plugin workflows", () => {
 
   function readFile(path: string): string {
     return kubectl("exec", pod, "--", "cat", path);
+  }
+
+  function workspacePython(script: string, ...args: string[]): string {
+    return execFileSync(
+      "kubectl",
+      [
+        "--context",
+        required("PLUGIN_SMOKE_CONTEXT"),
+        "-n",
+        namespace,
+        "exec",
+        "-i",
+        pod,
+        "--",
+        "python3",
+        "-",
+        ...args,
+      ],
+      { input: readFileSync(resolve(hfTests, script)), encoding: "utf8", timeout: 120_000 },
+    );
+  }
+
+  async function buildHfRepository(target: string): Promise<Frame> {
+    // A restored workbench can render Explorer before extension commands are ready.
+    await command("Triton Control: Refresh Repositories");
+    await explorer();
+    const localRoot = row("workspace");
+    if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
+      await localRoot.locator(".monaco-tl-twistie").click();
+    }
+    await expect(row(hfSource)).toBeVisible();
+    const action = workbench.getByRole("menuitem", {
+      name: "Triton Control: Build Repository from Hugging Face",
+      exact: true,
+    });
+    await expect(async () => {
+      await workbench.locator("body").press("Escape");
+      await row(hfSource).click();
+      await row(hfSource).click({ button: "right" });
+      await expect(action).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
+    await action.hover();
+    await page.keyboard.press("Enter");
+    const widget = workbench.locator(".quick-input-widget");
+    await expect(widget).toContainText("HF Builder: Serving runtime");
+    await widget.getByText("Transformers / Python", { exact: true }).click();
+    await expect(widget).toContainText("HF Builder: Serving device");
+    await widget.getByText("cpu", { exact: true }).click();
+    await input(workspaceImage, "HF Builder: Target serving image");
+    await input(hfModel, "HF Builder: Triton model name");
+    await input(`/workspace/${target}`, "HF Builder: Repository destination");
+    await expect
+      .poll(() => probe(() => readFile(`/workspace/${target}/serving.json`)))
+      .toContain('"generator": "triton-hf-builder"');
+    await workbench.getByRole("button", { name: "Deploy repository", exact: true }).click();
+    let form: Frame | undefined;
+    await expect
+      .poll(async () => {
+        for (const frame of page.frames().reverse()) {
+          if (await frame.locator("#deploy-form").count()) {
+            form = frame;
+            return true;
+          }
+        }
+        return false;
+      })
+      .toBeTruthy();
+    return form!;
   }
 
   async function command(title: string): Promise<void> {
@@ -162,6 +235,7 @@ test.describe.serial("code-server plugin workflows", () => {
           storage_size: "1Gi",
           memory: "1Gi",
           cpu: "250m",
+          install_hf_builder: true,
         },
       });
       expect(response.ok(), await response.text()).toBeTruthy();
@@ -182,6 +256,7 @@ test.describe.serial("code-server plugin workflows", () => {
     expect(
       kubectl("exec", pod, "--", "/tmp/triton-control-code-server/bin/code-server", "--version"),
     ).toContain(required("PLUGIN_SMOKE_VERSION"));
+    workspacePython("hf-builder-fixture.py", `/workspace/${hfSource}`);
     // Seed before Explorer mounts the remote filesystem so its initial listing
     // includes the fixture, even when the workbench restores a cached tree.
     s3("put", `${prefix}/remote-${phase}.txt`, "original smoke content");
@@ -341,6 +416,45 @@ test.describe.serial("code-server plugin workflows", () => {
     }
   });
 
+  test("HF wizard uses the published builder and passes serving metadata to deployment", async () => {
+    // Arrange
+    await page.goto("/development");
+    await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
+    await expect(page.locator(".frame-loading")).toBeHidden({ timeout: 30_000 });
+
+    // Act
+    const form = await buildHfRepository(hfRepository);
+    const manifest = JSON.parse(readFile(`/workspace/${hfRepository}/serving.json`));
+    const notebook = JSON.parse(
+      workspacePython(
+        "hf-builder-notebook.py",
+        required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),
+        "triton-control",
+      ),
+    );
+
+    // Assert
+    expect(manifest.generator_version).toBe(required("PLUGIN_SMOKE_HF_BUILDER_VERSION"));
+    expect(manifest.schema_version).toBe(1);
+    expect(manifest.model_name).toBe(hfModel);
+    expect(readFile(`/workspace/${hfRepository}/${hfModel}/config.pbtxt`)).toContain(
+      'backend: "python"',
+    );
+    expect(
+      readFile(`/workspace/${hfRepository}/${hfModel}/1/model/model.safetensors`).length,
+    ).toBeGreaterThan(0);
+    await expect(form.locator('[name="image"]')).toHaveValue(manifest.image);
+    await expect(form.locator('[name="gpuCount"]')).toHaveValue(String(manifest.gpu_count));
+    await expect(form.locator('[name="requirementsTxt"]')).toHaveValue(
+      readFile(`/workspace/${hfRepository}/requirements.txt`),
+    );
+    expect(notebook).toEqual({
+      version: required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),
+      python: true,
+      notebook: true,
+    });
+  });
+
   test("workspace and extension remain usable after pod restart or upgrade", async () => {
     test.setTimeout(600_000);
     if (phase === "upgrade") {
@@ -348,6 +462,9 @@ test.describe.serial("code-server plugin workflows", () => {
         "TritonPythonModel",
       );
       expect(readFile("/workspace/remote-baseline.txt")).toBe("edited smoke content");
+      expect(
+        JSON.parse(readFile("/workspace/hf-repository-baseline/serving.json")).generator_version,
+      ).toBe(required("PLUGIN_SMOKE_HF_BUILDER_VERSION"));
     }
     const oldUid = kubectl("get", "pod", pod, "-o", "jsonpath={.metadata.uid}");
     kubectl("delete", "pod", pod, "--wait=false");
@@ -373,5 +490,19 @@ test.describe.serial("code-server plugin workflows", () => {
     await command("Triton Control: Refresh Repositories");
     await openFile(`/workspace/${repository}/${model}/config.pbtxt`);
     await expect(workbench.locator(".monaco-editor").first()).toContainText("python");
+    expect(JSON.parse(readFile(`/workspace/${hfRepository}/serving.json`)).generator_version).toBe(
+      required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),
+    );
+    const form = await buildHfRepository(`${hfRepository}-restarted`);
+    await expect(form.locator('[name="image"]')).toHaveValue(workspaceImage);
+    expect(
+      JSON.parse(
+        workspacePython(
+          "hf-builder-notebook.py",
+          required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),
+          "triton-control",
+        ),
+      ).notebook,
+    ).toBe(true);
   });
 });

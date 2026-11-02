@@ -14,6 +14,8 @@
     "onCommand:tritonControl.deployModelRepository",
     "onCommand:tritonControl.uploadModelRepositorySimple",
     "onCommand:tritonControl.newModelRepository",
+    "onCommand:tritonControl.buildHuggingFaceRepository",
+    "onCommand:tritonControl.buildHuggingFaceRepositoryWithTask",
     "onCommand:tritonControl.openRepositorySetup",
     "onCommand:tritonControl.revealRepository",
     "onCommand:tritonControl.refreshRepositories",
@@ -24,6 +26,16 @@
   "main": "./extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "tritonControl.buildHuggingFaceRepository",
+        "title": "Triton Control: Build Repository from Hugging Face",
+        "icon": "$(package)"
+      },
+      {
+        "command": "tritonControl.buildHuggingFaceRepositoryWithTask",
+        "title": "Triton Control: Build Repository from Hugging Face (Choose Task)",
+        "icon": "$(package)"
+      },
       {
         "command": "tritonControl.deployModelRepository",
         "title": "Triton Control: Deploy Model Repository"
@@ -190,6 +202,11 @@
       ],
       "explorer/context": [
         {
+          "command": "tritonControl.buildHuggingFaceRepository",
+          "when": "explorerResourceIsFolder && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "navigation@88"
+        },
+        {
           "command": "tritonControl.deployModelRepository",
           "when": "explorerResourceIsFolder && resourceScheme != triton-s3",
           "group": "navigation@90"
@@ -295,6 +312,11 @@
     "configuration": {
       "title": "Triton Control Deploy",
       "properties": {
+        "tritonControlDeploy.hfBuilderPython": {
+          "type": "string",
+          "default": "",
+          "description": "Python executable containing triton-hf-builder. Leave empty to use the managed workspace installation, or python3 outside managed workspaces. May be an absolute virtualenv Python path."
+        },
         "tritonControlDeploy.s3Endpoint": {
           "type": "string",
           "default": "",

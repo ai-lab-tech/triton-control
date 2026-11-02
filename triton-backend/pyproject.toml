@@ -62,6 +62,7 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.services.perf_analyzer" = ["*.yaml"]
+"app.services.development" = ["hf-builder-version.txt"]
 
 ###################################  COVERAGE  CONFIG  ###################################
 

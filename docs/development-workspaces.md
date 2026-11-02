@@ -32,7 +32,8 @@ Open **Development** in the sidebar and configure the workspace:
 | --- | --- | --- | --- |
 | Workspace name | Yes | `workspace` | Name used to derive the user's Kubernetes resource names. |
 | Triton development image | Yes | `nvcr.io/nvidia/tritonserver:26.06-py3` | Container image used for the workspace pod. |
-| Image already has Development installed | No | disabled | Uses the `code-server` binary from the image instead of installing a standalone runtime during startup. Triton Control starts it on `0.0.0.0:8080`. |
+| Use preinstalled code-server | No | disabled | Uses the `code-server` binary from the image instead of installing a standalone runtime during startup. Triton Control starts it on `0.0.0.0:8080`. |
+| Install HF Triton Builder | No | enabled | Installs `triton-hf-builder` for Python code, Jupyter notebooks and the bundled **Build from Hugging Face** wizard. Disable to manage the Python package yourself. |
 | Workspace storage | Yes | `20Gi` | Persistent volume claim size mounted at `/workspace`. |
 | VS Code theme | Yes | `Default Dark+` | Initial code-server color theme. |
 | CPU request | No | unset | CPU request and limit for the workspace container. |
@@ -41,7 +42,7 @@ Open **Development** in the sidebar and configure the workspace:
 | Registry credentials | No | unset | Docker `.dockerconfigjson` used to pull a private workspace image. |
 
 In this field, **Development** refers to the code-server runtime. Enable
-**Image already has Development installed** only if `code-server` is available
+**Use preinstalled code-server** only if `code-server` is available
 on the image's `PATH`. Triton Control overrides the image startup command and
 starts that binary with `--bind-addr 0.0.0.0:8080`; the image does not need to
 start code-server itself. The resulting workspace must listen on container port
@@ -107,6 +108,93 @@ settings and user-installed extensions on that volume:
 These files survive pod restarts while the PVC remains available. New
 workspaces receive the Python extension when its marketplace installation
 succeeds and the bundled **Triton Control Deploy** extension.
+
+### HF Triton Builder
+
+**Install HF Triton Builder** is enabled by default when creating a workspace
+(`install_hf_builder: true` in the API). Startup installs
+[triton-hf-builder](https://pypi.org/project/triton-hf-builder/) and `ipykernel`
+using pip's user installation mode. Packages live in
+the workspace user's Python site directory on the PVC, making them available to ordinary `python3`
+scripts, the integrated terminal and notebooks without activating a virtual
+environment. Already importable packages are reused. The image needs Python
+3.10+, pip, user-site packages enabled and access to PyPI for installation. A
+setup failure stops startup and reports the reason in the pod logs.
+
+By default, installation uses the tested release shipped with Triton Control. Set
+`DEVELOPMENT_HF_BUILDER_VERSION` (Helm: `development.hfBuilder.version`) to pin a
+version. Existing installations are reused when they match the configured pin,
+or the shipped default when no override is set.
+
+New editor settings default to `python3`. Startup also installs the Jupyter
+editor extension and registers **Python (Triton Control)** using the same Python
+interpreter. Open an `.ipynb` file and select that kernel. Both Python scripts
+and notebook cells can use:
+
+```python
+from triton_hf_builder import generate_repository
+```
+
+The bundled builder wizard automatically uses `python3`. An explicit
+`tritonControlDeploy.hfBuilderPython` setting overrides it. Custom Python
+environments and remote notebook kernels need their own package installation.
+
+Disable the checkbox to skip managed Python installation. The bundled extension,
+including S3 and deployment actions, remains available. For a manually installed
+builder, run:
+
+```bash
+python3 -m pip install --user triton-hf-builder
+```
+
+Set `tritonControlDeploy.hfBuilderPython` if you install into a separate virtual
+environment. Without a managed or explicitly configured interpreter, the
+extension uses `python3`. Existing workspaces are unchanged; install the package
+manually there or create a new workspace with the option enabled.
+
+### Compatibility checks
+
+The **Code-server plugin smoke** workflow tests the real HF wizard, generated
+deployment metadata and Python/Jupyter access alongside S3 and deployment.
+It runs on plugin changes and supports baseline, restart, upgrade and fresh
+candidate code-server installations. Its package contract job also tests the
+published package on Python 3.10, 3.12 and 3.14.
+
+**HF builder compatibility** runs every Monday at 05:23 UTC, manually, or on a
+`repository_dispatch` event named `hf-builder-published` with
+`client_payload.version`. It resolves stable non-yanked PyPI releases and reuses
+the same contract and browser tests. A newer successful candidate opens an
+update PR and enables auto-merge after required PR checks pass. Failed checks
+leave the default unchanged. Manual runs only promote when **promote** is enabled.
+
+The version source is
+`triton-backend/app/services/development/hf-builder-version.txt`; the matching
+README sentence is generated by `triton-backend/scripts/hf_builder_release.py`.
+For automatic promotion, enable repository auto-merge and configure either:
+
+- A GitHub App installed on this repository: variable `HF_BUILDER_APP_ID` and
+  secret `HF_BUILDER_APP_PRIVATE_KEY`. Each run creates a fresh repository-scoped token.
+- A fine-grained PAT in secret `HF_BUILDER_UPDATE_TOKEN`.
+
+Grant Contents and Pull requests write access. These credentials allow required
+PR workflows to run automatically. Require `browser-smoke` in default-branch
+protection; that check also fails when the package contract fails. Configure the
+builder repository's publish workflow to dispatch only after its PyPI upload
+succeeds; weekly polling works independently of that hook.
+
+Run package checks locally with an environment containing the desired published
+builder and `ipykernel`:
+
+```bash
+HF_BUILDER_INTEGRATION_PYTHON=/path/to/python \
+HF_BUILDER_EXPECTED_VERSION=<package-version> \
+node --test code-server-extensions/triton-deploy/test/hf-builder-integration.test.js
+```
+
+Run the browser suite with `bash triton-frontend/e2e/code-server/run.sh`.
+`PLUGIN_SMOKE_HF_BUILDER_VERSION` overrides the tested package for that run;
+`PLUGIN_SMOKE_CANDIDATE_VERSION` additionally tests a code-server upgrade.
+These checks generate fixture repositories and do not run model inference.
 
 Triton Control starts code-server with Workspace Trust disabled. The managed
 `/workspace` folder is treated as the user's development area, so code-server

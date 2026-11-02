@@ -9,9 +9,11 @@ export PLUGIN_SMOKE_PYTHON
 for tool in docker kubectl helm node npm curl "$KIND" "$PLUGIN_SMOKE_PYTHON"; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
-"$PLUGIN_SMOKE_PYTHON" -c 'import boto3'
+"$PLUGIN_SMOKE_PYTHON" -c 'import boto3, packaging'
 DEFAULT_VERSION=$(node -e 'const fs=require("fs"); const source=fs.readFileSync(process.argv[1],"utf8"); const match=source.match(/codeServer:\s*\n(?:\s*#[^\n]*\n)*\s*version:\s*"([^"]+)"/); if(!match) process.exit(1); process.stdout.write(match[1]);' "$REPO_ROOT/charts/triton-control/values.yaml")
 export PLUGIN_SMOKE_VERSION=${PLUGIN_SMOKE_VERSION:-$DEFAULT_VERSION}
+PLUGIN_SMOKE_HF_BUILDER_VERSION=$("$PLUGIN_SMOKE_PYTHON" "$REPO_ROOT/triton-backend/scripts/hf_builder_release.py" pin --version "${PLUGIN_SMOKE_HF_BUILDER_VERSION:-}")
+export PLUGIN_SMOKE_HF_BUILDER_VERSION
 export PLUGIN_SMOKE_PHASE=${PLUGIN_SMOKE_PHASE:-baseline}
 for version in "$PLUGIN_SMOKE_VERSION" "${PLUGIN_SMOKE_CANDIDATE_VERSION:-$PLUGIN_SMOKE_VERSION}"; do
   [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected a code-server version such as 4.125.0" >&2; exit 1; }
@@ -82,7 +84,8 @@ root = pathlib.Path(sys.argv[1])
             }.items()],
             "secretEnv": {"SESSION_SECRET": secrets.token_hex(32), "JWT_SECRET": secrets.token_hex(32),
                           "S3_SECRET_ENCRYPTION_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()}},
-    "development": {"codeServer": {"version": os.environ["PLUGIN_SMOKE_VERSION"]}},
+    "development": {"codeServer": {"version": os.environ["PLUGIN_SMOKE_VERSION"]},
+                    "hfBuilder": {"version": os.environ["PLUGIN_SMOKE_HF_BUILDER_VERSION"]}},
     "postgresql": {"auth": {"password": secrets.token_hex(24)}},
 }))
 PY

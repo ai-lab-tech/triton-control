@@ -131,6 +131,7 @@ describe("DevelopmentPageComponent", () => {
         memory_limit: "4Gi",
         dockerconfigjson: '{"auths":{}}',
         image_has_code_server: false,
+        install_hf_builder: true,
       }),
     );
     expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(3);
@@ -230,6 +231,21 @@ describe("DevelopmentPageComponent", () => {
       jasmine.objectContaining({
         image_has_code_server: true,
       }),
+    );
+  });
+
+  it("Create_HfBuilderDisabled_SendsFalseFlag", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const component = fixture.componentInstance;
+    component.installHfBuilder = false;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({ install_hf_builder: false }),
     );
   });
 
