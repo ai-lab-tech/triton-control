@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from kubernetes.client.rest import ApiException
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 from starlette.middleware.sessions import SessionMiddleware
@@ -82,6 +82,7 @@ class WorkspaceDeploymentAccessTests(unittest.TestCase):
 
     def test_bearer_token_allows_only_plugin_apis(self):
         app = FastAPI()
+        app.state.workspace_deployment_authenticator = deployment_access.authenticate_token
         app.add_middleware(SessionMiddleware, secret_key="test-session")
 
         async def identity(claims=Depends(security.get_claims)):

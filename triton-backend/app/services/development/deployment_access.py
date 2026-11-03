@@ -7,8 +7,8 @@ import binascii
 import secrets
 from typing import Any
 
-from kubernetes import client
-from kubernetes.client.rest import ApiException
+from kubernetes import client  # type: ignore[import-untyped]
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.core.identity import claims_from_user
 from app.db.database import session_factory
@@ -17,7 +17,7 @@ from app.repositories import developments, users
 from app.services.kubernetes_client import api_client
 
 TOKEN_KEY = "TRITON_CONTROL_TOKEN"  # nosec B105 - environment variable name
-TOKEN_PREFIX = "workspace-deployment:"
+TOKEN_PREFIX = "workspace-deployment:"  # nosec B105 -- token format marker
 
 
 def create_token(namespace: str, workspace_name: str) -> str:

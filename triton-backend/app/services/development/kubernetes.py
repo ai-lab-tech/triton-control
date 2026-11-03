@@ -86,31 +86,25 @@ def apply_code_server_resources(
             meta = manifest.get("metadata") or {}
             kind = manifest.get("kind", "Resource")
             name = meta.get("name", "unknown")
-            _diag("create.apply.begin", kind=kind, name=name)
+            _diag("create.apply.begin")
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
-            _diag("create.apply.success", kind=kind, name=name)
+            _diag("create.apply.success")
             applied.append(f"{kind}/{name}")
-        _diag("create.success", applied=applied)
+        _diag("create.success", resources_count=len(applied))
         return applied
     except ConfigException as exc:
-        logger.exception("Development create failed: Kubernetes configuration could not be loaded")
-        _diag("create.failed.config", error=exc)
+        _diag("create.failed.config")
         raise BadGatewayError("Kubernetes configuration could not be loaded") from exc
     except ApiException as exc:
-        logger.exception("Development create failed with Kubernetes API error")
-        error = _api_error(exc)
-        _diag("create.failed.api", error=error)
-        raise BadGatewayError(error) from exc
+        # Kubernetes errors may echo Secret manifests, including generated tokens.
+        _diag("create.failed.api")
+        raise BadGatewayError("Kubernetes API request failed while creating Development resources") from exc
     except FailToCreateError as exc:
-        errs = getattr(exc, "api_exceptions", []) or []
-        message = "; ".join(_api_error(e) for e in errs) or "Failed to apply Kubernetes resources"
-        logger.exception("Development create failed while applying Kubernetes resources: %s", message)
-        _diag("create.failed.apply", errors_count=len(errs), error=message)
-        raise BadGatewayError(message) from exc
+        _diag("create.failed.apply")
+        raise BadGatewayError("Failed to apply Kubernetes resources") from exc
     except Exception as exc:
-        logger.exception("Development create failed with unexpected error")
-        _diag("create.failed.unexpected", error=exc)
-        raise BadGatewayError(f"Failed to apply Development resources: {exc}") from exc
+        _diag("create.failed.unexpected")
+        raise BadGatewayError("Failed to apply Development resources") from exc
 
 
 def delete_code_server_resources(

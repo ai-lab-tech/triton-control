@@ -19,7 +19,7 @@ from fastapi import Response
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import development_api as code_server_api
-from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError, NotFoundError
 from app.schemas import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
 from app.services.development import proxy as code_proxy
@@ -905,6 +905,26 @@ class CodeServerTests(unittest.TestCase):
             "Service/code-7-dev-workspace-svc",
         ])
         self.assertEqual(applied[2]["kind"], "StatefulSet")
+
+    def test_ApplyCodeServerResources_DoesNotExposeSecretErrors(self) -> None:
+        sensitive = "generated-deployment-credential"
+        api_error = ApiException(status=422, reason=sensitive)
+        api_error.body = sensitive
+        for error in [api_error, RuntimeError(sensitive)]:
+            stderr = io.StringIO()
+            with self.subTest(error=type(error).__name__), patch.object(
+                k8s, "api_client", return_value=object(),
+            ), patch.object(k8s, "_ensure_namespace"), patch.object(
+                k8s, "gpu_runtime_class_name", return_value=None,
+            ), patch("kubernetes.utils.create_from_dict", side_effect=error), patch(
+                "sys.stderr", stderr,
+            ), self.assertRaises(BadGatewayError) as raised:
+                k8s.apply_code_server_resources(
+                    self._request(), namespace="control", statefulset_name="code-7",
+                    service_name="code-7-svc", secret_name="code-7-secret",
+                )
+            self.assertNotIn(sensitive, stderr.getvalue())
+            self.assertNotIn(sensitive, raised.exception.detail)
 
     def test_ReadStatus_PodsReadyAndMissing_ReturnsStatus(self) -> None:
         ready_pod = SimpleNamespace(

@@ -7,7 +7,7 @@ or session cookie) from the higher-level access-policy check in ``core/security.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, cast
+from typing import Any, Callable, Dict, cast
 
 import anyio
 from fastapi import Depends, HTTPException, Request
@@ -38,7 +38,10 @@ async def extract_claims(
     if creds and creds.scheme.lower() == "bearer":
         if creds.credentials.startswith("workspace-deployment:"):
             from app.exceptions import AppError
-            from app.services.development.deployment_access import authenticate_token
+            authenticate_token = cast(
+                Callable[[str], Dict[str, Any]],
+                request.app.state.workspace_deployment_authenticator,
+            )
 
             try:
                 return await anyio.to_thread.run_sync(authenticate_token, creds.credentials)
