@@ -85,6 +85,7 @@ workflows/
 | `s3_upload/local-model-upload-s3-polling` | Upload a model to an existing polling instance | `python` |
 | `workflows/sklearn-iris-training` | Run scikit-learn training through Argo with S3-backed source and result artifacts | Training workflow |
 | `workflows/mlflow-iris-autodeploy` | Train and register an Iris model, export ONNX, then deploy it automatically with the MLflow plugin | MLflow and ONNX workflow |
+| `workflows/mlflow-iris-generate` | Generate a Triton adapter in MLflow artifacts using sklearn.log_model() | MLflow generation workflow |
 
 ## Runtime Notes
 
