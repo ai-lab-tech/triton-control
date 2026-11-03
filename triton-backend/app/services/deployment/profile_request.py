@@ -27,28 +27,35 @@ def resolve_profile_request(
         ):
             raise BadRequestError("Workflow token is not valid for this deployment or S3 profile")
     if request.s3_profile_id is None:
-        return request
+        raise BadRequestError("Select an admin-configured S3 profile")
 
     user = require_user_entity(session, claims)
     profile = s3_profiles.find_for_owner(session, user.id or 0, request.s3_profile_id)
     if profile is None:
         raise NotFoundError("S3 profile not found")
 
-    uri = urlsplit(request.model_uri or "")
-    parts = uri.path.strip("/").split("/")
-    if (
-        uri.scheme != "s3"
-        or not uri.netloc
-        or uri.query
-        or uri.fragment
-        or len(parts) < 2
-        or any(part in {"", ".", ".."} for part in parts)
-        or uri.netloc != profile.bucket
-    ):
-        raise BadRequestError("model_uri must name a model in the selected S3 profile bucket")
-    prefix, model_name = "/".join(parts[:-1]), parts[-1]
-    if prefix != request.repository_prefix or model_name != request.model_name or not _MODEL_NAME.fullmatch(model_name):
-        raise BadRequestError("model_uri, repository_prefix and model_name do not match")
+    prefix = (request.repository_prefix or "").strip("/")
+    if any(part in {".", ".."} for part in prefix.split("/")):
+        raise BadRequestError("Invalid repository prefix")
+    if claims.get("token_use") == "mlflow_workflow" and not request.model_uri:
+        raise BadRequestError("Workflow deployment requires model_uri")
+    if request.model_uri:
+        uri = urlsplit(request.model_uri or "")
+        parts = uri.path.strip("/").split("/")
+        if (
+            uri.scheme != "s3"
+            or not uri.netloc
+            or uri.query
+            or uri.fragment
+            or len(parts) < 2
+            or any(part in {"", ".", ".."} for part in parts)
+            or uri.netloc != profile.bucket
+        ):
+            raise BadRequestError("model_uri must name a model in the selected S3 profile bucket")
+        prefix, model_name = "/".join(parts[:-1]), parts[-1]
+        if (prefix != request.repository_prefix or model_name != request.model_name
+                or not _MODEL_NAME.fullmatch(model_name)):
+            raise BadRequestError("model_uri, repository_prefix and model_name do not match")
 
     endpoint = profile.endpoint.rstrip("/")
     if not endpoint.startswith(("http://", "https://")):

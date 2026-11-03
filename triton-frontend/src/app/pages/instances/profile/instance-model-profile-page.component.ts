@@ -159,7 +159,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
           {
             model_version: this.version(),
             image: this.image.trim(),
-            dockerconfigjson: this.dockerconfigjson.trim() || undefined,
+
             batch_size: Number(this.batchSize),
             concurrency_range: this.concurrencyRange.trim(),
             measurement_request_count: Number(this.measurementRequestCount),

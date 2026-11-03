@@ -103,9 +103,15 @@ class PerfLifecycleTests(unittest.TestCase):
         self.reserve(version="2")
 
     def test_start_is_durable_and_does_not_wait_for_job(self):
+        from app.api.registry_api import RegistryUpdate, put_registry_settings
+        with patch.dict("os.environ", {"REGISTRY_SECRET_ENCRYPTION_KEY": "test-key"}):
+            put_registry_settings(RegistryUpdate(dockerconfigjson='{"auths":{"registry":{"auth":"private"}}}'),
+                                  self.session, {"role": "admin"})
+        key = patch.dict("os.environ", {"REGISTRY_SECRET_ENCRYPTION_KEY": "test-key"})
+        key.start()
+        self.addCleanup(key.stop)
         response = jobs.start(self.session, {}, 1, "model-a", StartModelPerfRequest(
             model_version="1", input_data='{"data":[{"INPUT":[1]}]}',
-            dockerconfigjson='{"auths":{"registry":{"auth":"private"}}}',
         ))
         self.assertEqual(response.state, "creating")
         self.api.create.assert_not_called()

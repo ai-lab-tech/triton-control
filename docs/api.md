@@ -64,3 +64,23 @@ triton-frontend/openapi/triton-backend/openapi.json
 
 If the check fails, regenerate the backend spec, copy it to the frontend OpenAPI
 folder, run `npm run generate:api`, and commit the changed files.
+
+## Central Registry and S3 Configuration
+
+- `GET /api/settings/registry` (admin): returns `{ "configured": true }` or
+  `{ "configured": false }`, never the secret.
+- `PUT /api/settings/registry` (admin): accepts `dockerconfigjson` with a non-empty
+  `auths` object. An empty string removes the central secret.
+- `/api/s3-profiles`: members can list available profiles; only admins can create,
+  update, or delete them. Browser responses return an empty `secret_key`.
+- `POST /api/deployments`: send `s3_profile_id` and optional `repository_prefix`.
+  The backend resolves connection credentials. Model-specific workflow requests
+  additionally use `model_uri` and `model_name` with explicit model control.
+- `PUT /api/instances/{instance_id}/s3`: when enabling S3, send `s3_profile_id`
+  and optional `prefix`. Manual connection fields are rejected.
+- `POST /api/workflows/s3-credentials`: select `s3_profile_id`; manual credential
+  requests are rejected.
+
+Managed workload creation rejects per-request `dockerconfigjson` overrides and
+uses the central registry configuration. Existing workloads are unchanged when
+an administrator updates the central configuration.

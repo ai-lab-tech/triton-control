@@ -223,7 +223,6 @@ export class MlflowPageComponent implements OnDestroy {
       const payload: InstallMlflowRequest = {
         s3_profile_id: this.s3ProfileId!,
         installation_name: this.installationName.trim(),
-        dockerconfigjson: this.dockerconfigjson.trim() || undefined,
       };
       const installation = await firstValueFrom(
         this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload),

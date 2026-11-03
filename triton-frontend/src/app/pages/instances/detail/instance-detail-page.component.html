@@ -600,7 +600,7 @@
               {{ hasS3Connection(instance) ? "Edit S3 connection" : "Add S3 connection" }}
             </div>
             <div class="panel-hint">
-              Configure the S3 endpoint and credentials for this Triton instance.
+              Choose an admin-configured S3 profile for this Triton instance.
             </div>
           </div>
           <button
@@ -614,112 +614,20 @@
           </button>
         </div>
         <div class="s3-grid">
-          <div class="form-row">
-            <label class="field-label" for="s3-access-key">Access key</label>
-            <mat-form-field appearance="outline">
-              <input
-                id="s3-access-key"
-                matInput
-                [(ngModel)]="s3AccessKey"
-                placeholder="Access key"
-              />
-            </mat-form-field>
-          </div>
-          <div class="form-row">
-            <label class="field-label" for="s3-secret-key">Secret key</label>
-            <mat-form-field appearance="outline">
-              <input
-                id="s3-secret-key"
-                type="password"
-                matInput
-                [(ngModel)]="s3SecretKey"
-                [placeholder]="getS3SecretPlaceholder()"
-              />
-              @if (s3SecretConfigured) {
-                <mat-hint>Leave empty to keep the stored secret.</mat-hint>
+          <mat-form-field appearance="outline">
+            <mat-label>S3 profile</mat-label>
+            <mat-select [(ngModel)]="selectedS3ProfileId">
+              @for (profile of s3Profiles(); track profile.id) {
+                <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
               }
-            </mat-form-field>
-          </div>
-          <div class="form-row">
-            <label class="field-label" for="s3-bucket">Bucket</label>
-            <mat-form-field appearance="outline">
-              <input id="s3-bucket" matInput [(ngModel)]="s3Bucket" placeholder="Bucket" />
-            </mat-form-field>
-          </div>
-          <div class="form-row">
-            <label class="field-label" for="s3-region">Region (optional) </label>
-            <mat-form-field appearance="outline">
-              <input
-                id="s3-region"
-                matInput
-                [(ngModel)]="s3Region"
-                [placeholder]="defaultS3Region"
-              />
-              <span
-                matSuffix
-                class="field-help"
-                matTooltip="Optional. If left empty, the backend stores us-east-1."
-                aria-label="S3 region help"
-                >?</span
-              >
-            </mat-form-field>
-          </div>
-          <div class="form-row">
-            <label class="field-label" for="s3-endpoint">Endpoint</label>
-            <mat-form-field appearance="outline">
-              <input id="s3-endpoint" matInput [(ngModel)]="s3Endpoint" placeholder="Endpoint" />
-            </mat-form-field>
-          </div>
-          <div class="form-row">
-            <label class="field-label" for="s3-prefix">Prefix (optional)</label>
-            <mat-form-field appearance="outline">
-              <input
-                id="s3-prefix"
-                matInput
-                [(ngModel)]="s3Prefix"
-                placeholder="Prefix (optional)"
-              />
-            </mat-form-field>
-          </div>
-          <div class="toggle-row compact s3-ssl-row">
-            <div>
-              <div class="toggle-title">SSL</div>
-              <div class="panel-hint">Validate the S3 endpoint certificate.</div>
-            </div>
-            <label class="switch">
-              <input type="checkbox" [(ngModel)]="s3VerifySsl" />
-              <span class="slider"></span>
-            </label>
-          </div>
-          @if (shouldShowS3CaCertificate()) {
-            <div class="form-row s3-certificate-row">
-              <label class="field-label" for="s3-ca-certificate">Certificate</label>
-              <mat-form-field appearance="outline">
-                <textarea
-                  id="s3-ca-certificate"
-                  matInput
-                  rows="6"
-                  [(ngModel)]="s3CaCertificate"
-                  placeholder="-----BEGIN CERTIFICATE-----"
-                ></textarea>
-                <mat-hint>
-                  Optional. Only needed for private, self-signed, or internal CA chains.
-                </mat-hint>
-              </mat-form-field>
-              <div class="certificate-actions">
-                <input
-                  #s3CertificateInput
-                  type="file"
-                  accept=".crt,.cer,.pem"
-                  hidden
-                  (change)="onS3CertificateFileSelected($event)"
-                />
-                <button mat-stroked-button type="button" (click)="s3CertificateInput.click()">
-                  Add certificate
-                </button>
-              </div>
-            </div>
-          }
+            </mat-select>
+            <mat-hint>Profiles are configured by an administrator under S3 Profiles.</mat-hint>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Repository prefix (optional)</mat-label>
+            <input matInput [(ngModel)]="s3Prefix" />
+          </mat-form-field>
+          <p role="status">{{ s3ProfilesError() }}</p>
         </div>
         <div class="s3-dialog-actions">
           <button mat-stroked-button type="button" (click)="closeS3Dialog()">Cancel</button>

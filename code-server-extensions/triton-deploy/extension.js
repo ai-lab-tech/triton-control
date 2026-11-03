@@ -4,6 +4,7 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
+const profileApi = require("./profile-api");
 const {
   ENSEMBLE_PRESETS,
   TEMPLATES,
@@ -456,9 +457,8 @@ function openDeployPanel(context, initial) {
         return;
       }
       try {
-        const form = normalizeForm(message.form || {});
+        const form = await resolveDeploymentProfile(normalizeForm(message.form || {}));
         validateForm(form);
-        await saveS3Settings(form);
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -524,7 +524,6 @@ async function runSimpleUploadWizard(initial) {
   }
   try {
     validateForm(form);
-    await saveS3Settings(form);
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -554,29 +553,15 @@ async function collectSimpleUploadForm(initial) {
   if (!image) return null;
   values.image = image;
 
-  const endpoint = await promptValue("S3 endpoint", values.endpoint || "https://s3.example.com", true);
-  if (!endpoint) return null;
-  values.endpoint = endpoint.replace(/\/+$/, "");
-
-  const bucket = await promptValue("S3 bucket", values.bucket, true);
-  if (!bucket) return null;
-  values.bucket = bucket;
-
+  const profiles = await deploymentProfiles();
+  const selected = await vscode.window.showQuickPick(profiles.map((profile) => ({
+    label: profile.name, description: profile.bucket, profile,
+  })), { title: "Select an admin-configured S3 profile" });
+  if (!selected) return null;
+  Object.assign(values, await resolveDeploymentProfile({ ...values, profileId: selected.profile.id }));
   const prefix = await promptValue("Repository prefix", values.prefix, false);
   if (prefix === undefined) return null;
   values.prefix = cleanPrefix(prefix);
-
-  const region = await promptValue("S3 region", values.region || "us-east-1", true);
-  if (!region) return null;
-  values.region = region;
-
-  const accessKeyId = await promptValue("S3 access key", values.accessKeyId, true);
-  if (!accessKeyId) return null;
-  values.accessKeyId = accessKeyId;
-
-  const secretAccessKey = await promptValue("S3 secret key", values.secretAccessKey, true, true);
-  if (!secretAccessKey) return null;
-  values.secretAccessKey = secretAccessKey;
 
   const modelName = await promptValue("Model name", values.modelName, true);
   if (!modelName) return null;
@@ -589,20 +574,6 @@ async function collectSimpleUploadForm(initial) {
   );
   if (requirementsTxt === undefined) return null;
   values.requirementsTxt = requirementsTxt;
-
-  const forcePathStyle = await vscode.window.showQuickPick(
-    [
-      { label: "Path-style S3", value: true },
-      { label: "Virtual-host S3", value: false },
-    ],
-    {
-      title: "Triton Control Deploy",
-      placeHolder: "S3 addressing mode",
-      ignoreFocusOut: true,
-    },
-  );
-  if (!forcePathStyle) return null;
-  values.forcePathStyle = forcePathStyle.value;
 
   const modelControl = await vscode.window.showQuickPick(
     [
@@ -666,7 +637,6 @@ function showSimpleUploadResult(form) {
 
 async function initialFormValues(sourceFolder) {
   const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
-  const s3x = vscode.workspace.getConfiguration("s3x");
   let serving;
   try {
     serving = readServingMetadata(sourceFolder);
@@ -682,22 +652,19 @@ async function initialFormValues(sourceFolder) {
   }
   const requiresTensorRtLlmImage = isTensorRtLlmPythonRepository(sourceFolder, modelName);
   const deploymentName = toKubernetesName(modelName);
-  const endpoint = cfg.get("s3Endpoint") || s3x.get("endpointUrl") || process.env.AWS_ENDPOINT_URL || process.env.S3_ENDPOINT || "";
+  const endpoint = "";
   const initial = {
     sourceFolder,
     deploymentName,
     image: serving?.image || defaultImageForBackend(detectedBackend, requiresTensorRtLlmImage),
     endpoint,
-    bucket: cfg.get("s3Bucket") || process.env.S3_BUCKET || "",
+    bucket: "",
     prefix: cfg.get("s3Prefix") || process.env.S3_PREFIX || "",
-    accessKeyId: cfg.get("s3AccessKeyId") || s3x.get("accessKeyId") || process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: cfg.get("s3SecretAccessKey") || s3x.get("secretAccessKey") || process.env.AWS_SECRET_ACCESS_KEY || "",
-    region: cfg.get("s3Region") || s3x.get("region") || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1",
-    forcePathStyle: effectiveForcePathStyle(
-      endpoint,
-      cfg.get("s3ForcePathStyle") !== false && s3x.get("forcePathStyle") !== false,
-    ),
-    s3CaCertificate: cfg.get("s3CaCertificate") || "",
+    accessKeyId: "",
+    secretAccessKey: "",
+    region: "us-east-1",
+    forcePathStyle: true,
+    s3CaCertificate: "",
     requirementsTxt: serving?.requirementsTxt || "",
     detectedBackend,
     detectedBackendLabel: backendLabel(detectedBackend),
@@ -856,38 +823,6 @@ function toKubernetesName(value) {
     .replace(/^-|-$/g, "")
     .slice(0, 63)
     .replace(/-$/g, "") || "triton-model";
-}
-
-async function saveS3Settings(values) {
-  const cfg = vscode.workspace.getConfiguration("tritonControlDeploy");
-  const target = vscode.ConfigurationTarget.Global;
-  const forcePathStyle = effectiveForcePathStyle(values.endpoint, values.forcePathStyle);
-  await cfg.update("s3Endpoint", values.endpoint, target);
-  await cfg.update("s3Bucket", values.bucket, target);
-  await cfg.update("s3Prefix", values.prefix, target);
-  await cfg.update("s3AccessKeyId", values.accessKeyId, target);
-  await cfg.update("s3SecretAccessKey", values.secretAccessKey, target);
-  await cfg.update("s3Region", values.region, target);
-  await cfg.update("s3ForcePathStyle", forcePathStyle, target);
-  await cfg.update("s3CaCertificate", values.s3CaCertificate || "", target);
-  await saveS3xSettingsIfAvailable(values, forcePathStyle, target);
-}
-
-async function saveS3xSettingsIfAvailable(values, forcePathStyle, target) {
-  const s3x = vscode.workspace.getConfiguration("s3x");
-  try {
-    await s3x.update("endpointUrl", values.endpoint, target);
-    await s3x.update("accessKeyId", values.accessKeyId, target);
-    await s3x.update("secretAccessKey", values.secretAccessKey, target);
-    await s3x.update("region", values.region, target);
-    await s3x.update("forcePathStyle", forcePathStyle, target);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!/not a registered configuration/i.test(message)) {
-      throw error;
-    }
-    console.warn(`Skipping optional S3X settings sync: ${message}`);
-  }
 }
 
 function normalizeForm(form) {
@@ -1172,22 +1107,34 @@ function listFiles(root) {
   return output.sort();
 }
 
+async function deploymentProfiles() {
+  if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before accessing S3 profiles.");
+  const endpoint = process.env.TRITON_CONTROL_PROFILE_URL;
+  const token = process.env.TRITON_CONTROL_PROFILE_TOKEN;
+  if (!endpoint || !token) throw new Error("Ask your administrator to update this workspace's S3 profile integration.");
+  return profileApi.requestJson(endpoint, "", { token });
+}
+
+async function resolveDeploymentProfile(form) {
+  const profiles = await deploymentProfiles();
+  const profile = profiles.find((item) => String(item.id) === String(form.profileId));
+  if (!profile) throw new Error("Select an admin-configured S3 profile.");
+  return { ...form, endpoint: profile.endpoint, bucket: profile.bucket, region: profile.region,
+    accessKeyId: profile.access_key, secretAccessKey: profile.secret_key,
+    s3CaCertificate: profile.ca_certificate || "", forcePathStyle: profile.force_path_style !== false };
+}
+
 function deploymentPayload(form) {
   const payload = {
     deployment_name: form.deploymentName,
     image: form.image,
-    s3_url: deploymentS3Url(form),
-    s3_access_key: form.accessKeyId,
-    s3_secret_key: form.secretAccessKey,
-    s3_region: form.region,
+    s3_profile_id: Number(form.profileId),
+    repository_prefix: targetPrefix(form),
     model_control_mode: form.modelControlMode,
     repository_sync_mode: form.repositorySyncMode,
     repository_poll_secs: form.repositoryPollSecs > 0 ? form.repositoryPollSecs : 15,
     allow_metrics: true,
   };
-  if (form.endpoint.toLowerCase().startsWith("https://") && form.s3CaCertificate) {
-    payload.s3_ca_certificate = form.s3CaCertificate;
-  }
   if (form.modelControlMode === "explicit" && form.modelName) {
     payload.model_name = form.modelName;
   }
@@ -1307,7 +1254,7 @@ function renderHtml(webview, nonce, initial) {
         <strong id="model-control-label">Polling mode</strong>
       </div>
     </div>
-    <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
+    <label class="wide">S3 profile<select name="profileId" required><option value="">Select an admin-configured S3 profile</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
       <strong>S3 upload target</strong>
@@ -1322,22 +1269,15 @@ function renderHtml(webview, nonce, initial) {
         <label id="poll-interval-field">Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
       </div>
     </details>
-    <details class="wide">
-      <summary>Manual S3 settings</summary>
-      <div class="details-grid">
-        <label>S3 profile name<input name="profileName" placeholder="team-minio"></label>
-        <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com"></label>
-        <label>S3 bucket<input name="bucket"></label>
-        <label>S3 region<input name="region"></label>
-        <label>S3 access key<input name="accessKeyId"></label>
-        <label>S3 secret key<input name="secretAccessKey" type="password"></label>
-        <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-        <div class="wide checks">
-          <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
-        </div>
-        <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
-      </div>
-    </details>
+    <input type="hidden" name="profileName">
+    <input type="hidden" name="endpoint">
+    <input type="hidden" name="bucket">
+    <input type="hidden" name="region">
+    <input type="hidden" name="accessKeyId">
+    <input type="hidden" name="secretAccessKey">
+    <input type="hidden" name="s3CaCertificate">
+    <input class="hidden" type="checkbox" name="forcePathStyle">
+
     <details class="wide">
       <summary>Extra Python Packages</summary>
       <div class="details-grid">
@@ -1375,7 +1315,6 @@ function renderHtml(webview, nonce, initial) {
     const form = document.getElementById('deploy-form');
     const statusEl = document.getElementById('status');
     const submit = document.getElementById('submit');
-    const saveProfile = document.getElementById('save-profile');
     let profiles = [];
 
     for (const [key, value] of Object.entries(initial)) {
@@ -1396,7 +1335,6 @@ function renderHtml(webview, nonce, initial) {
       if (selected) applyS3Profile(selected);
       updateFormPreviews();
     });
-    saveProfile.addEventListener('click', saveCurrentS3Profile);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -1465,7 +1403,7 @@ function renderHtml(webview, nonce, initial) {
         if (!response.ok) return;
         profiles = await response.json();
         const select = form.elements.profileId;
-        select.innerHTML = '<option value="">Manual S3 settings</option>';
+        select.innerHTML = '<option value="">Select an admin-configured S3 profile</option>';
         for (const profile of profiles) {
           const option = document.createElement('option');
           option.value = String(profile.id);
@@ -1488,45 +1426,6 @@ function renderHtml(webview, nonce, initial) {
       form.elements.secretAccessKey.value = profile.secret_key || '';
       form.elements.forcePathStyle.checked = profile.force_path_style !== false;
       form.elements.s3CaCertificate.value = profile.ca_certificate || '';
-    }
-
-    async function saveCurrentS3Profile() {
-      const data = readForm();
-      const payload = {
-        name: data.profileName,
-        endpoint: data.endpoint,
-        bucket: data.bucket,
-        region: data.region || 'us-east-1',
-        access_key: data.accessKeyId,
-        secret_key: data.secretAccessKey,
-        prefix: data.prefix || '',
-        force_path_style: !!data.forcePathStyle,
-        ca_certificate: data.s3CaCertificate || '',
-      };
-      if (!payload.name) {
-        statusEl.className = 'status error';
-        statusEl.textContent = 'S3 profile name is required.';
-        return;
-      }
-      try {
-        const response = await fetch('/api/s3-profiles', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(body.detail || 'Failed to save S3 profile.');
-        }
-        statusEl.className = 'status success';
-        statusEl.textContent = 'S3 profile saved.';
-        await loadS3Profiles();
-        form.elements.profileId.value = String(body.id);
-      } catch (error) {
-        statusEl.className = 'status error';
-        statusEl.textContent = error.message || String(error);
-      }
     }
 
     function readForm() {

@@ -246,8 +246,6 @@ export class NewDeploymentPageComponent {
     this.s3Url = profile.endpoint;
     this.s3Bucket = profile.bucket;
     this.s3Region = profile.region || "us-east-1";
-    this.s3AccessKey = profile.access_key;
-    this.s3SecretKey = profile.secret_key;
     this.s3CaCertificate = profile.ca_certificate || "";
   }
 
@@ -265,11 +263,8 @@ export class NewDeploymentPageComponent {
       image: this.image.trim(),
       ingress_host: this.ingressHost.trim() || undefined,
       ingress_class_name: this.ingressClassName.trim() || undefined,
-      s3_url: this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix),
-      s3_access_key: this.s3AccessKey.trim(),
-      s3_secret_key: this.s3SecretKey,
-      s3_region: this.s3Region.trim() || "us-east-1",
-      dockerconfigjson: this.dockerconfigjson().trim() || undefined,
+      s3_profile_id: Number(this.selectedS3ProfileId),
+      repository_prefix: this.s3Prefix.trim().replace(/^\/+|\/+$/g, ""),
       model_control_mode: this.modelControlMode,
       repository_poll_secs: this.repositoryPollSecs,
       repository_sync_mode: this.usesSyncedRepository() ? "sidecar" : this.repositorySyncMode,
@@ -282,11 +277,6 @@ export class NewDeploymentPageComponent {
       memory: this.memoryQuantity() || undefined,
       memory_limit: this.memoryQuantity() || undefined,
     };
-    const caCertificate = this.usesHttpsS3() ? this.s3CaCertificate.trim() : "";
-    if (caCertificate) {
-      // Keep runtime payload compatible if generated TS models lag behind backend schema.
-      (payload as unknown as Record<string, unknown>)["s3_ca_certificate"] = caCertificate;
-    }
 
     try {
       const response = await firstValueFrom(
@@ -314,11 +304,9 @@ export class NewDeploymentPageComponent {
 
   canDeploy(): boolean {
     return (
-      this.s3Url.trim().length > 0 &&
+      this.s3Profiles().some((profile) => String(profile.id) === this.selectedS3ProfileId) &&
       this.deploymentName.trim().length > 0 &&
       this.image.trim().length > 0 &&
-      this.s3AccessKey.trim().length > 0 &&
-      this.s3SecretKey.trim().length > 0 &&
       this.hasValidMemoryGi() &&
       !this.deploying()
     );

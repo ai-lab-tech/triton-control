@@ -30,7 +30,7 @@ class S3ProfileTests(unittest.TestCase):
         return Session(self.engine)
 
     def _claims(self) -> dict[str, object]:
-        return {"user_id": 7, "email": "member@example.com", "role": "member"}
+        return {"user_id": 7, "email": "member@example.com", "role": "admin"}
 
     def _create_user(self, session: Session) -> None:
         session.add(
@@ -38,7 +38,7 @@ class S3ProfileTests(unittest.TestCase):
                 id=7,
                 email="member@example.com",
                 name="Member",
-                role="member",
+                role="admin",
                 auth_provider="local",
                 is_active=True,
             )
@@ -64,10 +64,10 @@ class S3ProfileTests(unittest.TestCase):
             listed = s3_profiles.list_profiles(session, self._claims())
 
         self.assertEqual(created.endpoint, "https://minio:9000")
-        self.assertEqual(created.secret_key, "secret")
+        self.assertEqual(created.secret_key, "")
         self.assertEqual(len(listed), 1)
         self.assertEqual(listed[0].name, "team-minio")
-        self.assertEqual(listed[0].secret_key, "secret")
+        self.assertEqual(listed[0].secret_key, "")
 
     def test_UpdateProfile_ChangesVisibleFieldsAndCanKeepSecret(self) -> None:
         with self._session() as session:
@@ -93,7 +93,7 @@ class S3ProfileTests(unittest.TestCase):
 
         self.assertEqual(updated.name, "prod-minio")
         self.assertEqual(updated.bucket, "prod-models")
-        self.assertEqual(updated.secret_key, "secret")
+        self.assertEqual(updated.secret_key, "")
 
     def test_DeleteProfile_RemovesOwnedRow(self) -> None:
         with self._session() as session:

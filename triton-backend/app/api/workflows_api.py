@@ -11,7 +11,7 @@ from app.core.access_control import is_member_or_admin, require_admin, require_m
 from app.core.identity import require_user_entity
 from app.core.security import get_claims
 from app.db.database import get_session
-from app.exceptions import UnauthorizedError
+from app.exceptions import BadRequestError, UnauthorizedError
 from app.repositories import s3_profiles
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
@@ -79,6 +79,8 @@ def create_workflow_s3_credential(
 ) -> WorkflowS3CredentialDTO:
     """Create a workflow S3 credential and mirror it as a Kubernetes secret."""
     require_member_or_admin(claims)
+    if request.s3_profile_id is None:
+        raise BadRequestError("Select an admin-configured S3 profile")
     return credentials.create_credential(request, session, claims)
 
 

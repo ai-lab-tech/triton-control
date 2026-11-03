@@ -95,9 +95,9 @@ class MlflowS3Tests(unittest.TestCase):
             s3_profiles, "_get_profile", return_value=self.profile()
         ), patch.object(s3_profiles.mlflow, "get", return_value=SimpleNamespace(s3_profile_id=3)):
             with self.assertRaises(ConflictError):
-                s3_profiles.delete_profile(MagicMock(), {"role": "member"}, 3)
+                s3_profiles.delete_profile(MagicMock(), {"role": "admin"}, 3)
             with self.assertRaises(ConflictError):
-                s3_profiles.update_profile(MagicMock(), {"role": "member"}, 3, UpdateS3ProfileRequest(bucket="other"))
+                s3_profiles.update_profile(MagicMock(), {"role": "admin"}, 3, UpdateS3ProfileRequest(bucket="other"))
 
     def test_s3_upgrade_never_falls_back_to_sqlite_when_secret_is_missing(self):
         with patch.object(kubernetes, "_client"), patch("kubernetes.client.CoreV1Api") as core, patch.object(

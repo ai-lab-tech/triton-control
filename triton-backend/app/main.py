@@ -47,6 +47,7 @@ from app.api.instance_api import router as instance_router
 from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
+from app.api.registry_api import router as registry_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
@@ -188,6 +189,7 @@ async def on_shutdown() -> None:
 
 
 app.include_router(oidc_router)
+app.include_router(registry_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])

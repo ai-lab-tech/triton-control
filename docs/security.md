@@ -10,7 +10,7 @@ Replace local defaults before using the app outside local development:
 - `JWT_SECRET`
 - `EMAIL_SECRET_ENCRYPTION_KEY`
 - SMTP credentials
-- `S3_SECRET_ENCRYPTION_KEY`
+- `REGISTRY_SECRET_ENCRYPTION_KEY`
 - `POSTGRES_PASSWORD`
 - OIDC client secrets
 - S3 credentials
@@ -91,8 +91,10 @@ Frontend HTTPS dev-server TLS paths are configured in:
 triton-frontend/angular.json
 ```
 
-Triton and S3 instance connections have their own SSL verification settings in
-the instance detail page. The endpoint scheme controls whether the backend uses
+Triton connections have SSL verification settings in the instance detail page.
+S3 connections use the selected profile's endpoint and CA certificate, configured
+by an administrator in **S3 Profiles**. Profile-based instance S3 connections
+enable certificate verification. The endpoint scheme controls whether the backend uses
 HTTP or HTTPS. The SSL flag controls whether the backend verifies the remote
 certificate. When SSL verification is enabled, use the system trust store or
 paste a PEM CA certificate for private or self-signed certificates.
@@ -102,16 +104,29 @@ connection examples.
 
 ## S3 Credentials
 
-S3 secret keys are encrypted by the backend before storage. This includes
-instance S3 settings and reusable S3 deployment profiles. Configure a strong:
+Only administrators can create, edit, or delete S3 profiles. Administrator-owned
+profiles are available to members; legacy personal profiles remain accessible
+to their owners and administrators. Browser profile responses omit secret keys.
+Deployment and instance connection requests select profiles instead of supplying
+credentials. The authenticated workspace profile endpoint returns credentials
+needed for direct S3 operations.
 
-```text
-S3_SECRET_ENCRYPTION_KEY
-```
+The current S3 `encrypt_secret`/`decrypt_secret` helpers are identity functions:
+S3 secrets are not encrypted at rest by those helpers. Protect database access
+and backups accordingly. This differs from central registry credentials.
 
-Do not reuse local development secrets in shared or production environments.
-Profiles are user-owned and visible only to the owning signed-in user through
-the S3 profile API.
+## Central Registry Credentials
+
+Only administrators can read configuration status or replace/remove the central
+image pull secret through `/api/settings/registry`. Responses never include its
+contents. New managed workloads receive the secret server-side; request-level
+registry credential overrides are rejected.
+
+The registry secret is encrypted with Fernet using a key derived from
+`REGISTRY_SECRET_ENCRYPTION_KEY`, falling back to `SESSION_SECRET`. A stable key
+is required before saving credentials. Preserve it across restarts and re-save
+credentials after rotating it. Removing the central secret does not remove
+Secrets already created for existing workloads.
 
 ## Reverse Proxy Headers
 
@@ -131,7 +146,7 @@ The native code-server S3 browser authenticates to its workspace-scoped profile
 endpoint using `TRITON_CONTROL_PROFILE_TOKEN`, injected from a Kubernetes Secret.
 The backend verifies the workspace owner and account status before returning
 profiles. This token is not accepted as general application API authentication.
-Processes in the workspace can use it to retrieve the owner's S3 profiles, so
+Processes in the workspace can use it to retrieve administrator-owned and the owner's personal S3 profiles, so
 workspace code runs within that owner's storage access boundary.
 
 The extension uses S3 credentials in memory and does not persist them to editor

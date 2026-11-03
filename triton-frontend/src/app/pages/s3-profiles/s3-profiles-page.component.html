@@ -3,7 +3,7 @@
 
   <mat-card class="card">
     @if (!canManage()) {
-      <div class="message error">Member or admin role required.</div>
+      <div class="message error">Admin role required.</div>
     } @else {
       <div class="toolbar">
         <mat-form-field appearance="outline">
@@ -73,6 +73,7 @@
               matInput
               type="password"
               [(ngModel)]="draft.secret_key"
+              [placeholder]="selectedId ? 'Leave empty to keep the stored secret' : 'Secret key'"
               autocomplete="new-password"
             />
           </mat-form-field>

@@ -79,35 +79,7 @@
           </div>
 
           <mat-accordion class="optional-sections">
-            <mat-expansion-panel>
-              @let pullSecret = pullSecretStatus();
-              <mat-expansion-panel-header>
-                <mat-panel-title>
-                  <span class="material-icons">key</span>
-                  <span>Image Pull Secret</span>
-                </mat-panel-title>
-                <mat-panel-description>
-                  <span class="panel-status-chip" [attr.data-tone]="pullSecret.tone">{{
-                    pullSecret.label
-                  }}</span>
-                  <span class="panel-status-detail">{{ pullSecret.detail }}</span>
-                </mat-panel-description>
-              </mat-expansion-panel-header>
-              <div class="form-row wide">
-                <label class="field-label" for="mlflow-dockerconfigjson"
-                  >Registry Credentials (.dockerconfigjson)</label
-                >
-                <div class="field-hint">
-                  Paste Docker registry auth JSON used to pull private images.
-                </div>
-                <ngx-monaco-editor
-                  id="mlflow-dockerconfigjson"
-                  class="dockerconfigjson-editor"
-                  [options]="dockerconfigjsonEditorOptions"
-                  [(ngModel)]="dockerconfigjson"
-                ></ngx-monaco-editor>
-              </div>
-            </mat-expansion-panel>
+            <p>Image pull credentials are managed centrally in admin Settings.</p>
           </mat-accordion>
         </div>
 

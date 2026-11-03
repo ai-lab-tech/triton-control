@@ -114,7 +114,7 @@ Required:
   and Ingress resources in that namespace.
 - A container registry that the cluster can pull from.
 - Real values for `SESSION_SECRET`, `JWT_SECRET`, and
-  `S3_SECRET_ENCRYPTION_KEY`.
+  `REGISTRY_SECRET_ENCRYPTION_KEY`.
 
 Usually required:
 
@@ -182,7 +182,7 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
+    REGISTRY_SECRET_ENCRYPTION_KEY: "replace-me"
 
 postgresql:
   enabled: true
@@ -362,9 +362,12 @@ Perf Analyzer endpoint notes:
 
 Image pull secrets:
 
-- Add Deployment and Perf Analyzer both accept Docker registry authentication
-  JSON for private images.
-- Paste the value as `.dockerconfigjson` in the UI image pull secret field.
+- Administrators save Docker registry authentication JSON under **Settings → Registry**.
+- New Triton deployments, development workspaces, MLflow installations, and
+  performance Jobs use the central secret automatically. Per-workload overrides
+  are rejected. Recreate existing workloads to apply credential changes.
+- Configure `REGISTRY_SECRET_ENCRYPTION_KEY` or a stable `SESSION_SECRET` to
+  encrypt the stored registry credentials. Keep the key across restarts.
 - The JSON below is only an example Docker config shape, not a fixed template.
 - The `auth` value is the base64 encoding of `username:token` or
   `username:password`.
@@ -401,13 +404,15 @@ tritonDeployments:
 
 S3 deployment profiles:
 
-- Members and admins can create reusable S3 profiles from the application
-  account menu.
-- Profiles are user-owned and store endpoint, bucket, prefix, region,
-  path-style mode, optional CA certificate, access key, and encrypted secret
-  key.
-- The deployment form reads profiles through `/api/s3-profiles` for repository
-  upload and deployment creation.
+- Administrators manage reusable S3 profiles through the existing **S3 Profiles**
+  account menu entry. Profiles store endpoint, bucket, prefix, region, addressing
+  mode, CA certificate, access key, and secret key.
+- Administrator-owned profiles are available to members. Existing personal
+  profiles remain available to their owners and can also be managed by admins.
+- Deployment and instance connection forms require a profile and accept an
+  optional repository prefix. Manual connection settings are rejected.
+- Browser requests to `/api/s3-profiles` return metadata with blank secret keys;
+  deployment requests send a profile ID instead of copying credentials.
 - The native code-server S3 browser loads the workspace owner's profiles through
   `/api/development/workspace-s3-profiles/<namespace>/<statefulset-name>` using
   its injected workspace token. It uses credentials and CA certificates in

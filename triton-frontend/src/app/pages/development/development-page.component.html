@@ -151,27 +151,7 @@
               </div>
             </mat-expansion-panel>
 
-            <mat-expansion-panel>
-              <mat-expansion-panel-header>
-                <mat-panel-title>
-                  <span class="material-icons">key</span>
-                  <span>Image Pull Secret</span>
-                </mat-panel-title>
-              </mat-expansion-panel-header>
-              <div class="form-row wide">
-                <label class="field-label" for="code-server-dockerconfigjson">
-                  Registry Credentials (.dockerconfigjson)
-                </label>
-                <mat-form-field appearance="outline">
-                  <textarea
-                    id="code-server-dockerconfigjson"
-                    matInput
-                    rows="6"
-                    [(ngModel)]="dockerconfigjson"
-                  ></textarea>
-                </mat-form-field>
-              </div>
-            </mat-expansion-panel>
+            <p>Image pull credentials are managed centrally in admin Settings.</p>
           </mat-accordion>
         </div>
 

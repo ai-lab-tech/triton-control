@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from sqlmodel import Session
 
-from app.core.access_control import require_member_or_admin
+from app.core.access_control import require_admin, require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity
@@ -21,7 +21,9 @@ from app.services.workflows.credentials import sync_profile_credentials
 def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO]:
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
-    return [_to_dto(profile) for profile in s3_profiles.list_for_owner(session, owner.id or 0)]
+    rows = (s3_profiles.list_all(session) if claims.get("role") == "admin"
+            else s3_profiles.list_for_owner(session, owner.id or 0))
+    return [_to_dto(profile) for profile in rows]
 
 
 def create_profile(
@@ -29,7 +31,7 @@ def create_profile(
     claims: dict[str, Any],
     request: CreateS3ProfileRequest,
 ) -> S3ProfileDTO:
-    require_member_or_admin(claims)
+    require_admin(claims)
     owner = require_user_entity(session, claims)
     owner_id = owner.id or 0
     name = _clean_required(request.name, "Profile name")
@@ -59,7 +61,7 @@ def update_profile(
     profile_id: int,
     request: UpdateS3ProfileRequest,
 ) -> S3ProfileDTO:
-    require_member_or_admin(claims)
+    require_admin(claims)
     owner = require_user_entity(session, claims)
     profile = _get_profile(session, owner.id or 0, profile_id)
     installation = mlflow.get(session)
@@ -100,7 +102,7 @@ def update_profile(
 
 
 def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) -> dict[str, str]:
-    require_member_or_admin(claims)
+    require_admin(claims)
     owner = require_user_entity(session, claims)
     profile = _get_profile(session, owner.id or 0, profile_id)
     installation = mlflow.get(session)
@@ -113,13 +115,13 @@ def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) ->
 
 
 def _get_profile(session: Session, owner_user_id: int, profile_id: int) -> S3ProfileEntity:
-    profile = s3_profiles.find_for_owner(session, owner_user_id, profile_id)
+    profile = s3_profiles.get(session, profile_id)
     if not profile:
         raise NotFoundError("S3 profile not found")
     return profile
 
 
-def _to_dto(profile: S3ProfileEntity) -> S3ProfileDTO:
+def _to_dto(profile: S3ProfileEntity, *, include_secret: bool = False) -> S3ProfileDTO:
     return S3ProfileDTO(
         id=profile.id or 0,
         name=profile.name,
@@ -127,7 +129,7 @@ def _to_dto(profile: S3ProfileEntity) -> S3ProfileDTO:
         bucket=profile.bucket,
         region=profile.region or "us-east-1",
         access_key=profile.access_key,
-        secret_key=decrypt_secret(profile.secret_key_enc or ""),
+        secret_key=decrypt_secret(profile.secret_key_enc or "") if include_secret else "",
         prefix=profile.prefix or "",
         force_path_style=bool(profile.force_path_style),
         ca_certificate=profile.ca_certificate or "",

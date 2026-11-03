@@ -387,6 +387,8 @@ describe("InstanceDetailPageComponent", () => {
     mockStore.refreshState();
     const fixture = TestBed.createComponent(InstanceDetailPageComponent);
     const component = fixture.componentInstance;
+    component.s3Profiles.set([{ id: 3, name: "Admin profile" }]);
+    component.selectedS3ProfileId = "3";
     component.s3Endpoint = "  https://s3.example.test  ";
     component.s3Bucket = "  models  ";
     component.s3AccessKey = "  access  ";
@@ -400,7 +402,7 @@ describe("InstanceDetailPageComponent", () => {
     expect(mockStore.dispatch).toHaveBeenCalledWith(
       jasmine.objectContaining({
         type: s3ConfigSaveRequested.type,
-        payload: jasmine.objectContaining({ region: "us-east-1" }),
+        payload: jasmine.objectContaining({ s3_profile_id: 3 }),
       }),
     );
   });

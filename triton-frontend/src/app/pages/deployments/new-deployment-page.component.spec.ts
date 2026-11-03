@@ -46,6 +46,21 @@ describe("NewDeploymentPageComponent", () => {
 
     // Act
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
 
     // Assert
     expect(component).toBeTruthy();
@@ -55,6 +70,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.s3Url = "";
 
     // Act
@@ -68,6 +98,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
@@ -86,6 +131,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
     component.image = "";
@@ -103,6 +163,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
@@ -120,6 +195,21 @@ describe("NewDeploymentPageComponent", () => {
   it("BackendChanged_VllmBackend_UsesSidecarAndKeepsPollMode", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.backend = "vllm";
     component.modelControlMode = "poll";
     component.gpuCount = 0;
@@ -134,6 +224,21 @@ describe("NewDeploymentPageComponent", () => {
   it("BackendChanged_TritonBackend_UsesDirectS3", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.backend = "triton";
     component.repositorySyncMode = "sidecar";
 
@@ -145,6 +250,21 @@ describe("NewDeploymentPageComponent", () => {
   it("BackendChanged_TensorRtLlmImage_UsesSidecar", () => {
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
 
     component.backendChanged();
@@ -156,6 +276,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     const router = TestBed.inject(Router);
     spyOn(router, "navigateByUrl").and.resolveTo(true);
@@ -188,7 +323,7 @@ describe("NewDeploymentPageComponent", () => {
     // Assert
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
-        dockerconfigjson: '{"auths":{"registry.example":{"auth":"token"}}}',
+        s3_profile_id: 1,
         ingress_host: "triton.example.local",
         model_control_mode: "poll",
         repository_sync_mode: "sidecar",
@@ -207,6 +342,21 @@ describe("NewDeploymentPageComponent", () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
       of({
@@ -242,10 +392,25 @@ describe("NewDeploymentPageComponent", () => {
     );
   });
 
-  it("Deploy_ManualS3Settings_AppendsNormalizedPrefixToS3Url", async () => {
+  it("Deploy_ProfileSettings_SendsNormalizedPrefix", async () => {
     // Arrange
     const fixture = createComponent();
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
       of({ instance_id: 7 }) as unknown as ReturnType<
@@ -268,7 +433,8 @@ describe("NewDeploymentPageComponent", () => {
     );
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
-        s3_url: "s3://https://object-store.example.com/triton-models/team/model-repository",
+        s3_profile_id: 1,
+        repository_prefix: "team/model-repository",
       }),
     );
   });
@@ -290,6 +456,21 @@ describe("NewDeploymentPageComponent", () => {
       },
     ]);
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     const deploymentsApi = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
     deploymentsApi.createDeploymentApiDeploymentsPost.and.returnValue(
       of({ instance_id: 7 }) as unknown as ReturnType<
@@ -312,10 +493,8 @@ describe("NewDeploymentPageComponent", () => {
     );
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
-        s3_url: "s3://https://object-store.example.com/triton-models/serving/opt-125m",
-        s3_access_key: "profile-access",
-        s3_secret_key: "profile-secret",
-        s3_region: "eu-central-1",
+        s3_profile_id: 12,
+        repository_prefix: "serving/opt-125m",
       }),
     );
   });
@@ -336,6 +515,21 @@ describe("NewDeploymentPageComponent", () => {
       },
     ]);
     const component = fixture.componentInstance;
+    component.s3Profiles.set([
+      {
+        id: 1,
+        name: "admin",
+        endpoint: "https://s3",
+        bucket: "models",
+        region: "us-east-1",
+        access_key: "",
+        secret_key: "",
+        prefix: "",
+        force_path_style: true,
+        ca_certificate: "",
+      },
+    ]);
+    component.selectedS3ProfileId = "1";
     await fixture.whenStable();
 
     component.selectedS3ProfileId = "12";

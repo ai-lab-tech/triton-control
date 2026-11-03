@@ -26,6 +26,14 @@ class _FakeSession:
 
 
 class DeploymentServiceTests(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise the resolved Kubernetes request; profile resolution
+        # and centralized credentials are covered by test_central_settings.
+        for target in ("resolve_profile_request", "apply_registry_settings"):
+            mocked = patch(f"app.services.deployment.deployment.{target}", side_effect=lambda request, *args: request)
+            mocked.start()
+            self.addCleanup(mocked.stop)
+
     def _request(self) -> CreateDeploymentRequest:
         return CreateDeploymentRequest(
             deployment_name="triton-minio",

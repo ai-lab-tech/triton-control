@@ -21,6 +21,7 @@ from app.schemas.perf_jobs import ModelPerfRunResponse, ModelPerfStatusResponse,
 from app.services.access import get_instance_or_404
 from app.services.perf_analyzer import commands, installer
 from app.services.perf_analyzer.jobs_kubernetes import Jobs, deadline_seconds, default_image, pod_message
+from app.services.registry_settings import apply_registry_settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ def start(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, request: StartModelPerfRequest,
 ) -> ModelPerfRunResponse:
     instance = get_instance_or_404(session, instance_id, claims)
+    request = apply_registry_settings(request, session)
     if results.get(session):
         raise ConflictError("Legacy analyzer retirement is in progress. Retry when its workload has stopped.")
     existing = repo.active(session, instance_id, model_name)

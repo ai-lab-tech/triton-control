@@ -129,7 +129,6 @@ describe("DevelopmentPageComponent", () => {
         cpu_limit: "2",
         memory: "4Gi",
         memory_limit: "4Gi",
-        dockerconfigjson: '{"auths":{}}',
         image_has_code_server: false,
         install_hf_builder: true,
       }),

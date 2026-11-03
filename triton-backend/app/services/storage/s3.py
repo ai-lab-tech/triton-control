@@ -25,10 +25,11 @@ from botocore.exceptions import BotoCoreError, ClientError
 from sqlmodel import Session
 
 from app.core.access_control import require_member_or_admin
-from app.core.crypto import encrypt_secret, hash_secret, is_secret_set
+from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
+from app.core.identity import require_user_entity
 from app.exceptions import BadGatewayError, BadRequestError, NotFoundError, UnsupportedMediaTypeError
 from app.mappers import s3_entity_to_dto
-from app.repositories import instances
+from app.repositories import instances, s3_profiles
 from app.schemas import (
     InstanceS3ConfigDTO,
     S3DeleteResponse,
@@ -128,6 +129,22 @@ def update_instance_s3(
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
+    if request.enabled:
+        if not request.s3_profile_id:
+            raise BadRequestError("Select an admin-configured S3 profile")
+        if any((request.endpoint, request.bucket, request.access_key, request.secret_key, request.ca_certificate)):
+            raise BadRequestError("S3 connection settings must be configured in an S3 profile")
+        user = require_user_entity(session, claims)
+        profile = s3_profiles.find_for_owner(session, user.id or 0, request.s3_profile_id)
+        if profile is None:
+            raise NotFoundError("S3 profile not found")
+        request = request.model_copy(update={
+            "endpoint": profile.endpoint, "bucket": profile.bucket, "region": profile.region,
+            "access_key": profile.access_key, "secret_key": decrypt_secret(profile.secret_key_enc),
+            "ca_certificate": profile.ca_certificate, "verify_ssl": True,
+            "address_style": "path" if profile.force_path_style else "virtual",
+        })
+
     instance.s3_enabled = request.enabled
 
     if not request.enabled:
@@ -160,14 +177,14 @@ def update_instance_s3(
         instance.s3_endpoint = _normalize_s3_endpoint(endpoint)
         instance.s3_bucket = bucket
         instance.s3_region = _clean_optional(request.region) or instance.s3_region or DEFAULT_S3_REGION
-        instance.s3_prefix = _clean_optional(request.prefix) or instance.s3_prefix
+        instance.s3_prefix = _clean_optional(request.prefix)
         instance.s3_access_key = access_key
         instance.s3_use_https = _is_https_endpoint(instance.s3_endpoint)
         verify_ssl = bool(request.verify_ssl) if request.verify_ssl is not None else bool(instance.s3_verify_ssl)
         instance.s3_verify_ssl = verify_ssl
         if verify_ssl:
             ca_certificate = request.ca_certificate.strip()
-            instance.s3_ca_certificate = ca_certificate or (instance.s3_ca_certificate or "")
+            instance.s3_ca_certificate = ca_certificate
         else:
             instance.s3_ca_certificate = ""
         instance.s3_address_style = request.address_style or instance.s3_address_style
