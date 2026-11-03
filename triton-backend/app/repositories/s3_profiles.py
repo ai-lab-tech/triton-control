@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlmodel import Session, or_, select
+from sqlmodel import Session, col, or_, select
 
 from app.db.entities import S3ProfileEntity, UserEntity
 
@@ -19,7 +19,7 @@ def list_for_owner(session: Session, owner_user_id: int) -> list[S3ProfileEntity
         .where(
             or_(
                 S3ProfileEntity.owner_user_id == owner_user_id,
-                S3ProfileEntity.owner_user_id.in_(select(UserEntity.id).where(UserEntity.role == "admin")),
+                col(S3ProfileEntity.owner_user_id).in_(select(UserEntity.id).where(UserEntity.role == "admin")),
             )
         )
         .order_by(S3ProfileEntity.name)
@@ -32,7 +32,7 @@ def find_for_owner(session: Session, owner_user_id: int, profile_id: int) -> S3P
         select(S3ProfileEntity).where(
             or_(
                 S3ProfileEntity.owner_user_id == owner_user_id,
-                S3ProfileEntity.owner_user_id.in_(select(UserEntity.id).where(UserEntity.role == "admin")),
+                col(S3ProfileEntity.owner_user_id).in_(select(UserEntity.id).where(UserEntity.role == "admin")),
             ),
             S3ProfileEntity.id == profile_id,
         )
