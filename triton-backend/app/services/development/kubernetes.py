@@ -19,6 +19,7 @@ from packaging.version import InvalidVersion, Version
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
+from app.services.development import deployment_access
 from app.services.kubernetes_client import (
     api_client,
     gpu_runtime_class_name,
@@ -215,7 +216,7 @@ def _manifests(
 ) -> list[dict[str, Any]]:
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
-        _secret_manifest(namespace, secret_name),
+        _secret_manifest(namespace, secret_name, statefulset_name),
         _triton_deploy_extension_configmap(namespace, statefulset_name),
         _statefulset_manifest(
             request,
@@ -233,7 +234,7 @@ def _manifests(
     return manifests
 
 
-def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
+def _secret_manifest(namespace: str, secret_name: str, statefulset_name: str) -> dict[str, Any]:
     return {
         "apiVersion": "v1",
         "kind": "Secret",
@@ -243,6 +244,7 @@ def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
             "AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32),
             tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32),
             workspace_access.TOKEN_KEY: secrets.token_urlsafe(32),
+            deployment_access.TOKEN_KEY: deployment_access.create_token(namespace, statefulset_name),
         },
     }
 
@@ -253,13 +255,22 @@ def enable_mlflow_tracking(namespace: str, statefulset_name: str, secret_name: s
 
     core = client.CoreV1Api(api_client())
     secret = core.read_namespaced_secret(secret_name, namespace)
+    missing_tokens = {}
     if not (secret.data or {}).get(tracking.TRACKING_TOKEN_KEY):
+        missing_tokens[tracking.TRACKING_TOKEN_KEY] = secrets.token_urlsafe(32)
+    if not (secret.data or {}).get(deployment_access.TOKEN_KEY):
+        missing_tokens[deployment_access.TOKEN_KEY] = deployment_access.create_token(namespace, statefulset_name)
+    if missing_tokens:
         core.patch_namespaced_secret(secret_name, namespace, {
-            "stringData": {tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32)},
+            "stringData": missing_tokens,
         })
     client.AppsV1Api(api_client()).patch_namespaced_stateful_set(statefulset_name, namespace, {
         "spec": {"template": {"spec": {"containers": [{
             "name": "code-server", "env": [
+                {"name": "TRITON_CONTROL_URL", "value": tracking.control_url(), "valueFrom": None},
+                {"name": deployment_access.TOKEN_KEY, "value": None, "valueFrom": {"secretKeyRef": {
+                    "name": secret_name, "key": deployment_access.TOKEN_KEY,
+                }}},
                 {"name": "MLFLOW_TRACKING_URI", "value": tracking.tracking_uri(
                     "workspaces", namespace, statefulset_name,
                 ), "valueFrom": None},
@@ -453,6 +464,17 @@ def _statefulset_manifest(
                             namespace, statefulset_name, secret_name or f"{statefulset_name}-secret",
                         ) + [
                             {
+                                "name": "TRITON_CONTROL_URL",
+                                "value": tracking.control_url(),
+                            },
+                            {
+                                "name": deployment_access.TOKEN_KEY,
+                                "valueFrom": {"secretKeyRef": {
+                                    "name": secret_name or f"{statefulset_name}-secret",
+                                    "key": deployment_access.TOKEN_KEY,
+                                }},
+                            },
+                            {
                                 "name": "MLFLOW_TRACKING_URI",
                                 "value": tracking.tracking_uri("workspaces", namespace, statefulset_name),
                             },
@@ -466,7 +488,7 @@ def _statefulset_manifest(
                             {
                                 "name": "TRITON_CONTROL_PROFILE_URL",
                                 "value": (
-                                    os.getenv("DEVELOPMENT_PROFILE_API_URL", "http://triton-control:8000").rstrip("/")
+                                    tracking.control_url()
                                     + f"/api/development/workspace-s3-profiles/{namespace}/{statefulset_name}"
                                 ),
                             },

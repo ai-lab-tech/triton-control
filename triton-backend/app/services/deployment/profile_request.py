@@ -20,6 +20,8 @@ _MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 def resolve_profile_request(
     request: CreateDeploymentRequest, session: Session, claims: dict[str, Any]
 ) -> CreateDeploymentRequest:
+    if claims.get("token_use") == "workspace_deployment" and request.s3_profile_id is None:
+        raise BadRequestError("Workspace deployment credentials require an owned S3 profile")
     if claims.get("token_use") == "mlflow_workflow":
         if (
             request.s3_profile_id != claims.get("allowed_s3_profile_id")

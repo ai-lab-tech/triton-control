@@ -69,6 +69,21 @@ class ProfileDeploymentTests(unittest.TestCase):
         with Session(self.engine) as session:
             self.assertIs(profile_request.resolve_profile_request(request, session, {}), request)
 
+    def test_workspace_token_requires_owned_profile(self) -> None:
+        claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workspace_deployment"}
+        with Session(self.engine) as session:
+            resolved = profile_request.resolve_profile_request(self._request(), session, claims)
+            self.assertEqual(resolved.s3_access_key, "access")
+            with self.assertRaises(NotFoundError):
+                profile_request.resolve_profile_request(
+                    self._request(), session, {**claims, "email": "other@example.com"},
+                )
+            with self.assertRaises(BadRequestError):
+                profile_request.resolve_profile_request(CreateDeploymentRequest(
+                    deployment_name="legacy", image="triton:test", s3_url="s3://bucket",
+                    s3_access_key="access", s3_secret_key="secret",
+                ), session, claims)
+
 
 class MlflowReadinessTests(unittest.IsolatedAsyncioTestCase):
     async def test_status_requires_selected_model_ready(self) -> None:

@@ -456,7 +456,7 @@ class WorkspaceArgoProvisioningTests(unittest.TestCase):
         namespace, name, secret_name = "control", "alice-workspace", "workspace-secret"
 
         # Act
-        secret = workspace_k8s._secret_manifest(namespace, secret_name)
+        secret = workspace_k8s._secret_manifest(namespace, secret_name, name)
         environment = workspace_access.environment(namespace, name, secret_name)
 
         # Assert

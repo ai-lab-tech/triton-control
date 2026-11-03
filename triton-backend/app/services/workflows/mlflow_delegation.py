@@ -83,9 +83,10 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
             environment = pod.setdefault("env", [])
             environment[:] = [
                 item for item in environment
-                if item.get("name") not in {"MLFLOW_TRACKING_URI", "MLFLOW_TRACKING_TOKEN"}
+                if item.get("name") not in {"MLFLOW_TRACKING_URI", "MLFLOW_TRACKING_TOKEN", "TRITON_CONTROL_URL"}
             ]
             environment.extend([
+                {"name": "TRITON_CONTROL_URL", "value": tracking.control_url()},
                 {"name": "MLFLOW_TRACKING_URI", "value": tracking.tracking_uri("workflows", namespace, secret_name)},
                 {"name": "MLFLOW_TRACKING_TOKEN", "valueFrom": {
                     "secretKeyRef": {"name": secret_name, "key": tracking.TRACKING_TOKEN_KEY},
@@ -163,6 +164,7 @@ def _prepare_deployment_submission(
         if profile is None:
             raise NotFoundError("S3 profile not found")
         profile_id = profile.id or 0
+        profile_name = profile.name
         profile_bucket = profile.bucket
         linked_repositories = [
             row for row in workflow_s3_credentials.list_for_profile(session, profile_id)
@@ -192,6 +194,7 @@ def _prepare_deployment_submission(
     reserved_env = {
         "TRITON_CONTROL_TOKEN",
         "TRITON_CONTROL_S3_PROFILE_ID",
+        "TRITON_CONTROL_S3_PROFILE_NAME",
         "TRITON_CONTROL_S3_BUCKET",
     }
     if any(item.get("name") in reserved_env for item in environment):
@@ -224,6 +227,7 @@ def _prepare_deployment_submission(
         "valueFrom": {"secretKeyRef": {"name": secret_name, "key": "token"}},
     })
     environment.append({"name": "TRITON_CONTROL_S3_PROFILE_ID", "value": str(profile_id)})
+    environment.append({"name": "TRITON_CONTROL_S3_PROFILE_NAME", "value": profile_name})
     environment.append({"name": "TRITON_CONTROL_S3_BUCKET", "value": profile_bucket})
     # The workflow and its temporary credential are garbage-collected together.
     spec.setdefault("ttlStrategy", {}).setdefault("secondsAfterCompletion", 300)

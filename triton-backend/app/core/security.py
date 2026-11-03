@@ -28,15 +28,16 @@ async def _get_claims_with_access_policy(
     allow_pending: bool = False,
 ) -> Dict[str, Any]:
     source_claims = await extract_claims(request, creds)
-    if source_claims.get("token_use") == "mlflow_workflow":
+    if source_claims.get("token_use") in {"mlflow_workflow", "workspace_deployment"}:
         path, method = request.url.path, request.method
         mlflow_path = path == "/api/deployments/mlflow" or path.startswith("/api/deployments/mlflow/")
         permitted = (
             (path == "/api/deployments" and method == "POST")
+            or (path == "/api/s3-profiles/resolve" and method == "GET")
             or (mlflow_path and method in {"GET", "DELETE"})
         )
         if not permitted:
-            raise HTTPException(status_code=403, detail="Workflow token cannot access this API")
+            raise HTTPException(status_code=403, detail="Deployment token cannot access this API")
     # A saturated SQLAlchemy pool must not block the ASGI loop (including
     # health checks and completion of requests returning their connections).
     return await anyio.to_thread.run_sync(

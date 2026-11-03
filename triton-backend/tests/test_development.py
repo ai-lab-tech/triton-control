@@ -217,6 +217,15 @@ class CodeServerTests(unittest.TestCase):
         self.assertFalse(request.image_has_code_server)
         self.assertTrue(request.install_hf_builder)
 
+    def test_workspace_receives_configured_backend_url(self) -> None:
+        with patch.dict(os.environ, {"DEVELOPMENT_PROFILE_API_URL": "http://custom-control.other:9000/"}):
+            manifests = k8s._manifests(
+                self._request(), "control", "code-7", "code-7-svc", "code-7-secret",
+            )
+        statefulset = next(item for item in manifests if item["kind"] == "StatefulSet")
+        env = statefulset["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertIn({"name": "TRITON_CONTROL_URL", "value": "http://custom-control.other:9000"}, env)
+
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
             CreateCodeServerRequest(name="!!!", image="triton")
@@ -271,6 +280,14 @@ class CodeServerTests(unittest.TestCase):
             },
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
+        self.assertIn({"name": "TRITON_CONTROL_URL", "value": k8s.tracking.control_url()}, container["env"])
+        deployment_token = next(item for item in container["env"] if item["name"] == "TRITON_CONTROL_TOKEN")
+        self.assertEqual(deployment_token["valueFrom"]["secretKeyRef"], {
+            "name": "code-7-dev-workspace-secret", "key": "TRITON_CONTROL_TOKEN",
+        })
+        self.assertTrue(secret["stringData"]["TRITON_CONTROL_TOKEN"].startswith(
+            "workspace-deployment:triton-control:code-7-dev-workspace:",
+        ))
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3")

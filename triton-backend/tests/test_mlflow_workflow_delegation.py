@@ -118,6 +118,7 @@ class WorkflowDelegationTests(unittest.TestCase):
         env = {item["name"]: item for item in workflow["spec"]["templates"][0]["container"]["env"]}
         self.assertEqual(env["TRITON_CONTROL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"], secret_name)
         self.assertEqual(env["TRITON_CONTROL_S3_PROFILE_ID"]["value"], "11")
+        self.assertEqual(env["TRITON_CONTROL_S3_PROFILE_NAME"]["value"], "models")
         self.assertEqual(namespace, "triton-control")
         self.assertEqual(workflow["spec"]["ttlStrategy"]["secondsAfterCompletion"], 300)
         secret = core_api.return_value.create_namespaced_secret.call_args.kwargs["body"]
@@ -138,12 +139,13 @@ class WorkflowDelegationTests(unittest.TestCase):
                 {"name": "train", "container": {"image": "python:3.12", "env": [
                     {"name": "MLFLOW_TRACKING_URI", "value": "http://mlflow-service:5000"},
                     {"name": "MLFLOW_TRACKING_TOKEN", "value": "fake-token"},
+                    {"name": "TRITON_CONTROL_URL", "value": "http://wrong-service:8000"},
                     {"name": "KEEP", "value": "yes"},
                 ]}},
                 {"name": "script", "script": {"image": "python:3.12", "source": "pass"}},
             ]},
         }}
-        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
+        with patch.dict("os.environ", {"DEVELOPMENT_PROFILE_API_URL": "http://custom-control.custom-namespace:9000/"}), patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
             mlflow_delegation, "api_client"
         ), patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core:
             body, secret_name, namespace = mlflow_delegation.prepare_submission(
@@ -155,6 +157,10 @@ class WorkflowDelegationTests(unittest.TestCase):
             env = (template.get("script") or template.get("container"))["env"]
             self.assertEqual(sum(item["name"] == "MLFLOW_TRACKING_TOKEN" for item in env), 1)
             self.assertEqual(sum(item["name"] == "MLFLOW_TRACKING_URI" for item in env), 1)
+            self.assertEqual(
+                [item for item in env if item["name"] == "TRITON_CONTROL_URL"],
+                [{"name": "TRITON_CONTROL_URL", "value": "http://custom-control.custom-namespace:9000"}],
+            )
             self.assertNotIn("fake-token", json.dumps(env))
         core.return_value.patch_namespaced_secret.assert_not_called()
         secret = core.return_value.create_namespaced_secret.call_args.kwargs["body"]
