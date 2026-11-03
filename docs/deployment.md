@@ -371,6 +371,11 @@ Image pull secrets:
 - The JSON below is only an example Docker config shape, not a fixed template.
 - The `auth` value is the base64 encoding of `username:token` or
   `username:password`.
+- Mixed private and public registries are supported. Configure credentials only
+  for the private registries; images from public registries with no matching
+  credentials pull anonymously. A public repository on a matching registry can
+  still use the configured credentials, so invalid credentials can cause a
+  pull failure. See [private and public registry examples](user-guide.md#using-private-and-public-registries-together).
 
 vLLM S3 repository handling:
 

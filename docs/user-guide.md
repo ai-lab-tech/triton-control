@@ -325,6 +325,29 @@ existing Kubernetes workloads; recreate the affected workload to apply a change.
 Helm-managed Argo components and Workflow YAML retain their separate image pull
 Secret configuration described in [Argo Workflows](argo-workflows.md).
 
+### Using Private and Public Registries Together
+
+You can deploy images from a private registry and public registries with the
+same global pull secret. Include credentials only for registries that require
+authentication. Kubernetes selects credentials that match the image's registry
+and any configured path prefix; it does not send them to unrelated registries.
+
+For example, if the secret contains credentials only for `registry.example.com`:
+
+| Image | Pull behavior |
+| --- | --- |
+| `registry.example.com/team/triton:release` | Uses the configured private registry credentials. |
+| `docker.io/library/nginx:stable` | Pulls anonymously because the secret has no matching Docker Hub entry. |
+
+No per-deployment switch is needed. If all images are public, leave the global
+secret unset.
+
+A public repository on the same registry can also match the configured
+credentials. Kubernetes then attempts authentication even if anonymous access
+is allowed; invalid credentials can cause the pull to fail. Keep matching
+credentials valid rather than relying on an anonymous fallback. See
+[Kubernetes credential matching](https://kubernetes.io/docs/concepts/containers/images/#interpretation-of-config-json).
+
 ## S3 Profiles
 
 Administrators manage reusable S3 deployment profiles through the existing
