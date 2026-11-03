@@ -88,7 +88,6 @@ export class InstanceDetailPageComponent implements OnInit {
       this.s3ProfilesError.set("Unable to load S3 profiles.");
     }
   }
-  readonly defaultS3Region = "us-east-1";
   private readonly instancesApi = inject(InstancesService);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -103,15 +102,7 @@ export class InstanceDetailPageComponent implements OnInit {
   private readonly logsTabActive$ = new Subject<boolean>();
   private deploymentLogsRequestPending = false;
 
-  s3AccessKey = "";
-  s3SecretKey = "";
-  s3Bucket = "";
-  s3Region = this.defaultS3Region;
-  s3Endpoint = "";
   s3Prefix = "";
-  s3VerifySsl = false;
-  s3CaCertificate = "";
-  s3SecretConfigured = false;
   tritonEndpoint = "";
   metricsEndpoint = "";
   tritonVerifySsl = false;
@@ -204,15 +195,7 @@ export class InstanceDetailPageComponent implements OnInit {
       .pipe(ofType(s3ConfigSaveSucceeded, s3ConfigDisableSucceeded), takeUntilDestroyed())
       .subscribe(() => {
         this.showS3Dialog.set(false);
-        this.s3AccessKey = "";
-        this.s3SecretKey = "";
-        this.s3Bucket = "";
-        this.s3Region = this.defaultS3Region;
-        this.s3Endpoint = "";
         this.s3Prefix = "";
-        this.s3VerifySsl = false;
-        this.s3CaCertificate = "";
-        this.s3SecretConfigured = false;
       });
     this.actions$
       .pipe(ofType(tritonConnectionSaveSucceeded), takeUntilDestroyed())
@@ -269,35 +252,10 @@ export class InstanceDetailPageComponent implements OnInit {
     if (!instance || !this.canWriteInstances()) {
       return;
     }
-    this.s3Bucket = instance.s3.bucket;
-    this.s3Region = instance.s3.region || this.defaultS3Region;
-    this.s3Endpoint = instance.s3.endpoint;
     this.s3Prefix = instance.s3.prefix;
-    this.s3VerifySsl = instance.s3.verifySsl;
-    this.s3CaCertificate = instance.s3.caCertificate;
-    this.s3AccessKey = instance.s3.accessKey;
-    this.s3SecretKey = "";
-    this.s3SecretConfigured = instance.s3.secretConfigured;
     this.selectedS3ProfileId = "";
     void this.loadS3Profiles();
     this.showS3Dialog.set(true);
-  }
-
-  onS3CertificateFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.s3CaCertificate = `${reader.result ?? ""}`;
-      input.value = "";
-    };
-    reader.readAsText(file);
-  }
-
-  shouldShowS3CaCertificate(): boolean {
-    return this.s3VerifySsl && this.s3Endpoint.trim().toLowerCase().startsWith("https://");
   }
 
   closeS3Dialog(): void {
@@ -559,10 +517,6 @@ export class InstanceDetailPageComponent implements OnInit {
       (instance.s3.accessKey ?? "").trim() ||
       instance.s3.secretConfigured,
     );
-  }
-
-  getS3SecretPlaceholder(): string {
-    return this.s3SecretConfigured ? "Stored secret configured" : "Secret key";
   }
 
   canSaveS3Config(): boolean {

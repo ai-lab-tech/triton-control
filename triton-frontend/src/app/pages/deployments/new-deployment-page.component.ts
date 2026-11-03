@@ -77,10 +77,6 @@ export class NewDeploymentPageComponent {
   s3Url = "";
   s3Bucket = "";
   s3Prefix = "";
-  s3AccessKey = "";
-  s3SecretKey = "";
-  s3Region = "us-east-1";
-  s3CaCertificate = "";
   backend: "triton" | "vllm" = "triton";
   modelControlMode: "explicit" | "poll" = "poll";
   repositorySyncMode: "direct" | "init" | "sidecar" = "direct";
@@ -90,20 +86,12 @@ export class NewDeploymentPageComponent {
   gpuCount: number | null = DEFAULT_GPU_COUNT;
   cpu = DEFAULT_CPU;
   memoryGi: number | null = DEFAULT_MEMORY_GI;
-  readonly dockerconfigjson = signal("");
   readonly requirementsTxt = signal("");
   readonly s3Profiles = signal<S3Profile[]>([]);
   readonly s3ProfilesLoading = signal(false);
   readonly requirementsEditorOptions = {
     theme: "vs-dark",
     language: "plaintext",
-    automaticLayout: true,
-    minimap: { enabled: false },
-    wordWrap: "on" as const,
-  };
-  readonly dockerconfigjsonEditorOptions = {
-    theme: "vs-dark",
-    language: "json",
     automaticLayout: true,
     minimap: { enabled: false },
     wordWrap: "on" as const,
@@ -129,23 +117,6 @@ export class NewDeploymentPageComponent {
       return { label: "On", tone: "ok", detail: "Host and class set" };
     }
     return { label: "Check", tone: "warn", detail: "Set host and class" };
-  }
-
-  pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
-    const raw = this.dockerconfigjson().trim();
-    if (!raw) {
-      return { label: "Off", tone: "neutral", detail: "No pull secret" };
-    }
-    try {
-      const parsed = JSON.parse(raw) as { auths?: Record<string, unknown> };
-      const auths = parsed && typeof parsed === "object" ? parsed.auths : undefined;
-      if (auths && typeof auths === "object" && Object.keys(auths).length > 0) {
-        return { label: "On", tone: "ok", detail: "Registry auth set" };
-      }
-      return { label: "Error", tone: "error", detail: "Missing auths" };
-    } catch {
-      return { label: "Error", tone: "error", detail: "Invalid JSON" };
-    }
   }
 
   requirementsStatus(): {
@@ -200,15 +171,6 @@ export class NewDeploymentPageComponent {
     return { label: "Explicit", tone: "neutral", detail: "Manual loading" };
   }
 
-  usesHttpsS3(): boolean {
-    const value = this.s3Url.trim().toLowerCase();
-    return value.startsWith("https://") || value.startsWith("s3://https://");
-  }
-
-  usesManualS3Settings(): boolean {
-    return !this.selectedS3ProfileId;
-  }
-
   s3Destination(): string {
     return this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix);
   }
@@ -245,8 +207,6 @@ export class NewDeploymentPageComponent {
     }
     this.s3Url = profile.endpoint;
     this.s3Bucket = profile.bucket;
-    this.s3Region = profile.region || "us-east-1";
-    this.s3CaCertificate = profile.ca_certificate || "";
   }
 
   async deploy(): Promise<void> {

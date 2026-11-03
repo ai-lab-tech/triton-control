@@ -16,26 +16,73 @@ describe("RegistrySettingsComponent", () => {
     }),
   );
   afterEach(() => TestBed.inject(HttpTestingController).verify());
-  it("loads status without fetching credentials, saves and clears the draft", async () => {
+  async function configuredComponent() {
+    const component = TestBed.createComponent(RegistrySettingsComponent).componentInstance;
+    TestBed.inject(HttpTestingController)
+      .expectOne("/api/settings/registry")
+      .flush({ configured: true });
+    await Promise.resolve();
+    return component;
+  }
+
+  it("loads status without populating the credential editor", async () => {
+    // Arrange
     const component = TestBed.createComponent(RegistrySettingsComponent).componentInstance;
     const http = TestBed.inject(HttpTestingController);
+    // Act
     http.expectOne("/api/settings/registry").flush({ configured: true });
     await Promise.resolve();
+    // Assert
     expect(component.configured()).toBeTrue();
     expect(component.draft).toBe("");
-    component.draft = '{"auths":{"registry":{"auth":"secret"}}}';
+  });
+
+  it("saves credentials and clears the editor after success", async () => {
+    // Arrange
+    const component = await configuredComponent();
+    const secret = '{"auths":{"registry":{"auth":"secret"}}}';
+    component.draft = secret;
+    const http = TestBed.inject(HttpTestingController);
+    // Act
     const saved = component.save(false);
     const req = http.expectOne("/api/settings/registry");
-    expect(req.request.method).toBe("PUT");
-    expect(req.request.body.dockerconfigjson).toBe(component.draft);
     req.flush({ configured: true });
     await saved;
+    // Assert
+    expect(req.request.method).toBe("PUT");
+    expect(req.request.body).toEqual({ dockerconfigjson: secret });
     expect(component.draft).toBe("");
-    const removed = component.save(true);
-    const remove = http.expectOne("/api/settings/registry");
-    expect(remove.request.body).toEqual({ dockerconfigjson: "" });
-    remove.flush({ configured: false });
-    await removed;
+    expect(component.configured()).toBeTrue();
+  });
+
+  it("removes stored credentials explicitly", async () => {
+    // Arrange
+    const component = await configuredComponent();
+    const http = TestBed.inject(HttpTestingController);
+    // Act
+    const saved = component.save(true);
+    const req = http.expectOne("/api/settings/registry");
+    req.flush({ configured: false });
+    await saved;
+    // Assert
+    expect(req.request.body).toEqual({ dockerconfigjson: "" });
     expect(component.configured()).toBeFalse();
+  });
+
+  it("preserves the draft when saving fails", async () => {
+    // Arrange
+    const component = await configuredComponent();
+    component.draft = "invalid";
+    const http = TestBed.inject(HttpTestingController);
+    // Act
+    const saved = component.save(false);
+    http
+      .expectOne("/api/settings/registry")
+      .flush({ detail: "Invalid config" }, { status: 422, statusText: "Invalid" });
+    await saved;
+    // Assert
+    expect(component.draft).toBe("invalid");
+    expect(component.busy()).toBeFalse();
+    expect(component.message()).toContain("Invalid config");
   });
 });

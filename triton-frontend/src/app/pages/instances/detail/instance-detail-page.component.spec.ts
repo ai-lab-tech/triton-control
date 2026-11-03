@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { HttpErrorResponse } from "@angular/common/http";
+import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { fakeAsync, TestBed, tick } from "@angular/core/testing";
 import { MatTabChangeEvent } from "@angular/material/tabs";
 import { ActivatedRoute } from "@angular/router";
@@ -389,10 +389,6 @@ describe("InstanceDetailPageComponent", () => {
     const component = fixture.componentInstance;
     component.s3Profiles.set([{ id: 3, name: "Admin profile" }]);
     component.selectedS3ProfileId = "3";
-    component.s3Endpoint = "  https://s3.example.test  ";
-    component.s3Bucket = "  models  ";
-    component.s3AccessKey = "  access  ";
-    component.s3SecretKey = "  secret  ";
     spyOn(mockStore, "dispatch");
 
     // Act
@@ -407,38 +403,32 @@ describe("InstanceDetailPageComponent", () => {
     );
   });
 
-  it("OpenS3Dialog_BlankRegion_ShowsDefaultRegion", () => {
-    // Arrange
-    mockStore.overrideSelector(selectDetailInstance, {
-      ...MOCK_INSTANCE,
-      s3: { ...MOCK_INSTANCE.s3, region: "" },
-    } as any);
-    mockStore.refreshState();
-    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
-    const component = fixture.componentInstance;
-
-    // Act
-    component.openS3Dialog();
-
-    // Assert
-    expect(component.s3Region).toBe("us-east-1");
-  });
-
-  it("OpenS3Dialog_ExistingS3Connection_PrefillsAccessKeyAndKeepsSecretHidden", () => {
+  it("OpenS3Dialog_ExistingConnection_PreservesRepositoryPrefix", () => {
     // Arrange
     mockStore.overrideSelector(selectDetailInstance, MOCK_INSTANCE as any);
     mockStore.refreshState();
-    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
-    const component = fixture.componentInstance;
-
+    spyOn(TestBed.inject(HttpClient), "get").and.returnValue(of([]));
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
     // Act
     component.openS3Dialog();
-
     // Assert
-    expect(component.s3AccessKey).toBe("ak");
-    expect(component.s3SecretKey).toBe("");
-    expect(component.s3SecretConfigured).toBeTrue();
-    expect(component.getS3SecretPlaceholder()).toBe("Stored secret configured");
+    expect(component.s3Prefix).toBe(MOCK_INSTANCE.s3.prefix);
+    expect(component.showS3Dialog()).toBeTrue();
+  });
+
+  it("OpenS3Dialog_RequiresANewProfileSelection", () => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, MOCK_INSTANCE as any);
+    mockStore.refreshState();
+    spyOn(TestBed.inject(HttpClient), "get").and.returnValue(of([]));
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
+    component.selectedS3ProfileId = "3";
+    component.s3Profiles.set([{ id: 3, name: "old" }]);
+    // Act
+    component.openS3Dialog();
+    // Assert
+    expect(component.selectedS3ProfileId).toBe("");
+    expect(component.canSaveS3Config()).toBeFalse();
   });
 
   it("SaveS3Config_BlankNewConnection_DoesNotDispatchSaveAction", () => {

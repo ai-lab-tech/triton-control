@@ -113,7 +113,6 @@ describe("DevelopmentPageComponent", () => {
     component.theme = "Monokai";
     component.cpu = "2";
     component.memoryGi = 4;
-    component.dockerconfigjson = '{"auths":{}}';
 
     // Act
     await component.create();

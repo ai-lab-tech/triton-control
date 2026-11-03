@@ -205,25 +205,42 @@ class S3ProfileTests(unittest.TestCase):
                 core.delete_namespaced_config_map.assert_called_once()
                 self.assertEqual(s3_profiles.delete_profile(session, self._claims(), profile.id), {"status": "deleted"})
 
-    def test_ProfileChoices_OwnedMetadataOnlyAndForeignLinkRejected(self) -> None:
+    def _member_profiles(self, session):
+        session.add(UserEntity(id=7, email="member@example.com", name="Member", role="member"))
+        owned = S3ProfileEntity(owner_user_id=7, name="owned", endpoint="https://minio", bucket="models",
+                                access_key="key", secret_key_enc="secret")
+        foreign = S3ProfileEntity(owner_user_id=99, name="foreign", endpoint="https://minio", bucket="models",
+                                  access_key="foreign-key", secret_key_enc="foreign-secret")
+        session.add_all([owned, foreign])
+        session.commit()
+        return owned, foreign, {"user_id": 7, "email": "member@example.com", "role": "member"}
+
+    def test_ProfileChoices_MemberReceivesOwnedMetadataOnly(self) -> None:
+        # Arrange
         with self._session() as session:
-            self._create_user(session)
-            owned = s3_profiles.create_profile(session, self._claims(), CreateS3ProfileRequest(
-                name="owned", endpoint="https://minio", bucket="models", access_key="key", secret_key="secret",
-            ))
-            foreign = S3ProfileEntity(owner_user_id=99, name="foreign", endpoint="https://minio", bucket="models",
-                                      access_key="foreign-key", secret_key_enc="foreign-secret")
-            session.add(foreign)
-            session.commit()
-            choices = workflows_api.list_s3_profile_choices(session=session, claims=self._claims())
+            owned, _, claims = self._member_profiles(session)
+            # Act
+            choices = workflows_api.list_s3_profile_choices(session=session, claims=claims)
+            # Assert
             self.assertEqual([p.id for p in choices], [owned.id])
             self.assertEqual(set(choices[0].model_dump()), {"id", "name", "endpoint", "bucket", "region"})
+
+    def test_LinkProfile_MemberCannotLinkForeignProfile(self) -> None:
+        # Arrange
+        with self._session() as session:
+            _, foreign, claims = self._member_profiles(session)
+            request = CreateWorkflowS3CredentialRequest(name="forbidden", s3_profile_id=foreign.id)
             with patch("app.services.workflows.credentials._apply_secret") as apply:
+                # Act
                 with self.assertRaises(NotFoundError):
-                    credentials.create_credential(CreateWorkflowS3CredentialRequest(
-                        name="forbidden", s3_profile_id=foreign.id,
-                    ), session, self._claims())
+                    credentials.create_credential(request, session, claims)
+                # Assert
                 apply.assert_not_called()
+
+    def test_RetrySync_MemberCannotSyncForeignProfile(self) -> None:
+        # Arrange
+        with self._session() as session:
+            _, foreign, claims = self._member_profiles(session)
             foreign_link = WorkflowS3CredentialEntity(
                 created_by_user_id=99, name="foreign-link", namespace="ns", secret_name="foreign-secret",
                 access_key_id="key", s3_profile_id=foreign.id,
@@ -231,8 +248,10 @@ class S3ProfileTests(unittest.TestCase):
             session.add(foreign_link)
             session.commit()
             with patch("app.services.workflows.credentials.sync_profile_credentials") as sync:
+                # Act
                 with self.assertRaises(NotFoundError):
-                    credentials.retry_sync(session, self._claims(), foreign_link.id)
+                    credentials.retry_sync(session, claims, foreign_link.id)
+                # Assert
                 sync.assert_not_called()
 
     def test_LinkMalformedCaExplainsPemFormatWithoutCreatingSecret(self) -> None:

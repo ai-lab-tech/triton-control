@@ -75,7 +75,6 @@ export class DevelopmentPageComponent implements OnDestroy {
   cpu = "";
   memoryGi: number | null = null;
   gpuCount: string | number = "";
-  dockerconfigjson = "";
   imageHasCodeServer = false;
   installHfBuilder = true;
 

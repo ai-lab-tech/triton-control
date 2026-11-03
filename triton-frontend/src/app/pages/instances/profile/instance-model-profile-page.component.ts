@@ -74,7 +74,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
 }`;
 
   image = "";
-  dockerconfigjson = "";
   readonly loadingStatus = signal(true);
   readonly resolvingInstance = signal(false);
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
@@ -104,7 +103,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
       this.actionError.set("");
       this.busy.set(false);
       this.image = "";
-      this.dockerconfigjson = "";
       this.batchSize = 1;
       this.concurrencyRange = "1";
       this.measurementRequestCount = 50;
@@ -170,7 +168,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
         ),
       );
       if (generation !== this.generation) return;
-      this.dockerconfigjson = "";
       this.applyRun(run);
     } catch (error) {
       if (generation !== this.generation) return;

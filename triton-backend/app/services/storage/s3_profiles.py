@@ -21,8 +21,7 @@ from app.services.workflows.credentials import sync_profile_credentials
 def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO]:
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
-    rows = (s3_profiles.list_all(session) if claims.get("role") == "admin"
-            else s3_profiles.list_for_owner(session, owner.id or 0))
+    rows = s3_profiles.list_for_owner(session, owner.id or 0)
     return [_to_dto(profile) for profile in rows]
 
 
@@ -62,14 +61,14 @@ def update_profile(
     request: UpdateS3ProfileRequest,
 ) -> S3ProfileDTO:
     require_admin(claims)
-    owner = require_user_entity(session, claims)
-    profile = _get_profile(session, owner.id or 0, profile_id)
+    require_user_entity(session, claims)
+    profile = _get_profile(session, profile_id)
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
     if request.name is not None:
         name = _clean_required(request.name, "Profile name")
-        existing = s3_profiles.find_by_name_for_owner(session, owner.id or 0, name)
+        existing = s3_profiles.find_by_name_for_owner(session, profile.owner_user_id, name)
         if existing and existing.id != profile.id:
             raise ConflictError("S3 profile name already exists")
         profile.name = name
@@ -103,8 +102,8 @@ def update_profile(
 
 def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) -> dict[str, str]:
     require_admin(claims)
-    owner = require_user_entity(session, claims)
-    profile = _get_profile(session, owner.id or 0, profile_id)
+    require_user_entity(session, claims)
+    profile = _get_profile(session, profile_id)
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
@@ -114,7 +113,7 @@ def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) ->
     return {"status": "deleted"}
 
 
-def _get_profile(session: Session, owner_user_id: int, profile_id: int) -> S3ProfileEntity:
+def _get_profile(session: Session, profile_id: int) -> S3ProfileEntity:
     profile = s3_profiles.get(session, profile_id)
     if not profile:
         raise NotFoundError("S3 profile not found")
