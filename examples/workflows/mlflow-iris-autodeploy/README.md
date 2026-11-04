@@ -28,8 +28,12 @@ Follow the steps below to upload the script and run the training and deployment.
 2. Open **Triton Control → MLflow**. Below the page title, check **S3 profile**
    for the profile name and **Artifacts** for its S3 path.
    Link that profile under **Triton Control → Workflows → Configure S3 Secrets**
-   and use it when uploading the training script in step 4. The profile's bucket
-   must match the bucket shown in **Artifacts**.
+   and use it when uploading the training script in step 4.
+
+   > [!WARNING]
+   > The profile's bucket must match the bucket shown in MLflow's **Artifacts**.
+   > Using a different bucket lets training finish, but deployment fails.
+
 3. Follow [Create a Development Workspace](../sklearn-iris-training/README.md#1-create-a-development-workspace).
    When the workspace is ready, open **code-server** from **Development**.
    Create `/workspace/mlflow-iris-autodeploy/` and copy this example's
@@ -96,8 +100,8 @@ model_repository/classifier/
   1/artifact/
 ```
 
-Open **Triton Instances → your deployment → Details → Models → classifier →
-Version 1 → Infer**. Use the name selected in the `deployment-name` parameter
+Open **Triton Instances → your deployment → Details → Models → classifier
+(Version 1) → Infer**. Use the name selected in the `deployment-name` parameter
 (default: `iris-classifier`). Paste the generated `request.json` from MLflow and
 click **Send / Infer**. It contains the four named Iris input tensors and the
 correct output name. The unmodified example request returns `[0, 2]`.
