@@ -132,6 +132,7 @@ describe("DevelopmentPageComponent", () => {
         dockerconfigjson: '{"auths":{}}',
         image_has_code_server: false,
         install_hf_builder: true,
+        install_mlflow: true,
       }),
     );
     expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(3);
@@ -246,6 +247,40 @@ describe("DevelopmentPageComponent", () => {
     // Assert
     expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({ install_hf_builder: false }),
+    );
+  });
+
+  it("Create_MlflowEnabled_UsesConfiguredDefaults", async () => {
+    // Arrange
+    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        install_mlflow: true,
+      }),
+    );
+    const request = codeServersApi.createCodeServerApiDevelopmentPost.calls.mostRecent().args[0];
+    expect(request.mlflow_version).toBeUndefined();
+    expect(request.mlflow_triton_control_version).toBeUndefined();
+  });
+
+  it("Create_MlflowDisabled_SendsFalseFlag", async () => {
+    // Arrange
+    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+    component.installMlflow = false;
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        install_mlflow: false,
+      }),
     );
   });
 

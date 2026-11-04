@@ -1,0 +1,208 @@
+name: MLflow plugin compatibility
+
+on:
+  pull_request:
+    paths:
+      - "triton-backend/**"
+      - "charts/triton-control/values.yaml"
+      - "charts/triton-control/README.md"
+      - ".github/workflows/mlflow-plugin-compatibility.yml"
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      plugin_version:
+        description: "Published stable version; empty selects the latest stable PyPI release"
+        required: false
+        type: string
+      promote:
+        description: "Open and enable auto-merge for a successful newer plugin version"
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [mlflow-plugin-published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mlflow-plugin-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      current: ${{ steps.resolve.outputs.current }}
+      newer: ${{ steps.resolve.outputs.newer }}
+      mlflow: ${{ steps.mlflow.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check packaging
+      - name: Resolve stable non-yanked PyPI candidate
+        id: resolve
+        env:
+          CANDIDATE: ${{ inputs.plugin_version || github.event.client_payload.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            CANDIDATE=$(python triton-backend/scripts/mlflow_plugin_release.py pin)
+          fi
+          python triton-backend/scripts/mlflow_plugin_release.py resolve --version "$CANDIDATE"
+      - name: Read configured workspace MLflow version
+        id: mlflow
+        run: |
+          python -m pip install pyyaml
+          python - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import yaml
+          from packaging.version import Version
+          version = str(Version(yaml.safe_load(Path('charts/triton-control/values.yaml').read_text())['development']['mlflow']['version']))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'version={version}\n')
+          PYTHON
+      - name: Record tested versions
+        env:
+          CURRENT: ${{ steps.resolve.outputs.current }}
+          CANDIDATE: ${{ steps.resolve.outputs.version }}
+        run: |
+          echo "Tested default: $CURRENT; candidate: $CANDIDATE" >> "$GITHUB_STEP_SUMMARY"
+
+  compatibility:
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install packaging sqlmodel
+      - name: Test actual workspace installation, model logging and notebook kernel
+        env:
+          PLUGIN_VERSION: ${{ needs.candidate.outputs.version }}
+          MLFLOW_VERSION: ${{ needs.candidate.outputs.mlflow }}
+          GIT_PYTHON_REFRESH: quiet
+        run: >-
+          python triton-backend/scripts/smoke_mlflow_plugin.py
+          --plugin-version "$PLUGIN_VERSION" --mlflow-version "$MLFLOW_VERSION"
+      - name: Test release selection and promotion guards
+        working-directory: triton-backend
+        run: python -m unittest tests.test_mlflow_plugin_release
+      - name: Check generated version documentation
+        run: python triton-backend/scripts/mlflow_plugin_release.py check
+
+  deployment-contract:
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install client and isolated backend test dependencies
+        run: |
+          python -m pip install packaging sqlmodel
+          python -m venv "$RUNNER_TEMP/backend"
+          "$RUNNER_TEMP/backend/bin/python" -m pip install -e ./triton-backend
+      - name: Test published client against backend deployment routes
+        env:
+          PLUGIN_VERSION: ${{ needs.candidate.outputs.version }}
+          MLFLOW_VERSION: ${{ needs.candidate.outputs.mlflow }}
+          GIT_PYTHON_REFRESH: quiet
+        run: |
+          "$RUNNER_TEMP/backend/bin/python" triton-backend/scripts/mlflow_contract_server.py \
+            --connection-file "$RUNNER_TEMP/mlflow-contract.json" &
+          server_pid=$!
+          trap 'kill "$server_pid"; wait "$server_pid" || true' EXIT
+          python triton-backend/scripts/smoke_mlflow_plugin.py \
+            --plugin-version "$PLUGIN_VERSION" --mlflow-version "$MLFLOW_VERSION" \
+            --contract-file "$RUNNER_TEMP/mlflow-contract.json"
+
+  promote:
+    needs: [candidate, compatibility, deployment-contract]
+    if: >-
+      needs.candidate.outputs.newer == 'true' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name != 'workflow_dispatch' || inputs.promote)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      APP_ENABLED: ${{ vars.MLFLOW_PLUGIN_APP_ID != '' && secrets.MLFLOW_PLUGIN_APP_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check packaging
+      - name: Require the tested default-branch revision
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          current=$(git ls-remote --exit-code origin "refs/heads/$DEFAULT_BRANCH" | cut -f1)
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo '::error::The default branch changed during compatibility checks. Rerun before promoting a release.'
+            exit 1
+          fi
+      - name: Check updater credentials
+        env:
+          GH_TOKEN: ${{ secrets.MLFLOW_PLUGIN_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ] && [ "$APP_ENABLED" != 'true' ]; then
+            echo '::error::Configure MLFLOW_PLUGIN_APP_ID and MLFLOW_PLUGIN_APP_PRIVATE_KEY, or MLFLOW_PLUGIN_UPDATE_TOKEN, with repository contents and pull-request write access.'
+            exit 1
+          fi
+      - name: Create repository-scoped updater token
+        if: env.APP_ENABLED == 'true'
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.MLFLOW_PLUGIN_APP_ID }}
+          private-key: ${{ secrets.MLFLOW_PLUGIN_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - name: Update tested default and generated README
+        env:
+          CANDIDATE: ${{ needs.candidate.outputs.version }}
+        run: |
+          python triton-backend/scripts/mlflow_plugin_release.py resolve --version "$CANDIDATE"
+          python triton-backend/scripts/mlflow_plugin_release.py promote --version "$CANDIDATE"
+      - name: Open compatibility update PR
+        id: pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app.outputs.token || secrets.MLFLOW_PLUGIN_UPDATE_TOKEN }}
+          branch: automation/mlflow-plugin-compatibility
+          base: ${{ github.event.repository.default_branch }}
+          delete-branch: true
+          add-paths: |
+            triton-backend/app/services/development/mlflow-triton-control-version.txt
+            charts/triton-control/README.md
+          commit-message: "chore: update tested MLflow plugin to ${{ needs.candidate.outputs.version }}"
+          title: "Update tested MLflow plugin to ${{ needs.candidate.outputs.version }}"
+          body: |
+            Updates the tested MLflow plugin default from ${{ needs.candidate.outputs.current }} to ${{ needs.candidate.outputs.version }}.
+
+            Shared-Python installation, model logging, generated artifacts, notebook checks and the real backend deployment API contract (with fixture storage and Kubernetes) passed with MLflow ${{ needs.candidate.outputs.mlflow }}:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Enable auto-merge after required PR checks
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.MLFLOW_PLUGIN_UPDATE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR_NUMBER" --auto --squash

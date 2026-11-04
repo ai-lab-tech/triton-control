@@ -3207,6 +3207,64 @@
         }
       }
     },
+    "/api/s3-profiles/resolve": {
+      "get": {
+        "tags": [
+          "s3-profiles"
+        ],
+        "summary": "Resolve S3 Profile",
+        "operationId": "resolve_s3_profile_api_s3_profiles_resolve_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Resolve S3 Profile Api S3 Profiles Resolve Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/s3-profiles": {
       "get": {
         "tags": [
@@ -4067,6 +4125,33 @@
             "type": "boolean",
             "title": "Install Hf Builder",
             "default": true
+          },
+          "install_mlflow": {
+            "type": "boolean",
+            "title": "Install Mlflow",
+            "default": true
+          },
+          "mlflow_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Version"
+          },
+          "mlflow_triton_control_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Triton Control Version"
           }
         },
         "type": "object",

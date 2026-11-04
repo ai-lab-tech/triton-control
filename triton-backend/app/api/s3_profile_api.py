@@ -14,6 +14,16 @@ from app.services.storage import s3_profiles as s3_profile_service
 router = APIRouter(prefix="/api/s3-profiles", tags=["s3-profiles"])
 
 
+@router.get("/resolve")
+@translate_app_errors
+def resolve_s3_profile(
+    name: str,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> dict[str, int | str]:
+    return s3_profile_service.resolve_profile_reference(session, claims, name)
+
+
 @router.get("", response_model=list[S3ProfileDTO])
 @translate_app_errors
 def list_s3_profiles(

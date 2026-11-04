@@ -12,7 +12,7 @@ from app.core.access_control import require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity
-from app.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.repositories import mlflow, s3_profiles, workflow_s3_credentials
 from app.schemas import CreateS3ProfileRequest, S3ProfileDTO, UpdateS3ProfileRequest
 from app.services.workflows.credentials import sync_profile_credentials
@@ -22,6 +22,18 @@ def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
     return [_to_dto(profile) for profile in s3_profiles.list_for_owner(session, owner.id or 0)]
+
+
+def resolve_profile_reference(session: Session, claims: dict[str, Any], name: str) -> dict[str, int | str]:
+    """Resolve an owned profile name without exposing any storage credentials."""
+    require_member_or_admin(claims)
+    owner = require_user_entity(session, claims)
+    profile = s3_profiles.find_by_name_for_owner(session, owner.id or 0, _clean_required(name, "Profile name"))
+    if profile is None:
+        raise NotFoundError("S3 profile not found")
+    if claims.get("token_use") == "mlflow_workflow" and claims.get("allowed_s3_profile_id") != profile.id:
+        raise ForbiddenError("Workflow token cannot access this S3 profile")
+    return {"id": profile.id or 0, "name": profile.name}
 
 
 def create_profile(

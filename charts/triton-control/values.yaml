@@ -154,6 +154,11 @@ mlflow:
   gatewayImage: nginx:1.28-alpine
 
 development:
+  mlflow:
+    # Workspace defaults; users can override versions when creating a workspace.
+    version: "3.14.0"
+    # mlflow-triton-control plugin; empty uses the CI-tested version.
+    tritonControlVersion: ""
   hfBuilder:
     # Empty uses the tested release shipped with the backend; set to override.
     version: ""

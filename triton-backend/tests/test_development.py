@@ -19,7 +19,7 @@ from fastapi import Response
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import development_api as code_server_api
-from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError, NotFoundError
 from app.schemas import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
 from app.services.development import proxy as code_proxy
@@ -41,10 +41,12 @@ class HfBuilderStartupTests(unittest.TestCase):
         python = binary_dir / "python3"
         python.write_text(
             '#!/bin/sh\n'
-            'printf "%s\\n" "$0 $*" >> "$HF_TEST_LOG"\n'
+            'printf "%s|%s\\n" "$0 $*" "$PYTHONPATH" >> "$HF_TEST_LOG"\n'
             'if [ "$1" = "-c" ]; then\n'
             '  case "$2" in\n'
+            '    *numpy-repair-*) exit 0;;\n'
             '    *getusersitepackages*) printf "%s" "$HF_TEST_USER_SITE";;\n'
+            '    *"requires(\x27tritonserver\x27)"*) printf "%s" "numpy<2";;\n'
             '    *) test -f "$0.ready";;\n'
             '  esac\n'
             'elif [ "$2" = "pip" ]; then\n'
@@ -66,6 +68,7 @@ class HfBuilderStartupTests(unittest.TestCase):
             "HF_TEST_KERNEL_FAIL": "0",
             "HF_TEST_KERNEL": str(root / "kernel-python"),
             "HF_TEST_USER_SITE": str(root / "user-site"),
+            "PYTHONPATH": "/opt/tritonserver/backends/dali/wheel/dali",
         }
 
     def _run_setup(self, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -91,6 +94,11 @@ class HfBuilderStartupTests(unittest.TestCase):
         calls = (root / "calls").read_text()
         self.assertEqual(calls.count("-m pip install"), 1)
         self.assertIn("-m pip install --user", calls)
+        self.assertIn("--upgrade --force-reinstall", calls)
+        self.assertIn("numpy<2", calls)
+        expected_path = environment["HF_TEST_USER_SITE"] + ":" + environment["PYTHONPATH"]
+        self.assertIn("|" + expected_path, calls)
+        self.assertIn("--env PYTHONPATH " + expected_path, calls)
         self.assertNotIn("--break-system-packages", calls)
         self.assertIn("triton-hf-builder", calls)
         tested_version = Path(k8s.__file__).with_name("hf-builder-version.txt").read_text().strip()
@@ -216,6 +224,16 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(request.name, "dev-workspace")
         self.assertFalse(request.image_has_code_server)
         self.assertTrue(request.install_hf_builder)
+        self.assertTrue(request.install_mlflow)
+
+    def test_workspace_receives_configured_backend_url(self) -> None:
+        with patch.dict(os.environ, {"DEVELOPMENT_PROFILE_API_URL": "http://custom-control.other:9000/"}):
+            manifests = k8s._manifests(
+                self._request(), "control", "code-7", "code-7-svc", "code-7-secret",
+            )
+        statefulset = next(item for item in manifests if item["kind"] == "StatefulSet")
+        env = statefulset["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertIn({"name": "TRITON_CONTROL_URL", "value": "http://custom-control.other:9000"}, env)
 
     def test_CreateCodeServerRequest_InvalidValues_RaiseValidationError(self) -> None:
         with self.assertRaises(ValueError):
@@ -271,6 +289,14 @@ class CodeServerTests(unittest.TestCase):
             },
         )
         self.assertIn({"name": "HOME", "value": "/workspace"}, container["env"])
+        self.assertIn({"name": "TRITON_CONTROL_URL", "value": k8s.tracking.control_url()}, container["env"])
+        deployment_token = next(item for item in container["env"] if item["name"] == "TRITON_CONTROL_TOKEN")
+        self.assertEqual(deployment_token["valueFrom"]["secretKeyRef"], {
+            "name": "code-7-dev-workspace-secret", "key": "TRITON_CONTROL_TOKEN",
+        })
+        self.assertTrue(secret["stringData"]["TRITON_CONTROL_TOKEN"].startswith(
+            "workspace-deployment:triton-control:code-7-dev-workspace:",
+        ))
         self.assertIn({"name": "VSCODE_RECONNECTION_GRACE_TIME", "value": "30000"}, container["env"])
         self.assertIn({"name": "NODE_TLS_REJECT_UNAUTHORIZED", "value": "1"}, container["env"])
         self.assertEqual(container["image"], "nvcr.io/nvidia/tritonserver:26.06-py3")
@@ -363,10 +389,11 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("--display-name 'Python (Triton Control)'", command)
         self.assertNotIn("python3 -m venv", command)
         self.assertLess(command.index("triton-hf-builder"), command.index('exec "$CODE_SERVER_BIN"'))
+        self.assertLess(command.index("mlflow-triton-control=="), command.index("HF_BUILDER_USER_SITE="))
 
     def test_Manifests_HfBuilderDisabled_KeepsEditorExtensionWithoutInstallingPythonPackage(self) -> None:
         # Arrange
-        request = self._request().model_copy(update={"install_hf_builder": False})
+        request = self._request().model_copy(update={"install_hf_builder": False, "install_mlflow": False})
 
         # Act
         manifest = k8s._statefulset_manifest(request, "dev", "workspace", "service", {})
@@ -888,6 +915,26 @@ class CodeServerTests(unittest.TestCase):
             "Service/code-7-dev-workspace-svc",
         ])
         self.assertEqual(applied[2]["kind"], "StatefulSet")
+
+    def test_ApplyCodeServerResources_DoesNotExposeSecretErrors(self) -> None:
+        sensitive = "generated-deployment-credential"
+        api_error = ApiException(status=422, reason=sensitive)
+        api_error.body = sensitive
+        for error in [api_error, RuntimeError(sensitive)]:
+            stderr = io.StringIO()
+            with self.subTest(error=type(error).__name__), patch.object(
+                k8s, "api_client", return_value=object(),
+            ), patch.object(k8s, "_ensure_namespace"), patch.object(
+                k8s, "gpu_runtime_class_name", return_value=None,
+            ), patch("kubernetes.utils.create_from_dict", side_effect=error), patch(
+                "sys.stderr", stderr,
+            ), self.assertRaises(BadGatewayError) as raised:
+                k8s.apply_code_server_resources(
+                    self._request(), namespace="control", statefulset_name="code-7",
+                    service_name="code-7-svc", secret_name="code-7-secret",
+                )
+            self.assertNotIn(sensitive, stderr.getvalue())
+            self.assertNotIn(sensitive, raised.exception.detail)
 
     def test_ReadStatus_PodsReadyAndMissing_ReturnsStatus(self) -> None:
         ready_pod = SimpleNamespace(

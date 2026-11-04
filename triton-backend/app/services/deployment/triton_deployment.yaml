@@ -38,6 +38,7 @@ spec:
         - name: triton
           image: {image}
           imagePullPolicy: IfNotPresent
+          workingDir: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false

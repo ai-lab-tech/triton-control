@@ -87,6 +87,10 @@ spec:
               value: {{ .Values.development.codeServer.version | quote }}
             - name: DEVELOPMENT_HF_BUILDER_VERSION
               value: {{ .Values.development.hfBuilder.version | quote }}
+            - name: DEVELOPMENT_MLFLOW_VERSION
+              value: {{ .Values.development.mlflow.version | quote }}
+            - name: DEVELOPMENT_MLFLOW_TRITON_CONTROL_VERSION
+              value: {{ .Values.development.mlflow.tritonControlVersion | quote }}
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

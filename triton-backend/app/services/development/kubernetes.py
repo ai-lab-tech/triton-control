@@ -15,10 +15,16 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from packaging.version import InvalidVersion, Version
-
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
+from app.services.development import deployment_access
+from app.services.development.mlflow_setup import setup_command as mlflow_setup_command
+from app.services.development.python_packages import (
+    NUMPY_REPAIR_SCRIPT,
+    NUMPY_REQUIREMENT_SCRIPT,
+    USER_INSTALL_FLAGS,
+    hf_builder_version,
+)
 from app.services.kubernetes_client import (
     api_client,
     gpu_runtime_class_name,
@@ -85,31 +91,25 @@ def apply_code_server_resources(
             meta = manifest.get("metadata") or {}
             kind = manifest.get("kind", "Resource")
             name = meta.get("name", "unknown")
-            _diag("create.apply.begin", kind=kind, name=name)
+            _diag("create.apply.begin")
             utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
-            _diag("create.apply.success", kind=kind, name=name)
+            _diag("create.apply.success")
             applied.append(f"{kind}/{name}")
-        _diag("create.success", applied=applied)
+        _diag("create.success", resources_count=len(applied))
         return applied
     except ConfigException as exc:
-        logger.exception("Development create failed: Kubernetes configuration could not be loaded")
-        _diag("create.failed.config", error=exc)
+        _diag("create.failed.config")
         raise BadGatewayError("Kubernetes configuration could not be loaded") from exc
     except ApiException as exc:
-        logger.exception("Development create failed with Kubernetes API error")
-        error = _api_error(exc)
-        _diag("create.failed.api", error=error)
-        raise BadGatewayError(error) from exc
+        # Kubernetes errors may echo Secret manifests, including generated tokens.
+        _diag("create.failed.api")
+        raise BadGatewayError("Kubernetes API request failed while creating Development resources") from exc
     except FailToCreateError as exc:
-        errs = getattr(exc, "api_exceptions", []) or []
-        message = "; ".join(_api_error(e) for e in errs) or "Failed to apply Kubernetes resources"
-        logger.exception("Development create failed while applying Kubernetes resources: %s", message)
-        _diag("create.failed.apply", errors_count=len(errs), error=message)
-        raise BadGatewayError(message) from exc
+        _diag("create.failed.apply")
+        raise BadGatewayError("Failed to apply Kubernetes resources") from exc
     except Exception as exc:
-        logger.exception("Development create failed with unexpected error")
-        _diag("create.failed.unexpected", error=exc)
-        raise BadGatewayError(f"Failed to apply Development resources: {exc}") from exc
+        _diag("create.failed.unexpected")
+        raise BadGatewayError("Failed to apply Development resources") from exc
 
 
 def delete_code_server_resources(
@@ -215,7 +215,7 @@ def _manifests(
 ) -> list[dict[str, Any]]:
     labels = {"app": "code-server", "workspace": statefulset_name}
     manifests = [
-        _secret_manifest(namespace, secret_name),
+        _secret_manifest(namespace, secret_name, statefulset_name),
         _triton_deploy_extension_configmap(namespace, statefulset_name),
         _statefulset_manifest(
             request,
@@ -233,7 +233,7 @@ def _manifests(
     return manifests
 
 
-def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
+def _secret_manifest(namespace: str, secret_name: str, statefulset_name: str) -> dict[str, Any]:
     return {
         "apiVersion": "v1",
         "kind": "Secret",
@@ -243,6 +243,7 @@ def _secret_manifest(namespace: str, secret_name: str) -> dict[str, Any]:
             "AUTH_MODE": "triton-control-proxy", "S3_PROFILE_TOKEN": secrets.token_urlsafe(32),
             tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32),
             workspace_access.TOKEN_KEY: secrets.token_urlsafe(32),
+            deployment_access.TOKEN_KEY: deployment_access.create_token(namespace, statefulset_name),
         },
     }
 
@@ -253,13 +254,22 @@ def enable_mlflow_tracking(namespace: str, statefulset_name: str, secret_name: s
 
     core = client.CoreV1Api(api_client())
     secret = core.read_namespaced_secret(secret_name, namespace)
+    missing_tokens = {}
     if not (secret.data or {}).get(tracking.TRACKING_TOKEN_KEY):
+        missing_tokens[tracking.TRACKING_TOKEN_KEY] = secrets.token_urlsafe(32)
+    if not (secret.data or {}).get(deployment_access.TOKEN_KEY):
+        missing_tokens[deployment_access.TOKEN_KEY] = deployment_access.create_token(namespace, statefulset_name)
+    if missing_tokens:
         core.patch_namespaced_secret(secret_name, namespace, {
-            "stringData": {tracking.TRACKING_TOKEN_KEY: secrets.token_urlsafe(32)},
+            "stringData": missing_tokens,
         })
     client.AppsV1Api(api_client()).patch_namespaced_stateful_set(statefulset_name, namespace, {
         "spec": {"template": {"spec": {"containers": [{
             "name": "code-server", "env": [
+                {"name": "TRITON_CONTROL_URL", "value": tracking.control_url(), "valueFrom": None},
+                {"name": deployment_access.TOKEN_KEY, "value": None, "valueFrom": {"secretKeyRef": {
+                    "name": secret_name, "key": deployment_access.TOKEN_KEY,
+                }}},
                 {"name": "MLFLOW_TRACKING_URI", "value": tracking.tracking_uri(
                     "workspaces", namespace, statefulset_name,
                 ), "valueFrom": None},
@@ -321,7 +331,11 @@ def _statefulset_manifest(
         )
 
     hf_builder_setup = _hf_builder_setup_command() if request.install_hf_builder else ""
-    python_settings = '\"python.defaultInterpreterPath\":\"python3\",' if request.install_hf_builder else ""
+    mlflow_setup = mlflow_setup_command(request) if request.install_mlflow else ""
+    python_settings = (
+        '\"python.defaultInterpreterPath\":\"python3\",'
+        if request.install_hf_builder or request.install_mlflow else ""
+    )
     jupyter_setup = (
         'if ! "$CODE_SERVER_BIN" --extensions-dir "$CODE_SERVER_EXTENSIONS" '
         "--list-extensions | grep -qx 'ms-toolsai.jupyter'; then "
@@ -329,7 +343,7 @@ def _statefulset_manifest(
         "--install-extension ms-toolsai.jupyter || "
         "echo 'Warning: failed to install ms-toolsai.jupyter extension' >&2; "
         "fi; "
-    ) if request.install_hf_builder else ""
+    ) if request.install_hf_builder or request.install_mlflow else ""
     startup_command = (
         "CODE_SERVER_RUNTIME=/tmp/triton-control-code-server; "
         "CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions; "
@@ -345,6 +359,7 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/user-data/User\" "
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
+        + mlflow_setup
         + hf_builder_setup
         +
         'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
@@ -453,6 +468,17 @@ def _statefulset_manifest(
                             namespace, statefulset_name, secret_name or f"{statefulset_name}-secret",
                         ) + [
                             {
+                                "name": "TRITON_CONTROL_URL",
+                                "value": tracking.control_url(),
+                            },
+                            {
+                                "name": deployment_access.TOKEN_KEY,
+                                "valueFrom": {"secretKeyRef": {
+                                    "name": secret_name or f"{statefulset_name}-secret",
+                                    "key": deployment_access.TOKEN_KEY,
+                                }},
+                            },
+                            {
                                 "name": "MLFLOW_TRACKING_URI",
                                 "value": tracking.tracking_uri("workspaces", namespace, statefulset_name),
                             },
@@ -466,7 +492,7 @@ def _statefulset_manifest(
                             {
                                 "name": "TRITON_CONTROL_PROFILE_URL",
                                 "value": (
-                                    os.getenv("DEVELOPMENT_PROFILE_API_URL", "http://triton-control:8000").rstrip("/")
+                                    tracking.control_url()
                                     + f"/api/development/workspace-s3-profiles/{namespace}/{statefulset_name}"
                                 ),
                             },
@@ -551,29 +577,29 @@ def _statefulset_manifest(
 
 def _hf_builder_setup_command() -> str:
     """Make the builder importable in normal workspace Python and notebook kernels."""
-    configured_version = os.getenv("DEVELOPMENT_HF_BUILDER_VERSION", "").strip() or (
-        Path(__file__).with_name("hf-builder-version.txt").read_text(encoding="utf-8").strip()
-    )
-    try:
-        configured_version = str(Version(configured_version))
-    except InvalidVersion as exc:
-        raise ValueError(
-            "DEVELOPMENT_HF_BUILDER_VERSION or the tested version must be a valid package version"
-        ) from exc
+    configured_version = hf_builder_version()
     requirement = f"triton-hf-builder=={configured_version}"
     user_site = shlex.quote("import site; assert site.ENABLE_USER_SITE; print(site.getusersitepackages())")
     check_code = (
-        "import triton_hf_builder, ipykernel; from importlib.metadata import version; "
+        "import triton_hf_builder, ipykernel, numpy, os; from importlib.metadata import version; "
         "from packaging.version import Version; "
-        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r})"
+        "from packaging.requirements import Requirement; "
+        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r}); "
+        "assert numpy.__version__ in Requirement(os.environ['HF_BUILDER_NUMPY_REQUIREMENT']).specifier"
     )
     check = shlex.quote(check_code)
     return (
         f"HF_BUILDER_USER_SITE=$(python3 -c {user_site}) || "
         "{ echo 'Error: HF Triton Builder requires Python user-site packages to be enabled.' >&2; exit 1; }; "
+        'export PYTHONPATH="$HF_BUILDER_USER_SITE${PYTHONPATH:+:$PYTHONPATH}"; '
+        f"HF_BUILDER_NUMPY_REQUIREMENT=$(python3 -c {shlex.quote(NUMPY_REQUIREMENT_SCRIPT)}) || "
+        "{ echo 'Error: could not read the image NumPy requirements.' >&2; exit 1; }; "
+        "export HF_BUILDER_NUMPY_REQUIREMENT; "
         f"if ! python3 -c {check} >/dev/null 2>&1; then "
-        "if ! (PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --user --disable-pip-version-check "
-        f"{shlex.quote(requirement)} 'ipykernel>=6,<8' && "
+        f"if ! (python3 -c {shlex.quote(NUMPY_REPAIR_SCRIPT)} && "
+        f"PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install {shlex.join(USER_INSTALL_FLAGS)} "
+        f"--disable-pip-version-check {shlex.quote(requirement)} 'ipykernel>=6,<8' "
+        '\"$HF_BUILDER_NUMPY_REQUIREMENT\" && '
         f"python3 -c {check}); then "
         "echo 'Error: HF Triton Builder setup failed. Use an image with Python 3.10+, pip and user-site packages, "
         "allow PyPI access, or disable Install HF Triton Builder when creating the workspace.' >&2; "
@@ -581,7 +607,7 @@ def _hf_builder_setup_command() -> str:
         "fi; "
         "fi; "
         "if ! python3 -m ipykernel install --user --name triton-control "
-        "--display-name 'Python (Triton Control)'; then "
+        "--display-name 'Python (Triton Control)' --env PYTHONPATH \"$PYTHONPATH\"; then "
         "echo 'Error: failed to register the Triton Control notebook kernel.' >&2; exit 1; "
         "fi; "
         "export TRITON_CONTROL_HF_BUILDER_PYTHON=python3; "

@@ -69,6 +69,44 @@ class ProfileDeploymentTests(unittest.TestCase):
         with Session(self.engine) as session:
             self.assertIs(profile_request.resolve_profile_request(request, session, {}), request)
 
+    def test_workspace_token_requires_owned_profile(self) -> None:
+        claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workspace_deployment"}
+        with Session(self.engine) as session:
+            resolved = profile_request.resolve_profile_request(self._request(), session, claims)
+            self.assertEqual(resolved.s3_access_key, "access")
+            with self.assertRaises(NotFoundError):
+                profile_request.resolve_profile_request(
+                    self._request(), session, {**claims, "email": "other@example.com"},
+                )
+            with self.assertRaises(BadRequestError):
+                profile_request.resolve_profile_request(CreateDeploymentRequest(
+                    deployment_name="legacy", image="triton:test", s3_url="s3://bucket",
+                    s3_access_key="access", s3_secret_key="secret",
+                ), session, claims)
+
+    def test_automatic_workflow_token_accepts_different_names_and_requires_owned_profiles(self):
+        claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workflow_deployment"}
+        with Session(self.engine) as session:
+            for name in ["first-model", "second-model"]:
+                request = self._request().model_copy(update={"deployment_name": name})
+                self.assertEqual(profile_request.resolve_profile_request(request, session, claims).deployment_name, name)
+            with self.assertRaises(NotFoundError):
+                profile_request.resolve_profile_request(self._request(), session, {**claims, "email": "other@example.com"})
+            with self.assertRaises(BadRequestError):
+                profile_request.resolve_profile_request(self._request().model_copy(update={"s3_profile_id": None}), session, claims)
+
+    def test_automatic_workflow_token_can_only_access_owner_deployments(self):
+        claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workflow_deployment"}
+        with Session(self.engine) as session:
+            for name, owner_id in [("first", 7), ("second", 7), ("foreign", 8)]:
+                session.add(TritonInstanceEntity(name=name, url="http://triton.test", created_by_user_id=owner_id,
+                    mlflow_model_uri="s3://models/repository/classifier"))
+            session.commit()
+            for name in ["first", "second"]:
+                self.assertEqual(mlflow._owned(session, claims, name).name, name)
+            with self.assertRaises(NotFoundError):
+                mlflow._owned(session, claims, "foreign")
+
 
 class MlflowReadinessTests(unittest.IsolatedAsyncioTestCase):
     async def test_status_requires_selected_model_ready(self) -> None:

@@ -174,6 +174,14 @@ For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for 
 Set `development.hfBuilder.version` to override the tested HF builder release
 shipped with the backend. Leave it empty to follow the verified default.
 
+Set `development.mlflow.tritonControlVersion` to override the tested
+`mlflow-triton-control` plugin release. Leave it empty to follow the verified
+default, maintained by CI like HF Triton Builder.
+
+<!-- mlflow-plugin-version:start -->
+Tested MLflow Triton plugin version: `0.4.2`.
+<!-- mlflow-plugin-version:end -->
+
 ## Development Workspace HTTPS Certificates
 
 The built-in **Explorer → S3 Browser** loads saved S3 profiles dynamically.
