@@ -13,6 +13,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { MatCheckboxModule } from "@angular/material/checkbox";
+import { MatTooltipModule } from "@angular/material/tooltip";
 
 import {
   BASE_PATH,
@@ -39,6 +40,7 @@ type CodeServer = CodeServerDTO;
     MatInputModule,
     MatSelectModule,
     MatCheckboxModule,
+    MatTooltipModule,
   ],
   styleUrl: "./development-page.component.scss",
   templateUrl: "./development-page.component.html",
