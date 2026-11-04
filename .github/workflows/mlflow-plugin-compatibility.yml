@@ -3,11 +3,7 @@ name: MLflow plugin compatibility
 on:
   pull_request:
     paths:
-      - "triton-backend/app/services/development/mlflow*"
-      - "triton-backend/app/schemas/development.py"
-      - "triton-backend/scripts/mlflow_plugin_release.py"
-      - "triton-backend/scripts/smoke_mlflow_plugin.py"
-      - "triton-backend/tests/test_mlflow_plugin_release.py"
+      - "triton-backend/**"
       - "charts/triton-control/values.yaml"
       - "charts/triton-control/README.md"
       - ".github/workflows/mlflow-plugin-compatibility.yml"
@@ -85,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.10", "3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,8 +102,36 @@ jobs:
       - name: Check generated version documentation
         run: python triton-backend/scripts/mlflow_plugin_release.py check
 
+  deployment-contract:
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install client and isolated backend test dependencies
+        run: |
+          python -m pip install packaging sqlmodel
+          python -m venv "$RUNNER_TEMP/backend"
+          "$RUNNER_TEMP/backend/bin/python" -m pip install -e ./triton-backend
+      - name: Test published client against backend deployment routes
+        env:
+          PLUGIN_VERSION: ${{ needs.candidate.outputs.version }}
+          MLFLOW_VERSION: ${{ needs.candidate.outputs.mlflow }}
+          GIT_PYTHON_REFRESH: quiet
+        run: |
+          "$RUNNER_TEMP/backend/bin/python" triton-backend/scripts/mlflow_contract_server.py \
+            --connection-file "$RUNNER_TEMP/mlflow-contract.json" &
+          server_pid=$!
+          trap 'kill "$server_pid"; wait "$server_pid" || true' EXIT
+          python triton-backend/scripts/smoke_mlflow_plugin.py \
+            --plugin-version "$PLUGIN_VERSION" --mlflow-version "$MLFLOW_VERSION" \
+            --contract-file "$RUNNER_TEMP/mlflow-contract.json"
+
   promote:
-    needs: [candidate, compatibility]
+    needs: [candidate, compatibility, deployment-contract]
     if: >-
       needs.candidate.outputs.newer == 'true' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
@@ -173,7 +197,7 @@ jobs:
           body: |
             Updates the tested MLflow plugin default from ${{ needs.candidate.outputs.current }} to ${{ needs.candidate.outputs.version }}.
 
-            Shared-Python workspace installation, model logging, generated artifacts, deployment target discovery and notebook checks passed with MLflow ${{ needs.candidate.outputs.mlflow }}:
+            Shared-Python installation, model logging, generated artifacts, notebook checks and the real backend deployment API contract (with fixture storage and Kubernetes) passed with MLflow ${{ needs.candidate.outputs.mlflow }}:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Enable auto-merge after required PR checks
         if: steps.pr.outputs.pull-request-number != ''

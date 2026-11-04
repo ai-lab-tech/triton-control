@@ -3,15 +3,69 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
-def verify(expected_plugin: str, expected_mlflow: str) -> None:
+def verify_deployment(model_uri: str, repository: Path, connection: dict[str, str]) -> None:
+    """Exercise the published client's HTTP contract against the real backend routes."""
+    from unittest.mock import patch
+
+    import httpx
+    from mlflow.deployments import get_deploy_client
+    from mlflow.exceptions import MlflowException
+
+    name = "mlflow-contract"
+    config = {"s3_profile_name": "models", "image": "triton:contract", "wait_timeout_seconds": 10}
+    with patch.dict(
+        os.environ,
+        {
+            "TRITON_CONTROL_URL": connection["url"],
+            "TRITON_CONTROL_TOKEN": connection["token"],
+        },
+    ):
+        client = get_deploy_client("triton-control")
+        deployed = client.create_deployment(name, model_uri=model_uri, config=config)
+        assert deployed["name"] == name and deployed["status"] == "ready", deployed
+        assert client.get_deployment(name)["model_name"] == "classifier"
+        assert [item["name"] for item in client.list_deployments()] == [name]
+        response = httpx.get(connection["url"] + "/contract/applied")
+        response.raise_for_status()
+        (applied,) = response.json()
+        assert applied["model_uri"].startswith("s3://compatibility-models/")
+        assert applied["model_name"] == "classifier"
+        assert applied["requirements_txt"].strip() == (repository / "requirements.txt").read_text().strip()
+        assert applied["image"] == config["image"] and applied["model_control_mode"] == "explicit"
+
+        with patch.dict(os.environ, {"TRITON_CONTROL_TOKEN": connection["other_token"]}):
+            assert client.list_deployments() == []
+            try:
+                client.get_deployment(name)
+            except MlflowException as error:
+                assert "404" in str(error), str(error)
+            else:
+                raise AssertionError("Another owner could read the deployment")
+
+        try:
+            client.create_deployment(
+                "foreign-profile", model_uri=model_uri, config={**config, "s3_profile_name": "other-owner"}
+            )
+        except MlflowException as error:
+            assert "404" in str(error), str(error)
+        else:
+            raise AssertionError("Another owner's S3 profile was accepted")
+        assert client.delete_deployment(name)["status"] == "deleted"
+        assert client.list_deployments() == []
+    print("Backend deployment create/get/list/delete, requirements transfer and ownership checks passed")
+
+
+def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | None = None) -> None:
     from importlib.metadata import requires, version
     from unittest.mock import patch
 
@@ -29,14 +83,14 @@ def verify(expected_plugin: str, expected_mlflow: str) -> None:
 
     assert Version(version("mlflow-triton-control")) == Version(expected_plugin)
     assert Version(mlflow.__version__) == Version(expected_mlflow)
-    assert Version(np.__version__) < Version("2")
+    assert np.__version__ in Requirement(os.environ["MLFLOW_NUMPY_REQUIREMENT"]).specifier
     core = next(
         Requirement(item)
         for item in requires("mlflow-triton-control") or []
         if Requirement(item).name == "mlflow-triton"
     )
     assert Version(version("mlflow-triton")) in core.specifier
-    # Discovery only: no deployment requests or real credentials in this smoke.
+    # Check entry-point discovery before testing deployment with the API fixture.
     with patch.dict(
         os.environ,
         {
@@ -49,7 +103,21 @@ def verify(expected_plugin: str, expected_mlflow: str) -> None:
     with tempfile.TemporaryDirectory(prefix="mlflow-plugin-smoke-") as folder:
         root = Path(folder)
         mlflow.set_tracking_uri(f"sqlite:///{root / 'tracking.db'}")
-        experiment = mlflow.create_experiment("compatibility", artifact_location=(root / "artifacts").as_uri())
+        # Only the object store is a fixture. MLflow model resolution and plugin HTTP
+        # requests run unmodified against S3 URIs and the backend API, respectively.
+        from urllib.parse import urlsplit
+
+        from mlflow.store.artifact.artifact_repository_registry import _artifact_repository_registry
+        from mlflow.store.artifact.local_artifact_repo import LocalArtifactRepository
+
+        class FixtureS3Repository(LocalArtifactRepository):
+            def __init__(self, artifact_uri, **kwargs):
+                parsed = urlsplit(artifact_uri)
+                assert parsed.netloc == "compatibility-models"
+                super().__init__(str(root / "artifacts" / parsed.path.lstrip("/")), **kwargs)
+
+        _artifact_repository_registry.register("s3", FixtureS3Repository)
+        experiment = mlflow.create_experiment("compatibility", artifact_location="s3://compatibility-models/iris")
         iris = load_iris(as_frame=True)
         features = iris.data.astype(np.float32)
         features.columns = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
@@ -61,6 +129,13 @@ def verify(expected_plugin: str, expected_mlflow: str) -> None:
         for name in ("config.pbtxt", "requirements.txt", "request.json", "validation.json", "1/model.py"):
             assert (repository / name).is_file(), f"Missing generated artifact: {name}"
         assert (repository / "1/artifact").is_dir()
+        if contract_file:
+            deadline = time.monotonic() + 30
+            while not contract_file.exists():
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Backend contract server did not start")
+                time.sleep(0.1)
+            verify_deployment(info.model_uri, repository, json.loads(contract_file.read_text()))
 
     manager = KernelManager(kernel_name="triton-control")
     manager.start_kernel()
@@ -87,9 +162,10 @@ def main() -> None:
     parser.add_argument("--plugin-version", required=True)
     parser.add_argument("--mlflow-version", required=True)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--contract-file", type=Path)
     args = parser.parse_args()
     if args.verify:
-        verify(args.plugin_version, args.mlflow_version)
+        verify(args.plugin_version, args.mlflow_version, args.contract_file)
         return
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -116,6 +192,7 @@ def main() -> None:
                 "--mlflow-version",
                 args.mlflow_version,
             ]
+            + (["--contract-file", str(args.contract_file)] if args.contract_file else [])
         )
         # Check both a fresh setup and restart with packages already present.
         subprocess.run(["sh", "-ec", command + command + verify_command], env=env, check=True, timeout=600)

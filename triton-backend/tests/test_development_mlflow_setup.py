@@ -1,9 +1,12 @@
 """Exercise MLflow startup under the workspace's inherited Python path."""
 
+import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,7 +14,7 @@ from pydantic import ValidationError
 
 from app.schemas.development import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
-from app.services.development.mlflow_setup import setup_command
+from app.services.development.mlflow_setup import NUMPY_REQUIREMENT_SCRIPT, USER_INSTALL_FLAGS, setup_command
 
 
 class MlflowSetupTests(unittest.TestCase):
@@ -35,6 +38,7 @@ class MlflowSetupTests(unittest.TestCase):
             'if [ "$1" = "-c" ]; then\n'
             '  case "$2" in\n'
             '    *getusersitepackages*) printf "%s" "$TEST_SITE";;\n'
+            '    *"requires(\x27tritonserver\x27)"*) printf "%s" "$TEST_NUMPY_REQUIREMENT";;\n'
             '    *) test -f "$TEST_READY";;\n'
             "  esac\n"
             'elif [ "$2" = "pip" ]; then\n'
@@ -54,6 +58,7 @@ class MlflowSetupTests(unittest.TestCase):
             "TEST_LOG": str(self.root / "log"),
             "TEST_READY": str(self.root / "ready"),
             "TEST_FAIL": "",
+            "TEST_NUMPY_REQUIREMENT": "numpy<2",
         }
 
     def run_setup(self, request=None):
@@ -82,7 +87,8 @@ class MlflowSetupTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("editor-started", result.stdout)
         self.assertEqual(len(installs), 1)
-        self.assertIn("--user --ignore-installed", installs[0])
+        self.assertIn("--user --upgrade --force-reinstall", installs[0])
+        self.assertNotIn("--ignore-installed", installs[0])
         self.assertIn("mlflow==3.14.0", installs[0])
         self.assertIn(f"mlflow-triton-control=={tested_plugin}", installs[0])
         self.assertIn("numpy<2", installs[0])
@@ -105,6 +111,92 @@ class MlflowSetupTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("editor-started", result.stdout)
                 self.assertIn("Error:", result.stderr)
+
+    def test_numpy_constraint_comes_from_image_metadata_and_respects_markers(self):
+        for dependencies, expected in [
+            ([], "numpy"),
+            (["numpy<2"], "numpy<2"),
+            (["numpy>=2; python_version >= '3.0'", "numpy<2; python_version < '3.0'"], "numpy>=2"),
+        ]:
+            with self.subTest(dependencies=dependencies):
+                # Arrange
+                metadata = self.root / "tritonserver-2.70.0.dist-info"
+                metadata.mkdir(exist_ok=True)
+                (metadata / "METADATA").write_text(
+                    "Metadata-Version: 2.1\nName: tritonserver\nVersion: 2.70.0\n"
+                    + "".join(f"Requires-Dist: {item}\n" for item in dependencies)
+                )
+                env = {**os.environ, "PYTHONPATH": str(self.root)}
+
+                # Act
+                result = subprocess.run(
+                    [sys.executable, "-c", NUMPY_REQUIREMENT_SCRIPT],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+                # Assert
+                self.assertEqual(result.stdout.strip(), expected)
+
+    def test_generic_image_does_not_force_numpy_one(self):
+        # Arrange
+        self.environment["TEST_NUMPY_REQUIREMENT"] = "numpy"
+
+        # Act
+        result = self.run_setup()
+        installs = [line for line in (self.root / "log").read_text().splitlines() if "-m pip install" in line]
+
+        # Assert
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("numpy<2", installs[0])
+
+    def test_package_upgrade_removes_old_distribution_metadata(self):
+        # Arrange
+        package = "workspace_upgrade_fixture"
+        wheels = []
+        for version in ("1.0", "2.0"):
+            metadata = f"{package}-{version}.dist-info"
+            files = {
+                f"{package}/__init__.py": f"__version__ = '{version}'\n",
+                f"{metadata}/METADATA": f"Metadata-Version: 2.1\nName: {package}\nVersion: {version}\n",
+                f"{metadata}/WHEEL": "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            }
+            files[f"{metadata}/RECORD"] = "".join(f"{name},,\n" for name in files) + f"{metadata}/RECORD,,\n"
+            wheel = self.root / f"{package}-{version}-py3-none-any.whl"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                for name, content in files.items():
+                    archive.writestr(name, content)
+            wheels.append(wheel)
+        env = {
+            **os.environ,
+            "PYTHONUSERBASE": str(self.root / "python-user"),
+            "PYTHONPATH": "",
+            "PIP_BREAK_SYSTEM_PACKAGES": "1",
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        }
+        python = str(Path(sys.base_prefix) / "bin/python3")
+        probe = (
+            f"import json, {package}; from importlib.metadata import distributions; "
+            f"print(json.dumps([{package}.__version__, "
+            f"[d.version for d in distributions() if d.metadata['Name'] == '{package}']]))"
+        )
+
+        # Act
+        for wheel in wheels:
+            subprocess.run(
+                [python, "-m", "pip", "install", *USER_INSTALL_FLAGS, "--no-index", "--no-deps", str(wheel)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+        result = subprocess.run([python, "-c", probe], env=env, capture_output=True, text=True, check=True)
+
+        # Assert
+        self.assertEqual(json.loads(result.stdout), ["2.0", ["2.0"]])
 
     def test_environment_versions_override_tested_defaults(self):
         # Arrange
