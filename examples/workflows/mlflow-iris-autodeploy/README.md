@@ -25,12 +25,15 @@ Follow the steps below to upload the script and run the training and deployment.
 
 1. In Triton Control, enable **MLflow** with an S3 artifact store and enable
    **Argo Workflows**.
-2. Save an S3 profile and link it under **Workflows → Configure S3 Secrets**.
-   It must read both the workflow inputs and the MLflow artifact bucket.
+2. Open **Triton Control → MLflow**. Below the page title, check **S3 profile**
+   for the profile name and **Artifacts** for its S3 path.
+   Link that profile under **Triton Control → Workflows → Configure S3 Secrets**
+   and use it when uploading the training script in step 4. The profile's bucket
+   must match the bucket shown in **Artifacts**.
 3. Follow [Create a Development Workspace](../sklearn-iris-training/README.md#1-create-a-development-workspace).
    When the workspace is ready, open **code-server** from **Development**.
    Create `/workspace/mlflow-iris-autodeploy/` and copy this example's
-   [train.py](train.py) into it.
+   [train.py](train.py) and [workflow.yaml](workflow.yaml) into it.
 4. Follow [Upload the Training Script](../sklearn-iris-training/README.md#3-upload-the-training-script)
    to upload this example's `train.py` to
    `workflows/mlflow-iris-autodeploy/train.py`. Set the workflow's `s3-script-key`
@@ -41,7 +44,8 @@ The workflow installs `mlflow-triton-control` directly from PyPI. Its matching
 
 ## Run through Argo
 
-Edit [workflow.yaml](workflow.yaml):
+In **code-server**, open `/workspace/mlflow-iris-autodeploy/workflow.yaml`
+and edit these settings:
 
 | Setting | Default |
 | --- | --- |
@@ -66,8 +70,11 @@ metadata:
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-Submit through **Triton Control → Workflows → Submit New Workflow**. The workflow
-has one **train** node that installs packages and runs `train.py`. Deployment
+Open **Triton Control → Workflows → Submit New Workflow → Edit using full workflow options**.
+Paste the entire edited `workflow.yaml`, including `spec.arguments.parameters`,
+then create the workflow.
+
+The workflow has one **train** node that installs packages and runs `train.py`. Deployment
 happens inside that script, not in a separate Argo step.
 
 ## Verify
