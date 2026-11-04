@@ -42,6 +42,21 @@ Edit [workflow.yaml](workflow.yaml):
 | `s3-script-key` | Uploaded training script's full S3 key |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
+With exactly one of your S3 profiles linked under **Workflows → Configure S3
+Secrets** in the workflow namespace, no profile annotation is needed. Triton
+Control selects it automatically.
+
+**With multiple linked profiles, you must select one by name.** Add the annotation
+to the existing `metadata` block in `workflow.yaml`, replacing `workflow-training`
+with the saved profile name:
+
+```yaml
+metadata:
+  name: mlflow-iris-autodeploy
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
+```
+
 Submit through **Triton Control → Workflows → Submit New Workflow**. The workflow
 has one **train** node that installs packages and runs `train.py`. Deployment
 happens inside that script, not in a separate Argo step.

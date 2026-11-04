@@ -177,19 +177,29 @@ retain previously loaded values.
 
 ## 5. Configure the Workflow in the Workspace
 
-Open `/workspace/sklearn-iris-training/workflow.yaml`. Copy the
-`artifactRepositoryRef` shown in the dialog under `spec`:
+Open `/workspace/sklearn-iris-training/workflow.yaml`. When submitting through
+Triton Control, the backend automatically selects your only linked S3 profile
+in the workflow namespace and fills in `artifactRepositoryRef`. No ConfigMap or
+Secret names need to be copied into the YAML.
+
+If you have multiple linked profiles, add this annotation under the existing
+workflow `metadata`, replacing `workflow-training` with your saved profile name:
 
 ```yaml
-artifactRepositoryRef:
-  configMap: workflow-s3-training-a1b2c3 # Use your generated name.
-  key: repository
+metadata:
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-Submit in the namespace shown in the dialog. When updating an older workflow, remove
-`s3-endpoint`, `s3-region`, `s3-bucket`, and `s3-credentials-secret` from both parameter
-lists. Replace each artifact's `s3` block with just its `key`; the linked repository
-provides the connection settings, credential references, and `caSecret` automatically.
+The selected profile must belong to the submitting user and be linked under
+**Workflows → Configure S3 Secrets**. With multiple links and no selection,
+Triton Control asks you to specify a profile instead of choosing one arbitrarily.
+
+Submit in the namespace shown in the dialog. When updating an older workflow,
+remove the manual `artifactRepositoryRef` and any `s3-endpoint`, `s3-region`,
+`s3-bucket`, and `s3-credentials-secret` parameters. Each artifact's `s3` block
+needs only its `key`; the backend-selected repository supplies connection
+settings, credential references, and `caSecret` automatically.
 Argo uses [key-only artifacts](https://argo-workflows.readthedocs.io/en/latest/key-only-artifacts/)
 with the linked repository. Set only the object paths in `spec.arguments.parameters`:
 
@@ -207,7 +217,7 @@ Triton Control adds Argo's certificate reference automatically.
 
 ## 6. Submit the Workflow
 
-In Argo Workflows:
+Open **Triton Control → Workflows**, then in the embedded Argo UI:
 
 1. Select **Submit New Workflow**.
 2. Select **Edit using full workflow options**.
@@ -219,9 +229,11 @@ In Argo Workflows:
 
 ![Open the full workflow editor](screenshots/argo-edit-full-workflow-options.png)
 
-The manifest screenshot uses the validation run's generated repository name
-and isolated S3 keys. Copy your own `artifactRepositoryRef` and object keys as
-explained in step 5.
+The older manifest screenshot includes an explicit repository reference. With
+the current Triton Control backend, omit that block and configure only your
+object keys and, when needed, the profile-name annotation as explained in step 5.
+Automatic selection applies to submissions through Triton Control or its managed
+code-server Argo access; direct submissions to Argo bypass this configuration.
 
 ![Create the S3 artifact workflow from the current manifest](screenshots/argo-create-workflow-manifest.png)
 
