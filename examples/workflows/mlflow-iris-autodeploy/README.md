@@ -18,10 +18,8 @@ deployment = deploy_model(info.model_uri)
 The `mlflow-triton` core generates the Triton files and logs the model to MLflow;
 `mlflow-triton-control` adds deployment to Triton Control.
 
-`deploy_model()` contains the `get_deploy_client("triton-control")` and
-`create_deployment()` calls. The plugin reads the generated `requirements.txt`
-automatically. The model is saved in the MLflow artifact store; no Model Registry
-registration or alias management is used.
+Use the included [train.py](train.py), which already defines `deploy_model()`.
+Follow the steps below to upload the script and run the training and deployment.
 
 ## Prepare
 
