@@ -21,7 +21,7 @@ def deploy_model(model_uri: str) -> dict:
         model_uri=model_uri,
         config={
             "s3_profile_name": os.getenv("TRITON_CONTROL_S3_PROFILE_NAME", "workflow-training"),
-            "image": os.getenv("TRITON_SERVING_IMAGE", "nvcr.io/nvidia/tritonserver:26.06-py3"),
+            "image": os.getenv("TRITON_SERVING_IMAGE", "nvcr.io/nvidia/tritonserver:26.10-py3"),
             "wait_timeout_seconds": 600,
         },
     )

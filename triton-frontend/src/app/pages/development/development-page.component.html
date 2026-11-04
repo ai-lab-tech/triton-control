@@ -76,7 +76,12 @@
                   [(ngModel)]="installHfBuilder"
                 >
                   <span class="option-copy">
-                    <span class="option-title">Install HF Triton Builder</span>
+                    <span class="option-title">
+                      Install HF Triton Builder
+                      @if (installHfBuilder) {
+                        <span class="option-description">(NVIDIA 26.10 recommended)</span>
+                      }
+                    </span>
                     <span class="option-description"
                       >Build Triton repositories from Python, notebooks or the editor.</span
                     >
@@ -101,7 +106,12 @@
                   [(ngModel)]="installMlflow"
                 >
                   <span class="option-copy">
-                    <span class="option-title">Install MLflow</span>
+                    <span class="option-title">
+                      Install MLflow
+                      @if (installMlflow) {
+                        <span class="option-description">(NVIDIA 26.10 recommended)</span>
+                      }
+                    </span>
                     <span class="option-description"
                       >Log models and deploy with mlflow-triton-control from Python or
                       notebooks.</span

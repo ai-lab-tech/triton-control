@@ -26,7 +26,7 @@ writing and testing the training code:
 
 | Field | Value |
 | --- | --- |
-| Triton development image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+| Triton development image | `nvcr.io/nvidia/tritonserver:26.10-py3` |
 | Image already has Development installed | Disabled |
 | Workspace storage | At least `5Gi` |
 | GPU count | `0` |

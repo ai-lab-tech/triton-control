@@ -57,7 +57,7 @@ and edit these settings:
 | Parameter `deployment-name` | `iris-classifier`; choose an unused deployment name |
 | Optional annotation `triton-control.ai/mlflow-s3-profile-name` | Only needed to select a profile when multiple profiles are linked |
 | `s3-script-key` | Uploaded training script's full S3 key |
-| `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+| `triton-image` | `nvcr.io/nvidia/tritonserver:26.10-py3` |
 
 With exactly one of your S3 profiles linked under **Workflows → Configure S3
 Secrets** in the workflow namespace, no profile annotation is needed. Triton
@@ -129,7 +129,7 @@ export TRITON_CONTROL_S3_PROFILE_NAME="your-mlflow-profile"
 python3 train.py
 ```
 
-The serving image defaults to `nvcr.io/nvidia/tritonserver:26.06-py3`; override it
+The serving image defaults to `nvcr.io/nvidia/tritonserver:26.10-py3`; override it
 with `TRITON_SERVING_IMAGE`. The deployment readiness timeout is 600 seconds.
 Use a new deployment name for each run; the plugin creates deployments rather
 than updating existing ones.
