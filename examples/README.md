@@ -1,25 +1,36 @@
 # Examples
 
-Large model artifacts are not committed. Each example includes the repository
-layout plus a notebook that creates the missing artifact.
+Examples cover model repositories, S3 uploads, and training workflows. Large
+model artifacts are generally generated or downloaded using the example's
+notebook or script. Follow its README for the required preparation.
 
 ## Use an Example
+
+For training workflows, follow the dedicated instructions:
+
+- [scikit-learn Iris training](workflows/sklearn-iris-training/README.md): run
+  training through Argo Workflows and save the results to S3.
+- [MLflow Iris autodeploy](workflows/mlflow-iris-autodeploy/README.md): train,
+  log the model to MLflow, and deploy it from the training script.
+
+For uploads to an existing polling instance, follow
+[Local Model Upload with S3 Polling](s3_upload/local-model-upload-s3-polling/README.md).
+
+For model repository examples, use these steps:
 
 1. In Triton Control, open **Development** and create the workspace with the
    image, storage, and GPU settings shown in the example README.
 2. When the workspace is ready, open code-server from **Development**.
-3. Choose one repository path.
-4. Option A: copy or upload the ready example folder into `/workspace`.
-5. Option B: run **New Model Repository** from the Triton Control plugin and
-   choose the backend/template shown in the example README.
-6. Run the example's notebook to create the model artifact.
-7. Review `config.pbtxt`.
-8. In the code-server Explorer, right-click the repository folder.
-9. Select **Triton Control: Deploy Model Repository** from the context menu.
-10. Select an S3 profile or enter manual S3 settings.
-11. Use the concrete Triton image shown in the example README.
-12. Deploy and test the running Triton instance with its **Inference** manual
-    input view. The README curl command uses the same request body.
+3. Copy or upload the example folder into `/workspace`. Alternatively, run
+   **Triton Control: New Model Repository** and follow the example README's
+   template and file-copy instructions.
+4. Run the example's notebook or preparation script to create the model artifacts.
+5. Review `config.pbtxt`.
+6. In the code-server Explorer, right-click the model repository folder and select
+   **Triton Control: Deploy Model Repository**.
+7. Select an S3 profile or enter manual S3 settings.
+8. Use the serving image and deployment settings shown in the example README.
+9. Deploy and test the running Triton instance using the example's request or client.
 
 The Development workspace image is only the edit/build environment. The deploy
 form selects the separate Triton image that serves the model.
@@ -28,9 +39,9 @@ Check each README for whether the code-server workspace needs a GPU. Most
 examples only need CPU in code-server; GPU is usually needed on the deployed
 Triton instance.
 
-For manual UI testing, open the Triton instance, select the loaded model, open
-**Inference**, and paste the JSON request body shown in the example. For
-terminal testing, replace `localhost:8000` or `localhost:8001` with the
+For manual UI testing, open **Triton Instances → your deployment → Details →
+Models → model (version) → Infer** and paste the JSON request body shown in the
+example. For terminal testing, replace `localhost:8000` or `localhost:8001` with the
 instance HTTP or gRPC endpoint unless you are port-forwarding locally.
 
 ## Create Your Own Repository
@@ -49,8 +60,7 @@ Use the same plugin path for your own model:
 
 For an already existing model repository, open it in `/workspace`, then
 right-click it in the code-server Explorer and select **Triton Control: Deploy
-Model Repository**. For the polling S3 example, use the instance **S3 Browser**
-because the Triton instance already exists.
+Model Repository**.
 
 ## Examples
 
@@ -88,13 +98,13 @@ workflows/
 
 ## Runtime Notes
 
-- Python backend examples use `nvcr.io/nvidia/tritonserver:26.06-py3` plus
-  the deploy form's `requirements.txt` field when extra packages are needed.
-- PyTorch/ONNX examples in this folder use `nvcr.io/nvidia/tritonserver:26.06-py3`.
+- The Iris Python example uses `nvcr.io/nvidia/tritonserver:26.06-py3` plus
+  the deploy form's **Extra Python Packages** field for its `requirements.txt` contents.
+- PyTorch/ONNX examples in this folder serve with `nvcr.io/nvidia/tritonserver:26.06-py3`.
 - TensorRT plan examples must build the plan on the same GPU class and with the
   same Triton image used for serving.
-- TensorRT-LLM examples use `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3`.
+- TensorRT-LLM examples use `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3`,
+  including the LLM API examples that use a Python backend.
 - vLLM examples use `nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3`.
-
 - Polling examples require the S3 Browser connection and Triton deployment
   repository prefix to point to the same S3 repository root.
