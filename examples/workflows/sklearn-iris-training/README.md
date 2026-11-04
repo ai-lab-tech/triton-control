@@ -64,6 +64,7 @@ Install and configure AWS CLI in the workspace terminal:
 
 ```bash
 python3 -m pip install --user awscli
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
 aws configure --profile workflow-training
 ```
 
@@ -120,6 +121,8 @@ certificate dynamically from your saved Triton Control S3 profile.
    **S3 Operations → Choose Profile…**, then select your saved profile.
    If already connected, use **S3 Operations → Switch Profile…** to select it.
 2. Expand **S3 · <profile name> · <bucket>** beside the workspace folder.
+   If the root is **S3 · <profile name> · Buckets**, first open the bucket configured
+   in your saved profile. Use that same bucket for the workflow link.
 3. Under that S3 root, create or open `workflows/sklearn-iris-training/` using
    Explorer's **New Folder** action.
 4. Drag `/workspace/sklearn-iris-training/train_iris.py` from the workspace

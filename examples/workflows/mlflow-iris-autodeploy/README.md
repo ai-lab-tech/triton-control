@@ -66,7 +66,9 @@ happens inside that script, not in a separate Argo step.
 Wait for **train → Succeeded**. The logs print the MLflow model URI and the ready
 deployment. If deployment fails, the script and workflow fail.
 
-In **MLflow → triton-iris-autodeploy**, open the run and logged model **classifier**:
+In **MLflow**, select **Model training**, open the **triton-iris-autodeploy**
+experiment, then your run and its logged model **classifier**. The model may open
+in a new browser tab. On its **Artifacts** tab, expand `model_repository/classifier`:
 
 ```text
 model_repository/classifier/
@@ -78,9 +80,11 @@ model_repository/classifier/
   1/artifact/
 ```
 
-Open **Triton Instances → iris-classifier → Models → classifier → Version 1 →
-Infer** and paste the generated `request.json` from MLflow. It contains the four
-named Iris input tensors and the correct output name.
+Open **Triton Instances → your deployment → Details → Models → classifier →
+Version 1 → Infer**. Use the name selected in the `deployment-name` parameter
+(default: `iris-classifier`). Paste the generated `request.json` from MLflow and
+click **Send / Infer**. It contains the four named Iris input tensors and the
+correct output name. The unmodified example request returns `[0, 2]`.
 
 ## Run the same script in code-server
 
