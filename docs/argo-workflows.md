@@ -162,7 +162,33 @@ not automatically prepended to Argo artifact keys.
 
 ### Use the Profile in a Workflow
 
-Copy the dialog's reference under workflow `spec`:
+When submitting through Triton Control (the UI or managed code-server Argo access),
+the backend fills in `artifactRepositoryRef` automatically for S3 artifacts that
+specify only object keys. With exactly one linked S3 profile owned by the submitter
+in the workflow namespace, no repository configuration is needed in the YAML.
+
+With multiple linked profiles, select one by its name:
+
+```yaml
+metadata:
+  annotations:
+    triton-control.ai/mlflow-s3-profile-name: workflow-training
+```
+
+The named profile must belong to the submitter and already be linked in this
+namespace. An ambiguous or missing selection is rejected before the workflow or
+its managed tokens are created. The selected profile name is also supplied as
+`TRITON_CONTROL_S3_PROFILE_NAME` to container/script steps.
+
+Every container/script step receives `TRITON_CONTROL_URL` and a temporary
+`TRITON_CONTROL_TOKEN` automatically. The token authenticates as the submitter and
+can manage their MLflow deployments using their own S3 profiles. It is restricted
+to deployment APIs and expires after 60 minutes. No deployment-template or
+deployment-name annotation is needed; the training code chooses the deployment
+name in `create_deployment()`. Ordinary workflow parameters can supply that name.
+
+An explicit reference remains supported. It is also needed when submitting directly
+to Argo without passing through Triton Control:
 
 ```yaml
 spec:

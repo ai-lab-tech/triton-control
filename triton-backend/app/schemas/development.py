@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import List, Literal, Optional
 
+from packaging.version import InvalidVersion, Version
 from pydantic import field_validator
 from sqlmodel import SQLModel
 
@@ -30,6 +31,19 @@ class CreateCodeServerRequest(SQLModel):
     dockerconfigjson: Optional[str] = None
     image_has_code_server: bool = False
     install_hf_builder: bool = True
+    install_mlflow: bool = True
+    mlflow_version: Optional[str] = None
+    mlflow_triton_control_version: Optional[str] = None
+
+    @field_validator("mlflow_version", "mlflow_triton_control_version")
+    @classmethod
+    def normalize_package_version(cls, value: str | None) -> str | None:
+        if not value or not value.strip():
+            return None
+        try:
+            return str(Version(value.strip()))
+        except InvalidVersion as exc:
+            raise ValueError("Enter an exact Python package version") from exc
 
     @field_validator("name", "image", "storage_size")
     @classmethod

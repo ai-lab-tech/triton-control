@@ -62,7 +62,7 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.services.perf_analyzer" = ["*.yaml"]
-"app.services.development" = ["hf-builder-version.txt"]
+"app.services.development" = ["hf-builder-version.txt", "mlflow-triton-control-version.txt"]
 
 ###################################  COVERAGE  CONFIG  ###################################
 
@@ -85,6 +85,11 @@ precision = 1
 strict = true
 explicit_package_bases = true # tells mypy to resolve modules relative
 exclude = ["protobuff/"]
+
+# The compatibility job installs these optional ML dependencies at runtime.
+[[tool.mypy.overrides]]
+module = ["mlflow.*", "mlflow_triton.*", "numpy.*", "jupyter_client.*", "sklearn.*"]
+ignore_missing_imports = true
 
 # Tests use lightweight duck-typed fakes (_FakeSession, _Req) that intentionally
 # don't subclass the real types. Relaxing these checks avoids hundreds of

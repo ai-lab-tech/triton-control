@@ -7,9 +7,6 @@ metadata:
     app.kubernetes.io/part-of: triton-control-examples
 spec:
   entrypoint: train
-  artifactRepositoryRef:
-    configMap: workflow-s3-training-a1b2c3 # Copy from Configure S3 Secrets.
-    key: repository
   podGC:
     strategy: OnPodCompletion
   ttlStrategy:

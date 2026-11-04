@@ -44,30 +44,96 @@
             </div>
 
             <div class="form-row wide workspace-options" role="group" aria-label="Workspace tools">
-              <mat-checkbox
-                class="workspace-option"
-                id="code-server-image-has-code-server"
-                [(ngModel)]="imageHasCodeServer"
-              >
-                <span class="option-copy">
-                  <span class="option-title">Use preinstalled code-server</span>
-                  <span class="option-description"
-                    >Use the editor already included in your image.</span
-                  >
-                </span>
-              </mat-checkbox>
-              <mat-checkbox
-                class="workspace-option"
-                id="code-server-install-hf-builder"
-                [(ngModel)]="installHfBuilder"
-              >
-                <span class="option-copy">
-                  <span class="option-title">Install HF Triton Builder</span>
-                  <span class="option-description"
-                    >Build Triton repositories from Python, notebooks or the editor.</span
-                  >
-                </span>
-              </mat-checkbox>
+              <div class="workspace-option-row">
+                <mat-checkbox
+                  class="workspace-option"
+                  id="code-server-image-has-code-server"
+                  [(ngModel)]="imageHasCodeServer"
+                >
+                  <span class="option-copy">
+                    <span class="option-title">Use preinstalled code-server</span>
+                    <span class="option-description"
+                      >Use the editor already included in your image.</span
+                    >
+                  </span>
+                </mat-checkbox>
+                <button
+                  type="button"
+                  mat-icon-button
+                  class="option-help"
+                  aria-label="About preinstalled code-server"
+                  matTooltip="Enable this if your development image already includes code-server. Otherwise, Triton Control downloads and installs the editor automatically."
+                  #preinstalledCodeServerHelp="matTooltip"
+                  (click)="preinstalledCodeServerHelp.show()"
+                >
+                  <mat-icon>help_outline</mat-icon>
+                </button>
+              </div>
+              <div class="workspace-option-row">
+                <mat-checkbox
+                  class="workspace-option"
+                  id="code-server-install-hf-builder"
+                  [(ngModel)]="installHfBuilder"
+                >
+                  <span class="option-copy">
+                    <span class="option-title">
+                      Install HF Triton Builder
+                      @if (installHfBuilder) {
+                        <span class="option-description"
+                          >(NVIDIA image version 26.10 recommended)</span
+                        >
+                      }
+                    </span>
+                    <span class="option-description"
+                      >Build Triton repositories from Python, notebooks or the editor.</span
+                    >
+                  </span>
+                </mat-checkbox>
+                <button
+                  type="button"
+                  mat-icon-button
+                  class="option-help"
+                  aria-label="About HF Triton Builder"
+                  matTooltip="Installs the tested HF Triton Builder version. Build Triton model repositories from supported Hugging Face models using Python, notebooks or the editor."
+                  #hfBuilderHelp="matTooltip"
+                  (click)="hfBuilderHelp.show()"
+                >
+                  <mat-icon>help_outline</mat-icon>
+                </button>
+              </div>
+              <div class="workspace-option-row">
+                <mat-checkbox
+                  class="workspace-option"
+                  id="code-server-install-mlflow"
+                  [(ngModel)]="installMlflow"
+                >
+                  <span class="option-copy">
+                    <span class="option-title">
+                      Install MLflow
+                      @if (installMlflow) {
+                        <span class="option-description"
+                          >(NVIDIA image version 26.10 recommended)</span
+                        >
+                      }
+                    </span>
+                    <span class="option-description"
+                      >Log models and deploy with mlflow-triton-control from Python or
+                      notebooks.</span
+                    >
+                  </span>
+                </mat-checkbox>
+                <button
+                  type="button"
+                  mat-icon-button
+                  class="option-help"
+                  aria-label="About MLflow installation"
+                  matTooltip="Installs MLflow, mlflow-triton and mlflow-triton-control with the configured versions. Log models and deploy them to Triton Control from the terminal or notebooks."
+                  #mlflowHelp="matTooltip"
+                  (click)="mlflowHelp.show()"
+                >
+                  <mat-icon>help_outline</mat-icon>
+                </button>
+              </div>
             </div>
 
             <div class="form-row">

@@ -264,6 +264,25 @@
   overflow: hidden;
 }
 
+.workspace-option-row {
+  display: flex;
+  align-items: center;
+
+  & + & {
+    border-top: 1px solid #e2e8f0;
+  }
+
+  &:hover {
+    background: #f1f5f9;
+  }
+}
+
+.option-help {
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+  color: #64748b;
+}
+
 .workspace-option {
   @include mat.checkbox-overrides(
     (
@@ -282,16 +301,9 @@
   );
 
   display: block;
+  flex: 1;
+  min-width: 0;
   padding: 0.5rem 0.75rem;
-  transition: background-color 120ms ease;
-
-  & + & {
-    border-top: 1px solid #e2e8f0;
-  }
-
-  &:hover {
-    background: #f1f5f9;
-  }
 }
 
 .option-copy {

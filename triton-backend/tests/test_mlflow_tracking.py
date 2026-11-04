@@ -379,12 +379,17 @@ class ManagedInstallationTests(unittest.TestCase):
             core.return_value.read_namespaced_secret.return_value = SimpleNamespace(data={"S3_PROFILE_TOKEN": "keep"})
             workspace_k8s.enable_mlflow_tracking("control", "code-7", "workspace-secret")
             patch_body = core.return_value.patch_namespaced_secret.call_args.args[2]
-            self.assertEqual(set(patch_body["stringData"]), {tracking.TRACKING_TOKEN_KEY})
+            self.assertEqual(set(patch_body["stringData"]), {tracking.TRACKING_TOKEN_KEY, "TRITON_CONTROL_TOKEN"})
             pod_patch = apps.return_value.patch_namespaced_stateful_set.call_args.args[2]
             self.assertNotIn("volumeClaimTemplates", pod_patch["spec"])
             env = pod_patch["spec"]["template"]["spec"]["containers"][0]["env"]
-            self.assertEqual(env[0]["name"], "MLFLOW_TRACKING_URI")
+            by_name = {item["name"]: item for item in env}
+            self.assertIn("MLFLOW_TRACKING_URI", by_name)
+            self.assertEqual(by_name["TRITON_CONTROL_URL"]["value"], tracking.control_url())
+            self.assertEqual(by_name["TRITON_CONTROL_TOKEN"]["valueFrom"]["secretKeyRef"],
+                             {"name": "workspace-secret", "key": "TRITON_CONTROL_TOKEN"})
             core.return_value.read_namespaced_secret.return_value.data[tracking.TRACKING_TOKEN_KEY] = "already-set"
+            core.return_value.read_namespaced_secret.return_value.data["TRITON_CONTROL_TOKEN"] = "already-set"
             core.return_value.patch_namespaced_secret.reset_mock()
             workspace_k8s.enable_mlflow_tracking("control", "code-7", "workspace-secret")
             core.return_value.patch_namespaced_secret.assert_not_called()

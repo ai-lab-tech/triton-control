@@ -720,6 +720,7 @@ class DeploymentServiceTests(unittest.TestCase):
 
         # Assert
         container = manifests[1]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["workingDir"], "/tmp")
         self.assertEqual(container["command"], ["/bin/bash", "-c"])
         self.assertEqual(len(container["args"]), 1)
         start_script = container["args"][0]

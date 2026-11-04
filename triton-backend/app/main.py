@@ -57,6 +57,7 @@ from app.core.logging import configure_logging, get_log_level_name, is_verbose_l
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
 from app.services import error_logs
+from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
 from app.services.mlflow import migration as mlflow_migration
 from app.services.perf_analyzer.jobs import reconciler as perf_job_reconciler
 from app.services.triton.client import TritonService
@@ -93,6 +94,8 @@ app = FastAPI(
     description="Backend for Triton",
     version="1.0.0",
 )
+
+app.state.workspace_deployment_authenticator = authenticate_workspace_deployment
 
 
 @app.exception_handler(RequestValidationError)

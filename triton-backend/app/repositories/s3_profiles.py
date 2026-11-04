@@ -51,6 +51,11 @@ def find_by_name_for_owner(session: Session, owner_user_id: int, name: str) -> S
     ).first()
 
 
+def list_visible_by_name(session: Session, user_id: int, name: str) -> list[S3ProfileEntity]:
+    query = select(S3ProfileEntity).where(_visible_to(user_id), S3ProfileEntity.name == name)
+    return list(session.exec(query).all())
+
+
 def save(session: Session, profile: S3ProfileEntity, *, refresh: bool = True) -> S3ProfileEntity:
     session.add(profile)
     session.commit()

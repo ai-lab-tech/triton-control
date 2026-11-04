@@ -13,6 +13,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { MatCheckboxModule } from "@angular/material/checkbox";
+import { MatTooltipModule } from "@angular/material/tooltip";
 
 import {
   BASE_PATH,
@@ -39,6 +40,7 @@ type CodeServer = CodeServerDTO;
     MatInputModule,
     MatSelectModule,
     MatCheckboxModule,
+    MatTooltipModule,
   ],
   styleUrl: "./development-page.component.scss",
   templateUrl: "./development-page.component.html",
@@ -77,6 +79,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   gpuCount: string | number = "";
   imageHasCodeServer = false;
   installHfBuilder = true;
+  installMlflow = true;
 
   readonly loading = signal(false);
   readonly initialLoaded = signal(false);
@@ -261,6 +264,7 @@ export class DevelopmentPageComponent implements OnDestroy {
 
         image_has_code_server: this.imageHasCodeServer,
         install_hf_builder: this.installHfBuilder,
+        install_mlflow: this.installMlflow,
       };
       const workspace = await firstValueFrom(
         this.developmentApi.createCodeServerApiDevelopmentPost(payload),
