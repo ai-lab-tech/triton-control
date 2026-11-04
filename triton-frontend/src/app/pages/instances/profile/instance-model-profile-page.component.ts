@@ -74,7 +74,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
 }`;
 
   image = "";
-  dockerconfigjson = "";
   readonly loadingStatus = signal(true);
   readonly resolvingInstance = signal(false);
   readonly instanceS3 = signal<InstanceS3ConfigDTO | null>(null);
@@ -104,7 +103,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
       this.actionError.set("");
       this.busy.set(false);
       this.image = "";
-      this.dockerconfigjson = "";
       this.batchSize = 1;
       this.concurrencyRange = "1";
       this.measurementRequestCount = 50;
@@ -159,7 +157,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
           {
             model_version: this.version(),
             image: this.image.trim(),
-            dockerconfigjson: this.dockerconfigjson.trim() || undefined,
+
             batch_size: Number(this.batchSize),
             concurrency_range: this.concurrencyRange.trim(),
             measurement_request_count: Number(this.measurementRequestCount),
@@ -170,7 +168,6 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
         ),
       );
       if (generation !== this.generation) return;
-      this.dockerconfigjson = "";
       this.applyRun(run);
     } catch (error) {
       if (generation !== this.generation) return;

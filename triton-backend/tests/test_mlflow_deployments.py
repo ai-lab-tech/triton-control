@@ -61,13 +61,14 @@ class ProfileDeploymentTests(unittest.TestCase):
             with self.assertRaises(BadRequestError):
                 profile_request.resolve_profile_request(self._request(), session, claims)
 
-    def test_legacy_request_still_valid(self) -> None:
+    def test_legacy_request_rejected_at_deployment_boundary(self) -> None:
         request = CreateDeploymentRequest(
             deployment_name="legacy", image="triton:test", s3_url="s3://bucket",
             s3_access_key="access", s3_secret_key="secret",
         )
         with Session(self.engine) as session:
-            self.assertIs(profile_request.resolve_profile_request(request, session, {}), request)
+            with self.assertRaises(BadRequestError):
+                profile_request.resolve_profile_request(request, session, {})
 
     def test_workspace_token_requires_owned_profile(self) -> None:
         claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workspace_deployment"}

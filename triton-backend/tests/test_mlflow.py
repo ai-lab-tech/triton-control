@@ -33,7 +33,7 @@ class MlflowTests(unittest.TestCase):
 
     def test_Status_NotInstalled_ReportsConfiguredVersion(self) -> None:
         # Arrange
-        session = SimpleNamespace()
+        session = SimpleNamespace(get=lambda *args: None)
         with (
             patch.dict("os.environ", {"MLFLOW_VERSION": "3.16.1"}),
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
@@ -83,7 +83,7 @@ class MlflowTests(unittest.TestCase):
     def test_InstallMlflow_NameProvided_AppliesNamedResources(self) -> None:
         # Arrange
         request = self._request()
-        session = SimpleNamespace()
+        session = SimpleNamespace(get=lambda *args: None)
         with (
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
             patch(
@@ -108,7 +108,7 @@ class MlflowTests(unittest.TestCase):
 
     def test_Status_NotInstalled_ReturnsDefaultBasePath(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
-            result = installer.get_mlflow_status(SimpleNamespace())
+            result = installer.get_mlflow_status(SimpleNamespace(get=lambda *args: None))
 
         self.assertFalse(result.installed)
         self.assertEqual(result.status, "not_installed")
@@ -130,7 +130,7 @@ class MlflowTests(unittest.TestCase):
                 return_value=(False, "still starting"),
             ),
         ):
-            result = installer.get_mlflow_status(SimpleNamespace())
+            result = installer.get_mlflow_status(SimpleNamespace(get=lambda *args: None))
 
         self.assertEqual(result.status, "creating")
         self.assertEqual(result.status_message, "still starting")
@@ -152,7 +152,7 @@ class MlflowTests(unittest.TestCase):
                 return_value=(True, "MLflow pod is Running."),
             ),
         ):
-            result = installer.get_mlflow_status(SimpleNamespace())
+            result = installer.get_mlflow_status(SimpleNamespace(get=lambda *args: None))
 
         self.assertTrue(result.ready)
         self.assertEqual(
@@ -162,14 +162,14 @@ class MlflowTests(unittest.TestCase):
 
     def test_Status_NotInstalled_HasEmptyServiceUrl(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
-            result = installer.get_mlflow_status(SimpleNamespace())
+            result = installer.get_mlflow_status(SimpleNamespace(get=lambda *args: None))
 
         self.assertEqual(result.service_url, "")
 
     def test_InstallMlflow_ExistingInstallation_RaisesConflict(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=object()):
             with self.assertRaises(ConflictError):
-                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
+                installer.install_mlflow(self._request(), SimpleNamespace(get=lambda *args: None), {"role": "member"})
 
     def test_InstallMlflow_ApplyFails_CleansUpDatabaseRecord(self) -> None:
         saved: list[MlflowEntity] = []
@@ -191,7 +191,7 @@ class MlflowTests(unittest.TestCase):
             patch("app.services.mlflow.installer.mlflow.delete") as delete,
         ):
             with self.assertRaises(BadGatewayError):
-                installer.install_mlflow(self._request(), SimpleNamespace(), {"role": "member"})
+                installer.install_mlflow(self._request(), SimpleNamespace(get=lambda *args: None), {"role": "member"})
 
         self.assertEqual(saved[-1].status, "failed")
         delete.assert_called_once()
@@ -213,7 +213,7 @@ class MlflowTests(unittest.TestCase):
             ) as delete_resources,
             patch("app.services.mlflow.installer.mlflow.delete"),
         ):
-            result = installer.uninstall_mlflow(SimpleNamespace())
+            result = installer.uninstall_mlflow(SimpleNamespace(get=lambda *args: None))
 
         delete_resources.assert_called_once_with(
             namespace="triton-control",
@@ -243,7 +243,7 @@ class MlflowTests(unittest.TestCase):
             ) as delete_namespace,
             patch("app.services.mlflow.installer.mlflow.delete"),
         ):
-            installer.uninstall_mlflow(SimpleNamespace())
+            installer.uninstall_mlflow(SimpleNamespace(get=lambda *args: None))
 
         delete_namespace.assert_called_once_with("legacy-mlflow")
 
@@ -298,7 +298,7 @@ class MlflowTests(unittest.TestCase):
 
     def test_ApiStatus_ViewerIsRejected(self) -> None:
         with self.assertRaises(HTTPException) as raised:
-            mlflow_api.get_mlflow_status(session=SimpleNamespace(), claims={"role": "viewer"})
+            mlflow_api.get_mlflow_status(session=SimpleNamespace(get=lambda *args: None), claims={"role": "viewer"})
         self.assertEqual(raised.exception.status_code, 403)
 
     def test_ApiStatus_MemberDelegates(self) -> None:
@@ -317,7 +317,7 @@ class MlflowTests(unittest.TestCase):
             ),
         )
         with patch("app.api.mlflow_api.installer.get_mlflow_status", return_value=expected):
-            result = mlflow_api.get_mlflow_status(session=SimpleNamespace(), claims={"role": "member"})
+            result = mlflow_api.get_mlflow_status(session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
         self.assertEqual(result, expected)
 
     def test_ApiInstall_MemberDelegates(self) -> None:
@@ -330,7 +330,7 @@ class MlflowTests(unittest.TestCase):
             applied_resources=["Deployment/mlflow"],
         )
         with patch("app.api.mlflow_api.installer.install_mlflow", return_value=expected) as mocked:
-            result = mlflow_api.install_mlflow(payload, session=SimpleNamespace(), claims={"role": "member"})
+            result = mlflow_api.install_mlflow(payload, session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
 
         mocked.assert_called_once()
         self.assertEqual(result, expected)
@@ -342,7 +342,7 @@ class MlflowTests(unittest.TestCase):
             namespace="triton-control",
         )
         with patch("app.api.mlflow_api.installer.uninstall_mlflow", return_value=expected) as mocked:
-            result = mlflow_api.uninstall_mlflow(session=SimpleNamespace(), claims={"role": "member"})
+            result = mlflow_api.uninstall_mlflow(session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
 
         mocked.assert_called_once_with(ANY)
         self.assertEqual(result, expected)
@@ -352,7 +352,7 @@ class MlflowTests(unittest.TestCase):
         with patch("app.api.mlflow_api.proxy.proxy_http", AsyncMock(return_value=response)) as mocked:
             result = asyncio.run(
                 mlflow_api.proxy_mlflow(
-                    request=SimpleNamespace(),
+                    request=SimpleNamespace(get=lambda *args: None),
                     path="api/2.0/mlflow/experiments/list",
                     claims={"role": "member"},
                 )
@@ -363,7 +363,7 @@ class MlflowTests(unittest.TestCase):
     def test_GetProxyServerUrl_NotInstalled_RaisesBadRequest(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
             with self.assertRaises(BadRequestError):
-                installer.get_proxy_server_url(SimpleNamespace())
+                installer.get_proxy_server_url(SimpleNamespace(get=lambda *args: None))
 
     def test_GetProxyServerUrl_FailedInstallation_RaisesBadRequest(self) -> None:
         with patch(
@@ -371,7 +371,7 @@ class MlflowTests(unittest.TestCase):
             return_value=SimpleNamespace(status="failed"),
         ):
             with self.assertRaises(BadRequestError):
-                installer.get_proxy_server_url(SimpleNamespace())
+                installer.get_proxy_server_url(SimpleNamespace(get=lambda *args: None))
 
     def test_KubernetesReadiness_CoversReadyErrorAndPending(self) -> None:
         with (

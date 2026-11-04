@@ -69,24 +69,7 @@
         </mat-form-field>
       </div>
 
-      <mat-expansion-panel class="optional-settings mat-elevation-z0">
-        <mat-expansion-panel-header>
-          <mat-panel-title>Optional Registry credentials (Docker config JSON)</mat-panel-title>
-        </mat-expansion-panel-header>
-        <div class="form-row">
-          <label class="field-label" for="perf-registry">Docker config JSON</label>
-          <mat-form-field appearance="outline">
-            <textarea
-              id="perf-registry"
-              matInput
-              [(ngModel)]="dockerconfigjson"
-              [disabled]="hasActiveRun() || busy()"
-              autocomplete="off"
-              spellcheck="false"
-            ></textarea>
-          </mat-form-field>
-        </div>
-      </mat-expansion-panel>
+      <p>Image pull credentials are managed centrally in admin Settings.</p>
 
       <div class="profile-grid">
         <div class="form-row">

@@ -115,7 +115,7 @@ password resets display progress while waiting for the bounded SMTP operation.
 | `EMAIL_SECRET_ENCRYPTION_KEY`                                                      | In DB mode with SMTP password      | unset                                                        | Secret used for authenticated encryption of the database-managed SMTP password.                                                                                                                                                                                                 |
 | `EMAIL_INVITE_SUBJECT`, `EMAIL_INVITE_TEXT_TEMPLATE`, `EMAIL_INVITE_HTML_TEMPLATE` | No                                 | built in                                                     | Invitation templates. Text and HTML templates must contain `{link}`.                                                                                                                                                                                                            |
 | `EMAIL_RESET_SUBJECT`, `EMAIL_RESET_TEXT_TEMPLATE`, `EMAIL_RESET_HTML_TEMPLATE`    | No                                 | built in                                                     | Reset templates. Text and HTML templates must contain `{link}`. Supported placeholders are `{display_name}`, `{product_name}`, `{link}`, and `{expiry_minutes}`.                                                                                                                |
-| `S3_SECRET_ENCRYPTION_KEY`                                                         | Yes                                | `change-me-s3`                                               | Fernet key used to encrypt stored S3 secret keys for instance S3 settings and reusable S3 deployment profiles.                                                                                                                                                                  |
+| `REGISTRY_SECRET_ENCRYPTION_KEY` | Required unless `SESSION_SECRET` is set | unset | Encrypts centrally stored registry credentials. Falls back to `SESSION_SECRET`; preserve the key across restarts and re-save credentials after rotation. |
 | `CORS_ORIGINS`                                                                     | No                                 | local Angular dev origins                                    | Comma-separated list of allowed frontend origins.                                                                                                                                                                                                                               |
 
 Set `OIDC_ISSUER` to the exact issuer URL published by your OIDC provider. Do
@@ -172,7 +172,7 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-with-generated-secret"
     JWT_SECRET: "replace-with-generated-secret"
-    S3_SECRET_ENCRYPTION_KEY: "replace-with-fernet-key"
+    REGISTRY_SECRET_ENCRYPTION_KEY: "replace-with-generated-secret"
     OIDC_CLIENT_SECRET: "replace-with-oidc-client-secret"
 ```
 

@@ -56,7 +56,7 @@ Main sidebar entries:
 - Add Deployment (when Kubernetes actions are available)
 - Workflows (when Kubernetes actions and Argo Workflows are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
-- S3 Profiles (account menu, `member`/`admin`): reusable S3 deployment credentials.
+- S3 Profiles (existing account menu entry, `admin`): manage reusable S3 connections.
 - Error Logs (admin only)
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
@@ -175,8 +175,10 @@ explicit model control on Triton.
 
 ### S3 Connection Tab
 
-Members and admins can configure S3 endpoint, bucket, credentials, optional
-region/prefix, SSL verification, and optional CA certificate.
+Members and admins select an available **S3 profile** and an optional repository
+prefix. Administrators configure endpoint, bucket, credentials, region, addressing
+mode, and CA certificate in the existing **S3 Profiles** account menu entry.
+Manual connection fields are no longer available in the instance dialog.
 
 When S3 is active, users can open the S3 Browser from the detail page.
 
@@ -234,7 +236,7 @@ Reference:
 Current behavior:
 
 - configure the analyzer image above batch size, concurrency range, and request count
-- expand **Optional Registry credentials (Docker config JSON)** when a private registry needs authentication; this section is collapsed by default
+- private registry authentication uses the central credentials configured by an administrator under **Settings → Registry**
 - each run creates its own non-root Kubernetes Job; no global installation is required
 - different models run concurrently, with one active run per model within an instance across all versions
 - while this model is creating, pending, running, or stopping, Start is disabled
@@ -289,9 +291,8 @@ by Triton Control. Members and admins can install it in Kubernetes, use its UI
 through the authenticated backend proxy, refresh its readiness state, and
 uninstall it.
 
-Installation requires a user-owned S3 profile, in addition to the Kubernetes
-resource name and optional `.dockerconfigjson` credentials for a private image
-registry. MLflow stores all artifacts in `s3://<bucket>/<profile-prefix>/mlflow`,
+Installation requires an available S3 profile and a Kubernetes resource name.
+Private images use the central credentials from **Settings → Registry**. MLflow stores all artifacts in `s3://<bucket>/<profile-prefix>/mlflow`,
 with paths allocated per experiment and logged model. Credentials, the endpoint,
 path-style configuration, and an optional CA certificate are stored in a
 server-only Kubernetes Secret. Workflows upload through the tracking proxy.
@@ -310,29 +311,67 @@ artifact references valid. SQLite/PVC installations are no longer supported by
 the tracking upgrade endpoint. Export their data and migrate to PostgreSQL/S3
 before upgrading.
 
+## Registry Credentials
+
+Administrators configure a shared image pull secret under **Settings → Registry**.
+Paste a Docker config JSON containing a non-empty `auths` object and choose
+**Save secret** to create or replace it. **Remove secret** clears it. The page
+shows whether credentials are configured without returning their contents.
+
+New Triton deployments, development workspaces, MLflow installations, and model
+performance Jobs use these credentials automatically. Per-workload credential
+overrides are rejected. Updating or removing the central secret does not modify
+existing Kubernetes workloads; recreate the affected workload to apply a change.
+Helm-managed Argo components and Workflow YAML retain their separate image pull
+Secret configuration described in [Argo Workflows](argo-workflows.md).
+
+### Using Private and Public Registries Together
+
+You can deploy images from a private registry and public registries with the
+same global pull secret. Include credentials only for registries that require
+authentication. Kubernetes selects credentials that match the image's registry
+and any configured path prefix; it does not send them to unrelated registries.
+
+For example, if the secret contains credentials only for `registry.example.com`:
+
+| Image | Pull behavior |
+| --- | --- |
+| `registry.example.com/team/triton:release` | Uses the configured private registry credentials. |
+| `docker.io/library/nginx:stable` | Pulls anonymously because the secret has no matching Docker Hub entry. |
+
+No per-deployment switch is needed. If all images are public, leave the global
+secret unset.
+
+A public repository on the same registry can also match the configured
+credentials. Kubernetes then attempts authentication even if anonymous access
+is allowed; invalid credentials can cause the pull to fail. Keep matching
+credentials valid rather than relying on an anonymous fallback. See
+[Kubernetes credential matching](https://kubernetes.io/docs/concepts/containers/images/#interpretation-of-config-json).
+
 ## S3 Profiles
 
-Members and admins can manage reusable S3 deployment profiles from the account
-menu. A profile stores:
+Administrators manage reusable S3 deployment profiles through the existing
+**S3 Profiles** account menu entry. Members select these profiles in deployment, instance connection, MLflow,
+workflow, and code-server flows. A profile stores:
 
 - profile name
 - endpoint
 - bucket
 - optional repository parent prefix
 - region
-- access key and encrypted secret key
+- access key and stored secret key
 - path-style mode
 - optional CA certificate
 
-Profiles are private to the signed-in user. Other users, including
-administrators, cannot list, edit, or delete them through the S3 profile API.
-Each user must create their own profile, even when multiple users connect to the
-same object store. The code-server **Triton Control Deploy** extension uses
+Profiles owned by administrators are available to members. Existing personal
+profiles remain available to their owners; administrators can list, edit, and
+delete those legacy profiles too. Only administrators can create or change
+profile configuration. Browser API responses omit secret keys. The code-server **Triton Control Deploy** extension uses
 these profiles for its native Explorer S3 browser and model deployments.
 Connect from **Explorer → S3 Operations → Choose Profile…** on a workspace
 item; the browser uses the workspace owner's saved credentials and CA
-certificate dynamically. The separate deployment form provides a profile
-dropdown and optional manual S3 fields.
+certificate dynamically. The deployment form requires a profile; manual S3
+credential entry is removed.
 
 The stored profile values are used to upload the selected model repository from
 the code-server workspace and to create the Triton deployment. The resulting
@@ -354,12 +393,11 @@ the model folder. For example, version files under `modela/1` are published as
 vLLM S3 URL points directly at a single folder containing `config.pbtxt`, the
 sync worker adds the model-name directory automatically.
 
-The S3 settings entered during **Add Deployment** are written into the
-Kubernetes deployment. Select a saved S3 profile for repeated deployments, or
-choose **Manual S3 settings** for a one-off connection. With a profile, the
-**Repository prefix** is the optional path inside the profile bucket and the
-form shows a **Serving repository** preview. With manual S3 settings, the prefix
-and final **Target path** preview are shown inside the manual settings section.
+Select an available **S3 profile** during **Add Deployment**. The backend
+resolves its connection settings and writes them into the Kubernetes deployment.
+**Repository prefix** is the optional path inside the profile bucket, and the
+form shows a **Serving repository** preview. Requests carry the profile ID and
+prefix instead of connection credentials; manual S3 settings are rejected.
 
 Models that do not use the vLLM backend use Triton's native S3 model repository
 directly. Enable **vLLM model backend** only when deploying vLLM models; Triton
@@ -380,24 +418,19 @@ pod.
 | -------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Deployment name                  | Yes                   | Base name for Kubernetes resources (deployment/service/secret) and, in external backend mode, namespace. | Keep stable and DNS-safe.                                                                                                                            |
 | Image                            | Yes                   | Triton server container image to run.                                                                    | Pin explicit version tags in stage/prod.                                                                                                             |
-| S3 profile                       | Yes                   | Saved S3 profile or manual S3 settings.                                                                  | Prefer profiles for repeated deployments.                                                                                                            |
-| S3 endpoint                      | Manual only           | Object-store endpoint.                                                                                   | Do not include the repository prefix in this field.                                                                                                  |
-| Bucket                           | Manual only           | Object-store bucket.                                                                                     | Keep the bucket separate from the repository prefix.                                                                                                 |
+| S3 profile                       | Yes                   | Available admin-managed or existing personal S3 profile.                                                                  | Ask an administrator to configure missing profiles.                                                                                                            |
 | Repository prefix                | Optional              | S3 path prefix inside the selected bucket.                                                               | Leave empty when models are stored at the bucket root.                                                                                               |
-| Serving repository / Target path | Read-only             | Preview of the final S3 repository URL.                                                                  | Confirm before deploy, especially with manual S3 settings.                                                                                           |
-| S3 CA certificate                | Optional              | PEM CA certificate for HTTPS S3 endpoints.                                                               | Provide for private/self-signed/internal CAs.                                                                                                        |
-| Access key / Secret key / Region | Manual only           | Repository credentials and region.                                                                       | Use least-privilege credentials.                                                                                                                     |
+| Serving repository | Read-only             | Preview of the final S3 repository URL.                                                                  | Confirm the selected bucket and prefix before deploy.                                                                                           |
 | vLLM model backend               | Optional              | Enables vLLM repository handling for vLLM models.                                                        | Use only when deploying vLLM models.                                                                                                                 |
 | Model control mode               | Yes                   | Triton behavior (`explicit` or `poll`).                                                                  | Use mode based on model operation strategy.                                                                                                          |
 | Startup model                    | Optional (`explicit`) | Model loaded at startup (`*` if empty).                                                                  | Control startup footprint when needed.                                                                                                               |
 | Poll interval                    | Optional (`poll`)     | Seconds between repository checks.                                                                       | Tune for change rate and API load.                                                                                                                   |
 | Ingress host/class               | Optional              | Expose deployment through ingress.                                                                       | Use for external cluster access.                                                                                                                     |
-| `.dockerconfigjson`              | Optional              | Private registry pull credentials.                                                                       | Required for private images.                                                                                                                         |
 | `requirements.txt`               | Optional              | Extra Python packages installed before Triton start.                                                     | Prefer dev/stage; bake into image for production.                                                                                                    |
 | Resources (GPU/CPU/Memory)       | Optional              | Kubernetes GPU limit and CPU/memory resource settings.                                                   | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
 
-For private container registries, paste Docker registry authentication JSON into
-the image pull secret field (`.dockerconfigjson`). The following JSON is only
+For private container registries, an administrator saves Docker registry
+authentication JSON under **Settings → Registry**. The following JSON is only
 an example of the expected Docker config shape; replace it with the registry,
 credentials, and optional email value for your own registry:
 
@@ -488,9 +521,9 @@ Current scope:
 - Add Deployment and Perf Analyzer workflows are intended for development/stage
 - they are not positioned as full production orchestration in this version
 
-Perf Analyzer can also use a private registry image pull secret. Paste the same
-`.dockerconfigjson` format into the model Perf view's registry credentials field when
-the configured SDK image is stored in a private registry. This example is not a
+Perf Analyzer automatically uses the central image pull secret from
+**Settings → Registry** when creating a benchmark Job. There is no per-run
+registry credential field. This example is not a
 fixed template; use the Docker config JSON required by your registry:
 
 ```json

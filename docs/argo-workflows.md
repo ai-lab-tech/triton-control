@@ -126,9 +126,9 @@ user-submitted Workflow YAML are handled separately (see above).
 ### Link an S3 Profile
 
 Members and administrators can open **Workflows → Configure S3 Secrets**, select
-one of their saved **S3 profiles**, and click **Link profile**. No manual credential
-entry or `kubectl` access is needed. Create or edit the source profile through
-**S3 Profiles** in the account menu.
+an available **S3 profile**, and click **Link profile**. Manual credential
+requests are rejected. Administrators create or edit source profiles through
+the existing **S3 Profiles** account menu entry.
 
 The source profile remains in the application database. Linking stores its profile
 ID and synchronization metadata, and creates two resources in the configured
@@ -143,7 +143,8 @@ Both resources use the same generated name, such as `workflow-s3-dev-1-a1b2c3`.
 The dialog shows the name, namespace, workflow reference, and synchronization status.
 The workflow credential API returns metadata, not the secret key or CA contents.
 Linking makes these credentials available to workflows in the shared workflow
-namespace; the source profile itself remains owner-scoped.
+namespace. Administrator-owned source profiles are shared with members; legacy
+personal source profiles remain available to their owners.
 
 ### Upload Scripts and Inspect Results
 

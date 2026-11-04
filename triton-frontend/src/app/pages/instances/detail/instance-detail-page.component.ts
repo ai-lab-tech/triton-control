@@ -1,3 +1,6 @@
+import { HttpClient } from "@angular/common/http";
+import { MatSelectModule } from "@angular/material/select";
+import { BASE_PATH } from "../../../api/generated";
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { EMPTY, Subject, firstValueFrom, interval, switchMap, timer } from "rxjs";
@@ -50,6 +53,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    MatSelectModule,
     DatePipe,
     FormsModule,
     RouterLink,
@@ -67,7 +71,23 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   templateUrl: "./instance-detail-page.component.html",
 })
 export class InstanceDetailPageComponent implements OnInit {
-  readonly defaultS3Region = "us-east-1";
+  private readonly http = inject(HttpClient);
+  private readonly apiBase = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
+  readonly s3Profiles = signal<{ id: number; name: string }[]>([]);
+  readonly s3ProfilesError = signal("");
+  selectedS3ProfileId = "";
+  private async loadS3Profiles(): Promise<void> {
+    this.s3ProfilesError.set("");
+    try {
+      this.s3Profiles.set(
+        await firstValueFrom(
+          this.http.get<{ id: number; name: string }[]>(`${this.apiBase}/api/s3-profiles`),
+        ),
+      );
+    } catch {
+      this.s3ProfilesError.set("Unable to load S3 profiles.");
+    }
+  }
   private readonly instancesApi = inject(InstancesService);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -82,15 +102,7 @@ export class InstanceDetailPageComponent implements OnInit {
   private readonly logsTabActive$ = new Subject<boolean>();
   private deploymentLogsRequestPending = false;
 
-  s3AccessKey = "";
-  s3SecretKey = "";
-  s3Bucket = "";
-  s3Region = this.defaultS3Region;
-  s3Endpoint = "";
   s3Prefix = "";
-  s3VerifySsl = false;
-  s3CaCertificate = "";
-  s3SecretConfigured = false;
   tritonEndpoint = "";
   metricsEndpoint = "";
   tritonVerifySsl = false;
@@ -183,15 +195,7 @@ export class InstanceDetailPageComponent implements OnInit {
       .pipe(ofType(s3ConfigSaveSucceeded, s3ConfigDisableSucceeded), takeUntilDestroyed())
       .subscribe(() => {
         this.showS3Dialog.set(false);
-        this.s3AccessKey = "";
-        this.s3SecretKey = "";
-        this.s3Bucket = "";
-        this.s3Region = this.defaultS3Region;
-        this.s3Endpoint = "";
         this.s3Prefix = "";
-        this.s3VerifySsl = false;
-        this.s3CaCertificate = "";
-        this.s3SecretConfigured = false;
       });
     this.actions$
       .pipe(ofType(tritonConnectionSaveSucceeded), takeUntilDestroyed())
@@ -236,15 +240,8 @@ export class InstanceDetailPageComponent implements OnInit {
 
     const payload: UpdateInstanceS3Request = {
       enabled: true,
-      endpoint: this.s3Endpoint?.trim(),
-      bucket: this.s3Bucket?.trim(),
-      region: this.s3Region?.trim() || this.defaultS3Region,
-      prefix: this.s3Prefix?.trim(),
-      access_key: this.s3AccessKey?.trim() || undefined,
-      secret_key: this.s3SecretKey?.trim() || undefined,
-      verify_ssl: this.shouldShowS3CaCertificate(),
-      ca_certificate: this.shouldShowS3CaCertificate() ? this.s3CaCertificate.trim() : "",
-      address_style: "path",
+      s3_profile_id: Number(this.selectedS3ProfileId),
+      prefix: this.s3Prefix.trim(),
     };
 
     this.store.dispatch(s3ConfigSaveRequested({ instanceId: instance.id, payload }));
@@ -255,33 +252,10 @@ export class InstanceDetailPageComponent implements OnInit {
     if (!instance || !this.canWriteInstances()) {
       return;
     }
-    this.s3Bucket = instance.s3.bucket;
-    this.s3Region = instance.s3.region || this.defaultS3Region;
-    this.s3Endpoint = instance.s3.endpoint;
     this.s3Prefix = instance.s3.prefix;
-    this.s3VerifySsl = instance.s3.verifySsl;
-    this.s3CaCertificate = instance.s3.caCertificate;
-    this.s3AccessKey = instance.s3.accessKey;
-    this.s3SecretKey = "";
-    this.s3SecretConfigured = instance.s3.secretConfigured;
+    this.selectedS3ProfileId = "";
+    void this.loadS3Profiles();
     this.showS3Dialog.set(true);
-  }
-
-  onS3CertificateFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.s3CaCertificate = `${reader.result ?? ""}`;
-      input.value = "";
-    };
-    reader.readAsText(file);
-  }
-
-  shouldShowS3CaCertificate(): boolean {
-    return this.s3VerifySsl && this.s3Endpoint.trim().toLowerCase().startsWith("https://");
   }
 
   closeS3Dialog(): void {
@@ -545,19 +519,8 @@ export class InstanceDetailPageComponent implements OnInit {
     );
   }
 
-  getS3SecretPlaceholder(): string {
-    return this.s3SecretConfigured ? "Stored secret configured" : "Secret key";
-  }
-
   canSaveS3Config(): boolean {
-    const instance = this.instance();
-    const hasExistingConnection = instance ? this.hasS3Connection(instance) : false;
-    return Boolean(
-      this.s3Endpoint.trim() &&
-      this.s3Bucket.trim() &&
-      this.s3AccessKey.trim() &&
-      (this.s3SecretKey.trim() || hasExistingConnection),
-    );
+    return this.s3Profiles().some((p) => String(p.id) === this.selectedS3ProfileId);
   }
 
   private getModelConfigKey(modelName: string, version: string): string {

@@ -240,23 +240,6 @@ describe("MlflowPageComponent", () => {
     expect(chrome.showTopbar).toHaveBeenCalled();
   });
 
-  it("validates pull secret payload", async () => {
-    const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
-    await flushMicrotasks();
-    await flushInitialStatus();
-
-    expect(component.pullSecretStatus().label).toBe("Not configured");
-
-    component.dockerconfigjson = '{"auths":{"registry.example.com":{"auth":"token"}}}';
-    expect(component.pullSecretStatus().label).toBe("Configured");
-
-    component.dockerconfigjson = '{"auths":{}}';
-    expect(component.pullSecretStatus().label).toBe("Invalid");
-
-    component.dockerconfigjson = "{broken";
-    expect(component.pullSecretStatus().detail).toContain("Invalid JSON");
-  });
-
   it("installs and reloads status", async () => {
     // Arrange
     const fixture = TestBed.createComponent(MlflowPageComponent);

@@ -77,7 +77,6 @@ export class DevelopmentPageComponent implements OnDestroy {
   cpu = "";
   memoryGi: number | null = null;
   gpuCount: string | number = "";
-  dockerconfigjson = "";
   imageHasCodeServer = false;
   installHfBuilder = true;
   installMlflow = true;
@@ -262,7 +261,7 @@ export class DevelopmentPageComponent implements OnDestroy {
         memory: this.memoryQuantity() || undefined,
         memory_limit: this.memoryQuantity() || undefined,
         gpu_count: this.parseGpuCount(),
-        dockerconfigjson: this.dockerconfigjson.trim() || undefined,
+
         image_has_code_server: this.imageHasCodeServer,
         install_hf_builder: this.installHfBuilder,
         install_mlflow: this.installMlflow,

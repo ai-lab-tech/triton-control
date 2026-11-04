@@ -416,3 +416,10 @@ class ErrorEventEntity(SQLModel, table=True):
     user_id: Optional[int] = Field(default=None, index=True)
     user_agent: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class RegistryConfigEntity(SQLModel, table=True):
+    """Singleton registry credentials managed through admin settings."""
+    __tablename__ = "registry_config"
+    id: int = Field(default=1, primary_key=True)
+    dockerconfigjson_enc: str = Field(default="", repr=False)

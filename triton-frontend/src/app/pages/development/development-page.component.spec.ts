@@ -113,7 +113,6 @@ describe("DevelopmentPageComponent", () => {
     component.theme = "Monokai";
     component.cpu = "2";
     component.memoryGi = 4;
-    component.dockerconfigjson = '{"auths":{}}';
 
     // Act
     await component.create();
@@ -129,7 +128,6 @@ describe("DevelopmentPageComponent", () => {
         cpu_limit: "2",
         memory: "4Gi",
         memory_limit: "4Gi",
-        dockerconfigjson: '{"auths":{}}',
         image_has_code_server: false,
         install_hf_builder: true,
         install_mlflow: true,

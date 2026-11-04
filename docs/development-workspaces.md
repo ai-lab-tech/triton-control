@@ -39,7 +39,7 @@ Open **Development** in the sidebar and configure the workspace:
 | CPU request | No | unset | CPU request and limit for the workspace container. |
 | Memory request | No | unset | Memory request and limit for the workspace container. |
 | GPU count | No | unset | Adds an `nvidia.com/gpu` resource limit when greater than zero. |
-| Registry credentials | No | unset | Docker `.dockerconfigjson` used to pull a private workspace image. |
+| Registry credentials | Centrally managed | unset | Uses the administrator's **Settings → Registry** configuration for new workspaces. |
 
 In this field, **Development** refers to the code-server runtime. Enable
 **Use preinstalled code-server** only if `code-server` is available
@@ -274,11 +274,12 @@ in the link above, then reopen the terminal after the workspace restarts.
 ## S3 Profiles and S3 Browser
 
 The bundled **Triton Control Deploy** extension displays saved S3 profiles as
-folders beside `/workspace` in the native **Explorer**. Members and admins
-create profiles through the Triton Control account menu's **S3 Profiles**.
+folders beside `/workspace` in the native **Explorer**. Administrators create
+profiles through the existing **S3 Profiles** account menu entry.
 Each profile stores its endpoint, bucket, optional prefix, region, access key,
-encrypted secret key, addressing mode, and optional public CA certificate.
-Profiles belong to the workspace owner.
+stored secret key, addressing mode, and optional public CA certificate.
+The workspace can use administrator-owned profiles and its owner's existing
+personal profiles.
 
 ### Connect, Switch, and Disconnect
 
@@ -419,9 +420,11 @@ workspace and rejects unsupported or incomplete bundles. Custom images that
 already include code-server must provide that build and a writable workbench
 bundle. See [Configuration](configuration.md) for the runtime version setting.
 
-The separate deployment form still offers an **S3 profile** dropdown and
-optional manual fields. Legacy `s3x.*` settings can supply defaults for those
-manual deployment fields; they do not configure the native S3 browser. Neither
+The deployment form and simple upload wizard require an **S3 profile**.
+Manual S3 fields and profile creation have been removed from these flows.
+Legacy editor credentials and `s3x.*` settings are not used as connection
+defaults. The extension resolves current credentials through the authenticated
+workspace profile endpoint and does not save them in editor settings. Neither
 S3/R2 Explorer nor More Connect is required for the bundled browser.
 
 ## Create a Model Repository
@@ -538,7 +541,7 @@ origins.
 3. Use a **ready to deploy** repository from the Triton Control Activity Bar
    view, or right-click the repository root or a single model folder in
    Explorer and run **Triton Control: Deploy Model Repository**.
-4. Select an S3 profile, or expand manual S3 settings for a one-off deploy.
+4. Select an available S3 profile. Ask an administrator to create or update it through **S3 Profiles** if needed.
 5. Confirm the Triton image, detected backend summary, S3 upload target, model
    control mode, and optional resources.
 6. After full webview deployment, Triton Control opens the new instance and its
@@ -559,10 +562,10 @@ name is present, it prompts for one. If no backend is declared, the detected
 backend summary shows `No backend in config.pbtxt`; otherwise it shows the
 configured backend, for example `vLLM model backend`.
 
-Selecting a single model folder uploads it below the chosen repository prefix
-while keeping the deployment's `s3_url` at the parent repository prefix. The
-form shows an **S3 upload target** preview before deploy. Manual S3 deployments
-show the same final path as **Target path** at the end of the manual S3 section.
+Selecting a single model folder preserves the parent repository layout. The
+form shows an **S3 upload target** preview before deploy. Deployment requests
+contain `s3_profile_id` and the uploaded repository's `repository_prefix`;
+the backend resolves the connection settings from the profile.
 
 Model control is displayed as a summary and configured in the collapsed
 **Model control** section. **Polling mode** shows the poll interval field;

@@ -7,9 +7,11 @@ from unittest.mock import ANY, Mock, patch
 
 from fastapi import HTTPException
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.deployment_api import create_deployment as create_deployment_api
 from app.api.deployment_api import delete_deployment as delete_deployment_api
+from app.db.entities import S3ProfileEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment import deployment as deployments
@@ -26,6 +28,20 @@ class _FakeSession:
 
 
 class DeploymentServiceTests(unittest.TestCase):
+    def _profile_fixture(self, role: str):
+        engine = create_engine("sqlite://")
+        SQLModel.metadata.create_all(engine)
+        session = Session(engine)
+        self.addCleanup(engine.dispose)
+        self.addCleanup(session.close)
+        session.add(UserEntity(id=1, email="owner@example.test", name="Owner", role=role))
+        session.add(S3ProfileEntity(id=1, owner_user_id=1, name="profile", endpoint="http://minio:9000",
+                                    bucket="triton-models", access_key="minioadmin",
+                                    secret_key_enc="super-secret-value"))
+        session.commit()
+        request = CreateDeploymentRequest(deployment_name="triton-minio", image="custom/triton:dev", s3_profile_id=1)
+        return session, request, {"email": "owner@example.test", "role": role, "user_id": 1}
+
     def _request(self) -> CreateDeploymentRequest:
         return CreateDeploymentRequest(
             deployment_name="triton-minio",
@@ -37,6 +53,7 @@ class DeploymentServiceTests(unittest.TestCase):
 
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange
+        session, request, claims = self._profile_fixture("admin")
         scheduled: list[tuple[Any, tuple[Any, ...]]] = []
 
         # Act
@@ -45,9 +62,9 @@ class DeploymentServiceTests(unittest.TestCase):
             return_value=SimpleNamespace(id=7),
         ) as upsert:
             response = deployments.create_deployment(
-                self._request(),
-                SimpleNamespace(),
-                {"role": "admin"},
+                request,
+                session,
+                claims,
                 lambda fn, *args: scheduled.append((fn, args)),
             )
 
@@ -786,6 +803,7 @@ class DeploymentServiceTests(unittest.TestCase):
 
     def test_CreateDeployment_ViewerClaim_SchedulesDeployment(self) -> None:
         # Arrange
+        session, request, claims = self._profile_fixture("viewer")
         scheduled: list[tuple[Any, tuple[Any, ...]]] = []
 
         # Act
@@ -794,9 +812,9 @@ class DeploymentServiceTests(unittest.TestCase):
             return_value=SimpleNamespace(id=7),
         ):
             response = deployments.create_deployment(
-                self._request(),
-                SimpleNamespace(),
-                {"role": "viewer"},
+                request,
+                session,
+                claims,
                 lambda fn, *args: scheduled.append((fn, args)),
             )
 

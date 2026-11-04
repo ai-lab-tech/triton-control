@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from sqlmodel import Session
 
-from app.core.access_control import require_member_or_admin
+from app.core.access_control import require_admin, require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity
@@ -21,16 +21,20 @@ from app.services.workflows.credentials import sync_profile_credentials
 def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO]:
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
-    return [_to_dto(profile) for profile in s3_profiles.list_for_owner(session, owner.id or 0)]
+    rows = s3_profiles.list_for_owner(session, owner.id or 0)
+    return [_to_dto(profile) for profile in rows]
 
 
 def resolve_profile_reference(session: Session, claims: dict[str, Any], name: str) -> dict[str, int | str]:
-    """Resolve an owned profile name without exposing any storage credentials."""
+    """Resolve a visible profile name without exposing any storage credentials."""
     require_member_or_admin(claims)
     owner = require_user_entity(session, claims)
-    profile = s3_profiles.find_by_name_for_owner(session, owner.id or 0, _clean_required(name, "Profile name"))
-    if profile is None:
+    profiles = s3_profiles.list_visible_by_name(session, owner.id or 0, _clean_required(name, "Profile name"))
+    if not profiles:
         raise NotFoundError("S3 profile not found")
+    if len(profiles) > 1:
+        raise ConflictError("S3 profile name is ambiguous; ask an administrator to assign unique profile names")
+    profile = profiles[0]
     if claims.get("token_use") == "mlflow_workflow" and claims.get("allowed_s3_profile_id") != profile.id:
         raise ForbiddenError("Workflow token cannot access this S3 profile")
     return {"id": profile.id or 0, "name": profile.name}
@@ -41,7 +45,7 @@ def create_profile(
     claims: dict[str, Any],
     request: CreateS3ProfileRequest,
 ) -> S3ProfileDTO:
-    require_member_or_admin(claims)
+    require_admin(claims)
     owner = require_user_entity(session, claims)
     owner_id = owner.id or 0
     name = _clean_required(request.name, "Profile name")
@@ -71,15 +75,15 @@ def update_profile(
     profile_id: int,
     request: UpdateS3ProfileRequest,
 ) -> S3ProfileDTO:
-    require_member_or_admin(claims)
-    owner = require_user_entity(session, claims)
-    profile = _get_profile(session, owner.id or 0, profile_id)
+    require_admin(claims)
+    require_user_entity(session, claims)
+    profile = _get_profile(session, profile_id)
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
     if request.name is not None:
         name = _clean_required(request.name, "Profile name")
-        existing = s3_profiles.find_by_name_for_owner(session, owner.id or 0, name)
+        existing = s3_profiles.find_by_name_for_owner(session, profile.owner_user_id, name)
         if existing and existing.id != profile.id:
             raise ConflictError("S3 profile name already exists")
         profile.name = name
@@ -112,9 +116,9 @@ def update_profile(
 
 
 def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) -> dict[str, str]:
-    require_member_or_admin(claims)
-    owner = require_user_entity(session, claims)
-    profile = _get_profile(session, owner.id or 0, profile_id)
+    require_admin(claims)
+    require_user_entity(session, claims)
+    profile = _get_profile(session, profile_id)
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
@@ -124,14 +128,14 @@ def delete_profile(session: Session, claims: dict[str, Any], profile_id: int) ->
     return {"status": "deleted"}
 
 
-def _get_profile(session: Session, owner_user_id: int, profile_id: int) -> S3ProfileEntity:
-    profile = s3_profiles.find_for_owner(session, owner_user_id, profile_id)
+def _get_profile(session: Session, profile_id: int) -> S3ProfileEntity:
+    profile = s3_profiles.get(session, profile_id)
     if not profile:
         raise NotFoundError("S3 profile not found")
     return profile
 
 
-def _to_dto(profile: S3ProfileEntity) -> S3ProfileDTO:
+def _to_dto(profile: S3ProfileEntity, *, include_secret: bool = False) -> S3ProfileDTO:
     return S3ProfileDTO(
         id=profile.id or 0,
         name=profile.name,
@@ -139,7 +143,7 @@ def _to_dto(profile: S3ProfileEntity) -> S3ProfileDTO:
         bucket=profile.bucket,
         region=profile.region or "us-east-1",
         access_key=profile.access_key,
-        secret_key=decrypt_secret(profile.secret_key_enc or ""),
+        secret_key=decrypt_secret(profile.secret_key_enc or "") if include_secret else "",
         prefix=profile.prefix or "",
         force_path_style=bool(profile.force_path_style),
         ca_certificate=profile.ca_certificate or "",
