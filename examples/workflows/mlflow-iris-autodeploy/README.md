@@ -109,7 +109,7 @@ correct output name. The unmodified example request returns `[0, 2]`.
 ## Run the same script in code-server
 
 When creating the **Development** workspace, leave **Install MLflow** enabled.
-You can set the MLflow and MLflow Triton plugin versions in the creation form.
+MLflow and the MLflow Triton plugin use the configured workspace defaults, like HF Triton Builder.
 Both plugins are available in the workspace's normal Python and the
 **Python (Triton Control)** notebook kernel; no environment activation is needed.
 

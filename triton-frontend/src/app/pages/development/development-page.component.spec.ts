@@ -250,11 +250,9 @@ describe("DevelopmentPageComponent", () => {
     );
   });
 
-  it("Create_MlflowVersions_SendsOverrides", async () => {
+  it("Create_MlflowEnabled_UsesConfiguredDefaults", async () => {
     // Arrange
     const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
-    component.mlflowVersion = " 3.14.0 ";
-    component.mlflowTritonControlVersion = " 0.4.2 ";
 
     // Act
     await component.create();
@@ -263,18 +261,17 @@ describe("DevelopmentPageComponent", () => {
     expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         install_mlflow: true,
-        mlflow_version: "3.14.0",
-        mlflow_triton_control_version: "0.4.2",
       }),
     );
+    const request = codeServersApi.createCodeServerApiDevelopmentPost.calls.mostRecent().args[0];
+    expect(request.mlflow_version).toBeUndefined();
+    expect(request.mlflow_triton_control_version).toBeUndefined();
   });
 
-  it("Create_MlflowDisabled_OmitsVersionOverrides", async () => {
+  it("Create_MlflowDisabled_SendsFalseFlag", async () => {
     // Arrange
     const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
     component.installMlflow = false;
-    component.mlflowVersion = "invalid";
-    component.mlflowTritonControlVersion = "invalid";
 
     // Act
     await component.create();
@@ -283,8 +280,6 @@ describe("DevelopmentPageComponent", () => {
     expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         install_mlflow: false,
-        mlflow_version: undefined,
-        mlflow_triton_control_version: undefined,
       }),
     );
   });
