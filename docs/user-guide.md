@@ -527,8 +527,11 @@ images. Private Workflow images require a pull Secret in that namespace.
 
 Use **Configure S3 Secrets** to link a saved S3 profile for workflow artifacts.
 Triton Control synchronizes connection settings into a ConfigMap and credentials
-and the optional CA into a Secret. Copy the displayed `artifactRepositoryRef` into
-your workflow; only object paths remain in its artifact definitions.
+and the optional CA into a Secret. When exactly one of your profiles is linked,
+Triton Control automatically selects it for workflows with S3 artifact keys.
+With multiple linked profiles, specify the profile name in the workflow annotation
+`triton-control.ai/mlflow-s3-profile-name`. No ConfigMap or Secret names are needed.
+An explicit `artifactRepositoryRef` remains available for direct Argo submissions.
 See [S3 profile linking and synchronization](argo-workflows.md#s3-credentials).
 
 ## Add Instance (Sidebar Action)

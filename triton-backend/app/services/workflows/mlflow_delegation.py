@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 from kubernetes import client  # type: ignore[import-untyped]
+from sqlmodel import Session
 
 from app.core.access_control import require_member_or_admin
 from app.core.identity import require_user_entity
@@ -44,10 +45,12 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
     with session_factory() as session:
         user = require_user_entity(session, claims)
         owner_id = user.id
-        allowed_secrets = {
-            row.secret_name for row in workflow_s3_credentials.list_all(session)
+        linked = [
+            row for row in workflow_s3_credentials.list_all(session)
             if row.namespace == namespace and row.created_by_user_id == owner_id
-        }
+        ]
+        allowed_secrets = {row.secret_name for row in linked}
+        _select_artifact_repository(workflow, session, namespace, owner_id or 0)
     validate_workflow(workflow, allowed_secrets)
     repository_ref = workflow.get("spec", {}).get("artifactRepositoryRef")
     if repository_ref:
@@ -61,7 +64,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if not isinstance(resolved, dict):
             raise BadRequestError("Invalid linked S3 artifact repository")
         validate_workflow({"spec": resolved}, allowed_secrets)
-    body, secret_name, _ = _prepare_deployment_submission(path, body, claims)
+    body, secret_name, _ = _prepare_deployment_submission(path, json.dumps(payload).encode(), claims)
     has_deployment_secret = secret_name is not None
     payload = json.loads(body)
     workflow = payload["workflow"]
@@ -114,6 +117,76 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
             cleanup_secret(namespace, secret_name)
         raise
     return json.dumps(payload).encode(), secret_name, namespace
+
+
+
+def _needs_artifact_repository(value: Any) -> bool:
+    """Find S3 artifacts that rely on repository defaults instead of inline storage."""
+    if isinstance(value, list):
+        return any(_needs_artifact_repository(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+    storage = value.get("s3")
+    if isinstance(storage, dict) and (not storage.get("bucket") or not storage.get("endpoint")):
+        return True
+    return any(_needs_artifact_repository(item) for item in value.values())
+
+
+def _select_artifact_repository(
+    workflow: dict[str, Any], session: Session, namespace: str, owner_id: int,
+) -> None:
+    """Select only a repository linked to a profile owned by the submitter."""
+    metadata = workflow.get("metadata") or {}
+    annotations = metadata.get("annotations") or {}
+    spec = workflow.get("spec") or {}
+    if spec.get("artifactRepositoryRef"):
+        return
+    profile_name = annotations.get("triton-control.ai/mlflow-s3-profile-name", "").strip()
+    profile_id_raw = annotations.get("triton-control.ai/mlflow-s3-profile-id", "")
+    deployment = bool(annotations.get(_ANNOTATION))
+    if not (deployment or profile_name or profile_id_raw or _needs_artifact_repository(spec)):
+        return
+    if profile_name and profile_id_raw:
+        raise BadRequestError("Specify exactly one MLflow S3 profile name or ID")
+    profile = None
+    if profile_name:
+        profile = s3_profiles.find_by_name_for_owner(session, owner_id, profile_name)
+        if profile is None:
+            raise NotFoundError("S3 profile not found")
+    elif profile_id_raw:
+        try:
+            profile_id = int(profile_id_raw)
+        except (TypeError, ValueError) as exc:
+            raise BadRequestError("A valid MLflow S3 profile ID is required") from exc
+        profile = s3_profiles.find_for_owner(session, owner_id, profile_id)
+        if profile is None:
+            raise NotFoundError("S3 profile not found")
+    linked = [
+        row for row in workflow_s3_credentials.list_all(session)
+        if row.namespace == namespace and row.created_by_user_id == owner_id
+        and row.s3_profile_id is not None
+        and s3_profiles.find_for_owner(session, owner_id, row.s3_profile_id) is not None
+        and (profile is None or row.s3_profile_id == profile.id)
+    ]
+    if not linked:
+        raise BadRequestError(
+            "Link an S3 profile under Workflows -> Configure S3 Secrets before submitting this workflow"
+        )
+    if len(linked) > 1:
+        raise BadRequestError(
+            "Multiple linked S3 repositories are available; select a profile using "
+            "the triton-control.ai/mlflow-s3-profile-name annotation or provide artifactRepositoryRef"
+        )
+    selected = linked[0]
+    spec["artifactRepositoryRef"] = {"configMap": selected.secret_name, "key": REPOSITORY_KEY}
+    workflow["spec"] = spec
+    if deployment and not (profile_name or profile_id_raw):
+        selected_profile = s3_profiles.find_for_owner(session, owner_id, selected.s3_profile_id or 0)
+        if selected_profile is None:
+            raise NotFoundError("S3 profile not found")
+        annotations["triton-control.ai/mlflow-s3-profile-name"] = selected_profile.name
+        metadata["annotations"] = annotations
+        workflow["metadata"] = metadata
 
 
 def _prepare_deployment_submission(

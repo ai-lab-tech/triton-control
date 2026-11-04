@@ -41,9 +41,13 @@ Edit [workflow.yaml](workflow.yaml):
 | `metadata.name` | `mlflow-iris-autodeploy`; choose an unused workflow name |
 | Annotation `triton-control.ai/mlflow-deploy-template` | `train` |
 | Annotation `triton-control.ai/mlflow-deployment-name` | `iris-classifier`; choose an unused deployment name |
-| Annotation `triton-control.ai/mlflow-s3-profile-name` | `workflow-training`; your linked profile name |
+| Annotation `triton-control.ai/mlflow-s3-profile-name` | `workflow-training`; replace with your linked profile name, or omit when exactly one of your profiles is linked |
 | `s3-script-key` | Uploaded training script's full S3 key |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
+
+The backend fills in `artifactRepositoryRef` from the selected linked profile.
+You do not need ConfigMap or Secret names in the workflow YAML. With multiple linked
+profiles, keep the profile-name annotation to select one explicitly.
 
 Submit through **Triton Control → Workflows → Submit New Workflow**. The workflow
 has one **train** node that installs packages and runs `train.py`. Deployment

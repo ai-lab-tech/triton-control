@@ -78,6 +78,7 @@ class WorkflowDelegationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        self.addCleanup(self.engine.dispose)
         SQLModel.metadata.create_all(self.engine)
         with Session(self.engine) as session:
             session.add(UserEntity(id=7, email="owner@example.com", name="Owner", role="member"))
@@ -110,6 +111,7 @@ class WorkflowDelegationTests(unittest.TestCase):
             patch("app.services.workflows.mlflow_delegation.api_client"),
             patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core_api,
         ):
+            core_api.return_value.read_namespaced_config_map.return_value = self._repository()
             body, secret_name, namespace = mlflow_delegation.prepare_submission(
                 "api/v1/workflows/triton-control", self._submission(),
                 {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
@@ -178,8 +180,9 @@ class WorkflowDelegationTests(unittest.TestCase):
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
             patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
             patch("app.services.workflows.mlflow_delegation.api_client"),
-            patch("app.services.workflows.mlflow_delegation.client.CoreV1Api"),
+            patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core,
         ):
+            core.return_value.read_namespaced_config_map.return_value = self._repository()
             body, _, _ = mlflow_delegation.prepare_submission(
                 "api/v1/workflows/triton-control", json.dumps(submission).encode(),
                 {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
@@ -208,7 +211,10 @@ class WorkflowDelegationTests(unittest.TestCase):
         with (
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
             patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
+            patch("app.services.workflows.mlflow_delegation.api_client"),
+            patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core,
         ):
+            core.return_value.read_namespaced_config_map.return_value = self._repository()
             with self.assertRaises(BadRequestError):
                 mlflow_delegation.prepare_submission(
                     "api/v1/workflows/triton-control", json.dumps(submission).encode(),
@@ -225,3 +231,113 @@ class WorkflowDelegationTests(unittest.TestCase):
                     "api/v1/workflows/triton-control", self._submission(),
                     {"email": "other@example.com", "auth_provider": "local", "role": "member"},
                 )
+
+    def _repository(self, secret_name="workflow-s3-models"):
+        return SimpleNamespace(data={"repository": json.dumps({"s3": {
+            "accessKeySecret": {"name": secret_name, "key": "access-key-id"},
+            "secretKeySecret": {"name": secret_name, "key": "secret-access-key"},
+        }})})
+
+    def _plain_s3_submission(self):
+        return {"workflow": {"metadata": {"generateName": "train-"}, "spec": {
+            "templates": [{"name": "train", "inputs": {"artifacts": [{
+                "name": "script", "path": "/tmp/train.py", "s3": {"key": "train.py"},
+            }]}, "container": {"image": "python:3.12"}}],
+        }}}
+
+    def _submit(self, submission, email="owner@example.com", secret="workflow-s3-models"):
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
+            mlflow_delegation, "in_cluster_namespace", return_value="triton-control",
+        ), patch.object(mlflow_delegation, "api_client"), patch.object(mlflow_delegation.client, "CoreV1Api") as core:
+            core.return_value.read_namespaced_config_map.return_value = self._repository(secret)
+            try:
+                body, _, _ = mlflow_delegation.prepare_submission(
+                    "api/v1/workflows/triton-control", json.dumps(submission).encode(),
+                    {"email": email, "auth_provider": "local", "role": "member"},
+                )
+            except Exception:
+                core.return_value.create_namespaced_secret.assert_not_called()
+                raise
+        return json.loads(body)["workflow"]
+
+    def _add_linked_profile(self, owner_id=7, namespace="triton-control"):
+        with Session(self.engine) as session:
+            session.add(S3ProfileEntity(id=12, owner_user_id=owner_id, name="second",
+                endpoint="https://s3.example.test", bucket="second", access_key="access"))
+            session.add(WorkflowS3CredentialEntity(id=22, created_by_user_id=owner_id,
+                name="second", namespace=namespace, secret_name="workflow-s3-second", access_key_id="access",
+                s3_profile_id=12, s3_profile_name="second"))
+            session.commit()
+
+    def test_key_only_s3_artifact_selects_only_owned_linked_profile(self):
+        self._add_linked_profile(owner_id=8)
+        result = self._submit(self._plain_s3_submission())
+        self.assertEqual(result["spec"]["artifactRepositoryRef"], {
+            "configMap": "workflow-s3-models", "key": "repository",
+        })
+
+    def test_explicit_profile_name_selects_between_multiple_links(self):
+        self._add_linked_profile()
+        submission = self._plain_s3_submission()
+        submission["workflow"]["metadata"]["annotations"] = {
+            "triton-control.ai/mlflow-s3-profile-name": "second",
+        }
+        result = self._submit(submission, secret="workflow-s3-second")
+        self.assertEqual(result["spec"]["artifactRepositoryRef"]["configMap"], "workflow-s3-second")
+
+    def test_ambiguous_links_require_profile_selection(self):
+        self._add_linked_profile()
+        with self.assertRaisesRegex(BadRequestError, "Multiple linked S3 repositories"):
+            self._submit(self._plain_s3_submission())
+
+    def test_missing_link_does_not_use_another_users_repository(self):
+        with self.assertRaisesRegex(BadRequestError, "Link an S3 profile"):
+            self._submit(self._plain_s3_submission(), email="other@example.com")
+
+    def test_links_in_other_namespaces_do_not_make_selection_ambiguous(self):
+        self._add_linked_profile(namespace="another-namespace")
+        result = self._submit(self._plain_s3_submission())
+        self.assertEqual(result["spec"]["artifactRepositoryRef"]["configMap"], "workflow-s3-models")
+
+    def test_deployment_uses_only_linked_profile_when_annotation_omitted(self):
+        submission = json.loads(self._submission())
+        del submission["workflow"]["metadata"]["annotations"]["triton-control.ai/mlflow-s3-profile-name"]
+        result = self._submit(submission)
+        env = result["spec"]["templates"][0]["container"]["env"]
+        self.assertIn({"name": "TRITON_CONTROL_S3_PROFILE_NAME", "value": "models"}, env)
+        self.assertEqual(result["spec"]["artifactRepositoryRef"]["configMap"], "workflow-s3-models")
+
+    def test_ordinary_workflow_without_s3_needs_no_selection(self):
+        self._add_linked_profile()
+        result = self._submit({"workflow": {"metadata": {"generateName": "plain-"}, "spec": {
+            "templates": [{"name": "train", "container": {"image": "python:3.12"}}],
+        }}})
+        self.assertNotIn("artifactRepositoryRef", result["spec"])
+
+    def test_auto_selected_repository_cannot_reference_foreign_secret(self):
+        with self.assertRaises(ForbiddenError):
+            self._submit(self._plain_s3_submission(), secret="foreign-secret")
+
+    def test_explicit_repository_is_preserved_with_multiple_links(self):
+        self._add_linked_profile()
+        submission = self._plain_s3_submission()
+        submission["workflow"]["spec"]["artifactRepositoryRef"] = {
+            "configMap": "workflow-s3-models", "key": "repository",
+        }
+        result = self._submit(submission)
+        self.assertEqual(result["spec"]["artifactRepositoryRef"]["configMap"], "workflow-s3-models")
+
+    def test_inline_s3_storage_does_not_need_default_repository(self):
+        self._add_linked_profile()
+        submission = self._plain_s3_submission()
+        storage = submission["workflow"]["spec"]["templates"][0]["inputs"]["artifacts"][0]["s3"]
+        storage.update({"bucket": "explicit", "endpoint": "s3.example.test"})
+        self.assertNotIn("artifactRepositoryRef", self._submit(submission)["spec"])
+
+    def test_unknown_profile_name_cannot_fall_back_to_another_profile(self):
+        submission = self._plain_s3_submission()
+        submission["workflow"]["metadata"]["annotations"] = {
+            "triton-control.ai/mlflow-s3-profile-name": "missing",
+        }
+        with self.assertRaises(NotFoundError):
+            self._submit(submission)
