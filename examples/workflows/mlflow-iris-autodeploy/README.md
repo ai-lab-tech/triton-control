@@ -28,9 +28,7 @@ registration or alias management is used.
    workflow's `s3-script-key`.
 
 The workflow installs `mlflow-triton-control` directly from PyPI. Its matching
-`mlflow-triton` core package is installed automatically. No wheel build or package
-upload is needed. Use a published plugin release supporting the current deployment
-API and automatic serving requirements.
+`mlflow-triton` core package is installed automatically.
 
 ## Run through Argo
 
@@ -44,22 +42,9 @@ Edit [workflow.yaml](workflow.yaml):
 | `s3-script-key` | Uploaded training script's full S3 key |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
-The backend fills in `artifactRepositoryRef` from the selected linked profile.
-You do not need ConfigMap or Secret names in the workflow YAML. With multiple linked
-profiles, add the profile-name annotation to select one explicitly.
-
 Submit through **Triton Control → Workflows → Submit New Workflow**. The workflow
 has one **train** node that installs packages and runs `train.py`. Deployment
 happens inside that script, not in a separate Argo step.
-
-Triton Control injects the backend URL, tracking credentials, deployment token
-and the selected S3 profile name into every container/script step automatically.
-The workflow supplies deployment name and serving image from ordinary parameters.
-No deployment annotations, profile IDs or manually copied tokens are needed.
-The deployment token can manage the submitting user's MLflow deployments and use
-that user's S3 profiles; it cannot access another user's resources or unrelated APIs.
-Workflow and serving pods need access to the package index; dependencies are
-installed before Triton starts.
 
 ## Verify
 
