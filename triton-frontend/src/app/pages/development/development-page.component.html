@@ -70,6 +70,52 @@
               </mat-checkbox>
             </div>
 
+            <div class="form-row wide workspace-options">
+              <mat-checkbox
+                class="workspace-option"
+                id="code-server-install-mlflow"
+                [(ngModel)]="installMlflow"
+              >
+                <span class="option-copy">
+                  <span class="option-title">Install MLflow</span>
+                  <span class="option-description"
+                    >Log models and deploy with mlflow-triton-control from Python or
+                    notebooks.</span
+                  >
+                </span>
+              </mat-checkbox>
+            </div>
+            @if (installMlflow) {
+              <div class="form-row">
+                <label class="field-label" for="code-server-mlflow-version">MLflow version</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="code-server-mlflow-version"
+                    matInput
+                    [(ngModel)]="mlflowVersion"
+                    placeholder="Use configured default"
+                  />
+                  <mat-hint>Optional exact version, e.g. 3.14.0</mat-hint>
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label" for="code-server-mlflow-plugin-version"
+                  >MLflow Triton plugin version</label
+                >
+                <mat-form-field appearance="outline">
+                  <input
+                    id="code-server-mlflow-plugin-version"
+                    matInput
+                    [(ngModel)]="mlflowTritonControlVersion"
+                    placeholder="Use configured default"
+                  />
+                  <mat-hint
+                    >Optional exact version, e.g. 0.4.2; includes matching mlflow-triton</mat-hint
+                  >
+                </mat-form-field>
+              </div>
+            }
+
             <div class="form-row">
               <label class="field-label" for="code-server-storage">Workspace storage</label>
               <mat-form-field appearance="outline">

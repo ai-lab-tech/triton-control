@@ -62,7 +62,7 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.services.perf_analyzer" = ["*.yaml"]
-"app.services.development" = ["hf-builder-version.txt"]
+"app.services.development" = ["hf-builder-version.txt", "mlflow-triton-control-version.txt"]
 
 ###################################  COVERAGE  CONFIG  ###################################
 

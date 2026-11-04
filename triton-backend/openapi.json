@@ -4125,6 +4125,33 @@
             "type": "boolean",
             "title": "Install Hf Builder",
             "default": true
+          },
+          "install_mlflow": {
+            "type": "boolean",
+            "title": "Install Mlflow",
+            "default": true
+          },
+          "mlflow_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Version"
+          },
+          "mlflow_triton_control_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Triton Control Version"
           }
         },
         "type": "object",

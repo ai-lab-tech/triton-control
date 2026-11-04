@@ -216,6 +216,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(request.name, "dev-workspace")
         self.assertFalse(request.image_has_code_server)
         self.assertTrue(request.install_hf_builder)
+        self.assertTrue(request.install_mlflow)
 
     def test_workspace_receives_configured_backend_url(self) -> None:
         with patch.dict(os.environ, {"DEVELOPMENT_PROFILE_API_URL": "http://custom-control.other:9000/"}):
@@ -383,7 +384,7 @@ class CodeServerTests(unittest.TestCase):
 
     def test_Manifests_HfBuilderDisabled_KeepsEditorExtensionWithoutInstallingPythonPackage(self) -> None:
         # Arrange
-        request = self._request().model_copy(update={"install_hf_builder": False})
+        request = self._request().model_copy(update={"install_hf_builder": False, "install_mlflow": False})
 
         # Act
         manifest = k8s._statefulset_manifest(request, "dev", "workspace", "service", {})

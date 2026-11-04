@@ -108,22 +108,25 @@ correct output name. The unmodified example request returns `[0, 2]`.
 
 ## Run the same script in code-server
 
-Install the plugin directly from PyPI plus the same training dependencies listed
-in `workflow.yaml` in your Python environment:
+When creating the **Development** workspace, leave **Install MLflow** enabled.
+You can set the MLflow and MLflow Triton plugin versions in the creation form.
+Both plugins are available in the workspace's normal Python and the
+**Python (Triton Control)** notebook kernel; no environment activation is needed.
+
+In the code-server terminal, install this example's training dependencies:
 
 ```bash
-python -m pip install --upgrade --index-url https://pypi.org/simple mlflow-triton-control \
-  "mlflow==3.14.0" "numpy==2.2.6" "pandas==2.3.3" \
+cd /workspace/mlflow-iris-autodeploy
+python3 -m pip install --user "numpy==1.26.4" "pandas==2.3.3" \
   "scikit-learn==1.7.2" "cloudpickle==3.1.2"
 ```
 
-A managed workspace with the updated backend supplies tracking and deployment
-credentials automatically; existing workspaces need the workspace upgrade or recreation.
+Use the S3 profile shown on the **MLflow** page and a new deployment name:
 
 ```bash
 export TRITON_DEPLOYMENT_NAME="iris-classifier-manual"
-export TRITON_CONTROL_S3_PROFILE_NAME="workflow-training"
-python train.py
+export TRITON_CONTROL_S3_PROFILE_NAME="your-mlflow-profile"
+python3 train.py
 ```
 
 The serving image defaults to `nvcr.io/nvidia/tritonserver:26.06-py3`; override it

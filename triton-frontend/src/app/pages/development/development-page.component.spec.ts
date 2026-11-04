@@ -132,6 +132,7 @@ describe("DevelopmentPageComponent", () => {
         dockerconfigjson: '{"auths":{}}',
         image_has_code_server: false,
         install_hf_builder: true,
+        install_mlflow: true,
       }),
     );
     expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(3);
@@ -246,6 +247,45 @@ describe("DevelopmentPageComponent", () => {
     // Assert
     expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
       jasmine.objectContaining({ install_hf_builder: false }),
+    );
+  });
+
+  it("Create_MlflowVersions_SendsOverrides", async () => {
+    // Arrange
+    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+    component.mlflowVersion = " 3.14.0 ";
+    component.mlflowTritonControlVersion = " 0.4.2 ";
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        install_mlflow: true,
+        mlflow_version: "3.14.0",
+        mlflow_triton_control_version: "0.4.2",
+      }),
+    );
+  });
+
+  it("Create_MlflowDisabled_OmitsVersionOverrides", async () => {
+    // Arrange
+    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+    component.installMlflow = false;
+    component.mlflowVersion = "invalid";
+    component.mlflowTritonControlVersion = "invalid";
+
+    // Act
+    await component.create();
+
+    // Assert
+    expect(codeServersApi.createCodeServerApiDevelopmentPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        install_mlflow: false,
+        mlflow_version: undefined,
+        mlflow_triton_control_version: undefined,
+      }),
     );
   });
 

@@ -78,6 +78,9 @@ export class DevelopmentPageComponent implements OnDestroy {
   dockerconfigjson = "";
   imageHasCodeServer = false;
   installHfBuilder = true;
+  installMlflow = true;
+  mlflowVersion = "";
+  mlflowTritonControlVersion = "";
 
   readonly loading = signal(false);
   readonly initialLoaded = signal(false);
@@ -262,6 +265,11 @@ export class DevelopmentPageComponent implements OnDestroy {
         dockerconfigjson: this.dockerconfigjson.trim() || undefined,
         image_has_code_server: this.imageHasCodeServer,
         install_hf_builder: this.installHfBuilder,
+        install_mlflow: this.installMlflow,
+        mlflow_version: this.installMlflow ? this.mlflowVersion.trim() || undefined : undefined,
+        mlflow_triton_control_version: this.installMlflow
+          ? this.mlflowTritonControlVersion.trim() || undefined
+          : undefined,
       };
       const workspace = await firstValueFrom(
         this.developmentApi.createCodeServerApiDevelopmentPost(payload),

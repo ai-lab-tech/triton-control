@@ -20,6 +20,7 @@ from packaging.version import InvalidVersion, Version
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
 from app.services.development import deployment_access
+from app.services.development.mlflow_setup import setup_command as mlflow_setup_command
 from app.services.kubernetes_client import (
     api_client,
     gpu_runtime_class_name,
@@ -326,7 +327,11 @@ def _statefulset_manifest(
         )
 
     hf_builder_setup = _hf_builder_setup_command() if request.install_hf_builder else ""
-    python_settings = '\"python.defaultInterpreterPath\":\"python3\",' if request.install_hf_builder else ""
+    mlflow_setup = mlflow_setup_command(request) if request.install_mlflow else ""
+    python_settings = (
+        '\"python.defaultInterpreterPath\":\"python3\",'
+        if request.install_hf_builder or request.install_mlflow else ""
+    )
     jupyter_setup = (
         'if ! "$CODE_SERVER_BIN" --extensions-dir "$CODE_SERVER_EXTENSIONS" '
         "--list-extensions | grep -qx 'ms-toolsai.jupyter'; then "
@@ -334,7 +339,7 @@ def _statefulset_manifest(
         "--install-extension ms-toolsai.jupyter || "
         "echo 'Warning: failed to install ms-toolsai.jupyter extension' >&2; "
         "fi; "
-    ) if request.install_hf_builder else ""
+    ) if request.install_hf_builder or request.install_mlflow else ""
     startup_command = (
         "CODE_SERVER_RUNTIME=/tmp/triton-control-code-server; "
         "CODE_SERVER_EXTENSIONS=$CODE_SERVER_RUNTIME/extensions; "
@@ -351,6 +356,7 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
         + hf_builder_setup
+        + mlflow_setup
         +
         'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
         'CODE_SERVER_ROOT=$(dirname "$(dirname "$CODE_SERVER_ENTRY")"); '
