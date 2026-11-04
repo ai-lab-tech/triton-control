@@ -119,15 +119,26 @@ The dialog shows sync errors and lets the profile owner retry. Remove the link b
 deleting its source profile. New runs use updated settings; running workflows may
 retain previously loaded values.
 
-## 5. Configure the Workflow in the Workspace
+## 5. Configure the Workflow in code-server
 
-Open `/workspace/sklearn-iris-training/workflow.yaml`. When submitting through
-Triton Control, the backend automatically selects your only linked S3 profile
-in the workflow namespace and fills in `artifactRepositoryRef`. No ConfigMap or
-Secret names need to be copied into the YAML.
+In your **Development workspace**, open **code-server** and edit
+`/workspace/sklearn-iris-training/workflow.yaml`.
 
-If you have multiple linked profiles, add this annotation under the existing
-workflow `metadata`, replacing `workflow-training` with your saved profile name:
+Set these values under `spec.arguments.parameters`:
+
+| Parameter | Value |
+| --- | --- |
+| `s3-script-key` | Full S3 key of the script uploaded in step 3, e.g. `workflows/sklearn-iris-training/train_iris.py` |
+| `s3-output-prefix` | S3 folder for results, e.g. `workflows/sklearn-iris-training/runs` |
+
+If your profile uses a prefix such as `team-a`, include `team-a/` at the start
+of both values.
+
+**One linked S3 profile:** Triton Control uses it automatically.
+
+**More than one linked S3 profile:** add this annotation to the existing
+`metadata` block. Replace `workflow-training` with the saved profile name you
+linked in step 4:
 
 ```yaml
 metadata:
@@ -135,29 +146,8 @@ metadata:
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-The selected profile must belong to the submitting user and be linked under
-**Workflows → Configure S3 Secrets**. With multiple links and no selection,
-Triton Control asks you to specify a profile instead of choosing one arbitrarily.
-
-Submit in the namespace shown in the dialog. When updating an older workflow,
-remove the manual `artifactRepositoryRef` and any `s3-endpoint`, `s3-region`,
-`s3-bucket`, and `s3-credentials-secret` parameters. Each artifact's `s3` block
-needs only its `key`; the backend-selected repository supplies connection
-settings, credential references, and `caSecret` automatically.
-Argo uses [key-only artifacts](https://argo-workflows.readthedocs.io/en/latest/key-only-artifacts/)
-with the linked repository. Set only the object paths in `spec.arguments.parameters`:
-
-| Parameter | Example | Meaning |
-| --- | --- | --- |
-| `s3-script-key` | `workflows/sklearn-iris-training/train_iris.py` | Object uploaded in step 3 |
-| `s3-output-prefix` | `workflows/sklearn-iris-training/runs` | Parent prefix for run outputs |
-
-Object paths are full bucket keys; the profile's browsing prefix is not added.
-For example, with the `team-a` prefix from step 3, set `s3-script-key` to
-`team-a/workflows/sklearn-iris-training/train_iris.py` and `s3-output-prefix` to
-`team-a/workflows/sklearn-iris-training/runs`.
-For HTTPS with a custom CA, save the public CA certificate in the S3 profile;
-Triton Control adds Argo's certificate reference automatically.
+Save the file. Triton Control supplies the S3 connection settings when you
+submit it in step 6.
 
 ## 6. Submit the Workflow
 
@@ -172,14 +162,6 @@ Open **Triton Control → Workflows**, then in the embedded Argo UI:
 ![Submit a new workflow in Argo Workflows](screenshots/argo-submit-new-workflow.png)
 
 ![Open the full workflow editor](screenshots/argo-edit-full-workflow-options.png)
-
-The older manifest screenshot includes an explicit repository reference. With
-the current Triton Control backend, omit that block and configure only your
-object keys and, when needed, the profile-name annotation as explained in step 5.
-Automatic selection applies to submissions through Triton Control or its managed
-code-server Argo access; direct submissions to Argo bypass this configuration.
-
-![Create the S3 artifact workflow from the current manifest](screenshots/argo-create-workflow-manifest.png)
 
 Before the training container starts, the Argo executor downloads
 `s3-script-key` to `/tmp/train_iris.py`. The container installs the pinned
