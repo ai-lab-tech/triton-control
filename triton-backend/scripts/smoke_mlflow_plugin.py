@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 
 def verify_deployment(model_uri: str, repository: Path, connection: dict[str, str]) -> None:
@@ -71,7 +72,7 @@ def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | Non
 
     import mlflow
     import numpy as np
-    from jupyter_client import KernelManager
+    from jupyter_client.manager import KernelManager
     from mlflow.deployments import get_deploy_client
     from mlflow_triton import sklearn as triton_sklearn
     from packaging.requirements import Requirement
@@ -110,8 +111,9 @@ def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | Non
         from mlflow.store.artifact.artifact_repository_registry import _artifact_repository_registry
         from mlflow.store.artifact.local_artifact_repo import LocalArtifactRepository
 
-        class FixtureS3Repository(LocalArtifactRepository):
-            def __init__(self, artifact_uri, **kwargs):
+        # MLflow is installed only in the compatibility environment.
+        class FixtureS3Repository(LocalArtifactRepository):  # type: ignore[misc]
+            def __init__(self, artifact_uri: str, **kwargs: Any) -> None:
                 parsed = urlsplit(artifact_uri)
                 assert parsed.netloc == "compatibility-models"
                 super().__init__(str(root / "artifacts" / parsed.path.lstrip("/")), **kwargs)

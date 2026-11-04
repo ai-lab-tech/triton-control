@@ -38,6 +38,7 @@ def main() -> None:
         from app.core.user_auth import issue_access_token
         from app.db.database import engine
         from app.db.entities import S3ProfileEntity, UserEntity
+        from app.schemas.deployment import CreateDeploymentRequest
         from app.services.deployment import deployment, kubernetes, mlflow
 
         stack.callback(engine.dispose)
@@ -80,9 +81,9 @@ def main() -> None:
                 )
             session.commit()
 
-        applied = []
+        applied: list[dict[str, str | None]] = []
 
-        def record_apply(_instance_id, request, *_args):
+        def record_apply(_instance_id: int, request: CreateDeploymentRequest, *_args: str) -> None:
             applied.append(
                 {
                     key: getattr(request, key)
@@ -97,13 +98,13 @@ def main() -> None:
             )
 
         class ReadyTriton:
-            def __init__(self, *_args, **_kwargs):
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
                 pass
 
-            async def is_ready(self):
+            async def is_ready(self) -> bool:
                 return True
 
-            async def get_repository_index(self):
+            async def get_repository_index(self) -> list[dict[str, str]]:
                 return [{"name": "classifier", "state": "READY"}]
 
         stack.enter_context(patch.object(kubernetes, "apply_deployment_resources", side_effect=record_apply))
@@ -117,7 +118,7 @@ def main() -> None:
         app.include_router(s3_profile_api.router)
 
         @app.get("/contract/applied")
-        def applied_requests():
+        def applied_requests() -> list[dict[str, str | None]]:
             return applied
 
         listener = stack.enter_context(socket.socket())

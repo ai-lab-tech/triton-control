@@ -86,6 +86,11 @@ strict = true
 explicit_package_bases = true # tells mypy to resolve modules relative
 exclude = ["protobuff/"]
 
+# The compatibility job installs these optional ML dependencies at runtime.
+[[tool.mypy.overrides]]
+module = ["mlflow.*", "mlflow_triton.*", "numpy.*", "jupyter_client.*", "sklearn.*"]
+ignore_missing_imports = true
+
 # Tests use lightweight duck-typed fakes (_FakeSession, _Req) that intentionally
 # don't subclass the real types. Relaxing these checks avoids hundreds of
 # type: ignore comments with no runtime benefit.
