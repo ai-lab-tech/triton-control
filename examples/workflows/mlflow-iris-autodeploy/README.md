@@ -4,6 +4,8 @@ A single `train.py` trains an Iris classifier, logs it with its generated Triton
 files, then deploys the returned MLflow model URI:
 
 ```python
+from mlflow_triton import sklearn
+
 info = sklearn.log_model(
     fitted_pipeline,
     name="classifier",
@@ -11,6 +13,10 @@ info = sklearn.log_model(
 )
 deployment = deploy_model(info.model_uri)
 ```
+
+`sklearn.log_model()` comes from our [MLflow Triton plugin](https://github.com/ai-lab-tech/mlflow-plugin).
+The `mlflow-triton` core generates the Triton files and logs the model to MLflow;
+`mlflow-triton-control` adds deployment to Triton Control.
 
 `deploy_model()` contains the `get_deploy_client("triton-control")` and
 `create_deployment()` calls. The plugin reads the generated `requirements.txt`

@@ -5,7 +5,7 @@ import os
 import mlflow
 import numpy as np
 from mlflow.deployments import get_deploy_client
-from mlflow_triton_control import sklearn
+from mlflow_triton import sklearn
 from sklearn.datasets import load_iris
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
