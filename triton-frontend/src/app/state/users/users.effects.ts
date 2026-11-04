@@ -195,10 +195,7 @@ function toUserRow(row: UserDTO): UserRow {
     role: normalizeRole(row.role),
     isActive: row.is_active ?? false,
     accountStatus: (row.account_status ?? (row.is_active ? "active" : "inactive")) as
-      | "active"
-      | "invitation_pending"
-      | "approval_pending"
-      | "inactive",
+      "active" | "invitation_pending" | "approval_pending" | "inactive",
     auth: (row.auth_provider ?? "local") as "local" | "oidc",
     instances: row.assigned_instances ?? [],
   };
