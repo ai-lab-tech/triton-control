@@ -15,12 +15,16 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from packaging.version import InvalidVersion, Version
-
 from app.exceptions import BadGatewayError
 from app.schemas import CreateCodeServerRequest
 from app.services.development import deployment_access
 from app.services.development.mlflow_setup import setup_command as mlflow_setup_command
+from app.services.development.python_packages import (
+    NUMPY_REPAIR_SCRIPT,
+    NUMPY_REQUIREMENT_SCRIPT,
+    USER_INSTALL_FLAGS,
+    hf_builder_version,
+)
 from app.services.kubernetes_client import (
     api_client,
     gpu_runtime_class_name,
@@ -355,8 +359,8 @@ def _statefulset_manifest(
         "\"$CODE_SERVER_RUNTIME/user-data/User\" "
         "\"$CODE_SERVER_RUNTIME/extensions\"; "
         + binary_setup
-        + hf_builder_setup
         + mlflow_setup
+        + hf_builder_setup
         +
         'CODE_SERVER_ENTRY=$(readlink -f "$CODE_SERVER_BIN"); '
         'CODE_SERVER_ROOT=$(dirname "$(dirname "$CODE_SERVER_ENTRY")"); '
@@ -573,29 +577,29 @@ def _statefulset_manifest(
 
 def _hf_builder_setup_command() -> str:
     """Make the builder importable in normal workspace Python and notebook kernels."""
-    configured_version = os.getenv("DEVELOPMENT_HF_BUILDER_VERSION", "").strip() or (
-        Path(__file__).with_name("hf-builder-version.txt").read_text(encoding="utf-8").strip()
-    )
-    try:
-        configured_version = str(Version(configured_version))
-    except InvalidVersion as exc:
-        raise ValueError(
-            "DEVELOPMENT_HF_BUILDER_VERSION or the tested version must be a valid package version"
-        ) from exc
+    configured_version = hf_builder_version()
     requirement = f"triton-hf-builder=={configured_version}"
     user_site = shlex.quote("import site; assert site.ENABLE_USER_SITE; print(site.getusersitepackages())")
     check_code = (
-        "import triton_hf_builder, ipykernel; from importlib.metadata import version; "
+        "import triton_hf_builder, ipykernel, numpy, os; from importlib.metadata import version; "
         "from packaging.version import Version; "
-        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r})"
+        "from packaging.requirements import Requirement; "
+        f"assert Version(version('triton-hf-builder')) == Version({configured_version!r}); "
+        "assert numpy.__version__ in Requirement(os.environ['HF_BUILDER_NUMPY_REQUIREMENT']).specifier"
     )
     check = shlex.quote(check_code)
     return (
         f"HF_BUILDER_USER_SITE=$(python3 -c {user_site}) || "
         "{ echo 'Error: HF Triton Builder requires Python user-site packages to be enabled.' >&2; exit 1; }; "
+        'export PYTHONPATH="$HF_BUILDER_USER_SITE${PYTHONPATH:+:$PYTHONPATH}"; '
+        f"HF_BUILDER_NUMPY_REQUIREMENT=$(python3 -c {shlex.quote(NUMPY_REQUIREMENT_SCRIPT)}) || "
+        "{ echo 'Error: could not read the image NumPy requirements.' >&2; exit 1; }; "
+        "export HF_BUILDER_NUMPY_REQUIREMENT; "
         f"if ! python3 -c {check} >/dev/null 2>&1; then "
-        "if ! (PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --user --disable-pip-version-check "
-        f"{shlex.quote(requirement)} 'ipykernel>=6,<8' && "
+        f"if ! (python3 -c {shlex.quote(NUMPY_REPAIR_SCRIPT)} && "
+        f"PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install {shlex.join(USER_INSTALL_FLAGS)} "
+        f"--disable-pip-version-check {shlex.quote(requirement)} 'ipykernel>=6,<8' "
+        '\"$HF_BUILDER_NUMPY_REQUIREMENT\" && '
         f"python3 -c {check}); then "
         "echo 'Error: HF Triton Builder setup failed. Use an image with Python 3.10+, pip and user-site packages, "
         "allow PyPI access, or disable Install HF Triton Builder when creating the workspace.' >&2; "
@@ -603,7 +607,7 @@ def _hf_builder_setup_command() -> str:
         "fi; "
         "fi; "
         "if ! python3 -m ipykernel install --user --name triton-control "
-        "--display-name 'Python (Triton Control)'; then "
+        "--display-name 'Python (Triton Control)' --env PYTHONPATH \"$PYTHONPATH\"; then "
         "echo 'Error: failed to register the Triton Control notebook kernel.' >&2; exit 1; "
         "fi; "
         "export TRITON_CONTROL_HF_BUILDER_PYTHON=python3; "

@@ -41,10 +41,12 @@ class HfBuilderStartupTests(unittest.TestCase):
         python = binary_dir / "python3"
         python.write_text(
             '#!/bin/sh\n'
-            'printf "%s\\n" "$0 $*" >> "$HF_TEST_LOG"\n'
+            'printf "%s|%s\\n" "$0 $*" "$PYTHONPATH" >> "$HF_TEST_LOG"\n'
             'if [ "$1" = "-c" ]; then\n'
             '  case "$2" in\n'
+            '    *numpy-repair-*) exit 0;;\n'
             '    *getusersitepackages*) printf "%s" "$HF_TEST_USER_SITE";;\n'
+            '    *"requires(\x27tritonserver\x27)"*) printf "%s" "numpy<2";;\n'
             '    *) test -f "$0.ready";;\n'
             '  esac\n'
             'elif [ "$2" = "pip" ]; then\n'
@@ -66,6 +68,7 @@ class HfBuilderStartupTests(unittest.TestCase):
             "HF_TEST_KERNEL_FAIL": "0",
             "HF_TEST_KERNEL": str(root / "kernel-python"),
             "HF_TEST_USER_SITE": str(root / "user-site"),
+            "PYTHONPATH": "/opt/tritonserver/backends/dali/wheel/dali",
         }
 
     def _run_setup(self, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -91,6 +94,11 @@ class HfBuilderStartupTests(unittest.TestCase):
         calls = (root / "calls").read_text()
         self.assertEqual(calls.count("-m pip install"), 1)
         self.assertIn("-m pip install --user", calls)
+        self.assertIn("--upgrade --force-reinstall", calls)
+        self.assertIn("numpy<2", calls)
+        expected_path = environment["HF_TEST_USER_SITE"] + ":" + environment["PYTHONPATH"]
+        self.assertIn("|" + expected_path, calls)
+        self.assertIn("--env PYTHONPATH " + expected_path, calls)
         self.assertNotIn("--break-system-packages", calls)
         self.assertIn("triton-hf-builder", calls)
         tested_version = Path(k8s.__file__).with_name("hf-builder-version.txt").read_text().strip()
@@ -381,6 +389,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("--display-name 'Python (Triton Control)'", command)
         self.assertNotIn("python3 -m venv", command)
         self.assertLess(command.index("triton-hf-builder"), command.index('exec "$CODE_SERVER_BIN"'))
+        self.assertLess(command.index("mlflow-triton-control=="), command.index("HF_BUILDER_USER_SITE="))
 
     def test_Manifests_HfBuilderDisabled_KeepsEditorExtensionWithoutInstallingPythonPackage(self) -> None:
         # Arrange

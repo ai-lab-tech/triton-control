@@ -14,7 +14,8 @@ from pydantic import ValidationError
 
 from app.schemas.development import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
-from app.services.development.mlflow_setup import NUMPY_REQUIREMENT_SCRIPT, USER_INSTALL_FLAGS, setup_command
+from app.services.development.mlflow_setup import setup_command
+from app.services.development.python_packages import NUMPY_REPAIR_SCRIPT, NUMPY_REQUIREMENT_SCRIPT, USER_INSTALL_FLAGS
 
 
 class MlflowSetupTests(unittest.TestCase):
@@ -37,8 +38,10 @@ class MlflowSetupTests(unittest.TestCase):
             'printf "%s|%s\\n" "$*" "$PYTHONPATH" >> "$TEST_LOG"\n'
             'if [ "$1" = "-c" ]; then\n'
             '  case "$2" in\n'
+            '    *numpy-repair-*) exit 0;;\n'
             '    *getusersitepackages*) printf "%s" "$TEST_SITE";;\n'
             '    *"requires(\x27tritonserver\x27)"*) printf "%s" "$TEST_NUMPY_REQUIREMENT";;\n'
+            "    *numpy-repair-*) exit 0;;\n"
             '    *) test -f "$TEST_READY";;\n'
             "  esac\n"
             'elif [ "$2" = "pip" ]; then\n'
@@ -151,6 +154,43 @@ class MlflowSetupTests(unittest.TestCase):
         # Assert
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("numpy<2", installs[0])
+
+    def test_numpy_repair_backs_up_only_broken_user_installation(self):
+        for broken in (True, False):
+            with self.subTest(broken=broken), tempfile.TemporaryDirectory() as folder:
+                # Arrange
+                user_base = Path(folder)
+                user_site = user_base / f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+                user_site.mkdir(parents=True)
+                names = ("numpy", "numpy.libs", "numpy-1.26.4.dist-info", "numpy-2.2.6.dist-info")
+                for name in names:
+                    (user_site / name).mkdir()
+                    (user_site / name / "original").write_text(name)
+                (user_site / "numpy/__init__.py").write_text(
+                    "raise RuntimeError('Mixed NumPy installation')" if broken else "def dtype(value): return value"
+                )
+                (user_site / "keep.txt").write_text("Other workspace files")
+                env = {**os.environ, "PYTHONUSERBASE": folder, "PYTHONPATH": str(user_site)}
+
+                # Act
+                result = subprocess.run(
+                    [sys.executable, "-c", NUMPY_REPAIR_SCRIPT],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=10,
+                )
+
+                # Assert
+                backups = list(user_site.parent.glob("numpy-repair-*"))
+                self.assertEqual(len(backups), int(broken))
+                for name in names:
+                    self.assertEqual((user_site / name).exists(), not broken)
+                    if broken:
+                        self.assertEqual((backups[0] / name / "original").read_text(), name)
+                self.assertEqual((user_site / "keep.txt").read_text(), "Other workspace files")
+                self.assertEqual("Backed up broken NumPy" in result.stderr, broken)
 
     def test_package_upgrade_removes_old_distribution_metadata(self):
         # Arrange
