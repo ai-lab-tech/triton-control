@@ -23,13 +23,18 @@ Follow the steps below to upload the script and run the training and deployment.
 
 ## Prepare
 
-1. Use the updated Triton Control backend and enable MLflow with S3 storage and
-   Argo Workflows.
+1. In Triton Control, enable **MLflow** with an S3 artifact store and enable
+   **Argo Workflows**.
 2. Save an S3 profile and link it under **Workflows → Configure S3 Secrets**.
    It must read both the workflow inputs and the MLflow artifact bucket.
-3. Upload only `train.py` with code-server's S3 browser to
-   `workflows/mlflow-iris-autodeploy/train.py`. Include any profile prefix in the
-   workflow's `s3-script-key`.
+3. Follow [Create a Development Workspace](../sklearn-iris-training/README.md#1-create-a-development-workspace).
+   When the workspace is ready, open **code-server** from **Development**.
+   Create `/workspace/mlflow-iris-autodeploy/` and copy this example's
+   [train.py](train.py) into it.
+4. Follow [Upload the Training Script](../sklearn-iris-training/README.md#3-upload-the-training-script)
+   to upload this example's `train.py` to
+   `workflows/mlflow-iris-autodeploy/train.py`. Set the workflow's `s3-script-key`
+   to that full S3 key, including any profile prefix.
 
 The workflow installs `mlflow-triton-control` directly from PyPI. Its matching
 `mlflow-triton` core package is installed automatically.
