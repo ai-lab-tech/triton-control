@@ -176,9 +176,15 @@ metadata:
 
 The named profile must belong to the submitter and already be linked in this
 namespace. An ambiguous or missing selection is rejected before the workflow or
-its managed tokens are created. MLflow deployment workflows also use this selection
-for their deployment credentials; the profile annotation can be omitted when
-exactly one profile is linked.
+its managed tokens are created. The selected profile name is also supplied as
+`TRITON_CONTROL_S3_PROFILE_NAME` to container/script steps.
+
+Every container/script step receives `TRITON_CONTROL_URL` and a temporary
+`TRITON_CONTROL_TOKEN` automatically. The token authenticates as the submitter and
+can manage their MLflow deployments using their own S3 profiles. It is restricted
+to deployment APIs and expires after 60 minutes. No deployment-template or
+deployment-name annotation is needed; the training code chooses the deployment
+name in `create_deployment()`. Ordinary workflow parameters can supply that name.
 
 An explicit reference remains supported. It is also needed when submitting directly
 to Argo without passing through Triton Control:

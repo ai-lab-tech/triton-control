@@ -68,3 +68,10 @@ class ProfileResolutionTests(unittest.TestCase):
     def test_workflow_missing_scope_cannot_resolve_profile(self):
         response = self.request("/api/s3-profiles/resolve", {**self.claims, "token_use": "mlflow_workflow"}, params={"name": "training"})
         self.assertEqual(response.status_code, 403)
+
+    def test_automatic_workflow_token_resolves_own_profiles_only(self):
+        claims = {**self.claims, "token_use": "workflow_deployment"}
+        for name in ["training", "other-owned"]:
+            self.assertEqual(self.request("/api/s3-profiles/resolve", claims, params={"name": name}).status_code, 200)
+        self.assertEqual(self.request("/api/s3-profiles/resolve", claims, params={"name": "foreign"}).status_code, 404)
+        self.assertEqual(self.request("/api/s3-profiles", claims).status_code, 403)

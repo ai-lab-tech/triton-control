@@ -229,7 +229,9 @@ class WorkspaceArgoApiTests(unittest.TestCase):
             )),
             patch.object(proxy.auth, "authorization_headers", return_value={"authorization": "Bearer backend-token"}),
             patch.object(mlflow_delegation, "session_factory"),
-            patch.object(mlflow_delegation, "require_user_entity", return_value=SimpleNamespace(id=7)),
+            patch.object(mlflow_delegation, "require_user_entity", return_value=SimpleNamespace(
+                id=7, email="owner@example.com", name="Owner", role="member", auth_provider="local", credential_version=0,
+            )),
             patch.object(mlflow_delegation.workflow_s3_credentials, "list_all", return_value=[]),
             patch.object(mlflow_delegation, "api_client"),
             patch.object(mlflow_delegation.client, "CoreV1Api") as core,
@@ -384,7 +386,9 @@ class WorkspaceArgoApiTests(unittest.TestCase):
             )),
             patch.object(proxy.auth, "authorization_headers", return_value={"authorization": "Bearer backend-token"}),
             patch.object(mlflow_delegation, "session_factory"),
-            patch.object(mlflow_delegation, "require_user_entity", return_value=SimpleNamespace(id=7)),
+            patch.object(mlflow_delegation, "require_user_entity", return_value=SimpleNamespace(
+                id=7, email="owner@example.com", name="Owner", role="member", auth_provider="local", credential_version=0,
+            )),
             patch.object(mlflow_delegation.workflow_s3_credentials, "list_all", return_value=[]),
             patch.object(proxy.httpx, "AsyncClient") as upstream,
         ):

@@ -97,17 +97,16 @@ class WorkflowDelegationTests(unittest.TestCase):
     def _submission(self) -> bytes:
         return json.dumps({"workflow": {
             "metadata": {"name": "train-iris", "annotations": {
-                "triton-control.ai/mlflow-deploy-template": "deploy",
-                "triton-control.ai/mlflow-deployment-name": "iris-classifier",
                 "triton-control.ai/mlflow-s3-profile-name": "models",
             }},
-            "spec": {"templates": [{"name": "deploy", "container": {"image": "python:3.12"}}]},
+            "spec": {"templates": [{"name": "deploy", "inputs": {"artifacts": [{
+                "name": "script", "path": "/tmp/train.py", "s3": {"key": "train.py"},
+            }]}, "container": {"image": "python:3.12"}}]},
         }}).encode()
 
     def test_injects_secret_reference_and_scoped_token(self) -> None:
         with (
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
-            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
             patch("app.services.workflows.mlflow_delegation.api_client"),
             patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core_api,
         ):
@@ -119,20 +118,18 @@ class WorkflowDelegationTests(unittest.TestCase):
         workflow = json.loads(body)["workflow"]
         env = {item["name"]: item for item in workflow["spec"]["templates"][0]["container"]["env"]}
         self.assertEqual(env["TRITON_CONTROL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"], secret_name)
-        self.assertEqual(env["TRITON_CONTROL_S3_PROFILE_ID"]["value"], "11")
         self.assertEqual(env["TRITON_CONTROL_S3_PROFILE_NAME"]["value"], "models")
         self.assertEqual(namespace, "triton-control")
-        self.assertEqual(workflow["spec"]["ttlStrategy"]["secondsAfterCompletion"], 300)
         secret = core_api.return_value.create_namespaced_secret.call_args.kwargs["body"]
         claims = verify_access_token(secret.string_data["token"])
-        self.assertEqual(claims["allowed_s3_profile_id"], 11)
-        self.assertEqual(claims["allowed_deployment_name"], "iris-classifier")
+        self.assertEqual(claims["token_use"], "workflow_deployment")
+        self.assertNotIn("allowed_s3_profile_id", claims)
+        self.assertNotIn("allowed_deployment_name", claims)
         self.assertNotIn(secret.string_data["token"], body.decode())
         self.assertIn("MLFLOW_TRACKING_TOKEN", env)
         self.assertIn(f"/tracking/workflows/{namespace}/{secret_name}", env["MLFLOW_TRACKING_URI"]["value"])
-        patched = core_api.return_value.patch_namespaced_secret.call_args.args[2]
-        self.assertEqual(patched["metadata"]["annotations"]["triton-control.ai/mlflow-owner-user-id"], "7")
-        self.assertNotIn(patched["stringData"]["MLFLOW_TRACKING_TOKEN"], body.decode())
+        self.assertEqual(secret.metadata.annotations["triton-control.ai/mlflow-owner-user-id"], "7")
+        self.assertNotIn(secret.string_data["MLFLOW_TRACKING_TOKEN"], body.decode())
 
     def test_plain_workflow_gets_submitter_identity_in_every_training_container(self) -> None:
         submission = {"workflow": {
@@ -164,6 +161,7 @@ class WorkflowDelegationTests(unittest.TestCase):
                 [{"name": "TRITON_CONTROL_URL", "value": "http://custom-control.custom-namespace:9000"}],
             )
             self.assertNotIn("fake-token", json.dumps(env))
+            self.assertEqual(sum(item["name"] == "TRITON_CONTROL_TOKEN" for item in env), 1)
         core.return_value.patch_namespaced_secret.assert_not_called()
         secret = core.return_value.create_namespaced_secret.call_args.kwargs["body"]
         self.assertEqual(secret.metadata.annotations["triton-control.ai/mlflow-owner-user-id"], "7")
@@ -178,7 +176,6 @@ class WorkflowDelegationTests(unittest.TestCase):
         annotations["triton-control.ai/mlflow-s3-profile-id"] = "11"
         with (
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
-            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
             patch("app.services.workflows.mlflow_delegation.api_client"),
             patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core,
         ):
@@ -188,13 +185,12 @@ class WorkflowDelegationTests(unittest.TestCase):
                 {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
             )
         env = json.loads(body)["workflow"]["spec"]["templates"][0]["container"]["env"]
-        self.assertIn({"name": "TRITON_CONTROL_S3_PROFILE_ID", "value": "11"}, env)
+        self.assertIn({"name": "TRITON_CONTROL_S3_PROFILE_NAME", "value": "models"}, env)
 
     def test_rejects_ambiguous_profile_reference(self) -> None:
         submission = json.loads(self._submission())
         submission["workflow"]["metadata"]["annotations"]["triton-control.ai/mlflow-s3-profile-id"] = "11"
         with (
-            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
         ):
             with self.assertRaises(BadRequestError):
@@ -203,28 +199,21 @@ class WorkflowDelegationTests(unittest.TestCase):
                     {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
                 )
 
-    def test_rejects_workflow_supplied_profile_id_environment(self) -> None:
+    def test_managed_deployment_token_overwrites_workflow_value(self):
         submission = json.loads(self._submission())
         submission["workflow"]["spec"]["templates"][0]["container"]["env"] = [{
-            "name": "TRITON_CONTROL_S3_PROFILE_ID", "value": "99",
+            "name": "TRITON_CONTROL_TOKEN", "value": "fake-token",
         }]
-        with (
-            patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
-            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
-            patch("app.services.workflows.mlflow_delegation.api_client"),
-            patch("app.services.workflows.mlflow_delegation.client.CoreV1Api") as core,
-        ):
-            core.return_value.read_namespaced_config_map.return_value = self._repository()
-            with self.assertRaises(BadRequestError):
-                mlflow_delegation.prepare_submission(
-                    "api/v1/workflows/triton-control", json.dumps(submission).encode(),
-                    {"email": "owner@example.com", "auth_provider": "local", "role": "member"},
-                )
+        result = self._submit(submission)
+        env = result["spec"]["templates"][0]["container"]["env"]
+        tokens = [item for item in env if item["name"] == "TRITON_CONTROL_TOKEN"]
+        self.assertEqual(len(tokens), 1)
+        self.assertIn("valueFrom", tokens[0])
+        self.assertNotIn("fake-token", json.dumps(env))
 
     def test_other_user_cannot_select_profile(self) -> None:
         with (
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
-            patch("app.services.workflows.mlflow_delegation.in_cluster_namespace", return_value="triton-control"),
         ):
             with self.assertRaises(NotFoundError):
                 mlflow_delegation.prepare_submission(
@@ -246,9 +235,7 @@ class WorkflowDelegationTests(unittest.TestCase):
         }}}
 
     def _submit(self, submission, email="owner@example.com", secret="workflow-s3-models"):
-        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(
-            mlflow_delegation, "in_cluster_namespace", return_value="triton-control",
-        ), patch.object(mlflow_delegation, "api_client"), patch.object(mlflow_delegation.client, "CoreV1Api") as core:
+        with patch.object(mlflow_delegation, "session_factory", side_effect=lambda: Session(self.engine)), patch.object(mlflow_delegation, "api_client"), patch.object(mlflow_delegation.client, "CoreV1Api") as core:
             core.return_value.read_namespaced_config_map.return_value = self._repository(secret)
             try:
                 body, _, _ = mlflow_delegation.prepare_submission(
