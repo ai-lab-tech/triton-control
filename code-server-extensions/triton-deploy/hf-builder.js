@@ -55,6 +55,8 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
       if (image === undefined) return;
       const name = await vscode.window.showInputBox({
         title: "HF Builder: Triton model name",
+        prompt: "Choose the name used to call this model in Triton inference requests. It also names the model subfolder inside the repository. The repository destination is selected separately afterwards.",
+        placeHolder: "e.g. my_text_model",
         value: path.basename(source).replace(/[^A-Za-z0-9_-]/g, "_").replace(/^[_-]+/, "") || "hf_model",
         validateInput: (value) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value) ? undefined : "Use letters, digits, underscores or hyphens.",
         ignoreFocusOut: true,
