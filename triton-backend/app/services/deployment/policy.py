@@ -27,7 +27,11 @@ def base_domain() -> str:
 
 
 def short_hostname(host: str | None) -> str | None:
-    domain = base_domain()
+    # Reading/removing existing endpoints must work even with a misconfigured domain.
+    try:
+        domain = base_domain()
+    except BadRequestError:
+        return host
     if host and domain and host.endswith("." + domain):
         label = host[:-(len(domain) + 1)]
         if "." not in label:
@@ -37,8 +41,11 @@ def short_hostname(host: str | None) -> str | None:
 
 def resolve_hostname(request: RequestT, *, existing_host: str | None = None) -> RequestT:
     """Resolve once at the API/service boundary; queued tasks receive the full host."""
-    host, domain = request.ingress_host, base_domain()
-    if not host or not domain or host == existing_host:
+    host = request.ingress_host
+    if not host or host == existing_host:
+        return request
+    domain = base_domain()
+    if not domain:
         return request
     if "." in host:
         raise BadRequestError("Enter only the short hostname; the configured base domain is appended automatically")

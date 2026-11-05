@@ -28,13 +28,11 @@ from app.db.database import session_factory
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment.access import (
-    OWNER_LABEL,
-    access_manifests,
     create_auth_middleware,
-    ingress_class,
     validate_controller,
     validate_tls_secret,
 )
+from app.services.deployment.access_manifests import OWNER_LABEL, access_manifests, ingress_class
 from app.services.deployment.hostname import validate_hostname_available
 from app.services.deployment.policy import validate_endpoint_policy, validate_ingress
 from app.services.deployment.probes import serving_probes

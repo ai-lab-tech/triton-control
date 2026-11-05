@@ -142,3 +142,34 @@ class MlflowReadinessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["external_url"], "https://model.test")
         self.assertTrue(result["access"]["basic_auth_enabled"])
         self.assertNotIn("basic_auth_password", result["access"])
+
+    async def test_transport_failure_reports_unknown_exposure(self):
+        from unittest.mock import Mock
+
+        from urllib3.exceptions import MaxRetryError
+
+        for operation in ("get", "list"):
+            with self.subTest(operation=operation):
+                # Arrange
+                row = TritonInstanceEntity(
+                    id=4, name="model", url="http://internal:18000", is_self_deployed=True,
+                    deployment_name="model", deployment_namespace="control", deployment_service_name="model-service",
+                    mlflow_model_uri="s3://models/classifier", created_by_user_id=7,
+                )
+                with (
+                    patch("app.services.deployment.access.api_client"),
+                    patch("app.services.deployment.access.client.NetworkingV1Api") as network,
+                    patch.object(mlflow, "_owned", return_value=row),
+                    patch.object(mlflow, "require_user_entity", return_value=Mock(id=7)),
+                    patch.object(mlflow.instances, "list_mlflow_for_owner", return_value=[row]),
+                ):
+                    network.return_value.read_namespaced_ingress.side_effect = MaxRetryError(None, "/private")
+                    # Act
+                    results = ([await mlflow.get(Mock(), {}, "model")] if operation == "get"
+                               else await mlflow.list_all(Mock(), {}))
+                # Assert
+                self.assertEqual(len(results), 1)
+                self.assertEqual(results[0]["url"], row.url)
+                self.assertIsNone(results[0]["external_url"])
+                self.assertIsNone(results[0]["access"])
+                self.assertEqual(results[0]["access_error"], "Could not read endpoint configuration from Kubernetes")

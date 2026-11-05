@@ -550,9 +550,9 @@ artifact endpoint and root to retain valid proxy references.
 
 ## Changing deployment access
 
-For a Kubernetes-managed Triton instance, open its details and select **Deployment
-access → Edit access**. Members with access to that instance and administrators can
-switch between **Internal Service** and **Ingress**. The switch changes the Ingress
+For a Kubernetes-managed Triton instance, open **Endpoints → Edit endpoint**.
+Members assigned to the instance and administrators can switch between
+**Cluster only** and **External access (Ingress)**. The switch changes the Ingress
 and authentication Secret without restarting Triton or changing its models. The
 ClusterIP Service remains in both modes. Internal mode removes the managed Ingress
 and its authentication Secret; requests already in flight may finish while the
@@ -569,7 +569,7 @@ current Kubernetes exposure settings. `PUT` accepts `access_mode`, `ingress_host
 Triton Control manages new deployments and deployments whose access was changed
 through their internal Service DNS address, including health, metrics and model
 operations. The backend must therefore have cluster DNS/network access. The
-**Deployment access** panel shows the client-facing endpoint separately. Ingress
+**Endpoints** tab shows the client-facing endpoint separately. Ingress
 exposes Triton's HTTP API and metrics when enabled; gRPC remains on the internal
 Service. Existing deployments retain their stored management URL until access is
 saved.
@@ -614,9 +614,11 @@ backend for creation and editing, including a recheck before queued creation.
 
 
 Deployment creation and endpoint edits reject hostnames that overlap an existing
-Ingress rule in any namespace for the configured ingress class. Unclassified
-Ingresses are also checked conservatively. Matching includes single-label
-wildcards (for example, `*.example.com` conflicts with `model.example.com`).
+Ingress rule in any namespace for the configured ingress class or another class
+using the Traefik controller. Unclassified routes and missing IngressClass resources
+are checked conservatively; only verified different controllers are excluded.
+This may also reject overlaps between separately operated Traefik controllers.
+Matching includes single-label wildcards (for example, `*.example.com` conflicts with `model.example.com`).
 An edit may retain its own hostname. The Helm chart grants cluster-wide
 `list` permission for Ingresses even with namespaced workload permissions;
 custom RBAC must grant this permission too.
@@ -727,5 +729,7 @@ tritonDeployments:
 
 Enter `smollm`; the API creates `smollm.models.example.com`.
 Configure wildcard DNS and TLS for that domain. Leave `baseDomain` empty
-to use hostnames unchanged. Existing endpoints are preserved.
+to use hostnames unchanged. Invalid domain configuration rejects new external
+hostnames but still permits internal deployments and removing existing exposure.
+Existing endpoints are preserved.
 Triton Control's own hostname is configured under `ingress.hosts`.

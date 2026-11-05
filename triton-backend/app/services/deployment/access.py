@@ -2,42 +2,31 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
-import uuid
 from typing import Any
 
-import bcrypt
 from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from kubernetes.config.config_exception import ConfigException  # type: ignore[import-untyped]
+from urllib3.exceptions import HTTPError
 
 from app.core.access_control import require_member_or_admin
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.repositories import instances
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
 from app.services.access import get_instance_or_404
-from app.services.deployment.hostname import validate_hostname_available
+from app.services.deployment.access_manifests import (
+    AUTH_PREFIX,
+    AUTH_SECRET_ANNOTATION,
+    MIDDLEWARE_ANNOTATION,
+    OWNER_LABEL,
+    access_manifests,
+    ingress_class,
+    validate_policy,
+)
+from app.services.deployment.hostname import API_REQUEST_TIMEOUT, validate_hostname_available
 from app.services.deployment.policy import resolve_hostname, short_hostname, validate_endpoint_policy, validate_ingress
 from app.services.kubernetes_client import api_client
-
-AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
-AUTH_SECRET_ANNOTATION = "triton-control.io/auth-secret"
-MIDDLEWARE_ANNOTATION = f"{AUTH_PREFIX}router.middlewares"
-OWNER_LABEL = "triton-control.io/deployment"
-
-
-def ingress_class() -> str:
-    return os.getenv("TRITON_DEPLOY_INGRESS_CLASS", "traefik").strip() or "traefik"
-
-
-def validate_policy(request: DeploymentAccessRequest, *, creating: bool = False) -> None:
-    if creating and request.basic_auth_enabled and not request.basic_auth_password:
-        raise BadRequestError("Username and password are required when enabling basic authentication")
-    if (request.ingress_host and (request.ingress_scheme or "https") == "https"
-            and os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
-            and os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()):
-        raise BadRequestError("Configure either a TLS Secret or a cert-manager ClusterIssuer, not both")
 
 
 def validate_new_hostname(request: DeploymentAccessRequest) -> None:
@@ -49,108 +38,8 @@ def validate_new_hostname(request: DeploymentAccessRequest) -> None:
             net = client.NetworkingV1Api(api)
             validate_controller(net, request)
             validate_hostname_available(net, request.ingress_host, ingress_class())
-    except (ApiException, ConfigException) as exc:
+    except (ApiException, ConfigException, HTTPError, OSError) as exc:
         raise BadGatewayError("Could not verify hostname availability in Kubernetes") from exc
-
-
-def auth_secret_name(deployment_name: str) -> str:
-    digest = hashlib.sha256(deployment_name.encode()).hexdigest()[:8]
-    return f"{deployment_name[:32]}-{digest}-auth-{uuid.uuid4().hex[:8]}"
-
-
-def access_manifests(
-    request: DeploymentAccessRequest,
-    namespace: str,
-    deployment_name: str,
-    service_name: str,
-    *,
-    auth_secret: str | None = None,
-    allow_metrics: bool = True,
-) -> list[dict[str, Any]]:
-    validate_policy(request)
-    if not request.ingress_host:
-        return []
-    manifests: list[dict[str, Any]] = []
-    annotations: dict[str, str] = {}
-    if request.basic_auth_enabled:
-        if request.basic_auth_password and request.basic_auth_username:
-            auth_secret = auth_secret_name(deployment_name)
-            hashed = bcrypt.hashpw(request.basic_auth_password.get_secret_value().encode(), bcrypt.gensalt()).decode()
-            manifests.append(
-                {
-                    "apiVersion": "v1",
-                    "kind": "Secret",
-                    "type": "Opaque",
-                    "metadata": {"name": auth_secret, "namespace": namespace, "labels": {OWNER_LABEL: deployment_name}},
-                    "stringData": {"users": f"{request.basic_auth_username}:{hashed}\n"},
-                }
-            )
-        if not auth_secret:
-            raise BadRequestError("Username and password are required when enabling basic authentication")
-        manifests.append({
-            "apiVersion": "traefik.io/v1alpha1",
-            "kind": "Middleware",
-            "metadata": {
-                "name": auth_secret, "namespace": namespace,
-                "labels": {OWNER_LABEL: deployment_name},
-                "annotations": {"kubernetes.io/ingress.class": ingress_class()},
-            },
-            "spec": {"basicAuth": {
-                "secret": auth_secret, "realm": "Triton authentication required", "removeHeader": True,
-            }},
-        })
-        annotations[AUTH_SECRET_ANNOTATION] = auth_secret
-        annotations[MIDDLEWARE_ANNOTATION] = f"{namespace}-{auth_secret}@kubernetescrd"
-    spec: dict[str, Any] = {
-        "ingressClassName": ingress_class(),
-        "rules": [
-            {
-                "host": request.ingress_host,
-                "http": {
-                    "paths": [
-                        {
-                            "path": path,
-                            "pathType": "Prefix",
-                            "backend": {"service": {"name": service_name, "port": {"name": port}}},
-                        }
-                        for path, port in ([("/metrics", "metrics")] if allow_metrics else []) + [("/", "http")]
-                    ]
-                },
-            }
-        ],
-    }
-    if (request.ingress_scheme or "https") == "https":
-        tls: dict[str, Any] = {"hosts": [request.ingress_host]}
-        secret = os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
-        issuer = os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()
-        if issuer:
-            tls["secretName"] = f"{deployment_name}-ingress-tls"
-            annotations["cert-manager.io/cluster-issuer"] = issuer
-        elif secret:
-            tls["secretName"] = secret
-        spec["tls"] = [tls]
-        annotations[f"{AUTH_PREFIX}router.tls"] = "true"
-        annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
-            os.getenv("TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT", "websecure").strip() or "websecure"
-        )
-    else:
-        annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
-            os.getenv("TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT", "web").strip() or "web"
-        )
-    manifests.append(
-        {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "Ingress",
-            "metadata": {
-                "name": f"{deployment_name}-ingress",
-                "namespace": namespace,
-                "labels": {OWNER_LABEL: deployment_name},
-                "annotations": annotations,
-            },
-            "spec": spec,
-        }
-    )
-    return manifests
 
 
 def _managed_instance(session: Any, claims: dict[str, Any], instance_id: int) -> Any:
@@ -167,7 +56,10 @@ def _managed_instance(session: Any, claims: dict[str, Any], instance_id: int) ->
 
 def _read_ingress(net: Any, instance: Any) -> Any:
     try:
-        ingress = net.read_namespaced_ingress(f"{instance.deployment_name}-ingress", instance.deployment_namespace)
+        ingress = net.read_namespaced_ingress(
+            f"{instance.deployment_name}-ingress", instance.deployment_namespace,
+            _request_timeout=API_REQUEST_TIMEOUT,
+        )
     except ApiException as exc:
         if exc.status == 404:
             return None
@@ -221,7 +113,7 @@ def read_instance_access(instance: Any) -> DeploymentAccessResponse:
     try:
         with api_client() as api:
             return _response(instance, _read_ingress(client.NetworkingV1Api(api), instance))
-    except (ApiException, ConfigException) as exc:
+    except (ApiException, ConfigException, HTTPError, OSError) as exc:
         raise BadGatewayError("Could not read deployment access from Kubernetes") from exc
 
 
@@ -359,6 +251,10 @@ def update_access(
         raise BadGatewayError(
             "Could not update deployment access in Kubernetes; reload access settings and retry"
         ) from exc
+    except (HTTPError, OSError) as exc:
+        # A transport failure may occur after a write committed; never delete
+        # newly referenced credentials without knowing the live Ingress state.
+        raise BadGatewayError("Kubernetes connection failed; reload access settings before retrying") from exc
     except ConfigException as exc:
         raise BadGatewayError("Kubernetes configuration could not be loaded") from exc
 

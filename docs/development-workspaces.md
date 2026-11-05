@@ -561,8 +561,8 @@ configured backend, for example `vLLM model backend`.
 
 Selecting a single model folder uploads it below the chosen repository prefix
 while keeping the deployment's `s3_url` at the parent repository prefix. The
-form shows an **S3 upload target** preview before deploy. Manual S3 deployments
-show the same final path as **Target path** at the end of the manual S3 section.
+form uses saved S3 profiles and shows an **S3 upload target** preview before deploy.
+Manage connection credentials in Triton Control's **S3 Profiles** menu.
 
 Model control is displayed as a summary and configured in the collapsed
 **Model control** section. **Polling mode** shows the poll interval field;

@@ -4,7 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+
 from app.exceptions import ConflictError
+
+API_REQUEST_TIMEOUT = (3, 5)
+TRAEFIK_CONTROLLER = "traefik.io/ingress-controller"
+
+
+def _may_share_controller(net: Any, class_name: str) -> bool:
+    try:
+        ingress_class = net.read_ingress_class(class_name, _request_timeout=API_REQUEST_TIMEOUT)
+    except ApiException as exc:
+        if exc.status == 404:
+            # Legacy annotation-only classes may have no IngressClass resource.
+            # Their controller cannot be established, so include them conservatively.
+            return True
+        raise
+    return bool(ingress_class.spec.controller == TRAEFIK_CONTROLLER)
 
 
 def hosts_overlap(first: str, second: str) -> bool:
@@ -35,21 +52,26 @@ def validate_hostname_available(
     """Reject overlapping routes in any namespace before modifying resources.
 
     Unclassified Ingresses are included conservatively because Traefik may
-    serve them. Explicitly different classes belong to a different routing
-    configuration. Only an already verified, owned Ingress may be excluded.
+    serve them. Other classes using Traefik are included too: a single controller
+    can watch several classes. Only a verified different controller is excluded.
     """
     if not host:
         return
-    for ingress in net.list_ingress_for_all_namespaces().items or []:
+    shared_classes: dict[str, bool] = {}
+    for ingress in net.list_ingress_for_all_namespaces(_request_timeout=API_REQUEST_TIMEOUT).items or []:
         metadata, spec = ingress.metadata, ingress.spec
         if existing_ingress == (metadata.namespace, metadata.name):
+            continue
+        if not any(hosts_overlap(host, rule.host or "") for rule in spec.rules or []):
             continue
         route_class = spec.ingress_class_name or (metadata.annotations or {}).get(
             "kubernetes.io/ingress.class"
         )
         if route_class and route_class != ingress_class:
-            continue
-        if any(hosts_overlap(host, rule.host or "") for rule in spec.rules or []):
-            raise ConflictError(
-                "This hostname overlaps an existing Ingress route. Choose a different hostname."
-            )
+            if route_class not in shared_classes:
+                shared_classes[route_class] = _may_share_controller(net, route_class)
+            if not shared_classes[route_class]:
+                continue
+        raise ConflictError(
+            "This hostname overlaps an existing Ingress route. Choose a different hostname."
+        )

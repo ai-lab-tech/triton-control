@@ -28,6 +28,8 @@ class DeploymentAccessTests(unittest.TestCase):
             os.environ,
             {
                 "TRITON_DEPLOY_INGRESS_CLASS": "traefik",
+                "TRITON_DEPLOY_BASE_DOMAIN": "",
+                "TRITON_DEPLOY_INGRESS_ENABLED": "true",
                 "TRITON_DEPLOY_INGRESS_TLS_SECRET": "",
                 "TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "",
                 "TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT": "web",
@@ -536,6 +538,32 @@ class DeploymentAccessTests(unittest.TestCase):
             with self.assertRaises(ConflictError):
                 self.update(self.request(ingress_host="smollm"))
         self.net.create_namespaced_ingress.assert_not_called()
+
+    def test_transport_failures_are_sanitized_gateway_errors(self):
+        from urllib3.exceptions import MaxRetryError, ReadTimeoutError
+
+        for error in (MaxRetryError(None, "/secret-path"), ReadTimeoutError(None, "/", "private detail"), OSError()):
+            with self.subTest(error=type(error).__name__):
+                # Arrange
+                self.net.read_namespaced_ingress.side_effect = error
+                # Act
+                with self.assertRaises(BadGatewayError) as raised:
+                    access.read_instance_access(self.instance)
+                # Assert
+                self.assertEqual(str(raised.exception), "Could not read deployment access from Kubernetes")
+                timeout = self.net.read_namespaced_ingress.call_args.kwargs["_request_timeout"]
+                self.assertTrue(all(0 < value <= 5 for value in timeout))
+
+    def test_invalid_domain_does_not_prevent_removing_existing_endpoint(self):
+        # Arrange
+        self.existing(authenticated=True)
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "*.models.example.com"}):
+            # Act
+            result = self.update(DeploymentAccessRequest(access_mode="internal"))
+        # Assert
+        self.assertEqual(result.access_mode, "internal")
+        self.net.delete_namespaced_ingress.assert_called_once()
+        self.core.delete_namespaced_secret.assert_called_once_with("old-auth", "control")
 
     def test_invalid_inputs(self):
         for values in [

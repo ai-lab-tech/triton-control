@@ -293,48 +293,14 @@ The selected profile is used both for uploading the chosen repository from
 code-server and for creating the Triton deployment. The deployment receives its
 own Kubernetes Secret for the in-pod S3 repository connection.
 
-When a profile is selected, manual S3 connection fields remain collapsed. For
-manual S3 deployments, enter the endpoint, bucket, credentials, optional
-repository prefix, and confirm the **Target path** preview at the end of the
-manual section.
+The deployment form requires a saved profile. Manage connection credentials and
+optional CA certificates in Triton Control's **S3 Profiles** menu. Set the
+repository prefix in the form and check **S3 upload target** before deploying.
 
-## Manual S3 Settings
-
-Manual S3 settings remain available in a collapsed section for one-off
-deployments or for saving a new profile from the extension. Defaults can still
-come from code-server settings or environment variables:
-
-- `tritonControlDeploy.s3Endpoint` or `AWS_ENDPOINT_URL` / `S3_ENDPOINT`
-- `tritonControlDeploy.s3Bucket` or `S3_BUCKET`
-- `tritonControlDeploy.s3Prefix` or `S3_PREFIX`
-- `tritonControlDeploy.s3Region` or `AWS_REGION`
-- `tritonControlDeploy.s3AccessKeyId` or `AWS_ACCESS_KEY_ID`
-- `tritonControlDeploy.s3SecretAccessKey` or `AWS_SECRET_ACCESS_KEY`
-
-If S3/R2 Explorer is configured, this extension reuses:
-
-- `s3x.endpointUrl`
-- `s3x.region`
-- `s3x.accessKeyId`
-- `s3x.secretAccessKey`
-- `s3x.forcePathStyle`
-
-In Triton Control-managed workspaces, code-server settings are backed by
-`/workspace/.triton-control/code-server-settings.json` so they survive pod
-restarts. Extensions installed from the code-server UI are stored at
-`/workspace/.triton-control/code-server-extensions`.
-
-Local, MinIO, minikube, `.local`, `.internal`, and IP endpoints should use
-path-style addressing to avoid bucket-prefixed DNS lookups such as
-`bucket.host.minikube.internal`.
-
-Keep `tritonControlDeploy.s3ForcePathStyle` enabled for providers and custom
-endpoints that require path-style bucket URLs. Disable it only when your S3
-provider requires virtual-host bucket URLs.
-
-For Triton deployments using HTTPS S3 endpoints, paste the optional S3 CA
-certificate into the S3 profile or manual deploy form. It is passed to Triton
-Control as `s3_ca_certificate` so the Triton pod trusts the object store.
+The extension fetches current credentials through the managed workspace endpoint
+when uploading. For MinIO and other custom endpoints, configure path-style
+addressing in the profile. An HTTPS S3 CA certificate is passed to the Triton pod
+so it can trust the object store.
 
 ## Detected Backend and Model Control
 

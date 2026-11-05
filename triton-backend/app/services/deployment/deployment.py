@@ -17,7 +17,8 @@ from app.exceptions import BadRequestError
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
-from app.services.deployment.access import validate_new_hostname, validate_policy
+from app.services.deployment.access import validate_new_hostname
+from app.services.deployment.access_manifests import validate_policy
 from app.services.deployment.policy import resolve_hostname, validate_endpoint_policy
 from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
