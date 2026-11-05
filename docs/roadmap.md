@@ -1,6 +1,6 @@
 # Product Roadmap
 
-This roadmap outlines planned features that are not yet active in the current release.
+Planned enhancements and delivered capabilities for Triton Control.
 
 ## Focus
 
@@ -19,33 +19,13 @@ Goal:
 - Provide clear management of GPU, RAM, and CPU resources for self-deployed Triton instances during deployment.
 - Enable explicit configuration of requests and limits per self-deployed Triton instance.
 
-### 2) Security and Networking
-
-#### TLS Configuration in the Deployment Flow
-
-Today:
-
-- Add Deployment supports ingress host/class configuration.
-- HTTPS TLS is managed outside Triton Control
-  (for example via cert-manager resources or pre-created TLS secrets).
+#### Triton Deployment Scaling
 
 Goal:
 
-- Add TLS configuration directly in the Add Deployment UI.
-- Support cert-manager (Issuer/ClusterIssuer) and existing TLS secrets.
+- Support changing the replica count of self-deployed Triton deployments.
 
-#### Ingress Authentication Enhancements
-
-Goal:
-
-- Extend ingress configuration with HTTP Basic Authentication support.
-- Add support for Bearer token authentication.
-
-Scope:
-
-- Both authentication options apply to ingress endpoints of self-deployed Triton serving instances created via Triton Control.
-
-### 3) Platform and Workspace
+### 2) Platform and Workspace
 
 #### OpenAI API Support for Triton Server
 
@@ -60,26 +40,20 @@ Goal:
 - Extend user management with groups.
 - Establish a foundation for role- and team-based administration.
 
-#### Enhanced S3 Browser
-
-Goal:
-
-- Enable renaming files in the S3 Browser.
-- Enable moving files and folders in the S3 Browser.
-
 ## Prioritization
 
 ### Next
 
-- TLS configuration in the Add Deployment flow
+- Triton deployment scaling
 - OpenAI API integration for Triton Server
 
 ### Later
 
 - Resource management for Triton deployments (GPU/RAM/CPU)
 - User management with groups
-- S3 Browser: rename and move
 
 ## Delivered
+
+- Security and networking: administrator-managed Traefik routing, TLS through a cert-manager ClusterIssuer or existing TLS Secret, and HTTP Basic Authentication for model endpoints.
 
 - [Per-model performance Jobs](model-performance-jobs.md): independent non-root Jobs, model-scoped status, and cancellation.
