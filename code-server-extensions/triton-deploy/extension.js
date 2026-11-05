@@ -5,6 +5,7 @@ const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
 const { endpointPayload } = require("./endpoint-config");
+const { requestJson } = require("./profile-api");
 const {
   ENSEMBLE_PRESETS,
   TEMPLATES,
@@ -458,9 +459,23 @@ function openDeployPanel(context, initial) {
       }
       try {
         const form = normalizeForm(message.form || {});
+        const profileId = Number(form.profileId);
+        if (!Number.isSafeInteger(profileId) || profileId <= 0) throw new Error("Select an S3 profile.");
+        const profileUrl = process.env.TRITON_CONTROL_PROFILE_URL;
+        const profileToken = process.env.TRITON_CONTROL_PROFILE_TOKEN;
+        if (!profileUrl || !profileToken) throw new Error("Workspace S3 profile access is unavailable. Reopen or update the workspace.");
+        const profiles = await requestJson(profileUrl, "", { token: profileToken });
+        if (!Array.isArray(profiles)) throw new Error("Invalid S3 profile response.");
+        const profile = profiles.find(item => Number(item.id) === profileId);
+        if (!profile) throw new Error("The selected S3 profile is no longer available.");
+        Object.assign(form, {
+          endpoint: profile.endpoint, bucket: profile.bucket, region: profile.region,
+          accessKeyId: profile.access_key, secretAccessKey: profile.secret_key,
+          forcePathStyle: effectiveForcePathStyle(profile.endpoint, profile.force_path_style),
+          s3CaCertificate: profile.ca_certificate || "",
+        });
         validateForm(form);
         endpointPayload(form);
-        await saveS3Settings(form);
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -1253,7 +1268,8 @@ function encodePathSegment(value) {
 }
 
 function renderHtml(webview, nonce, initial) {
-  const state = JSON.stringify(initial).replace(/</g, "\\u003c");
+  const { endpoint, bucket, region, accessKeyId, secretAccessKey, s3CaCertificate, forcePathStyle, ...viewState } = initial;
+  const state = JSON.stringify(viewState).replace(/</g, "\\u003c");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1312,7 +1328,7 @@ function renderHtml(webview, nonce, initial) {
         <strong id="model-control-label">Polling mode</strong>
       </div>
     </div>
-    <label class="wide">S3 profile<select name="profileId"><option value="">Manual S3 settings</option></select></label>
+    <label class="wide">S3 profile<select name="profileId" required><option value="">Select an S3 profile</option></select></label>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
       <strong>S3 upload target</strong>
@@ -1325,22 +1341,6 @@ function renderHtml(webview, nonce, initial) {
       <div class="details-grid">
         <label>Load mode<select name="modelControlMode"><option value="poll">Polling mode</option><option value="explicit">Explicit mode</option></select></label>
         <label id="poll-interval-field">Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
-      </div>
-    </details>
-    <details class="wide">
-      <summary>Manual S3 settings</summary>
-      <div class="details-grid">
-        <label>S3 profile name<input name="profileName" placeholder="team-minio"></label>
-        <label>S3 endpoint<input name="endpoint" placeholder="https://s3.example.com"></label>
-        <label>S3 bucket<input name="bucket"></label>
-        <label>S3 region<input name="region"></label>
-        <label>S3 access key<input name="accessKeyId"></label>
-        <label>S3 secret key<input name="secretAccessKey" type="password"></label>
-        <label class="wide">S3 CA certificate for Triton HTTPS access<textarea name="s3CaCertificate" rows="6" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-        <div class="wide checks">
-          <label><input name="forcePathStyle" type="checkbox"> Path-style S3</label>
-        </div>
-        <div class="wide"><button id="save-profile" type="button">Save S3 Profile</button></div>
       </div>
     </details>
     <details class="wide">
@@ -1395,7 +1395,6 @@ function renderHtml(webview, nonce, initial) {
     const form = document.getElementById('deploy-form');
     const statusEl = document.getElementById('status');
     const submit = document.getElementById('submit');
-    const saveProfile = document.getElementById('save-profile');
     let profiles = [];
     let endpointPolicy = { ingress_enabled: false, allow_http: false };
 
@@ -1440,11 +1439,13 @@ function renderHtml(webview, nonce, initial) {
       if (selected) applyS3Profile(selected);
       updateFormPreviews();
     });
-    saveProfile.addEventListener('click', saveCurrentS3Profile);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      try { endpointPayload(readForm(), endpointPolicy); }
+      try {
+        if (!form.elements.profileId.value) throw new Error('Select an S3 profile.');
+        endpointPayload(readForm(), endpointPolicy);
+      }
       catch (error) { statusEl.className = 'status error'; statusEl.textContent = error.message; return; }
       submit.disabled = true;
       statusEl.className = 'status';
@@ -1512,10 +1513,10 @@ function renderHtml(webview, nonce, initial) {
     async function loadS3Profiles() {
       try {
         const response = await fetch('/api/s3-profiles', { credentials: 'include' });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error('Could not load S3 profiles. Reopen the form to retry.');
         profiles = await response.json();
         const select = form.elements.profileId;
-        select.innerHTML = '<option value="">Manual S3 settings</option>';
+        select.innerHTML = '<option value="">Select an S3 profile</option>';
         for (const profile of profiles) {
           const option = document.createElement('option');
           option.value = String(profile.id);
@@ -1525,58 +1526,19 @@ function renderHtml(webview, nonce, initial) {
         if (profiles.length) {
           select.value = String(profiles[0].id);
           applyS3Profile(profiles[0]);
+        } else {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'No S3 profiles available. Create a profile in Triton Control, then reopen this form.';
         }
-      } catch {}
+      } catch (error) {
+        statusEl.className = 'status error';
+        statusEl.textContent = error.message;
+      }
     }
 
     function applyS3Profile(profile) {
-      form.elements.profileName.value = profile.name || '';
-      form.elements.endpoint.value = profile.endpoint || '';
-      form.elements.bucket.value = profile.bucket || '';
-      form.elements.region.value = profile.region || 'us-east-1';
-      form.elements.accessKeyId.value = profile.access_key || '';
-      form.elements.secretAccessKey.value = profile.secret_key || '';
-      form.elements.forcePathStyle.checked = profile.force_path_style !== false;
-      form.elements.s3CaCertificate.value = profile.ca_certificate || '';
-    }
-
-    async function saveCurrentS3Profile() {
-      const data = readForm();
-      const payload = {
-        name: data.profileName,
-        endpoint: data.endpoint,
-        bucket: data.bucket,
-        region: data.region || 'us-east-1',
-        access_key: data.accessKeyId,
-        secret_key: data.secretAccessKey,
-        prefix: data.prefix || '',
-        force_path_style: !!data.forcePathStyle,
-        ca_certificate: data.s3CaCertificate || '',
-      };
-      if (!payload.name) {
-        statusEl.className = 'status error';
-        statusEl.textContent = 'S3 profile name is required.';
-        return;
-      }
-      try {
-        const response = await fetch('/api/s3-profiles', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(body.detail || 'Failed to save S3 profile.');
-        }
-        statusEl.className = 'status success';
-        statusEl.textContent = 'S3 profile saved.';
-        await loadS3Profiles();
-        form.elements.profileId.value = String(body.id);
-      } catch (error) {
-        statusEl.className = 'status error';
-        statusEl.textContent = error.message || String(error);
-      }
+      form.elements.prefix.value = profile.prefix || '';
+      updateDestinationPath();
     }
 
     function readForm() {
@@ -1591,10 +1553,10 @@ function renderHtml(webview, nonce, initial) {
     function updateDestinationPath() {
       const destination = document.getElementById('destination-path');
       const data = readForm();
-      const endpoint = String(data.endpoint || '').trim().replace(/^s3:\\/\\//i, '').replace(/\\/+$/g, '');
-      const bucket = cleanS3Path(data.bucket || 'bucket');
+      const profile = profiles.find(item => String(item.id) === data.profileId);
+      const bucket = cleanS3Path(profile?.bucket || 'bucket');
       const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
-      const root = endpoint ? 's3://' + endpoint + '/' + bucket : 's3://' + bucket;
+      const root = 's3://' + bucket;
       destination.textContent = [root, target].filter(Boolean).join('/');
     }
 

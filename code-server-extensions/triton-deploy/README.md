@@ -125,7 +125,7 @@ the filesystem watcher or the view refresh action runs.
    `config.pbtxt`. If no model name is found, it asks for one. When neither
    backend nor platform is declared, the form shows
    `No backend or platform in config.pbtxt`.
-4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
+4. Select a saved S3 profile. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
    `s3://...` path before deploy. Expand **External access** to choose cluster-only access or an Ingress
    hostname, HTTP/HTTPS, and optional basic authentication. External access and
@@ -398,3 +398,9 @@ Hostname fields accept only a DNS hostname, e.g. `smollm`, without
 (`ingress_scheme` in REST/MLflow configuration). URLs previously supplied in
 `ingress_host` must be split into these two fields; existing deployed endpoints
 are unchanged.
+
+
+The deployment form uses saved S3 profiles only. Manual S3 connection fields and
+profile creation have been removed from this form. Manage profiles in Triton
+Control. The workspace resolves the selected profile again before uploading, so
+current credentials are used and are not saved to extension settings by this form.

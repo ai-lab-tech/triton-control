@@ -81,11 +81,13 @@ test("deployment webview renders the policy controls and valid JavaScript", () =
   const source = fs.readFileSync(filename, "utf8") + "\nmodule.exports.renderHtml = renderHtml;";
   // Act
   vm.runInNewContext(source, sandbox, { filename });
-  const html = sandbox.module.exports.renderHtml({ cspSource: "test" }, "nonce", {});
+  const html = sandbox.module.exports.renderHtml({ cspSource: "test" }, "nonce", { secretAccessKey: "do-not-render" });
   const script = html.match(/<script nonce="nonce">([\s\S]*?)<\/script>/)[1];
   // Assert
   assert.doesNotThrow(() => new vm.Script(script));
   assert.match(html, /api\/deployments\/policy/);
   assert.match(html, /name="basicAuthPassword"/);
   assert.doesNotMatch(html, /name="ingressClassName"/);
+  assert.doesNotMatch(html, /Manual S3 settings|save-profile|name="secretAccessKey"|do-not-render/);
+  assert.match(html, /name="profileId" required/);
 });
