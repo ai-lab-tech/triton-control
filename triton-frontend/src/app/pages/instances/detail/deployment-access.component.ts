@@ -94,6 +94,20 @@ export class DeploymentAccessComponent implements OnInit {
   private readonly api = inject(DeploymentsService);
   readonly access = signal<DeploymentAccessResponse | null>(null);
   readonly busy = signal(false);
+  readonly allowHttp = signal(false);
+  readonly ingressEnabled = signal(false);
+
+  async loadPolicy(): Promise<void> {
+    try {
+      const policy = await firstValueFrom(this.api.getDeploymentPolicyApiDeploymentsPolicyGet());
+      this.allowHttp.set(policy.allow_http);
+      this.ingressEnabled.set(policy.ingress_enabled);
+    } catch {
+      this.allowHttp.set(false);
+      this.ingressEnabled.set(false);
+    }
+  }
+
   readonly editing = signal(false);
   readonly error = signal("");
   readonly message = signal("");
@@ -106,6 +120,7 @@ export class DeploymentAccessComponent implements OnInit {
 
   ngOnInit(): void {
     void this.load();
+    void this.loadPolicy();
   }
 
   async load(): Promise<void> {
@@ -149,7 +164,16 @@ export class DeploymentAccessComponent implements OnInit {
 
   valid(): boolean {
     if (this.mode === "internal") return true;
-    if (!this.host.trim()) return false;
+    if (!this.ingressEnabled() || !this.host.trim()) return false;
+    if (
+      this.scheme === "http" &&
+      !this.allowHttp() &&
+      !(
+        this.access()?.ingress_scheme === "http" &&
+        this.host.trim().toLowerCase().replace(/\.$/, "") === this.access()?.ingress_host
+      )
+    )
+      return false;
     if (!this.authEnabled) return true;
     if (this.scheme !== "https") return false;
     return (

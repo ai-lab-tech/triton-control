@@ -37,6 +37,7 @@ describe("NewDeploymentPageComponent", () => {
     TestBed.inject(HttpTestingController)
       .expectOne("http://localhost:8000/api/s3-profiles")
       .flush(profiles);
+    fixture.componentInstance.ingressEnabled.set(true);
     return fixture;
   }
 
@@ -81,6 +82,26 @@ describe("NewDeploymentPageComponent", () => {
 
     // Assert
     expect(canDeploy).toBeTrue();
+  });
+
+  it("blocks HTTP unless allowed and always requires HTTPS for basic auth", () => {
+    const component = createComponent().componentInstance;
+    component.s3Url = "s3://bucket";
+    component.deploymentName = "model";
+    component.s3AccessKey = "key";
+    component.s3SecretKey = "secret";
+    component.accessMode = "ingress";
+    component.ingressHost = "http://model.example.com";
+    expect(component.canDeploy()).toBeFalse();
+    component.allowHttp.set(true);
+    expect(component.canDeploy()).toBeTrue();
+    component.ingressEnabled.set(false);
+    expect(component.canDeploy()).toBeFalse();
+    component.ingressEnabled.set(true);
+    component.basicAuthEnabled = true;
+    component.basicAuthUsername = "user";
+    component.basicAuthPassword = "password";
+    expect(component.canDeploy()).toBeFalse();
   });
 
   it("CanDeploy_ImageMissing_ReturnsFalse", () => {

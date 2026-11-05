@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+import anyio
 from sqlmodel import Session
 
 from app.core.identity import require_user_entity
-from app.exceptions import NotFoundError
+from app.exceptions import AppError, NotFoundError
 from app.repositories import instances
 from app.schemas import DeploymentDeleteResponse
-from app.services.deployment import deployment
+from app.services.deployment import access, deployment
 from app.services.triton.client import TritonService
 
 
@@ -37,7 +38,18 @@ async def describe(row: Any) -> dict[str, Any]:
                     break
             else:
                 detail = "Model is not ready"
+    exposure = None
+    exposure_error = None
+    if row.is_self_deployed:
+        try:
+            exposure = await anyio.to_thread.run_sync(access.read_instance_access, row)
+        except AppError:
+            exposure_error = "Could not read endpoint configuration from Kubernetes"
     return {
+        "internal_url": row.url,
+        "external_url": exposure.url if exposure and exposure.access_mode == "ingress" else None,
+        "access": exposure.model_dump() if exposure else None,
+        "access_error": exposure_error,
         "name": row.name,
         "instance_id": row.id,
         "model_uri": row.mlflow_model_uri,

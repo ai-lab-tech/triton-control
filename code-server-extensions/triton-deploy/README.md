@@ -127,8 +127,10 @@ the filesystem watcher or the view refresh action runs.
    `No backend or platform in config.pbtxt`.
 4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
-   `s3://...` path before deploy. Expand **Ingress** to optionally configure the
-   same ingress host and class settings available in Add Deployment.
+   `s3://...` path before deploy. Expand **External access** to choose cluster-only access or an Ingress
+   hostname, HTTP/HTTPS, and optional basic authentication. External access and
+   HTTP are available only when permitted by the administrator. Controller class,
+   routing and certificates are administrator-managed.
 5. The extension uploads files below `bucket/prefix/model-repository-path`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
@@ -378,3 +380,15 @@ npm run package
 ```
 
 Install the generated `.vsix` in code-server.
+
+### Endpoint policy
+
+The deployment form reads `GET /api/deployments/policy`. When
+`tritonDeployments.ingressEnabled=false`, only cluster-only deployments are
+available. HTTP additionally requires administrator permission; basic
+authentication requires HTTPS and both username and password. Passwords are
+sent only with the deployment request, not saved in extension settings.
+
+The backend rechecks policy and hostname conflicts when processing
+`POST /api/deployments`. A failed policy lookup leaves external access disabled.
+For existing deployments, use Triton Control's **Endpoints** tab.

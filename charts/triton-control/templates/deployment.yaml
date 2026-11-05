@@ -76,6 +76,10 @@ spec:
               value: {{ .Values.mlflow.gatewayImage | quote }}
             - name: ARGO_WORKFLOWS_WORKFLOW_SERVICE_ACCOUNT
               value: {{ .Values.argoWorkflows.controller.workflowDefaults.spec.serviceAccountName | quote }}
+            - name: TRITON_DEPLOY_INGRESS_ENABLED
+              value: {{ .Values.tritonDeployments.ingressEnabled | quote }}
+            - name: TRITON_DEPLOY_ALLOW_HTTP
+              value: {{ .Values.tritonDeployments.allowHttp | default false | quote }}
             - name: TRITON_DEPLOY_INGRESS_CLASS
               value: {{ .Values.tritonDeployments.ingressClassName | default "traefik" | quote }}
             - name: TRITON_DEPLOY_INGRESS_TLS_SECRET

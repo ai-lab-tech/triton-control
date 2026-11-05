@@ -573,6 +573,43 @@ saved.
 
 ### Administrator-managed Traefik and HTTPS
 
+Model Ingress can be disabled independently of Triton Control's UI/API Ingress:
+
+```yaml
+ingress:
+  enabled: false
+tritonDeployments:
+  ingressEnabled: false
+```
+
+`tritonDeployments.ingressEnabled` defaults to `true` for compatibility. Setting
+it to `false` hides new external-access options and rejects model Ingress
+creation and edits in the backend, including queued creation. Existing model
+Ingresses are not automatically removed; users can still switch them to
+cluster-only access. **Settings → Endpoints** shows this deployment-managed
+switch. The HTTP permission override cannot enable Ingress when this switch is
+off. No database migration is needed for this switch.
+
+New model endpoints require HTTPS by default. To permit HTTP through Helm:
+
+```yaml
+tritonDeployments:
+  allowHttp: true
+```
+
+Administrators can override this default in **Settings → Endpoints**, or select
+**Use deployment default** to remove the override. The page shows the effective
+policy and its source. The override is persisted in the `deployment_policy`
+table, created automatically at startup. This policy controls model endpoints,
+not the Triton Control UI's own Ingress.
+
+Disabling HTTP blocks new HTTP endpoints, transitions from HTTPS to HTTP, and
+hostname changes on HTTP endpoints. Existing HTTP endpoints remain active and
+can retain their current hostname; they can also switch to HTTPS or cluster-only
+access. Basic authentication always requires HTTPS. Enforcement runs in the
+backend for creation and editing, including a recheck before queued creation.
+
+
 Deployment creation and endpoint edits reject hostnames that overlap an existing
 Ingress rule in any namespace for the configured ingress class. Unclassified
 Ingresses are also checked conservatively. Matching includes single-label
@@ -663,3 +700,25 @@ only after the Ingress update succeeds.
 
 Authentication protects the Ingress route; cluster-internal access remains subject
 to your network policies. See [Traefik BasicAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/basicauth/).
+
+### Plugin endpoint configuration
+
+The code-server deployment form and MLflow deployment plugin use the same
+`POST /api/deployments` exposure fields and read
+`GET /api/deployments/policy`. Delegated workspace/workflow tokens may read
+policy but cannot update it. Controller class and certificate issuer remain
+administrator-managed. For model endpoint configuration in code-server, expand
+**External access**; for MLflow use `access_mode`, `ingress_host`,
+`ingress_scheme` and the optional `basic_auth_*` configuration keys.
+
+MLflow deployment lookup/list responses preserve `url` for compatibility
+and include `internal_url`, `external_url`, `access` and `access_error`.
+The external URL is read from live Kubernetes configuration, not inferred from
+an old creation request. If the lookup fails, `access_error` is populated and
+the external URL is unknown. Authentication passwords are never returned.
+
+The code-server extension ships with the backend; recreate/update a managed
+workspace to install the bundled extension. MLflow plugin source lives in the
+separate `mlflow-plugin` repository. Release/install its updated package before
+using the new configuration keys; the backend's tested published-version pin is
+not advanced until that release passes compatibility checks.

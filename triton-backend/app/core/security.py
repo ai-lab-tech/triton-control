@@ -33,6 +33,7 @@ async def _get_claims_with_access_policy(
         mlflow_path = path == "/api/deployments/mlflow" or path.startswith("/api/deployments/mlflow/")
         permitted = (
             (path == "/api/deployments" and method == "POST")
+            or (path == "/api/deployments/policy" and method == "GET")
             or (path == "/api/s3-profiles/resolve" and method == "GET")
             or (mlflow_path and method in {"GET", "DELETE"})
         )

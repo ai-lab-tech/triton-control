@@ -1,3 +1,9 @@
+@if (!ingressEnabled()) {
+  <p>
+    External access is unavailable. Existing endpoints keep working; you can switch to cluster-only
+    access.
+  </p>
+}
 @if (access(); as current) {
   <div class="endpoint-header">
     <div>
@@ -41,7 +47,7 @@
           : "No endpoint authentication configured."
       }}
     </p>
-    @if (current.basic_auth_enabled && canWrite() && !editing()) {
+    @if (current.basic_auth_enabled && canWrite() && !editing() && ingressEnabled()) {
       <button
         mat-stroked-button
         type="button"
@@ -60,7 +66,11 @@
       <mat-label>Access mode</mat-label>
       <mat-select [(ngModel)]="mode" [disabled]="busy()">
         <mat-option value="internal">Cluster only</mat-option>
-        <mat-option value="ingress">External access (Ingress)</mat-option>
+        @if (ingressEnabled() || access()?.access_mode === "ingress") {
+          <mat-option value="ingress" [disabled]="!ingressEnabled()"
+            >External access (Ingress)</mat-option
+          >
+        }
       </mat-select>
     </mat-form-field>
     @if (mode === "ingress") {
@@ -72,10 +82,17 @@
         <mat-label>Protocol</mat-label>
         <mat-select [(ngModel)]="scheme" [disabled]="busy()">
           <mat-option value="https">HTTPS</mat-option>
-          <mat-option value="http">HTTP</mat-option>
+          @if (allowHttp() || access()?.ingress_scheme === "http") {
+            <mat-option value="http"
+              >HTTP{{ allowHttp() ? "" : " (existing endpoint only)" }}</mat-option
+            >
+          }
         </mat-select>
       </mat-form-field>
       <p>HTTPS certificates and routing are managed by your administrator.</p>
+      @if (!allowHttp()) {
+        <p>Your administrator requires HTTPS for new endpoints and hostname changes.</p>
+      }
       <mat-checkbox [(ngModel)]="authEnabled" [disabled]="busy()"
         >Require basic authentication</mat-checkbox
       >

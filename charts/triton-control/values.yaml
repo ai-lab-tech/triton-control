@@ -116,6 +116,10 @@ app:
 
 # Configuration for generated Triton serving deployments.
 tritonDeployments:
+  # Allow model Ingress creation/edits, independently of the UI/API Ingress.
+  ingressEnabled: true
+  # Default for new HTTP endpoints; administrators may override in Settings.
+  allowHttp: false
   # Health probes for all serving adapters, separate from app.probes.
   # Startup allows up to 15 minutes for dependency installation and model loading.
   probes:

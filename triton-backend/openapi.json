@@ -1294,6 +1294,76 @@
         ]
       }
     },
+    "/api/deployments/policy": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get Deployment Policy",
+        "operationId": "get_deployment_policy_api_deployments_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentPolicyResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Update Deployment Policy",
+        "operationId": "update_deployment_policy_api_deployments_policy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentPolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/deployments/mlflow": {
       "get": {
         "tags": [
@@ -4968,6 +5038,58 @@
         ],
         "title": "DeploymentDeleteResponse",
         "description": "Response after deleting a Kubernetes-managed Triton deployment."
+      },
+      "DeploymentPolicyResponse": {
+        "properties": {
+          "ingress_enabled": {
+            "type": "boolean",
+            "title": "Ingress Enabled"
+          },
+          "allow_http": {
+            "type": "boolean",
+            "title": "Allow Http"
+          },
+          "default_allow_http": {
+            "type": "boolean",
+            "title": "Default Allow Http"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "admin"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingress_enabled",
+          "allow_http",
+          "default_allow_http",
+          "source"
+        ],
+        "title": "DeploymentPolicyResponse"
+      },
+      "DeploymentPolicyUpdate": {
+        "properties": {
+          "allow_http": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Http"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allow_http"
+        ],
+        "title": "DeploymentPolicyUpdate"
       },
       "DeploymentResponse": {
         "properties": {

@@ -4,6 +4,7 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
+const { endpointPayload } = require("./endpoint-config");
 const {
   ENSEMBLE_PRESETS,
   TEMPLATES,
@@ -458,6 +459,7 @@ function openDeployPanel(context, initial) {
       try {
         const form = normalizeForm(message.form || {});
         validateForm(form);
+        endpointPayload(form);
         await saveS3Settings(form);
         await vscode.window.withProgress(
           {
@@ -711,7 +713,11 @@ async function initialFormValues(sourceFolder) {
     memoryGi: "4",
     gpuCount: serving?.gpuCount ?? (requiresTensorRtLlmImage ? "1" : "0"),
     ingressHost: "",
-    ingressClassName: "",
+    accessMode: "internal",
+    ingressScheme: "https",
+    basicAuthEnabled: false,
+    basicAuthUsername: "",
+    basicAuthPassword: "",
   };
   return initial;
 }
@@ -920,7 +926,11 @@ function normalizeForm(form) {
     memoryGi: String(form.memoryGi || "").trim(),
     gpuCount: String(form.gpuCount || "").trim(),
     ingressHost: String(form.ingressHost || "").trim(),
-    ingressClassName: String(form.ingressClassName || "").trim(),
+    accessMode: form.accessMode === "ingress" ? "ingress" : "internal",
+    ingressScheme: form.ingressScheme === "http" ? "http" : "https",
+    basicAuthEnabled: form.basicAuthEnabled === true,
+    basicAuthUsername: String(form.basicAuthUsername || "").trim(),
+    basicAuthPassword: String(form.basicAuthPassword || ""),
   };
 }
 
@@ -1205,12 +1215,7 @@ function deploymentPayload(form) {
   if (form.gpuCount && Number(form.gpuCount) > 0) {
     payload.gpu_count = Number(form.gpuCount);
   }
-  if (form.ingressHost) {
-    payload.ingress_host = form.ingressHost;
-  }
-  if (form.ingressClassName) {
-    payload.ingress_class_name = form.ingressClassName;
-  }
+  Object.assign(payload, endpointPayload(form));
   return payload;
 }
 
@@ -1358,18 +1363,33 @@ function renderHtml(webview, nonce, initial) {
       </div>
     </details>
     <details class="wide">
-      <summary>Ingress</summary>
+      <summary>External access</summary>
       <div class="details-grid">
-        <div class="wide details-hint">Hostname or URL. Without a scheme, <code>https://</code> is used.</div>
-        <label>Ingress host<input name="ingressHost" placeholder="http://triton.example.local"></label>
-        <label>Ingress class<input name="ingressClassName" placeholder="nginx"></label>
-        <div class="wide details-hint">TLS is not created here. Provide certificates through your ingress controller.</div>
+        <label>Access mode<select name="accessMode">
+          <option value="internal">Cluster only</option>
+          <option value="ingress" id="ingress-option" disabled>External access (Ingress)</option>
+        </select></label>
+        <div id="endpoint-policy" class="wide details-hint">Loading endpoint policy…</div>
+        <div id="ingress-fields" class="wide" hidden><div class="details-grid">
+          <label>Hostname<input name="ingressHost" placeholder="model.example.com"></label>
+          <label>Protocol<select name="ingressScheme">
+            <option value="https">HTTPS</option>
+            <option value="http" id="http-option" disabled>HTTP</option>
+          </select></label>
+          <div class="wide details-hint">Routing and certificates are configured by your administrator.</div>
+          <label><input name="basicAuthEnabled" type="checkbox">Require basic authentication (HTTPS only)</label>
+          <div id="auth-fields" class="wide" hidden><div class="details-grid">
+            <label>Username<input name="basicAuthUsername" autocomplete="off"></label>
+            <label>Password<input name="basicAuthPassword" type="password" autocomplete="new-password"></label>
+          </div></div>
+        </div></div>
       </div>
     </details>
     <div class="wide"><button id="submit" type="submit">Upload and Deploy</button></div>
   </form>
   <div id="status" class="status"></div>
   <script nonce="${nonce}">
+    const endpointPayload = ${endpointPayload.toString()};
     const vscode = acquireVsCodeApi();
     const initial = ${state};
     const form = document.getElementById('deploy-form');
@@ -1377,6 +1397,7 @@ function renderHtml(webview, nonce, initial) {
     const submit = document.getElementById('submit');
     const saveProfile = document.getElementById('save-profile');
     let profiles = [];
+    let endpointPolicy = { ingress_enabled: false, allow_http: false };
 
     for (const [key, value] of Object.entries(initial)) {
       const input = form.elements[key];
@@ -1388,6 +1409,29 @@ function renderHtml(webview, nonce, initial) {
     updateDestinationPath();
     updateModelControlLabel();
     loadS3Profiles();
+    loadEndpointPolicy();
+    form.elements.accessMode.addEventListener('change', updateEndpointFields);
+    form.elements.basicAuthEnabled.addEventListener('change', updateEndpointFields);
+    updateEndpointFields();
+
+    function updateEndpointFields() {
+      document.getElementById('ingress-fields').hidden = form.elements.accessMode.value !== 'ingress';
+      document.getElementById('auth-fields').hidden = !form.elements.basicAuthEnabled.checked;
+    }
+    async function loadEndpointPolicy() {
+      try {
+        const response = await fetch('/api/deployments/policy', { credentials: 'include' });
+        if (!response.ok) throw new Error('Could not load endpoint policy.');
+        endpointPolicy = await response.json();
+        document.getElementById('ingress-option').disabled = endpointPolicy.ingress_enabled !== true;
+        document.getElementById('http-option').disabled = endpointPolicy.allow_http !== true;
+        document.getElementById('endpoint-policy').textContent = !endpointPolicy.ingress_enabled
+          ? 'External access is disabled by the administrator.'
+          : endpointPolicy.allow_http ? 'HTTP and HTTPS are allowed.' : 'HTTPS only.';
+      } catch {
+        document.getElementById('endpoint-policy').textContent = 'Could not load endpoint policy. Reopen this form to retry. Cluster-only deployment is available.';
+      }
+    }
 
     form.addEventListener('input', updateFormPreviews);
     form.addEventListener('change', updateFormPreviews);
@@ -1400,6 +1444,8 @@ function renderHtml(webview, nonce, initial) {
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      try { endpointPayload(readForm(), endpointPolicy); }
+      catch (error) { statusEl.className = 'status error'; statusEl.textContent = error.message; return; }
       submit.disabled = true;
       statusEl.className = 'status';
       statusEl.textContent = 'Uploading model repository to S3...';
@@ -1429,9 +1475,13 @@ function renderHtml(webview, nonce, initial) {
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(body.detail || 'Failed to create deployment.');
+            const detail = Array.isArray(body.detail)
+              ? body.detail.map(item => item.msg || 'Invalid request').join('; ')
+              : body.detail;
+            throw new Error(detail || 'Failed to create deployment.');
           }
           statusEl.className = 'status success';
+          form.elements.basicAuthPassword.value = '';
           statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
           await notifyDeploymentNavigation(body.instance_id);
           const navigationMessage = {

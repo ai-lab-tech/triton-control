@@ -24,7 +24,8 @@ from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
 
-from app.exceptions import BadGatewayError, ConflictError
+from app.db.database import session_factory
+from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment.access import (
     OWNER_LABEL,
@@ -35,6 +36,7 @@ from app.services.deployment.access import (
     validate_tls_secret,
 )
 from app.services.deployment.hostname import validate_hostname_available
+from app.services.deployment.policy import validate_endpoint_policy, validate_ingress
 from app.services.deployment.probes import serving_probes
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
 from app.services.kubernetes_client import (
@@ -100,6 +102,10 @@ def apply_deployment_resources(
     from kubernetes.utils.create_from_yaml import FailToCreateError  # type: ignore[import-untyped]
 
     try:
+        validate_ingress(request)
+        if request.ingress_host and request.ingress_scheme == "http":
+            with session_factory() as session:
+                validate_endpoint_policy(request, session)
         api = _client()
         _ensure_namespace(api, namespace)
         from kubernetes import client, utils  # type: ignore[import-untyped]
@@ -132,7 +138,7 @@ def apply_deployment_resources(
             metrics_url=urls["metrics"] if request.allow_metrics else "",
             applied_resources=applied,
         )
-    except ConflictError as exc:
+    except (ConflictError, BadRequestError) as exc:
         record_deployment_failure(instance_id, str(exc))
     except ConfigException:
         record_deployment_failure(instance_id, "Kubernetes configuration could not be loaded")

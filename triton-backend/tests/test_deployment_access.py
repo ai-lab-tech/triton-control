@@ -344,9 +344,76 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertEqual(body["metadata"]["annotations"][f"{access.AUTH_PREFIX}router.entrypoints"], "secure")
         self.assertEqual(body["metadata"]["annotations"][f"{access.AUTH_PREFIX}router.tls"], "true")
 
+    def test_disabled_ingress_rejects_edit_before_kubernetes(self):
+        with (
+            patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_ENABLED": "false"}),
+            self.assertRaisesRegex(BadRequestError, "Model Ingress is disabled"),
+        ):
+            self.update(self.request())
+        self.net.read_namespaced_ingress.assert_not_called()
+        self.net.create_namespaced_ingress.assert_not_called()
+
+    def test_disabled_ingress_still_allows_removing_existing_endpoint(self):
+        self.existing()
+        with patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_ENABLED": "false"}):
+            response = self.update(DeploymentAccessRequest(access_mode="internal"))
+        self.assertEqual(response.access_mode, "internal")
+        self.net.delete_namespaced_ingress.assert_called_once()
+
+    def test_queued_ingress_rechecks_switch_before_kubernetes(self):
+        request = CreateDeploymentRequest(
+            deployment_name="model", image="triton:latest", s3_url="s3://bucket",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+        )
+        with (
+            patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_ENABLED": "false"}),
+            patch.object(k8s, "_client") as kube,
+            patch.object(k8s, "record_deployment_failure") as failed,
+        ):
+            k8s.apply_deployment_resources(1, request, "control", "model", "model-service", "s3", "triton:latest")
+        kube.assert_not_called()
+        self.assertIn("Model Ingress is disabled", failed.call_args.args[1])
+
+    def test_http_policy_rejects_edit_before_mutations(self):
+        with (
+            patch("app.repositories.deployment_policy.get_override", return_value=False),
+            self.assertRaisesRegex(BadRequestError, "HTTP endpoints are disabled"),
+        ):
+            self.update(self.request(ingress_scheme="http"))
+        self.net.create_namespaced_ingress.assert_not_called()
+        self.net.replace_namespaced_ingress.assert_not_called()
+        self.core.create_namespaced_secret.assert_not_called()
+
+    def test_http_policy_preserves_existing_endpoint(self):
+        previous = ingress_object(access.access_manifests(
+            self.request(ingress_scheme="http"), "control", "model", "model-service",
+        )[-1])
+        self.net.read_namespaced_ingress.side_effect = None
+        self.net.read_namespaced_ingress.return_value = previous
+        with patch("app.repositories.deployment_policy.get_override", return_value=False):
+            result = self.update(self.request(ingress_scheme="http"))
+        self.assertEqual(result.ingress_scheme, "http")
+
+    def test_queued_http_deployment_rechecks_policy_before_resources(self):
+        request = CreateDeploymentRequest(
+            deployment_name="model", image="triton:latest", s3_url="s3://bucket",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="http://model.example.com",
+        )
+        with (
+            patch.object(k8s, "session_factory") as sessions,
+            patch.object(k8s, "_client") as kube,
+            patch.object(k8s, "record_deployment_failure") as failed,
+            patch("app.repositories.deployment_policy.get_override", return_value=False),
+        ):
+            k8s.apply_deployment_resources(1, request, "control", "model", "model-service", "s3", "triton:latest")
+        sessions.assert_called_once()
+        kube.assert_not_called()
+        self.assertIn("HTTP endpoints are disabled", failed.call_args.args[1])
+
     def test_http_does_not_configure_tls_or_issuer(self):
         with patch.dict(os.environ, {"TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "issuer"}):
-            self.update(self.request(ingress_scheme="http"))
+            with patch("app.repositories.deployment_policy.get_override", return_value=True):
+                self.update(self.request(ingress_scheme="http"))
         body = self.net.create_namespaced_ingress.call_args.args[1]
         self.assertNotIn("tls", body["spec"])
         self.assertEqual(body["metadata"]["annotations"], {f"{access.AUTH_PREFIX}router.entrypoints": "web"})

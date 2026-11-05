@@ -121,3 +121,24 @@ class MlflowReadinessTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await mlflow.describe(row))["status"], "starting")
             service.get_repository_index = AsyncMock(return_value=[{"name": "iris_classifier", "state": "READY"}])
             self.assertEqual((await mlflow.describe(row))["status"], "ready")
+
+    async def test_managed_deployment_reports_external_url_without_credentials(self):
+        # Arrange
+        from app.schemas.deployment_access import DeploymentAccessResponse
+        row = TritonInstanceEntity(
+            id=4, name="model", url="http://internal:18000", is_self_deployed=True,
+            mlflow_model_uri="s3://models/classifier", created_by_user_id=7,
+        )
+        exposure = DeploymentAccessResponse(
+            access_mode="ingress", url="https://model.test", internal_url=row.url,
+            ingress_host="model.test", ingress_scheme="https", basic_auth_enabled=True,
+        )
+        with patch("app.services.deployment.mlflow.access.read_instance_access", return_value=exposure):
+            # Act
+            result = await mlflow.describe(row)
+        # Assert
+        self.assertEqual(result["url"], row.url)
+        self.assertEqual(result["internal_url"], row.url)
+        self.assertEqual(result["external_url"], "https://model.test")
+        self.assertTrue(result["access"]["basic_auth_enabled"])
+        self.assertNotIn("basic_auth_password", result["access"])

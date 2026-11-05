@@ -299,13 +299,23 @@
               <mat-label>Access mode</mat-label>
               <mat-select [(ngModel)]="accessMode">
                 <mat-option value="internal">Internal Service</mat-option>
-                <mat-option value="ingress">Ingress</mat-option>
+                @if (ingressEnabled()) {
+                  <mat-option value="ingress">Ingress</mat-option>
+                }
               </mat-select>
             </mat-form-field>
+            @if (!ingressEnabled()) {
+              <p>External access is unavailable. Only cluster-only deployments are allowed.</p>
+            }
             @if (accessMode === "ingress") {
               <div class="form-row wide ingress-help">
                 <div class="field-hint">
                   Hostname or URL. Without a scheme, <code>https://</code> is used.
+                  @if (allowHttp()) {
+                    Use <code>http://</code> for HTTP.
+                  } @else {
+                    Your administrator requires HTTPS.
+                  }
                 </div>
               </div>
               <div class="form-row">
@@ -315,7 +325,7 @@
                     id="deployment-ingress-host"
                     matInput
                     [(ngModel)]="ingressHost"
-                    placeholder="http://triton.example.local"
+                    placeholder="https://triton.example.com"
                   />
                 </mat-form-field>
               </div>

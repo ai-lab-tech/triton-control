@@ -18,6 +18,7 @@ from app.repositories import instances
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment.hostname import validate_hostname_available
+from app.services.deployment.policy import validate_endpoint_policy, validate_ingress
 from app.services.kubernetes_client import api_client
 
 AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
@@ -211,6 +212,11 @@ def _response(instance: Any, ingress: Any) -> DeploymentAccessResponse:
 
 def get_access(session: Any, claims: dict[str, Any], instance_id: int) -> DeploymentAccessResponse:
     instance = _managed_instance(session, claims, instance_id)
+    return read_instance_access(instance)
+
+
+def read_instance_access(instance: Any) -> DeploymentAccessResponse:
+    """Read exposure for an instance whose caller has already checked ownership."""
     try:
         with api_client() as api:
             return _response(instance, _read_ingress(client.NetworkingV1Api(api), instance))
@@ -239,6 +245,7 @@ def update_access(
     require_member_or_admin(claims)
     instance = _managed_instance(session, claims, instance_id)
     validate_policy(request)
+    validate_ingress(request)
     namespace, name = instance.deployment_namespace, instance.deployment_name
     try:
         with api_client() as api:
@@ -247,6 +254,10 @@ def update_access(
             # Require the serving workload to exist (creation may still be queued).
             workload = client.AppsV1Api(api).read_namespaced_deployment(name, namespace)
             previous = _read_ingress(net, instance)
+            current = _response(instance, previous)
+            validate_endpoint_policy(
+                request, session, existing_host=current.ingress_host, existing_scheme=current.ingress_scheme,
+            )
             annotations = (previous.metadata.annotations or {}) if previous else {}
             old_secret = annotations.get(AUTH_SECRET_ANNOTATION) or annotations.get(
                 "nginx.ingress.kubernetes.io/auth-secret"

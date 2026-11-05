@@ -549,3 +549,18 @@ Keep `argoWorkflows.enabled=false` when Argo Workflows is managed by a separate
 Helm or GitOps release. The future Triton Control proxy/configuration layer
 should support connecting to that existing internal Argo Server as a separate
 operating mode.
+
+### HTTP model endpoint policy
+
+`tritonDeployments.allowHttp` defaults to `false` (HTTPS only). Administrators
+can override it in **Settings → Endpoints** and reset to the deployment default.
+Existing HTTP endpoints remain active; new HTTP endpoints and HTTP hostname
+changes require permission. Basic authentication requires HTTPS.
+
+### Disable model Ingress
+
+Set `tritonDeployments.ingressEnabled: false` to prohibit model Ingress creation
+and edits. It defaults to `true` and is independent of `ingress.enabled`, which
+controls only Triton Control's UI/API. Existing model endpoints remain active;
+users can explicitly switch them to cluster-only access. The admin HTTP policy
+cannot override this deployment-level switch.

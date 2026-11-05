@@ -23,11 +23,32 @@ from app.schemas import (
     InstanceLogsResponse,
 )
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
+from app.schemas.deployment_policy import DeploymentPolicyResponse, DeploymentPolicyUpdate
 from app.services.deployment import access as access_service
 from app.services.deployment import deployment as deployment_service
 from app.services.deployment import mlflow as mlflow_service
+from app.services.deployment import policy as policy_service
 
 router = APIRouter(prefix="/api/deployments", tags=["deployments"])
+
+
+@router.get("/policy", response_model=DeploymentPolicyResponse)
+@translate_app_errors
+def get_deployment_policy(
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentPolicyResponse:
+    return policy_service.get_policy(session)
+
+
+@router.put("/policy", response_model=DeploymentPolicyResponse)
+@translate_app_errors
+def update_deployment_policy(
+    request: DeploymentPolicyUpdate,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentPolicyResponse:
+    return policy_service.update_policy(request, session, claims)
 
 
 @router.get("/mlflow")

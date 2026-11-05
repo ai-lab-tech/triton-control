@@ -9,7 +9,7 @@ import { SettingsPageComponent } from "./settings-page.component";
 import { AuthService } from "../../shared/auth/auth.service";
 import { SettingsEffects } from "../../state/settings/settings.effects";
 import { SETTINGS_FEATURE_KEY, settingsReducer } from "../../state/settings/settings.reducer";
-import { UsersService } from "../../api/generated";
+import { UsersService, DeploymentsService } from "../../api/generated";
 import { of, Subject, throwError } from "rxjs";
 
 describe("SettingsPageComponent", () => {
@@ -76,10 +76,49 @@ describe("SettingsPageComponent", () => {
     };
   });
 
+  it("saves an administrator HTTP override and can reset to the deployment default", async () => {
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    component.httpPolicyChoice = "allow";
+    await component.saveDeploymentPolicy();
+    const api = TestBed.inject(DeploymentsService);
+    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledWith({
+      allow_http: true,
+    });
+    component.httpPolicyChoice = "default";
+    await component.saveDeploymentPolicy();
+    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledWith({
+      allow_http: null,
+    });
+  });
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [SettingsPageComponent, NoopAnimationsModule],
       providers: [
+        {
+          provide: DeploymentsService,
+          useValue: {
+            getDeploymentPolicyApiDeploymentsPolicyGet: () =>
+              of({
+                ingress_enabled: true,
+                allow_http: false,
+                default_allow_http: false,
+                source: "environment",
+              }),
+            updateDeploymentPolicyApiDeploymentsPolicyPut: jasmine
+              .createSpy()
+              .and.returnValue(
+                of({
+                  ingress_enabled: true,
+                  allow_http: true,
+                  default_allow_http: false,
+                  source: "admin",
+                }),
+              ),
+          },
+        },
         provideStore(),
         provideState(SETTINGS_FEATURE_KEY, settingsReducer),
         provideEffects([SettingsEffects]),
@@ -130,7 +169,7 @@ describe("SettingsPageComponent", () => {
     ).map((tab) => tab.textContent?.trim());
 
     // Assert
-    expect(tabLabels).toEqual(["OIDC", "Email"]);
+    expect(tabLabels).toEqual(["OIDC", "Email", "Endpoints"]);
   });
 
   it("SaveSettings_SaveSucceeds_ShowsSuccessMessage", async () => {

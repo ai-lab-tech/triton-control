@@ -118,7 +118,23 @@ export class NewDeploymentPageComponent {
   readonly message = this._message.asReadonly();
   readonly messageTone = this._messageTone.asReadonly();
 
+  readonly allowHttp = signal(false);
+  readonly ingressEnabled = signal(false);
+  async loadEndpointPolicy(): Promise<void> {
+    try {
+      const policy = await firstValueFrom(
+        this.deploymentsApi.getDeploymentPolicyApiDeploymentsPolicyGet(),
+      );
+      this.allowHttp.set(policy.allow_http);
+      this.ingressEnabled.set(policy.ingress_enabled);
+    } catch {
+      this.allowHttp.set(false);
+      this.ingressEnabled.set(false);
+    }
+  }
+
   constructor() {
+    void this.loadEndpointPolicy();
     void this.loadS3Profiles();
   }
 
@@ -331,7 +347,9 @@ export class NewDeploymentPageComponent {
       this.s3AccessKey.trim().length > 0 &&
       this.s3SecretKey.trim().length > 0 &&
       (this.accessMode === "internal" ||
-        (this.ingressHost.trim().length > 0 &&
+        (this.ingressEnabled() &&
+          this.ingressHost.trim().length > 0 &&
+          (this.allowHttp() || !this.ingressHost.trim().toLowerCase().startsWith("http://")) &&
           (!this.basicAuthEnabled ||
             (!!this.basicAuthUsername &&
               !!this.basicAuthPassword &&

@@ -17,6 +17,7 @@ describe("DeploymentAccessComponent", () => {
 
   beforeEach(() => {
     api = jasmine.createSpyObj<DeploymentsService>("DeploymentsService", [
+      "getDeploymentPolicyApiDeploymentsPolicyGet",
       "getDeploymentAccessApiDeploymentsInstanceIdAccessGet",
       "updateDeploymentAccessApiDeploymentsInstanceIdAccessPut",
     ]);
@@ -30,6 +31,14 @@ describe("DeploymentAccessComponent", () => {
         DeploymentsService["updateDeploymentAccessApiDeploymentsInstanceIdAccessPut"]
       >,
     );
+    api.getDeploymentPolicyApiDeploymentsPolicyGet.and.returnValue(
+      of({
+        ingress_enabled: true,
+        allow_http: false,
+        default_allow_http: false,
+        source: "environment",
+      }) as unknown as ReturnType<DeploymentsService["getDeploymentPolicyApiDeploymentsPolicyGet"]>,
+    );
     TestBed.configureTestingModule({
       imports: [DeploymentAccessComponent],
       providers: [provideNoopAnimations(), { provide: DeploymentsService, useValue: api }],
@@ -40,6 +49,7 @@ describe("DeploymentAccessComponent", () => {
     const fixture = TestBed.createComponent(DeploymentAccessComponent);
     fixture.componentRef.setInput("instanceId", "7");
     fixture.componentRef.setInput("canWrite", canWrite);
+    fixture.componentInstance.ingressEnabled.set(true);
     return fixture;
   }
 
@@ -145,6 +155,27 @@ describe("DeploymentAccessComponent", () => {
     expect(component.message()).toBe("");
     expect(component.password).toBe("");
     expect(component.editing()).toBeTrue();
+  });
+
+  it("blocks new HTTP hosts but preserves an existing HTTP endpoint", () => {
+    const component = create().componentInstance;
+    component.access.set({ ...ingress, basic_auth_enabled: false, ingress_scheme: "http" });
+    component.edit();
+    expect(component.valid()).toBeTrue();
+    component.host = "new.example.com";
+    expect(component.valid()).toBeFalse();
+    component.allowHttp.set(true);
+    expect(component.valid()).toBeTrue();
+  });
+
+  it("disables ingress edits but permits cluster-only access when policy is disabled", async () => {
+    const component = create().componentInstance;
+    await component.load();
+    component.ingressEnabled.set(false);
+    component.edit();
+    expect(component.valid()).toBeFalse();
+    component.mode = "internal";
+    expect(component.valid()).toBeTrue();
   });
 
   it("does not allow viewers to edit or save", async () => {
