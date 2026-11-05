@@ -202,7 +202,7 @@ Set `development.mlflow.tritonControlVersion` to override the tested
 default, maintained by CI like HF Triton Builder.
 
 <!-- mlflow-plugin-version:start -->
-Tested MLflow Triton plugin version: `0.4.2`.
+Tested MLflow Triton plugin version: `0.4.4`.
 <!-- mlflow-plugin-version:end -->
 
 ## Development Workspace HTTPS Certificates
