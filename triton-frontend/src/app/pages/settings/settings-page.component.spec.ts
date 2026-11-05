@@ -107,16 +107,14 @@ describe("SettingsPageComponent", () => {
                 default_allow_http: false,
                 source: "environment",
               }),
-            updateDeploymentPolicyApiDeploymentsPolicyPut: jasmine
-              .createSpy()
-              .and.returnValue(
-                of({
-                  ingress_enabled: true,
-                  allow_http: true,
-                  default_allow_http: false,
-                  source: "admin",
-                }),
-              ),
+            updateDeploymentPolicyApiDeploymentsPolicyPut: jasmine.createSpy().and.returnValue(
+              of({
+                ingress_enabled: true,
+                allow_http: true,
+                default_allow_http: false,
+                source: "admin",
+              }),
+            ),
           },
         },
         provideStore(),
