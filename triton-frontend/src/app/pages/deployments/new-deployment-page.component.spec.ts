@@ -108,6 +108,14 @@ describe("NewDeploymentPageComponent", () => {
     expect(component.canDeploy()).toBeFalse();
   });
 
+  it("previews the base domain without appending it to the submitted hostname", () => {
+    const component = createComponent().componentInstance;
+    component.ingressHost = "smollm";
+    component.baseDomain.set("models.example.com");
+    expect(component.endpointPreview()).toBe("https://smollm.models.example.com");
+    expect(component.ingressHost).toBe("smollm");
+  });
+
   it("CanDeploy_ImageMissing_ReturnsFalse", () => {
     // Arrange
     const fixture = createComponent();

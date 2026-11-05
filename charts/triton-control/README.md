@@ -564,3 +564,16 @@ and edits. It defaults to `true` and is independent of `ingress.enabled`, which
 controls only Triton Control's UI/API. Existing model endpoints remain active;
 users can explicitly switch them to cluster-only access. The admin HTTP policy
 cannot override this deployment-level switch.
+
+### Model base domain
+
+```yaml
+tritonDeployments:
+  ingressEnabled: true
+  baseDomain: models.example.com
+```
+
+Enter `smollm`; the API creates `smollm.models.example.com`.
+Configure wildcard DNS and TLS for that domain. Leave `baseDomain` empty
+to use hostnames unchanged. Existing endpoints are preserved.
+Triton Control's own hostname is configured under `ingress.hosts`.

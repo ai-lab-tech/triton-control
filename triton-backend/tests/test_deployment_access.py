@@ -517,6 +517,26 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertEqual(request.ingress_host, "smollm")
         self.assertEqual(request.ingress_scheme, "https")
 
+    def test_base_domain_applies_to_ingress_tls_and_response(self):
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):
+            response = self.update(self.request(ingress_host="smollm"))
+        manifest = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertEqual(manifest["spec"]["rules"][0]["host"], "smollm.models.example.com")
+        self.assertEqual(manifest["spec"]["tls"][0]["hosts"], ["smollm.models.example.com"])
+        self.assertEqual(response.url, "https://smollm.models.example.com")
+        self.assertEqual(response.ingress_host, "smollm.models.example.com")
+        self.assertEqual(response.hostname, "smollm")
+
+    def test_base_domain_conflict_checks_resolved_hostname(self):
+        other = ingress_object(access.access_manifests(
+            self.request(ingress_host="smollm.models.example.com"), "other", "other", "other-service",
+        )[-1])
+        self.net.list_ingress_for_all_namespaces.return_value.items = [other]
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):
+            with self.assertRaises(ConflictError):
+                self.update(self.request(ingress_host="smollm"))
+        self.net.create_namespaced_ingress.assert_not_called()
+
     def test_invalid_inputs(self):
         for values in [
             {"access_mode": "ingress"},

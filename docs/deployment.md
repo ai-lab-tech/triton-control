@@ -703,28 +703,26 @@ to your network policies. See [Traefik BasicAuth](https://doc.traefik.io/traefik
 
 ### Plugin endpoint configuration
 
-The code-server deployment form and MLflow deployment plugin use the same
-`POST /api/deployments` exposure fields and read
-`GET /api/deployments/policy`. Delegated workspace/workflow tokens may read
-policy but cannot update it. Controller class and certificate issuer remain
-administrator-managed. For model endpoint configuration in code-server, expand
-**External access**; for MLflow use `access_mode`, `ingress_host`,
-`ingress_scheme` and the optional `basic_auth_*` configuration keys.
+Code-server (**External access**) and MLflow use the same deployment API and
+admin policy. Supply a hostname without protocol, port or path:
 
-MLflow deployment lookup/list responses preserve `url` for compatibility
-and include `internal_url`, `external_url`, `access` and `access_error`.
-The external URL is read from live Kubernetes configuration, not inferred from
-an old creation request. If the lookup fails, `access_error` is populated and
-the external URL is unknown. Authentication passwords are never returned.
+```json
+{"access_mode":"ingress","ingress_host":"smollm","ingress_scheme":"https"}
+```
 
-The code-server extension ships with the backend; recreate/update a managed
-workspace to install the bundled extension. MLflow plugin source lives in the
-separate `mlflow-plugin` repository. Release/install its updated package before
-using the new configuration keys; the backend's tested published-version pin is
-not advanced until that release passes compatibility checks.
+Optional `basic_auth_*` settings require HTTPS. MLflow's `external_url`
+is the public endpoint; `url` remains internal. Update installed plugins
+to use these options.
 
-Hostname fields accept only a DNS hostname, e.g. `smollm`, without
-`http://`, `https://`, a port or a path. Choose the protocol separately
-(`ingress_scheme` in REST/MLflow configuration). URLs previously supplied in
-`ingress_host` must be split into these two fields; existing deployed endpoints
-are unchanged.
+### Model base domain
+
+```yaml
+tritonDeployments:
+  ingressEnabled: true
+  baseDomain: models.example.com
+```
+
+Enter `smollm`; the API creates `smollm.models.example.com`.
+Configure wildcard DNS and TLS for that domain. Leave `baseDomain` empty
+to use hostnames unchanged. Existing endpoints are preserved.
+Triton Control's own hostname is configured under `ingress.hosts`.

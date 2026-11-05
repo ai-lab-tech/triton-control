@@ -18,7 +18,7 @@ from app.repositories import instances
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment.hostname import validate_hostname_available
-from app.services.deployment.policy import validate_endpoint_policy, validate_ingress
+from app.services.deployment.policy import resolve_hostname, short_hostname, validate_endpoint_policy, validate_ingress
 from app.services.kubernetes_client import api_client
 
 AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
@@ -200,6 +200,7 @@ def _response(instance: Any, ingress: Any) -> DeploymentAccessResponse:
         url=f"{scheme}://{host}",
         internal_url=internal,
         ingress_host=host,
+        hostname=short_hostname(host),
         ingress_scheme=scheme,
         ingress_class_name=ingress.spec.ingress_class_name,
         basic_auth_enabled=bool(
@@ -255,6 +256,7 @@ def update_access(
             workload = client.AppsV1Api(api).read_namespaced_deployment(name, namespace)
             previous = _read_ingress(net, instance)
             current = _response(instance, previous)
+            request = resolve_hostname(request, existing_host=current.ingress_host)
             validate_endpoint_policy(
                 request, session, existing_host=current.ingress_host, existing_scheme=current.ingress_scheme,
             )

@@ -178,6 +178,18 @@ describe("DeploymentAccessComponent", () => {
     expect(component.valid()).toBeTrue();
   });
 
+  it("edits the short hostname and previews the configured domain", () => {
+    const component = create().componentInstance;
+    component.baseDomain.set("models.example.com");
+    component.access.set({ ...ingress, hostname: "smollm", ingress_host: "smollm.models.example.com" });
+    component.edit();
+    expect(component.host).toBe("smollm");
+    expect(component.endpointPreview()).toBe("https://smollm.models.example.com");
+    expect(component.valid()).toBeTrue();
+    component.host = "smollm.other.de";
+    expect(component.valid()).toBeFalse();
+  });
+
   it("does not allow viewers to edit or save", async () => {
     const component = create(false).componentInstance;
     await component.load();

@@ -652,6 +652,9 @@
           <p>Control whether users may expose model deployments over unencrypted HTTP.</p>
           @if (deploymentPolicy(); as policy) {
             <p>
+              Model base domain: {{ policy.base_domain || "Not configured (standalone hostnames)" }}
+            </p>
+            <p>
               <strong>Model Ingress:</strong>
               {{ policy.ingress_enabled ? "Enabled" : "Disabled" }} by deployment configuration.
             </p>

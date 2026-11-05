@@ -1,4 +1,4 @@
-import { isEndpointHostname } from "../../shared/endpoint-hostname";
+import { isEndpointHostname, resolvedEndpointHostname } from "../../shared/endpoint-hostname";
 import { Component, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
@@ -120,6 +120,7 @@ export class NewDeploymentPageComponent {
   readonly message = this._message.asReadonly();
   readonly messageTone = this._messageTone.asReadonly();
 
+  readonly baseDomain = signal("");
   readonly allowHttp = signal(false);
   readonly ingressEnabled = signal(false);
   async loadEndpointPolicy(): Promise<void> {
@@ -127,6 +128,7 @@ export class NewDeploymentPageComponent {
       const policy = await firstValueFrom(
         this.deploymentsApi.getDeploymentPolicyApiDeploymentsPolicyGet(),
       );
+      this.baseDomain.set(policy.base_domain || "");
       this.allowHttp.set(policy.allow_http);
       this.ingressEnabled.set(policy.ingress_enabled);
     } catch {
@@ -138,6 +140,12 @@ export class NewDeploymentPageComponent {
   constructor() {
     void this.loadEndpointPolicy();
     void this.loadS3Profiles();
+  }
+
+  endpointPreview(): string {
+    return this.ingressHost.trim()
+      ? this.ingressScheme + "://" + resolvedEndpointHostname(this.ingressHost, this.baseDomain())
+      : "";
   }
 
   ingressStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
@@ -352,6 +360,7 @@ export class NewDeploymentPageComponent {
       (this.accessMode === "internal" ||
         (this.ingressEnabled() &&
           isEndpointHostname(this.ingressHost) &&
+          (!this.baseDomain() || !this.ingressHost.trim().replace(/\.$/, "").includes(".")) &&
           (this.allowHttp() || this.ingressScheme === "https") &&
           (!this.basicAuthEnabled ||
             (!!this.basicAuthUsername &&

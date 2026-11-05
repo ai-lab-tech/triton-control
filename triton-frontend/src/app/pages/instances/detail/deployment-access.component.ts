@@ -1,4 +1,4 @@
-import { isEndpointHostname } from "../../../shared/endpoint-hostname";
+import { isEndpointHostname, resolvedEndpointHostname } from "../../../shared/endpoint-hostname";
 import { Component, inject, input, OnInit, output, signal } from "@angular/core";
 import { ClipboardModule } from "@angular/cdk/clipboard";
 import { FormsModule } from "@angular/forms";
@@ -95,12 +95,14 @@ export class DeploymentAccessComponent implements OnInit {
   private readonly api = inject(DeploymentsService);
   readonly access = signal<DeploymentAccessResponse | null>(null);
   readonly busy = signal(false);
+  readonly baseDomain = signal("");
   readonly allowHttp = signal(false);
   readonly ingressEnabled = signal(false);
 
   async loadPolicy(): Promise<void> {
     try {
       const policy = await firstValueFrom(this.api.getDeploymentPolicyApiDeploymentsPolicyGet());
+      this.baseDomain.set(policy.base_domain || "");
       this.allowHttp.set(policy.allow_http);
       this.ingressEnabled.set(policy.ingress_enabled);
     } catch {
@@ -146,7 +148,7 @@ export class DeploymentAccessComponent implements OnInit {
     const access = this.access();
     if (!access || !this.canWrite() || this.busy()) return;
     this.mode = access.access_mode;
-    this.host = access.ingress_host || "";
+    this.host = access.hostname || access.ingress_host || "";
     this.scheme = access.ingress_scheme || "https";
     this.authEnabled = !!access.basic_auth_enabled;
     this.username = "";
@@ -163,15 +165,26 @@ export class DeploymentAccessComponent implements OnInit {
     this.error.set("");
   }
 
+  endpointPreview(): string {
+    return this.host.trim()
+      ? this.scheme +
+          "://" +
+          resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host)
+      : "";
+  }
+
   valid(): boolean {
     if (this.mode === "internal") return true;
     if (!this.ingressEnabled() || !isEndpointHostname(this.host)) return false;
+    if (this.baseDomain() && this.host.includes(".") && this.host !== this.access()?.ingress_host)
+      return false;
     if (
       this.scheme === "http" &&
       !this.allowHttp() &&
       !(
         this.access()?.ingress_scheme === "http" &&
-        this.host.trim().toLowerCase().replace(/\.$/, "") === this.access()?.ingress_host
+        resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host) ===
+          this.access()?.ingress_host
       )
     )
       return false;

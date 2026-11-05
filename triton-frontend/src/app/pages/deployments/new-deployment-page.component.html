@@ -311,6 +311,9 @@
               <div class="form-row wide ingress-help">
                 <div class="field-hint">
                   Enter only the hostname, e.g. <code>smollm</code>. Select the protocol separately.
+                  @if (baseDomain()) {
+                    The domain <code>{{ baseDomain() }}</code> is appended automatically.
+                  }
                   @if (allowHttp()) {
                     HTTP and HTTPS are allowed.
                   } @else {
@@ -341,6 +344,11 @@
                   </mat-select>
                 </mat-form-field>
               </div>
+              @if (endpointPreview()) {
+                <p class="wide">
+                  Endpoint: <code>{{ endpointPreview() }}</code>
+                </p>
+              }
               <div class="form-row wide ingress-help">
                 <div class="field-hint">
                   HTTPS uses the certificate configured by your administrator. Its domain must cover

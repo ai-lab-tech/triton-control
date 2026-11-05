@@ -1370,6 +1370,7 @@ function renderHtml(webview, nonce, initial) {
           <option value="ingress" id="ingress-option" disabled>External access (Ingress)</option>
         </select></label>
         <div id="endpoint-policy" class="wide details-hint">Loading endpoint policy…</div>
+        <div id="endpoint-preview" class="wide details-hint"></div>
         <div id="ingress-fields" class="wide" hidden><div class="details-grid">
           <label>Hostname<input name="ingressHost" placeholder="e.g. smollm"></label>
           <label>Protocol<select name="ingressScheme">
@@ -1409,13 +1410,20 @@ function renderHtml(webview, nonce, initial) {
     updateModelControlLabel();
     loadS3Profiles();
     loadEndpointPolicy();
+    form.addEventListener('input', updateEndpointFields);
     form.elements.accessMode.addEventListener('change', updateEndpointFields);
     form.elements.basicAuthEnabled.addEventListener('change', updateEndpointFields);
+    form.elements.ingressScheme.addEventListener('change', updateEndpointFields);
     updateEndpointFields();
 
     function updateEndpointFields() {
       document.getElementById('ingress-fields').hidden = form.elements.accessMode.value !== 'ingress';
       document.getElementById('auth-fields').hidden = !form.elements.basicAuthEnabled.checked;
+      const host = form.elements.ingressHost.value.trim();
+      const fullHost = host && endpointPolicy.base_domain ? host + '.' + endpointPolicy.base_domain : host;
+      document.getElementById('endpoint-preview').textContent = host && form.elements.accessMode.value === 'ingress'
+        ? 'Endpoint: ' + form.elements.ingressScheme.value + '://' + fullHost : '';
+
     }
     async function loadEndpointPolicy() {
       try {
@@ -1427,6 +1435,8 @@ function renderHtml(webview, nonce, initial) {
         document.getElementById('endpoint-policy').textContent = !endpointPolicy.ingress_enabled
           ? 'External access is disabled by the administrator.'
           : endpointPolicy.allow_http ? 'HTTP and HTTPS are allowed.' : 'HTTPS only.';
+        if (endpointPolicy.base_domain) document.getElementById('endpoint-policy').textContent += ' Domain: ' + endpointPolicy.base_domain + ' (appended automatically).';
+        updateEndpointFields();
       } catch {
         document.getElementById('endpoint-policy').textContent = 'Could not load endpoint policy. Reopen this form to retry. Cluster-only deployment is available.';
       }

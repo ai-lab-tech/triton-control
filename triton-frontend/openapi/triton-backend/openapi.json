@@ -4939,6 +4939,17 @@
       },
       "DeploymentAccessResponse": {
         "properties": {
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hostname"
+          },
           "access_mode": {
             "type": "string",
             "enum": [
@@ -5043,6 +5054,11 @@
       },
       "DeploymentPolicyResponse": {
         "properties": {
+          "base_domain": {
+            "type": "string",
+            "title": "Base Domain",
+            "default": ""
+          },
           "ingress_enabled": {
             "type": "boolean",
             "title": "Ingress Enabled"
@@ -5129,6 +5145,17 @@
             },
             "type": "array",
             "title": "Applied Resources"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
           }
         },
         "type": "object",

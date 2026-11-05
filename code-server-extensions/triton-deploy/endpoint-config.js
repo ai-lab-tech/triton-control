@@ -10,6 +10,7 @@ function endpointPayload(form, policy) {
   if (!host || host.length > 253 || host.split(".").some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
     throw new Error("Enter a hostname only, without a protocol, port or path.");
   }
+  if (policy?.base_domain && host.includes(".")) throw new Error("Enter only the short hostname; the configured domain is appended automatically.");
   if (!["http", "https"].includes(scheme)) throw new Error("Select HTTP or HTTPS.");
   if (scheme === "http" && policy && policy.allow_http !== true) {
     throw new Error("HTTP endpoints are disabled by the administrator. Use HTTPS.");

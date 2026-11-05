@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 
 class DeploymentPolicyResponse(BaseModel):
+    base_domain: str = ""
     ingress_enabled: bool
     allow_http: bool
     default_allow_http: bool

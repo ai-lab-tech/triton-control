@@ -184,6 +184,7 @@ class DeploymentResponse(SQLModel):
     image: str
     s3_url: str
     applied_resources: List[str]
+    external_url: Optional[str] = None
 
 
 class DeploymentDeleteResponse(SQLModel):

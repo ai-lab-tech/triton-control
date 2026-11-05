@@ -74,6 +74,7 @@ class DeploymentAccessRequest(SQLModel):
 
 
 class DeploymentAccessResponse(SQLModel):
+    hostname: str | None = None
     access_mode: Literal["internal", "ingress"]
     url: str
     internal_url: str

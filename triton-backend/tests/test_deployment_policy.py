@@ -81,3 +81,55 @@ class DeploymentPolicyTests(unittest.TestCase):
                         self.session, existing_host="model.example.com", existing_scheme=scheme,
                     )
             validate_endpoint_policy(DeploymentAccessRequest(access_mode="internal"), self.session)
+
+    def test_base_domain_resolves_short_hostname_without_mutating_input(self):
+        from app.services.deployment.policy import resolve_hostname
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):
+            request = DeploymentAccessRequest(ingress_host="smollm", ingress_scheme="https")
+            resolved = resolve_hostname(request)
+            self.assertEqual(resolved.ingress_host, "smollm.models.example.com")
+            self.assertEqual(request.ingress_host, "smollm")
+            self.assertEqual(get_policy(self.session).base_domain, "models.example.com")
+            with self.assertRaises(BadRequestError):
+                resolve_hostname(DeploymentAccessRequest(ingress_host="smollm.other.de"))
+
+    def test_existing_full_host_is_preserved_and_not_appended_twice(self):
+        from app.services.deployment.policy import resolve_hostname, short_hostname
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):
+            request = DeploymentAccessRequest(ingress_host="smollm.models.example.com")
+            result = resolve_hostname(request, existing_host=request.ingress_host)
+            self.assertEqual(result.ingress_host, request.ingress_host)
+            self.assertEqual(short_hostname(request.ingress_host), "smollm")
+            self.assertEqual(short_hostname("legacy.other.de"), "legacy.other.de")
+
+    def test_empty_base_domain_preserves_standalone_host_and_invalid_domain_is_rejected(self):
+        from app.services.deployment.policy import resolve_hostname
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": ""}):
+            self.assertEqual(resolve_hostname(self.http("smollm")).ingress_host, "smollm")
+        for domain in ("*.models.example.com", "https://models.example.com", "models.example.com:443", "bad..domain"):
+            with self.subTest(domain=domain), patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": domain}):
+                with self.assertRaises(BadRequestError):
+                    resolve_hostname(self.http("smollm"))
+
+    def test_creation_schedules_resolved_hostname_once_and_returns_full_url(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        from app.schemas import CreateDeploymentRequest
+        from app.services.deployment import deployment
+        request = CreateDeploymentRequest(
+            deployment_name="smollm", image="triton:latest", s3_url="s3://bucket",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="smollm",
+        )
+        schedule = Mock()
+        with (
+            patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}),
+            patch.object(deployment, "resolve_profile_request", side_effect=lambda req, *args: req),
+            patch.object(deployment, "upsert_deployed_instance", return_value=SimpleNamespace(id=1)),
+            patch.object(deployment, "validate_new_hostname") as validate_host,
+        ):
+            result = deployment.create_deployment(request, self.session, {"role": "member"}, schedule)
+        self.assertEqual(result.external_url, "https://smollm.models.example.com")
+        self.assertEqual(validate_host.call_args.args[0].ingress_host, "smollm.models.example.com")
+        self.assertEqual(schedule.call_args.args[2].ingress_host, "smollm.models.example.com")
+        self.assertEqual(request.ingress_host, "smollm")

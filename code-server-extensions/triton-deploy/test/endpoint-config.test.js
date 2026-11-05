@@ -91,3 +91,13 @@ test("deployment webview renders the policy controls and valid JavaScript", () =
   assert.doesNotMatch(html, /Manual S3 settings|save-profile|name="secretAccessKey"|do-not-render/);
   assert.match(html, /name="profileId" required/);
 });
+
+test("base domain requires a short hostname and leaves resolution to the backend", () => {
+  // Arrange
+  const policy = { ingress_enabled: true, base_domain: "models.example.com" };
+  // Act
+  const result = endpointPayload({ accessMode: "ingress", ingressHost: "smollm" }, policy);
+  // Assert
+  assert.equal(result.ingress_host, "smollm");
+  assert.throws(() => endpointPayload({ accessMode: "ingress", ingressHost: "smollm.other.de" }, policy), /short hostname/);
+});

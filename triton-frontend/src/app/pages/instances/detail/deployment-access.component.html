@@ -77,7 +77,12 @@
       <mat-form-field appearance="outline">
         <mat-label>Hostname</mat-label>
         <input matInput [(ngModel)]="host" placeholder="e.g. smollm" />
-        <mat-hint>Hostname only. Select the protocol separately.</mat-hint>
+        <mat-hint
+          >Hostname only.
+          @if (baseDomain()) {
+            {{ baseDomain() }} is appended automatically.
+          }
+        </mat-hint>
       </mat-form-field>
       <mat-form-field appearance="outline">
         <mat-label>Protocol</mat-label>
@@ -90,6 +95,11 @@
           }
         </mat-select>
       </mat-form-field>
+      @if (endpointPreview()) {
+        <p>
+          Endpoint: <code>{{ endpointPreview() }}</code>
+        </p>
+      }
       <p>HTTPS certificates and routing are managed by your administrator.</p>
       @if (!allowHttp()) {
         <p>Your administrator requires HTTPS for new endpoints and hostname changes.</p>

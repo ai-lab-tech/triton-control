@@ -18,7 +18,7 @@ from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, Deplo
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
 from app.services.deployment.access import validate_new_hostname, validate_policy
-from app.services.deployment.policy import validate_endpoint_policy
+from app.services.deployment.policy import resolve_hostname, validate_endpoint_policy
 from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
@@ -31,6 +31,7 @@ def create_deployment(
     claims: dict[str, Any],
     schedule_task: Callable[..., None] | None = None,
 ) -> DeploymentResponse:
+    request = resolve_hostname(request)
     validate_policy(request, creating=True)
     validate_endpoint_policy(request, session)
     request = resolve_profile_request(request, session, claims)
@@ -79,6 +80,7 @@ def create_deployment(
         image=image,
         s3_url=request.s3_url,
         applied_resources=applied_resources,
+        external_url=f"{request.ingress_scheme or 'https'}://{request.ingress_host}" if request.ingress_host else None,
     )
 
 
