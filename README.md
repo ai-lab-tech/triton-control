@@ -108,34 +108,25 @@ workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Run On Kubernetes
 
-Use the Helm chart in `charts/triton-control`:
+Prerequisites: a Kubernetes cluster with a default StorageClass, configured
+`kubectl`, and Helm. Run the following commands from the repository root:
 
-- [Cluster setup: Traefik, DNS and certificates](docs/ingress-tls.md)
-- [Developer test environment: Minikube and mkcert](docs/local-kubernetes.md)
-- [Helm values reference](charts/triton-control/README.md)
+```bash
+helm upgrade --install triton-control ./charts/triton-control \
+  --namespace triton-control --create-namespace \
+  --set ingress.enabled=false \
+  --set tritonDeployments.ingressEnabled=false \
+  --wait --timeout 10m
 
-The setup guides include example values files and verification commands.
+kubectl -n triton-control port-forward svc/triton-control 8080:8080
+```
 
-### Self-Deployed Triton And Perf Analyzer Namespace Behavior
+Open [http://localhost:8080](http://localhost:8080) and create the first administrator.
+This setup needs no ingress controller or cert-manager.
 
-When you create a self-deployed Triton instance or run a model performance
-Job, namespace behavior depends on backend runtime context. Performance Jobs
-run as non-root with one active run per model; see [Model performance Jobs](docs/model-performance-jobs.md).
-
-- Triton Control backend running in Kubernetes (in-cluster detection):
-  self-deployed Triton and Perf Analyzer are created in the same namespace as
-  the Triton Control pod.
-- Triton Control backend running outside Kubernetes (for example local dev with
-  `KUBERNETES_KUBECONFIG_PATH`):
-  self-deployed Triton remains name-based, while Perf Analyzer defaults to the
-  shared `triton-control` namespace.
-
-In-cluster detection is automatic and uses Kubernetes runtime signals
-(ServiceAccount files and Kubernetes service environment).
-
-`KUBERNETES_KUBECONFIG_PATH` is intended as a local development/testing
-override for Triton Control running outside Kubernetes. In-cluster production
-deployments should use ServiceAccount-based in-cluster configuration.
+For shared installations, see [Ingress and TLS setup](docs/ingress-tls.md) and
+[Helm configuration](charts/triton-control/README.md).
+For development, see [the Minikube test environment](docs/local-kubernetes.md).
 
 ## Run Locally With Python And npm
 
