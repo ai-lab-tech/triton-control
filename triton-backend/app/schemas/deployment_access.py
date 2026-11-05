@@ -12,7 +12,11 @@ from sqlmodel import Field, SQLModel
 class DeploymentAccessRequest(SQLModel):
     # Omitted mode preserves existing clients which select ingress by hostname.
     access_mode: Literal["internal", "ingress"] | None = None
-    ingress_host: str | None = Field(default=None, description="Hostname only, e.g. smollm. No URL, port or path.")
+    ingress_host: str | None = Field(
+        default=None,
+        description=("Short hostname only, e.g. smollm. No domain, URL, port or path. "
+                     "The administrator configures the domain."),
+    )
     ingress_scheme: Literal["http", "https"] | None = None
     basic_auth_enabled: bool = False
     basic_auth_username: str | None = None

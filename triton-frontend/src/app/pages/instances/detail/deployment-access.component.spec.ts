@@ -11,6 +11,7 @@ describe("DeploymentAccessComponent", () => {
     url: "https://model.example.com",
     internal_url: "http://model.control:18000",
     ingress_host: "model.example.com",
+    hostname: "model",
     ingress_scheme: "https",
     basic_auth_enabled: true,
   };
@@ -159,10 +160,15 @@ describe("DeploymentAccessComponent", () => {
 
   it("blocks new HTTP hosts but preserves an existing HTTP endpoint", () => {
     const component = create().componentInstance;
-    component.access.set({ ...ingress, basic_auth_enabled: false, ingress_scheme: "http" });
+    component.access.set({
+      ...ingress,
+      basic_auth_enabled: false,
+      ingress_scheme: "http",
+      ingress_host: "model",
+    });
     component.edit();
     expect(component.valid()).toBeTrue();
-    component.host = "new.example.com";
+    component.host = "new";
     expect(component.valid()).toBeFalse();
     component.allowHttp.set(true);
     expect(component.valid()).toBeTrue();
@@ -181,13 +187,29 @@ describe("DeploymentAccessComponent", () => {
   it("edits the short hostname and previews the configured domain", () => {
     const component = create().componentInstance;
     component.baseDomain.set("models.example.com");
-    component.access.set({ ...ingress, hostname: "smollm", ingress_host: "smollm.models.example.com" });
+    component.access.set({
+      ...ingress,
+      hostname: "smollm",
+      ingress_host: "smollm.models.example.com",
+    });
     component.edit();
     expect(component.host).toBe("smollm");
     expect(component.endpointPreview()).toBe("https://smollm.models.example.com");
     expect(component.valid()).toBeTrue();
     component.host = "smollm.other.de";
     expect(component.valid()).toBeFalse();
+  });
+
+  it("rejects a full domain even without a configured base domain", () => {
+    // Arrange
+    const component = create().componentInstance;
+    component.access.set(ingress);
+    component.edit();
+    component.host = "model.example.com";
+    // Act
+    const valid = component.valid();
+    // Assert
+    expect(valid).toBeFalse();
   });
 
   it("does not allow viewers to edit or save", async () => {

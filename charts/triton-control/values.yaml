@@ -116,7 +116,7 @@ app:
 
 # Configuration for generated Triton serving deployments.
 tritonDeployments:
-  # Appended to short model hostnames; no wildcard or URL. Empty preserves standalone hostnames.
+  # Appended to short model hostnames; no wildcard or URL. Empty uses the short hostname unchanged.
   baseDomain: ""
   # Allow model Ingress creation/edits, independently of the UI/API Ingress.
   ingressEnabled: true

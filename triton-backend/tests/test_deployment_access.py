@@ -78,7 +78,7 @@ class DeploymentAccessTests(unittest.TestCase):
         return DeploymentAccessRequest(
             **{
                 "access_mode": "ingress",
-                "ingress_host": "model.example.com",
+                "ingress_host": "model",
                 **overrides,
             }
         )
@@ -118,8 +118,8 @@ class DeploymentAccessTests(unittest.TestCase):
             )
             response = self.update(self.request())
         body = self.net.create_namespaced_ingress.call_args.args[1]
-        self.assertEqual(body["spec"]["tls"], [{"hosts": ["model.example.com"], "secretName": "central-cert"}])
-        self.assertEqual(response.url, "https://model.example.com")
+        self.assertEqual(body["spec"]["tls"], [{"hosts": ["model"], "secretName": "central-cert"}])
+        self.assertEqual(response.url, "https://model")
         self.assertEqual(self.instance.url, "http://model-service.control.svc.cluster.local:18000")
         self.assertEqual(self.instance.metrics_url, "http://model-service.control.svc.cluster.local:18002/metrics")
         self.apps.patch_namespaced_deployment.assert_not_called()
@@ -249,7 +249,7 @@ class DeploymentAccessTests(unittest.TestCase):
         self.net.list_ingress_for_all_namespaces.return_value.items = [other]
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest", s3_url="s3://bucket",
-            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model",
         )
         with (
             patch.object(deployment, "resolve_profile_request", return_value=request),
@@ -264,7 +264,7 @@ class DeploymentAccessTests(unittest.TestCase):
         self.net.list_ingress_for_all_namespaces.return_value.items = [other]
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest", s3_url="s3://bucket",
-            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model",
             basic_auth_enabled=True, basic_auth_username="user", basic_auth_password="secret",
         )
         with (
@@ -314,7 +314,7 @@ class DeploymentAccessTests(unittest.TestCase):
             s3_url="s3://bucket",
             s3_access_key="key",
             s3_secret_key="secret",
-            ingress_host="model.example.com", ingress_scheme="https",
+            ingress_host="model", ingress_scheme="https",
             basic_auth_enabled=True,
             basic_auth_username="user",
             basic_auth_password="password",
@@ -322,7 +322,7 @@ class DeploymentAccessTests(unittest.TestCase):
         )
         manifests = k8s._manifests(request, "control", "model", "model-service", "model-s3", "triton:latest")
         ingress = manifests[-1]
-        self.assertEqual(ingress["spec"]["tls"], [{"hosts": ["model.example.com"]}])
+        self.assertEqual(ingress["spec"]["tls"], [{"hosts": ["model"]}])
         self.assertEqual(len(ingress["spec"]["rules"][0]["http"]["paths"]), 1)
         self.assertEqual(manifests[-2]["kind"], "Middleware")
         self.assertEqual(manifests[-3]["kind"], "Secret")
@@ -365,7 +365,7 @@ class DeploymentAccessTests(unittest.TestCase):
     def test_queued_ingress_rechecks_switch_before_kubernetes(self):
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest", s3_url="s3://bucket",
-            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model",
         )
         with (
             patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_ENABLED": "false"}),
@@ -399,7 +399,7 @@ class DeploymentAccessTests(unittest.TestCase):
     def test_queued_http_deployment_rechecks_policy_before_resources(self):
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest", s3_url="s3://bucket",
-            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com", ingress_scheme="http",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model", ingress_scheme="http",
         )
         with (
             patch.object(k8s, "session_factory") as sessions,
@@ -492,7 +492,7 @@ class DeploymentAccessTests(unittest.TestCase):
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest",
             s3_url="s3://bucket", s3_access_key="key", s3_secret_key="secret",
-            ingress_host="model.example.com", basic_auth_enabled=True,
+            ingress_host="model", basic_auth_enabled=True,
             basic_auth_username="user", basic_auth_password="secret",
         )
         events = []

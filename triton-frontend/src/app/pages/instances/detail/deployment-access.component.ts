@@ -148,7 +148,7 @@ export class DeploymentAccessComponent implements OnInit {
     const access = this.access();
     if (!access || !this.canWrite() || this.busy()) return;
     this.mode = access.access_mode;
-    this.host = access.hostname || access.ingress_host || "";
+    this.host = access.hostname || access.ingress_host?.split(".")[0] || "";
     this.scheme = access.ingress_scheme || "https";
     this.authEnabled = !!access.basic_auth_enabled;
     this.username = "";
@@ -167,24 +167,19 @@ export class DeploymentAccessComponent implements OnInit {
 
   endpointPreview(): string {
     return this.host.trim()
-      ? this.scheme +
-          "://" +
-          resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host)
+      ? this.scheme + "://" + resolvedEndpointHostname(this.host, this.baseDomain())
       : "";
   }
 
   valid(): boolean {
     if (this.mode === "internal") return true;
     if (!this.ingressEnabled() || !isEndpointHostname(this.host)) return false;
-    if (this.baseDomain() && this.host.includes(".") && this.host !== this.access()?.ingress_host)
-      return false;
     if (
       this.scheme === "http" &&
       !this.allowHttp() &&
       !(
         this.access()?.ingress_scheme === "http" &&
-        resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host) ===
-          this.access()?.ingress_host
+        resolvedEndpointHostname(this.host, this.baseDomain()) === this.access()?.ingress_host
       )
     )
       return false;

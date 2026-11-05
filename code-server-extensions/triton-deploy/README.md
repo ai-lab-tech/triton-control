@@ -366,6 +366,10 @@ Hostname fields accept only a DNS hostname, e.g. `smollm`, without
 are unchanged.
 
 
+Hostname input always accepts only a short name such as `smollm`, never a full
+domain. The administrator-configured domain is appended by the API; an empty
+domain leaves the short name unchanged.
+
 The deployment form uses saved S3 profiles only. Manual S3 connection fields and
 profile creation have been removed from this form. Manage profiles in Triton
 Control. The workspace resolves the selected profile again before uploading, so

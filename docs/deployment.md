@@ -709,7 +709,7 @@ to your network policies. See [Traefik BasicAuth](https://doc.traefik.io/traefik
 ### Plugin endpoint configuration
 
 Code-server (**External access**) and MLflow use the same deployment API and
-admin policy. Supply a hostname without protocol, port or path:
+admin policy. Supply only a short hostname, without a domain, protocol, port or path:
 
 ```json
 {"access_mode":"ingress","ingress_host":"smollm","ingress_scheme":"https"}
@@ -728,8 +728,9 @@ tritonDeployments:
 ```
 
 Enter `smollm`; the API creates `smollm.models.example.com`.
-Configure wildcard DNS and TLS for that domain. Leave `baseDomain` empty
-to use hostnames unchanged. Invalid domain configuration rejects new external
+Users always enter a short hostname, never a full domain or URL.
+Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
+the short hostname is used unchanged. Invalid domain configuration rejects new external
 hostnames but still permits internal deployments and removing existing exposure.
 Existing endpoints are preserved.
 Triton Control's own hostname is configured under `ingress.hosts`.

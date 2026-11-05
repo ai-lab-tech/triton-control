@@ -27,28 +27,20 @@ def base_domain() -> str:
 
 
 def short_hostname(host: str | None) -> str | None:
-    # Reading/removing existing endpoints must work even with a misconfigured domain.
-    try:
-        domain = base_domain()
-    except BadRequestError:
-        return host
-    if host and domain and host.endswith("." + domain):
-        label = host[:-(len(domain) + 1)]
-        if "." not in label:
-            return label
-    return host
+    """Return the editable name; domains are always managed by the administrator."""
+    return host.split(".", 1)[0] if host else host
 
 
-def resolve_hostname(request: RequestT, *, existing_host: str | None = None) -> RequestT:
-    """Resolve once at the API/service boundary; queued tasks receive the full host."""
+def resolve_hostname(request: RequestT) -> RequestT:
+    """Resolve user-supplied names once; queued tasks receive the full host."""
     host = request.ingress_host
-    if not host or host == existing_host:
+    if not host:
         return request
+    if "." in host:
+        raise BadRequestError("Enter a short hostname only, without a domain, protocol, port or path")
     domain = base_domain()
     if not domain:
         return request
-    if "." in host:
-        raise BadRequestError("Enter only the short hostname; the configured base domain is appended automatically")
     full_host = f"{host}.{domain}"
     if len(full_host) > 253:
         raise BadRequestError("Hostname plus base domain exceeds 253 characters")

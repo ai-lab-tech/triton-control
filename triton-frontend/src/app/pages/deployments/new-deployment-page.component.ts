@@ -360,7 +360,6 @@ export class NewDeploymentPageComponent {
       (this.accessMode === "internal" ||
         (this.ingressEnabled() &&
           isEndpointHostname(this.ingressHost) &&
-          (!this.baseDomain() || !this.ingressHost.trim().replace(/\.$/, "").includes(".")) &&
           (this.allowHttp() || this.ingressScheme === "https") &&
           (!this.basicAuthEnabled ||
             (!!this.basicAuthUsername &&

@@ -185,17 +185,20 @@ class DeploymentPolicyTests(unittest.TestCase):
         # Assert
         self.assertIn("short hostname", str(raised.exception))
 
-    def test_existing_full_host_is_not_appended_twice(self):
-        # Arrange
-        request = DeploymentAccessRequest(ingress_host="smollm.models.example.com")
-        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):
-            # Act
-            result = resolve_hostname(request, existing_host=request.ingress_host)
-        # Assert
-        self.assertIs(result, request)
+    def test_full_host_rejected_even_when_base_domain_is_empty(self):
+        for domain in ("", "models.example.com"):
+            with self.subTest(domain=domain):
+                # Arrange
+                request = DeploymentAccessRequest(ingress_host="smollm.models.example.com")
+                with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": domain}):
+                    # Act
+                    with self.assertRaises(BadRequestError) as raised:
+                        resolve_hostname(request)
+                # Assert
+                self.assertIn("short hostname", str(raised.exception))
 
-    def test_editable_hostname_preserves_legacy_domains(self):
-        cases = (("smollm.models.example.com", "smollm"), ("legacy.other.example", "legacy.other.example"))
+    def test_editable_hostname_always_omits_domain(self):
+        cases = (("smollm.models.example.com", "smollm"), ("legacy.other.example", "legacy"))
         for host, expected in cases:
             with self.subTest(host=host):
                 # Arrange
@@ -236,14 +239,13 @@ class DeploymentPolicyTests(unittest.TestCase):
         # Assert
         self.assertIs(result, request)
 
-    def test_invalid_domain_preserves_existing_host(self):
+    def test_invalid_domain_does_not_prevent_reading_short_hostname(self):
         # Arrange
-        request = DeploymentAccessRequest(ingress_host="legacy.example.com")
         with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "*.models.example.com"}):
             # Act
-            result = resolve_hostname(request, existing_host=request.ingress_host)
+            result = short_hostname("legacy.example.com")
         # Assert
-        self.assertIs(result, request)
+        self.assertEqual(result, "legacy")
 
     def test_creation_schedules_resolved_hostname_once_and_returns_full_url(self):
         from types import SimpleNamespace

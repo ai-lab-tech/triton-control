@@ -577,6 +577,7 @@ tritonDeployments:
 ```
 
 Enter `smollm`; the API creates `smollm.models.example.com`.
-Configure wildcard DNS and TLS for that domain. Leave `baseDomain` empty
-to use hostnames unchanged. Existing endpoints are preserved.
+Users always enter a short hostname, never a full domain or URL.
+Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
+the short hostname is used unchanged. Existing endpoints are preserved.
 Triton Control's own hostname is configured under `ingress.hosts`.

@@ -78,7 +78,7 @@
         <mat-label>Hostname</mat-label>
         <input matInput [(ngModel)]="host" placeholder="e.g. smollm" />
         <mat-hint
-          >Hostname only.
+          >Short hostname only, e.g. smollm. Do not include a domain.
           @if (baseDomain()) {
             {{ baseDomain() }} is appended automatically.
           }

@@ -4,7 +4,7 @@ const { endpointPayload } = require("../endpoint-config");
 
 test("cluster-only strips stale ingress and credentials", () => {
   // Arrange
-  const form = { accessMode: "internal", ingressHost: "model.test", basicAuthPassword: "secret" };
+  const form = { accessMode: "internal", ingressHost: "model", basicAuthPassword: "secret" };
   // Act
   const result = endpointPayload(form, { ingress_enabled: false });
   // Assert
@@ -13,32 +13,32 @@ test("cluster-only strips stale ingress and credentials", () => {
 
 test("HTTPS authentication uses the shared API fields without controller selection", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "MODEL.test", basicAuthEnabled: true,
+  const form = { accessMode: "ingress", ingressHost: "MODEL", basicAuthEnabled: true,
     basicAuthUsername: "user", basicAuthPassword: "secret", ingressClassName: "nginx" };
   // Act
   const result = endpointPayload(form, { ingress_enabled: true, allow_http: false });
   // Assert
-  assert.deepEqual(result, { access_mode: "ingress", ingress_host: "model.test", ingress_scheme: "https",
+  assert.deepEqual(result, { access_mode: "ingress", ingress_host: "model", ingress_scheme: "https",
     basic_auth_enabled: true, basic_auth_username: "user", basic_auth_password: "secret" });
 });
 
 test("disabled ingress is rejected", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "model.test" };
+  const form = { accessMode: "ingress", ingressHost: "model" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: false }), /disabled/);
 });
 
 test("HTTP URL cannot bypass HTTPS policy", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "http://model.test" };
+  const form = { accessMode: "ingress", ingressHost: "http://model" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: true, allow_http: false }), /hostname only/);
 });
 
 test("permitted HTTP sends no authentication secrets", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "model.test", ingressScheme: "http", basicAuthPassword: "stale" };
+  const form = { accessMode: "ingress", ingressHost: "model", ingressScheme: "http", basicAuthPassword: "stale" };
   // Act
   const result = endpointPayload(form, { ingress_enabled: true, allow_http: true });
   // Assert
@@ -48,7 +48,7 @@ test("permitted HTTP sends no authentication secrets", () => {
 
 test("basic authentication requires HTTPS", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "model.test", ingressScheme: "http", basicAuthEnabled: true,
+  const form = { accessMode: "ingress", ingressHost: "model", ingressScheme: "http", basicAuthEnabled: true,
     basicAuthUsername: "user", basicAuthPassword: "secret" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: true, allow_http: true }), /requires HTTPS/);
@@ -56,14 +56,14 @@ test("basic authentication requires HTTPS", () => {
 
 test("partial basic authentication is rejected", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "model.test", basicAuthEnabled: true, basicAuthUsername: "user" };
+  const form = { accessMode: "ingress", ingressHost: "model", basicAuthEnabled: true, basicAuthUsername: "user" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: true }), /both username and password/);
 });
 
 test("URL credentials are rejected without echoing them", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "https://user:secret@model.test" };
+  const form = { accessMode: "ingress", ingressHost: "https://user:secret@model" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: true }), error => !error.message.includes("secret"));
 });
@@ -101,3 +101,13 @@ test("base domain requires a short hostname and leaves resolution to the backend
   assert.equal(result.ingress_host, "smollm");
   assert.throws(() => endpointPayload({ accessMode: "ingress", ingressHost: "smollm.other.de" }, policy), /short hostname/);
 });
+
+for (const baseDomain of ["", "models.example.com"]) {
+  test(`full domain rejected with base domain '${baseDomain}'`, () => {
+    // Arrange
+    const form = { accessMode: "ingress", ingressHost: "smollm.models.example.com" };
+    const policy = { ingress_enabled: true, base_domain: baseDomain };
+    // Act / Assert
+    assert.throws(() => endpointPayload(form, policy), /short hostname only/);
+  });
+}

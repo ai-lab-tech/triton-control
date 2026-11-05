@@ -4357,7 +4357,7 @@
               }
             ],
             "title": "Ingress Host",
-            "description": "Hostname only, e.g. smollm. No URL, port or path."
+            "description": "Short hostname only, e.g. smollm. No domain, URL, port or path. The administrator configures the domain."
           },
           "ingress_scheme": {
             "anyOf": [
@@ -4887,7 +4887,7 @@
               }
             ],
             "title": "Ingress Host",
-            "description": "Hostname only, e.g. smollm. No URL, port or path."
+            "description": "Short hostname only, e.g. smollm. No domain, URL, port or path. The administrator configures the domain."
           },
           "ingress_scheme": {
             "anyOf": [

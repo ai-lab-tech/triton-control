@@ -1,18 +1,11 @@
-/** Validate a hostname without accepting URLs, ports or paths. */
+/** User input is always one DNS label; the administrator supplies the domain. */
 export function isEndpointHostname(value: string): boolean {
-  const host = value.trim().toLowerCase().replace(/\.$/, "");
-  return (
-    !!host &&
-    host.length <= 253 &&
-    host.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+    value.trim().toLowerCase().replace(/\.$/, ""),
   );
 }
 
-export function resolvedEndpointHostname(
-  value: string,
-  baseDomain: string,
-  existingHost?: string,
-): string {
+export function resolvedEndpointHostname(value: string, baseDomain: string): string {
   const host = value.trim().toLowerCase().replace(/\.$/, "");
-  return !host || !baseDomain || host === existingHost ? host : host + "." + baseDomain;
+  return !host || !baseDomain ? host : host + "." + baseDomain;
 }

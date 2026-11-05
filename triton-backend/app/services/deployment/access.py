@@ -148,7 +148,7 @@ def update_access(
             workload = client.AppsV1Api(api).read_namespaced_deployment(name, namespace)
             previous = _read_ingress(net, instance)
             current = _response(instance, previous)
-            request = resolve_hostname(request, existing_host=current.ingress_host)
+            request = resolve_hostname(request)
             validate_endpoint_policy(
                 request, session, existing_host=current.ingress_host, existing_scheme=current.ingress_scheme,
             )

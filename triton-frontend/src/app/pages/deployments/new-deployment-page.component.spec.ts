@@ -73,7 +73,7 @@ describe("NewDeploymentPageComponent", () => {
     component.deploymentName = "triton-minio";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
     component.accessMode = "ingress";
-    component.ingressHost = "triton.example.local";
+    component.ingressHost = "triton";
     component.s3AccessKey = "minioadmin";
     component.s3SecretKey = "secret";
 
@@ -209,7 +209,7 @@ describe("NewDeploymentPageComponent", () => {
     component.image = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.accessMode = "ingress";
-    component.ingressHost = "triton.example.local";
+    component.ingressHost = "triton";
     component.s3AccessKey = "minioadmin";
     component.s3SecretKey = "secret";
     component.repositoryPollSecs = 9;
@@ -224,7 +224,7 @@ describe("NewDeploymentPageComponent", () => {
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         dockerconfigjson: '{"auths":{"registry.example":{"auth":"token"}}}',
-        ingress_host: "triton.example.local",
+        ingress_host: "triton",
         model_control_mode: "poll",
         repository_sync_mode: "sidecar",
         repository_poll_secs: 9,

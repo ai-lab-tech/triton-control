@@ -1377,7 +1377,7 @@ function renderHtml(webview, nonce, initial) {
             <option value="https">HTTPS</option>
             <option value="http" id="http-option" disabled>HTTP</option>
           </select></label>
-          <div class="wide details-hint">Enter only the hostname, e.g. smollm. Select the protocol separately. Routing and certificates are configured by your administrator.</div>
+          <div class="wide details-hint">Enter only the short hostname, e.g. smollm, without a domain. Select the protocol separately. Routing and certificates are configured by your administrator.</div>
           <label><input name="basicAuthEnabled" type="checkbox">Require basic authentication (HTTPS only)</label>
           <div id="auth-fields" class="wide" hidden><div class="details-grid">
             <label>Username<input name="basicAuthUsername" autocomplete="off"></label>
