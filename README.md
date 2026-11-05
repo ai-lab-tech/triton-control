@@ -52,7 +52,25 @@ Core capabilities include:
   authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
 
-## Run With Docker Compose
+## Run On Kubernetes
+
+Requires Kubernetes with a default StorageClass, kubectl and Helm.
+Run from the repository root:
+
+```bash
+helm upgrade --install triton-control ./charts/triton-control \
+  --namespace triton-control --create-namespace \
+  --set ingress.enabled=false,tritonDeployments.ingressEnabled=false \
+  --wait --timeout 10m
+kubectl -n triton-control port-forward svc/triton-control 8080:8080
+```
+
+Open [localhost:8080](http://localhost:8080) and create your administrator account.
+This installs the chart's release image. Building from source: [developer setup](docs/local-kubernetes.md).
+
+[Ingress and TLS](docs/ingress-tls.md) · [Helm configuration](charts/triton-control/README.md) · [Minikube](docs/local-kubernetes.md)
+
+## Demo With Docker Compose
 
 With Docker installed, start the published image:
 
@@ -81,7 +99,7 @@ For Triton running on the host, use
 Before a non-development deployment, replace the secrets and database password
 defined in `compose.yaml`.
 
-## Run With Podman Compose
+## Demo With Podman Compose
 
 With Podman and `podman-compose` installed, start the published image:
 
@@ -105,24 +123,6 @@ The backend API is available at `http://localhost:8000` and PostgreSQL at
 
 Podman Compose does not provide Kubernetes. Deployments, Development
 workspaces, managed MLflow, and Argo Workflows are therefore disabled.
-
-## Run On Kubernetes
-
-Requires Kubernetes with a default StorageClass, kubectl and Helm.
-Run from the repository root:
-
-```bash
-helm upgrade --install triton-control ./charts/triton-control \
-  --namespace triton-control --create-namespace \
-  --set ingress.enabled=false,tritonDeployments.ingressEnabled=false \
-  --wait --timeout 10m
-kubectl -n triton-control port-forward svc/triton-control 8080:8080
-```
-
-Open [localhost:8080](http://localhost:8080) and create your administrator account.
-This installs the chart's release image. Building from source: [developer setup](docs/local-kubernetes.md).
-
-[Ingress and TLS](docs/ingress-tls.md) · [Helm configuration](charts/triton-control/README.md) · [Minikube](docs/local-kubernetes.md)
 
 ## Run Locally With Python And npm
 
