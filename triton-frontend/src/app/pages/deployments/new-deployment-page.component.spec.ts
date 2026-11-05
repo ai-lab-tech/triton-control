@@ -91,10 +91,14 @@ describe("NewDeploymentPageComponent", () => {
     component.s3AccessKey = "key";
     component.s3SecretKey = "secret";
     component.accessMode = "ingress";
-    component.ingressHost = "http://model.example.com";
+    component.ingressHost = "smollm";
+    component.ingressScheme = "http";
     expect(component.canDeploy()).toBeFalse();
     component.allowHttp.set(true);
     expect(component.canDeploy()).toBeTrue();
+    component.ingressHost = "http://smollm";
+    expect(component.canDeploy()).toBeFalse();
+    component.ingressHost = "smollm";
     component.ingressEnabled.set(false);
     expect(component.canDeploy()).toBeFalse();
     component.ingressEnabled.set(true);

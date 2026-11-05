@@ -26,10 +26,12 @@ class DeploymentPolicyTests(unittest.TestCase):
     def http(self, host="model.example.com"):
         return DeploymentAccessRequest(ingress_host=host, ingress_scheme="http")
 
-    def test_default_is_https_only_and_http_url_cannot_bypass_it(self):
+    def test_default_is_https_only(self):
         self.assertFalse(get_policy(self.session).allow_http)
         with self.assertRaises(BadRequestError):
-            validate_endpoint_policy(DeploymentAccessRequest(ingress_host="http://model.example.com"), self.session)
+            validate_endpoint_policy(
+                DeploymentAccessRequest(ingress_host="model.example.com", ingress_scheme="http"), self.session,
+            )
 
     def test_helm_default_admin_override_and_reset(self):
         with patch.dict(os.environ, {"TRITON_DEPLOY_ALLOW_HTTP": "true"}):

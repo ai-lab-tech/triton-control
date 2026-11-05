@@ -1,3 +1,4 @@
+import { isEndpointHostname } from "../../../shared/endpoint-hostname";
 import { Component, inject, input, OnInit, output, signal } from "@angular/core";
 import { ClipboardModule } from "@angular/cdk/clipboard";
 import { FormsModule } from "@angular/forms";
@@ -164,7 +165,7 @@ export class DeploymentAccessComponent implements OnInit {
 
   valid(): boolean {
     if (this.mode === "internal") return true;
-    if (!this.ingressEnabled() || !this.host.trim()) return false;
+    if (!this.ingressEnabled() || !isEndpointHostname(this.host)) return false;
     if (
       this.scheme === "http" &&
       !this.allowHttp() &&

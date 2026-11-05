@@ -1371,12 +1371,12 @@ function renderHtml(webview, nonce, initial) {
         </select></label>
         <div id="endpoint-policy" class="wide details-hint">Loading endpoint policy…</div>
         <div id="ingress-fields" class="wide" hidden><div class="details-grid">
-          <label>Hostname<input name="ingressHost" placeholder="model.example.com"></label>
+          <label>Hostname<input name="ingressHost" placeholder="e.g. smollm"></label>
           <label>Protocol<select name="ingressScheme">
             <option value="https">HTTPS</option>
             <option value="http" id="http-option" disabled>HTTP</option>
           </select></label>
-          <div class="wide details-hint">Routing and certificates are configured by your administrator.</div>
+          <div class="wide details-hint">Enter only the hostname, e.g. smollm. Select the protocol separately. Routing and certificates are configured by your administrator.</div>
           <label><input name="basicAuthEnabled" type="checkbox">Require basic authentication (HTTPS only)</label>
           <div id="auth-fields" class="wide" hidden><div class="details-grid">
             <label>Username<input name="basicAuthUsername" autocomplete="off"></label>

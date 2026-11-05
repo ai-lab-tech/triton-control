@@ -1,3 +1,4 @@
+import { isEndpointHostname } from "../../shared/endpoint-hostname";
 import { Component, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
@@ -76,6 +77,7 @@ export class NewDeploymentPageComponent {
   basicAuthUsername = "";
   basicAuthPassword = "";
   ingressHost = "";
+  ingressScheme: "http" | "https" = "https";
   selectedS3ProfileId = "";
   s3Url = "";
   s3Bucket = "";
@@ -285,6 +287,7 @@ export class NewDeploymentPageComponent {
       deployment_name: this.deploymentName.trim(),
       image: this.image.trim(),
       access_mode: this.accessMode,
+      ingress_scheme: this.accessMode === "ingress" ? this.ingressScheme : undefined,
       ingress_host: this.accessMode === "ingress" ? this.ingressHost.trim() : undefined,
       basic_auth_enabled: this.accessMode === "ingress" && this.basicAuthEnabled,
       basic_auth_username:
@@ -348,12 +351,12 @@ export class NewDeploymentPageComponent {
       this.s3SecretKey.trim().length > 0 &&
       (this.accessMode === "internal" ||
         (this.ingressEnabled() &&
-          this.ingressHost.trim().length > 0 &&
-          (this.allowHttp() || !this.ingressHost.trim().toLowerCase().startsWith("http://")) &&
+          isEndpointHostname(this.ingressHost) &&
+          (this.allowHttp() || this.ingressScheme === "https") &&
           (!this.basicAuthEnabled ||
             (!!this.basicAuthUsername &&
               !!this.basicAuthPassword &&
-              !this.ingressHost.trim().toLowerCase().startsWith("http://"))))) &&
+              this.ingressScheme === "https")))) &&
       this.hasValidMemoryGi() &&
       !this.deploying()
     );

@@ -178,7 +178,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(request.s3_url, "s3://https://object-store.example.com/triton-models")
         self.assertIsNone(request.s3_ca_certificate)
 
-    def test_CreateDeploymentRequest_IngressHttpUrl_NormalizesHostAndScheme(self) -> None:
+    def test_CreateDeploymentRequest_HostnameAndSeparateScheme(self) -> None:
         # Act
         request = CreateDeploymentRequest(
             deployment_name="triton",
@@ -186,7 +186,7 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://bucket",
             s3_access_key="ak",
             s3_secret_key="secret",
-            ingress_host="http://triton.example.local/",
+            ingress_host="triton.example.local", ingress_scheme="http",
         )
 
         # Assert
@@ -478,7 +478,7 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://http://minio:9000/triton-models",
             s3_access_key="minioadmin",
             s3_secret_key="super-secret-value",
-            ingress_host="http://triton.example.local",
+            ingress_host="triton.example.local", ingress_scheme="http",
         )
 
         # Act

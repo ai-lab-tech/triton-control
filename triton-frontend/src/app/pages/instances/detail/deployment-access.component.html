@@ -76,7 +76,8 @@
     @if (mode === "ingress") {
       <mat-form-field appearance="outline">
         <mat-label>Hostname</mat-label>
-        <input matInput [(ngModel)]="host" placeholder="triton.example.com" />
+        <input matInput [(ngModel)]="host" placeholder="e.g. smollm" />
+        <mat-hint>Hostname only. Select the protocol separately.</mat-hint>
       </mat-form-field>
       <mat-form-field appearance="outline">
         <mat-label>Protocol</mat-label>

@@ -312,7 +312,7 @@ class DeploymentAccessTests(unittest.TestCase):
             s3_url="s3://bucket",
             s3_access_key="key",
             s3_secret_key="secret",
-            ingress_host="https://model.example.com/",
+            ingress_host="model.example.com", ingress_scheme="https",
             basic_auth_enabled=True,
             basic_auth_username="user",
             basic_auth_password="password",
@@ -397,7 +397,7 @@ class DeploymentAccessTests(unittest.TestCase):
     def test_queued_http_deployment_rechecks_policy_before_resources(self):
         request = CreateDeploymentRequest(
             deployment_name="model", image="triton:latest", s3_url="s3://bucket",
-            s3_access_key="key", s3_secret_key="secret", ingress_host="http://model.example.com",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com", ingress_scheme="http",
         )
         with (
             patch.object(k8s, "session_factory") as sessions,
@@ -512,11 +512,20 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertEqual(self.custom.create_namespaced_custom_object.call_args.args[:4],
                          ("traefik.io", "v1alpha1", "control", "middlewares"))
 
+    def test_short_hostname_with_separate_protocol(self):
+        request = DeploymentAccessRequest(ingress_host="smollm", ingress_scheme="https")
+        self.assertEqual(request.ingress_host, "smollm")
+        self.assertEqual(request.ingress_scheme, "https")
+
     def test_invalid_inputs(self):
         for values in [
             {"access_mode": "ingress"},
             {"access_mode": "internal", "ingress_host": "example.com"},
             {"ingress_host": "bad..example.com"},
+            {"ingress_host": "https://smollm"},
+            {"ingress_host": "http://smollm"},
+            {"ingress_host": "smollm:443"},
+            {"ingress_host": "smollm/path"},
             {"ingress_host": "https://user:password@example.com"},
             {"ingress_host": "https://example.com/path"},
             {"ingress_host": "example.com", "ingress_scheme": "http", "basic_auth_enabled": True},

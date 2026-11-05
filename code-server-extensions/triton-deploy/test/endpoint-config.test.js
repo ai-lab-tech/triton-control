@@ -33,12 +33,12 @@ test("HTTP URL cannot bypass HTTPS policy", () => {
   // Arrange
   const form = { accessMode: "ingress", ingressHost: "http://model.test" };
   // Act / Assert
-  assert.throws(() => endpointPayload(form, { ingress_enabled: true, allow_http: false }), /HTTP endpoints/);
+  assert.throws(() => endpointPayload(form, { ingress_enabled: true, allow_http: false }), /hostname only/);
 });
 
 test("permitted HTTP sends no authentication secrets", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "http://model.test", basicAuthPassword: "stale" };
+  const form = { accessMode: "ingress", ingressHost: "model.test", ingressScheme: "http", basicAuthPassword: "stale" };
   // Act
   const result = endpointPayload(form, { ingress_enabled: true, allow_http: true });
   // Assert
@@ -48,7 +48,7 @@ test("permitted HTTP sends no authentication secrets", () => {
 
 test("basic authentication requires HTTPS", () => {
   // Arrange
-  const form = { accessMode: "ingress", ingressHost: "http://model.test", basicAuthEnabled: true,
+  const form = { accessMode: "ingress", ingressHost: "model.test", ingressScheme: "http", basicAuthEnabled: true,
     basicAuthUsername: "user", basicAuthPassword: "secret" };
   // Act / Assert
   assert.throws(() => endpointPayload(form, { ingress_enabled: true, allow_http: true }), /requires HTTPS/);

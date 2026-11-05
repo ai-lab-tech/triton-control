@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from pydantic import SecretStr, field_validator, model_validator
 from sqlmodel import Field, SQLModel
@@ -13,7 +12,7 @@ from sqlmodel import Field, SQLModel
 class DeploymentAccessRequest(SQLModel):
     # Omitted mode preserves existing clients which select ingress by hostname.
     access_mode: Literal["internal", "ingress"] | None = None
-    ingress_host: str | None = None
+    ingress_host: str | None = Field(default=None, description="Hostname only, e.g. smollm. No URL, port or path.")
     ingress_scheme: Literal["http", "https"] | None = None
     basic_auth_enabled: bool = False
     basic_auth_username: str | None = None
@@ -21,28 +20,12 @@ class DeploymentAccessRequest(SQLModel):
 
     @model_validator(mode="before")
     @classmethod
-    def normalize_ingress_url(cls, data: Any) -> Any:
+    def validate_admin_fields(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
         data = dict(data)
         if data.get("ingress_class_name") is not None:
             raise ValueError("Ingress class is configured by the administrator")
-        host = (data.get("ingress_host") or "").strip()
-        if "://" in host:
-            parsed = urlsplit(host)
-            if (
-                parsed.scheme not in {"http", "https"}
-                or not parsed.hostname
-                or parsed.username
-                or parsed.password
-                or parsed.port
-                or parsed.path not in {"", "/"}
-                or parsed.query
-                or parsed.fragment
-            ):
-                raise ValueError("ingress_host must be a DNS host name or http(s) URL without credentials or path")
-            data["ingress_host"] = parsed.hostname
-            data["ingress_scheme"] = parsed.scheme
         return data
 
     @field_validator("ingress_host")
@@ -54,7 +37,7 @@ class DeploymentAccessRequest(SQLModel):
         if len(value) > 253 or any(
             not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in value.split(".")
         ):
-            raise ValueError("Enter a valid DNS host name")
+            raise ValueError("Enter a hostname only, without a protocol, port or path")
         return value
 
     @field_validator("basic_auth_username")

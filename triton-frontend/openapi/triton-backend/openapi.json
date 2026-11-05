@@ -4356,7 +4356,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ingress Host"
+            "title": "Ingress Host",
+            "description": "Hostname only, e.g. smollm. No URL, port or path."
           },
           "ingress_scheme": {
             "anyOf": [
@@ -4885,7 +4886,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ingress Host"
+            "title": "Ingress Host",
+            "description": "Hostname only, e.g. smollm. No URL, port or path."
           },
           "ingress_scheme": {
             "anyOf": [

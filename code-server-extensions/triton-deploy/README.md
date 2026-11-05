@@ -392,3 +392,9 @@ sent only with the deployment request, not saved in extension settings.
 The backend rechecks policy and hostname conflicts when processing
 `POST /api/deployments`. A failed policy lookup leaves external access disabled.
 For existing deployments, use Triton Control's **Endpoints** tab.
+
+Hostname fields accept only a DNS hostname, e.g. `smollm`, without
+`http://`, `https://`, a port or a path. Choose the protocol separately
+(`ingress_scheme` in REST/MLflow configuration). URLs previously supplied in
+`ingress_host` must be split into these two fields; existing deployed endpoints
+are unchanged.

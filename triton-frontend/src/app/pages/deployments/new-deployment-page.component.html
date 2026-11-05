@@ -310,9 +310,9 @@
             @if (accessMode === "ingress") {
               <div class="form-row wide ingress-help">
                 <div class="field-hint">
-                  Hostname or URL. Without a scheme, <code>https://</code> is used.
+                  Enter only the hostname, e.g. <code>smollm</code>. Select the protocol separately.
                   @if (allowHttp()) {
-                    Use <code>http://</code> for HTTP.
+                    HTTP and HTTPS are allowed.
                   } @else {
                     Your administrator requires HTTPS.
                   }
@@ -325,8 +325,20 @@
                     id="deployment-ingress-host"
                     matInput
                     [(ngModel)]="ingressHost"
-                    placeholder="https://triton.example.com"
+                    placeholder="e.g. smollm"
                   />
+                </mat-form-field>
+              </div>
+              <div class="form-row">
+                <label class="field-label">Protocol</label>
+                <mat-form-field appearance="outline">
+                  <mat-label>Protocol</mat-label>
+                  <mat-select [(ngModel)]="ingressScheme">
+                    <mat-option value="https">HTTPS</mat-option>
+                    @if (allowHttp()) {
+                      <mat-option value="http">HTTP</mat-option>
+                    }
+                  </mat-select>
                 </mat-form-field>
               </div>
               <div class="form-row wide ingress-help">

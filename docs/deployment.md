@@ -722,3 +722,9 @@ workspace to install the bundled extension. MLflow plugin source lives in the
 separate `mlflow-plugin` repository. Release/install its updated package before
 using the new configuration keys; the backend's tested published-version pin is
 not advanced until that release passes compatibility checks.
+
+Hostname fields accept only a DNS hostname, e.g. `smollm`, without
+`http://`, `https://`, a port or a path. Choose the protocol separately
+(`ingress_scheme` in REST/MLflow configuration). URLs previously supplied in
+`ingress_host` must be split into these two fields; existing deployed endpoints
+are unchanged.
