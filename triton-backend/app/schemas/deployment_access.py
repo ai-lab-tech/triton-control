@@ -15,7 +15,6 @@ class DeploymentAccessRequest(SQLModel):
     access_mode: Literal["internal", "ingress"] | None = None
     ingress_host: str | None = None
     ingress_scheme: Literal["http", "https"] | None = None
-    ingress_class_name: str | None = None
     basic_auth_enabled: bool = False
     basic_auth_username: str | None = None
     basic_auth_password: SecretStr | None = Field(default=None, repr=False)
@@ -26,6 +25,8 @@ class DeploymentAccessRequest(SQLModel):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        if data.get("ingress_class_name") is not None:
+            raise ValueError("Ingress class is configured by the administrator")
         host = (data.get("ingress_host") or "").strip()
         if "://" in host:
             parsed = urlsplit(host)
@@ -44,7 +45,7 @@ class DeploymentAccessRequest(SQLModel):
             data["ingress_scheme"] = parsed.scheme
         return data
 
-    @field_validator("ingress_host", "ingress_class_name")
+    @field_validator("ingress_host")
     @classmethod
     def validate_dns_name(cls, value: str | None) -> str | None:
         value = (value or "").strip().lower().rstrip(".")

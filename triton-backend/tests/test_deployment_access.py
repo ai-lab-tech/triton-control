@@ -27,8 +27,11 @@ class DeploymentAccessTests(unittest.TestCase):
         self.env = patch.dict(
             os.environ,
             {
-                "TRITON_DEPLOY_INGRESS_CLASS": "nginx",
+                "TRITON_DEPLOY_INGRESS_CLASS": "traefik",
                 "TRITON_DEPLOY_INGRESS_TLS_SECRET": "",
+                "TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "",
+                "TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT": "web",
+                "TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT": "websecure",
             },
         )
         self.env.start()
@@ -41,8 +44,11 @@ class DeploymentAccessTests(unittest.TestCase):
             url="https://old.example.com",
             metrics_url="https://old.example.com/metrics",
         )
-        self.net, self.core, self.apps = Mock(), Mock(), Mock()
-        self.net.read_ingress_class.return_value.spec.controller = "k8s.io/ingress-nginx"
+        self.net, self.core, self.apps, self.custom = Mock(), Mock(), Mock(), Mock()
+        self.core.read_namespaced_secret.return_value = client.V1Secret(
+            metadata=client.V1ObjectMeta(name="new-auth", uid="secret-uid", labels={access.OWNER_LABEL: "model"}),
+        )
+        self.net.read_ingress_class.return_value.spec.controller = "traefik.io/ingress-controller"
         self.apps.read_namespaced_deployment.return_value.metadata.uid = "deployment-uid"
         self.net.read_namespaced_ingress.side_effect = ApiException(status=404)
         self.net.list_namespaced_ingress.return_value.items = []
@@ -53,6 +59,7 @@ class DeploymentAccessTests(unittest.TestCase):
             ("client.NetworkingV1Api", Mock(return_value=self.net)),
             ("client.CoreV1Api", Mock(return_value=self.core)),
             ("client.AppsV1Api", Mock(return_value=self.apps)),
+            ("client.CustomObjectsApi", Mock(return_value=self.custom)),
             ("get_instance_or_404", Mock(return_value=self.instance)),
             ("instances.save", Mock()),
         ]:
@@ -93,9 +100,12 @@ class DeploymentAccessTests(unittest.TestCase):
         self.net.read_namespaced_ingress.side_effect = None
         self.net.read_namespaced_ingress.return_value = ingress
         self.core.read_namespaced_secret.return_value = client.V1Secret(
-            metadata=client.V1ObjectMeta(labels={access.OWNER_LABEL: "model"}),
-            data={"auth": base64.b64encode(b"user:hash").decode()},
+            metadata=client.V1ObjectMeta(name="old-auth", uid="old-uid", labels={access.OWNER_LABEL: "model"}),
+            data={"users": base64.b64encode(b"user:hash").decode()},
         )
+        self.custom.get_namespaced_custom_object.return_value = access.access_manifests(
+            request, "control", "model", "model-service", auth_secret="old-auth" if authenticated else None,
+        )[-2] if authenticated else {}
         return ingress
 
     def test_internal_to_ingress_uses_central_tls_and_keeps_management_internal(self):
@@ -133,7 +143,7 @@ class DeploymentAccessTests(unittest.TestCase):
             )
         )
         secret = self.core.create_namespaced_secret.call_args.args[1]
-        username, hashed = secret["stringData"]["auth"].strip().split(":", 1)
+        username, hashed = secret["stringData"]["users"].strip().split(":", 1)
         self.assertEqual(username, "alice")
         self.assertTrue(bcrypt.checkpw(b"my password", hashed.encode()))
         self.assertFalse(bcrypt.checkpw(b"wrong", hashed.encode()))
@@ -144,7 +154,7 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertEqual(secret["metadata"]["ownerReferences"][0]["uid"], "deployment-uid")
         ingress = self.net.create_namespaced_ingress.call_args.args[1]
         self.assertEqual(
-            ingress["metadata"]["annotations"][f"{access.AUTH_PREFIX}auth-secret"], secret["metadata"]["name"]
+            ingress["metadata"]["annotations"][access.AUTH_SECRET_ANNOTATION], secret["metadata"]["name"]
         )
 
     def test_blank_credentials_keep_existing_secret(self):
@@ -173,8 +183,8 @@ class DeploymentAccessTests(unittest.TestCase):
         response = self.update(self.request())
         self.assertFalse(response.basic_auth_enabled)
         annotations = self.net.replace_namespaced_ingress.call_args.args[2]["metadata"]["annotations"]
-        self.assertNotIn(f"{access.AUTH_PREFIX}auth-secret", annotations)
-        self.assertNotIn(f"{access.AUTH_PREFIX}auth-type", annotations)
+        self.assertNotIn(access.AUTH_SECRET_ANNOTATION, annotations)
+        self.assertNotIn(access.MIDDLEWARE_ANNOTATION, annotations)
         self.core.delete_namespaced_secret.assert_called_once_with("old-auth", "control")
 
     def test_unowned_secret_is_never_deleted_or_reused(self):
@@ -242,9 +252,11 @@ class DeploymentAccessTests(unittest.TestCase):
         with self.assertRaises(BadRequestError):
             self.update(self.request(basic_auth_enabled=True))
 
-    def test_auth_rejects_unsupported_controller(self):
-        with self.assertRaises(BadRequestError):
-            self.update(self.request(ingress_class_name="traefik", basic_auth_enabled=True))
+    def test_users_cannot_select_ingress_class(self):
+        for ingress_class in ["nginx", "traefik", "custom"]:
+            with self.subTest(ingress_class=ingress_class), self.assertRaises(ValidationError):
+                self.request(ingress_class_name=ingress_class)
+        self.net.create_namespaced_ingress.assert_not_called()
 
     def test_auth_checks_actual_ingress_controller(self):
         self.net.read_ingress_class.return_value.spec.controller = "example.com/other-controller"
@@ -275,8 +287,128 @@ class DeploymentAccessTests(unittest.TestCase):
         ingress = manifests[-1]
         self.assertEqual(ingress["spec"]["tls"], [{"hosts": ["model.example.com"]}])
         self.assertEqual(len(ingress["spec"]["rules"][0]["http"]["paths"]), 1)
-        self.assertEqual(manifests[-2]["kind"], "Secret")
+        self.assertEqual(manifests[-2]["kind"], "Middleware")
+        self.assertEqual(manifests[-3]["kind"], "Secret")
         self.assertNotIn("password", repr(request))
+
+    def test_unauthenticated_ingress_also_requires_traefik(self):
+        self.net.read_ingress_class.return_value.spec.controller = "k8s.io/ingress-nginx"
+        with self.assertRaises(BadRequestError):
+            self.update(self.request())
+        self.net.create_namespaced_ingress.assert_not_called()
+
+    def test_custom_admin_class_and_entrypoints(self):
+        with patch.dict(os.environ, {
+            "TRITON_DEPLOY_INGRESS_CLASS": "public-traefik",
+            "TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT": "secure",
+        }):
+            self.update(self.request())
+        self.net.read_ingress_class.assert_called_once_with("public-traefik")
+        body = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertEqual(body["spec"]["ingressClassName"], "public-traefik")
+        self.assertEqual(body["metadata"]["annotations"][f"{access.AUTH_PREFIX}router.entrypoints"], "secure")
+        self.assertEqual(body["metadata"]["annotations"][f"{access.AUTH_PREFIX}router.tls"], "true")
+
+    def test_http_does_not_configure_tls_or_issuer(self):
+        with patch.dict(os.environ, {"TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "issuer"}):
+            self.update(self.request(ingress_scheme="http"))
+        body = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertNotIn("tls", body["spec"])
+        self.assertEqual(body["metadata"]["annotations"], {f"{access.AUTH_PREFIX}router.entrypoints": "web"})
+
+    def test_cert_manager_uses_unique_secret_and_admin_issuer(self):
+        with patch.dict(os.environ, {"TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "issuer"}):
+            self.update(self.request())
+        body = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertEqual(body["spec"]["tls"][0]["secretName"], "model-ingress-tls")
+        self.assertEqual(body["metadata"]["annotations"]["cert-manager.io/cluster-issuer"], "issuer")
+        self.core.read_namespaced_secret.assert_not_called()
+
+    def test_conflicting_certificate_configuration_rejected(self):
+        with patch.dict(os.environ, {
+            "TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER": "issuer", "TRITON_DEPLOY_INGRESS_TLS_SECRET": "existing",
+        }), self.assertRaises(BadRequestError):
+            self.update(self.request())
+        self.net.create_namespaced_ingress.assert_not_called()
+
+    def test_middleware_uses_hashed_secret_and_is_garbage_collected_with_it(self):
+        self.update(self.request(basic_auth_enabled=True, basic_auth_username="user", basic_auth_password="secret"))
+        secret = self.core.create_namespaced_secret.call_args.args[1]
+        middleware = self.custom.create_namespaced_custom_object.call_args.args[-1]
+        self.assertEqual(middleware["spec"]["basicAuth"]["secret"], secret["metadata"]["name"])
+        self.assertTrue(middleware["spec"]["basicAuth"]["removeHeader"])
+        self.assertEqual(middleware["metadata"]["ownerReferences"][0]["kind"], "Secret")
+        self.assertEqual(middleware["metadata"]["ownerReferences"][0]["uid"], "secret-uid")
+        ingress = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertEqual(ingress["metadata"]["annotations"][access.MIDDLEWARE_ANNOTATION],
+                         f"control-{secret['metadata']['name']}@kubernetescrd")
+
+    def test_missing_crd_cleans_new_secret_and_keeps_old_ingress(self):
+        self.existing(authenticated=True)
+        self.custom.create_namespaced_custom_object.side_effect = ApiException(status=404)
+        with self.assertRaises(BadGatewayError):
+            self.update(self.request(basic_auth_enabled=True, basic_auth_username="user", basic_auth_password="secret"))
+        self.net.replace_namespaced_ingress.assert_not_called()
+        new_secret = self.core.create_namespaced_secret.call_args.args[1]["metadata"]["name"]
+        self.core.delete_namespaced_secret.assert_called_once_with(new_secret, "control")
+
+    def test_missing_retained_middleware_requires_new_credentials(self):
+        self.existing(authenticated=True)
+        self.custom.get_namespaced_custom_object.side_effect = ApiException(status=404)
+        with self.assertRaises(BadRequestError):
+            self.update(self.request(basic_auth_enabled=True))
+        self.net.replace_namespaced_ingress.assert_not_called()
+        self.core.delete_namespaced_secret.assert_not_called()
+
+    def test_modified_retained_middleware_is_not_used(self):
+        self.existing(authenticated=True)
+        self.custom.get_namespaced_custom_object.return_value["spec"]["basicAuth"]["secret"] = "someone-else"
+        with self.assertRaises(BadRequestError):
+            self.update(self.request(basic_auth_enabled=True))
+        self.net.replace_namespaced_ingress.assert_not_called()
+
+    def test_legacy_nginx_auth_is_reported_and_requires_credentials_to_migrate(self):
+        ingress = self.existing()
+        ingress.metadata.annotations.update({
+            "nginx.ingress.kubernetes.io/auth-type": "basic",
+            "nginx.ingress.kubernetes.io/auth-secret": "old-auth",
+        })
+        self.core.read_namespaced_secret.return_value.data = {"auth": "old-hash"}
+        self.assertTrue(access.get_access(Mock(), {"role": "member"}, 7).basic_auth_enabled)
+        with self.assertRaises(BadRequestError):
+            self.update(self.request(basic_auth_enabled=True))
+        self.net.replace_namespaced_ingress.assert_not_called()
+        self.update(self.request(basic_auth_enabled=True, basic_auth_username="user", basic_auth_password="secret"))
+        annotations = self.net.replace_namespaced_ingress.call_args.args[2]["metadata"]["annotations"]
+        self.assertNotIn("nginx.ingress.kubernetes.io/auth-type", annotations)
+        self.assertIn(access.MIDDLEWARE_ANNOTATION, annotations)
+        self.core.delete_namespaced_secret.assert_called_once_with("old-auth", "control")
+
+    def test_initial_deployment_creates_middleware_before_ingress_via_custom_api(self):
+        request = CreateDeploymentRequest(
+            deployment_name="model", image="triton:latest",
+            s3_url="s3://bucket", s3_access_key="key", s3_secret_key="secret",
+            ingress_host="model.example.com", basic_auth_enabled=True,
+            basic_auth_username="user", basic_auth_password="secret",
+        )
+        events = []
+        self.custom.create_namespaced_custom_object.side_effect = lambda *args: events.append("Middleware")
+        with (
+            patch.object(k8s, "_client", return_value=Mock()),
+            patch.object(k8s, "_ensure_namespace"),
+            patch.object(k8s, "gpu_runtime_class_name", return_value=None),
+            patch.object(k8s, "_deployment_urls", return_value={"http": "internal", "metrics": "metrics"}),
+            patch.object(k8s, "update_instance_after_apply") as applied,
+            patch.object(k8s, "record_deployment_failure") as failed,
+            patch("kubernetes.utils.create_from_dict",
+                  side_effect=lambda *args, **kw: events.append(kw["data"]["kind"])),
+        ):
+            k8s.apply_deployment_resources(1, request, "control", "model", "model-service", "model-s3", "triton:latest")
+        failed.assert_not_called()
+        applied.assert_called_once()
+        self.assertEqual(events[-3:], ["Secret", "Middleware", "Ingress"])
+        self.assertEqual(self.custom.create_namespaced_custom_object.call_args.args[:4],
+                         ("traefik.io", "v1alpha1", "control", "middlewares"))
 
     def test_invalid_inputs(self):
         for values in [

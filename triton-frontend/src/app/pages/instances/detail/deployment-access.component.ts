@@ -58,7 +58,6 @@ export class DeploymentAccessComponent implements OnInit {
   mode: "internal" | "ingress" = "internal";
   host = "";
   scheme: "http" | "https" = "https";
-  ingressClass = "";
   authEnabled = false;
   username = "";
   password = "";
@@ -89,7 +88,6 @@ export class DeploymentAccessComponent implements OnInit {
     this.mode = access.access_mode;
     this.host = access.ingress_host || "";
     this.scheme = access.ingress_scheme || "https";
-    this.ingressClass = access.ingress_class_name || "";
     this.authEnabled = !!access.basic_auth_enabled;
     this.username = "";
     this.password = "";
@@ -127,7 +125,6 @@ export class DeploymentAccessComponent implements OnInit {
             access_mode: this.mode,
             ingress_host: ingress ? this.host.trim() : undefined,
             ingress_scheme: ingress ? this.scheme : undefined,
-            ingress_class_name: ingress ? this.ingressClass.trim() || undefined : undefined,
             basic_auth_enabled: ingress && this.authEnabled,
             basic_auth_username:
               ingress && this.authEnabled ? this.username || undefined : undefined,

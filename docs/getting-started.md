@@ -63,7 +63,7 @@ Prerequisites:
   which is stable from Kubernetes `v1.19`.
 - `kubectl` configured for the target cluster.
 - Helm `v3`.
-- An Ingress controller if `ingress.enabled=true`, for example nginx-ingress.
+- Traefik with its Kubernetes Ingress provider enabled if `ingress.enabled=true`.
 - A default StorageClass, or an explicit `postgresql.persistence.storageClass`,
   when using the bundled PostgreSQL database with persistence enabled.
 

@@ -13,7 +13,7 @@ The combined app image must expose:
 - frontend HTTP on `app.ports.frontend`, default `8080`
 - backend API on `app.ports.backend`, default `8000`
 
-Ingress itself is a Kubernetes resource. The ingress controller Pod, for example nginx-ingress, must already exist in the cluster.
+Ingress itself is a Kubernetes resource. Traefik with its Kubernetes Ingress provider must already exist in the cluster.
 
 ## Install
 
@@ -146,8 +146,14 @@ postgresql:
     size: 20Gi
 
 ingress:
-  className: nginx
-  proxyBodySize: 256m
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - hosts: [triton-control.example.com]
+      secretName: triton-control-tls
   hosts:
     - host: triton-control.example.com
       paths:
@@ -169,7 +175,21 @@ ingress:
 
 If `postgresql.enabled` is `true`, the chart injects `DATABASE_URL` into the app from the generated PostgreSQL Secret. If you use an external database, set `postgresql.enabled=false` and provide `DATABASE_URL` through `app.existingSecret` or `app.env`.
 
-For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for example `256m` or `1g`).
+Configure upload limits and timeouts in Traefik's administrator-managed configuration.
+The old nginx-specific `ingress.proxyBodySize` value is no longer used.
+The example above requires cert-manager and an existing `letsencrypt-prod` ClusterIssuer.
+
+For managed Triton deployments, configure `tritonDeployments.ingressClassName`
+(default `traefik`), `ingressHttpEntrypoint` (`web`), and `ingressHttpsEntrypoint`
+(`websecure`). Choose either `ingressTlsSecretName` for an existing certificate or
+`certManagerClusterIssuer` for automatic per-Ingress certificates. Both empty uses
+Traefik's administrator-configured default certificate. These settings are separate
+from the application's own `ingress` section. Users cannot override the controller.
+
+Deployment basic authentication requires Traefik's Kubernetes CRD provider and
+`middlewares.traefik.io` CRD. The chart grants the backend `get`/`create` access to
+Middlewares; each generated Middleware is garbage-collected with its credential
+Secret. See [deployment access](../../docs/deployment.md#administrator-managed-traefik-and-https).
 
 Set `development.hfBuilder.version` to override the tested HF builder release
 shipped with the backend. Leave it empty to follow the verified default.

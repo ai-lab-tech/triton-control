@@ -76,7 +76,6 @@ export class NewDeploymentPageComponent {
   basicAuthUsername = "";
   basicAuthPassword = "";
   ingressHost = "";
-  ingressClassName = "";
   selectedS3ProfileId = "";
   s3Url = "";
   s3Bucket = "";
@@ -127,12 +126,11 @@ export class NewDeploymentPageComponent {
     if (this.accessMode === "internal")
       return { label: "Internal", tone: "neutral", detail: "Cluster Service" };
     const hasHost = this.ingressHost.trim().length > 0;
-    const hasClass = this.ingressClassName.trim().length > 0;
     if (hasHost) {
       return {
         label: "On",
         tone: "ok",
-        detail: hasClass ? "Host and class set" : "Administrator default class",
+        detail: "Administrator-managed ingress",
       };
     }
     return { label: "Check", tone: "warn", detail: "Set an Ingress hostname" };
@@ -272,8 +270,6 @@ export class NewDeploymentPageComponent {
       image: this.image.trim(),
       access_mode: this.accessMode,
       ingress_host: this.accessMode === "ingress" ? this.ingressHost.trim() : undefined,
-      ingress_class_name:
-        this.accessMode === "ingress" ? this.ingressClassName.trim() || undefined : undefined,
       basic_auth_enabled: this.accessMode === "ingress" && this.basicAuthEnabled,
       basic_auth_username:
         this.accessMode === "ingress" && this.basicAuthEnabled ? this.basicAuthUsername : undefined,

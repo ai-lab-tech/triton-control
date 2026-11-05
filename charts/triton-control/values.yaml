@@ -138,11 +138,15 @@ tritonDeployments:
       timeoutSeconds: 1
       failureThreshold: 12
 
-  # Administrator-managed ingress-nginx class used by deployment access settings.
-  ingressClassName: nginx
-  # Existing kubernetes.io/tls Secret in the deployment namespace. Empty uses
-  # the ingress controller's default certificate (for example a wildcard).
+  # Administrator-managed Traefik class used by deployment access settings.
+  ingressClassName: traefik
+  # Existing kubernetes.io/tls Secret in the deployment namespace. When both
+  # certificate settings are empty, use Traefik's default certificate.
   ingressTlsSecretName: ""
+  # Optional cert-manager ClusterIssuer; mutually exclusive with ingressTlsSecretName.
+  certManagerClusterIssuer: ""
+  ingressHttpEntrypoint: web
+  ingressHttpsEntrypoint: websecure
 
   # Helper image for repository init containers and S3 sync sidecars.
   s3SyncImage: amazon/aws-cli:2.22.35
@@ -371,12 +375,10 @@ service:
 
 ingress:
   enabled: true
-  className: nginx
-  proxyBodySize: 256m
+  className: traefik
   annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
 
   hosts:
     - host: #triton-control.ai-lab-tech.com

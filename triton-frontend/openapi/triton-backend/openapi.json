@@ -4303,17 +4303,6 @@
             ],
             "title": "Ingress Scheme"
           },
-          "ingress_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Class Name"
-          },
           "basic_auth_enabled": {
             "type": "boolean",
             "title": "Basic Auth Enabled",
@@ -4842,17 +4831,6 @@
               }
             ],
             "title": "Ingress Scheme"
-          },
-          "ingress_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Class Name"
           },
           "basic_auth_enabled": {
             "type": "boolean",

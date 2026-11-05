@@ -26,7 +26,13 @@ import yaml  # type: ignore[import-untyped]
 
 from app.exceptions import BadGatewayError
 from app.schemas import CreateDeploymentRequest
-from app.services.deployment.access import OWNER_LABEL, access_manifests, validate_controller, validate_tls_secret
+from app.services.deployment.access import (
+    OWNER_LABEL,
+    access_manifests,
+    create_auth_middleware,
+    validate_controller,
+    validate_tls_secret,
+)
 from app.services.deployment.probes import serving_probes
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
 from app.services.kubernetes_client import (
@@ -109,7 +115,10 @@ def apply_deployment_resources(
             image,
             runtime_class_name=runtime_class_name,
         ):
-            utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
+            if manifest["kind"] == "Middleware":
+                create_auth_middleware(api, namespace, manifest)
+            else:
+                utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
         urls = _deployment_urls(request, api, namespace, service_name)

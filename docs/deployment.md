@@ -118,7 +118,7 @@ Required:
 
 Usually required:
 
-- An Ingress controller, such as nginx-ingress, if `ingress.enabled=true`.
+- Traefik with its Kubernetes Ingress provider enabled if `ingress.enabled=true`.
 - DNS for the configured Ingress host.
 - A TLS certificate Secret when exposing the application over HTTPS.
 - A default StorageClass, or `postgresql.persistence.storageClass`, when using
@@ -560,7 +560,8 @@ New deployments offer the same choice under **Access**. Existing API clients can
 continue supplying `ingress_host` without `access_mode`. An omitted host means
 internal access. The new `GET /api/deployments/{id}/access` and `PUT` endpoint return
 current Kubernetes exposure settings. `PUT` accepts `access_mode`, `ingress_host`,
-`ingress_scheme`, `ingress_class_name`, and the optional authentication fields.
+`ingress_scheme` and the optional authentication fields. Users cannot supply
+`ingress_class_name`; the administrator controls the class for every deployment.
 
 Triton Control manages new deployments and deployments whose access was changed
 through their internal Service DNS address, including health, metrics and model
@@ -570,51 +571,82 @@ exposes Triton's HTTP API and metrics when enabled; gRPC remains on the internal
 Service. Existing deployments retain their stored management URL until access is
 saved.
 
-### Central HTTPS certificates
+### Administrator-managed Traefik and HTTPS
 
-An administrator provisions and renews the certificate once. Set Helm values:
+Traefik is the supported controller. Install it separately with the Kubernetes
+Ingress provider enabled. Basic authentication additionally requires the
+Kubernetes CRD provider and the `middlewares.traefik.io` CRD. Triton Control does
+not install or configure the controller itself.
+
+Administrators configure the class and entrypoints through Helm:
 
 ```yaml
 tritonDeployments:
-  ingressClassName: nginx
+  ingressClassName: traefik
+  ingressHttpEntrypoint: web
+  ingressHttpsEntrypoint: websecure
   ingressTlsSecretName: triton-wildcard-tls
+  certManagerClusterIssuer: ""
 ```
 
-Create `triton-wildcard-tls` as a `kubernetes.io/tls` Secret with `tls.crt` and
-`tls.key` in the Triton deployment namespace (normally the Triton Control release
-namespace). Reference an existing Secret managed by your certificate tooling;
-private keys do not go into user forms or Helm values. Certificate renewal updates
-the same Secret and is picked up by the controller. The certificate must cover the
-chosen hostname, and DNS must resolve to the ingress controller.
+The backend verifies that the configured IngressClass uses
+`traefik.io/ingress-controller` for every exposed deployment. Custom Traefik class
+names are supported; user overrides and other controllers are rejected. Configure
+both Traefik providers to observe the deployment namespace and the chosen class.
+The chart grants the backend `get` permission on IngressClasses and `get`/`create`
+on Traefik Middlewares in its managed namespace (or cluster-wide when configured).
 
-Alternatively, leave `ingressTlsSecretName` empty and configure the controller's
-default certificate, for example a wildcard for your deployment domain. HTTPS
-Ingresses include a TLS hosts section even when using that default. An empty
-setting does **not** provision a trusted certificate automatically. If deploying
-into multiple namespaces, use the controller default certificate or synchronize
-the named TLS Secret into each namespace with your certificate tooling. Kubernetes
-Ingress Secret references cannot point into another namespace.
+Choose one certificate strategy:
 
-For installations without Helm, set `TRITON_DEPLOY_INGRESS_CLASS` and
-`TRITON_DEPLOY_INGRESS_TLS_SECRET` on the backend. Certificate administration remains
-an operator responsibility; instance users cannot select arbitrary TLS Secrets.
-See [controller TLS configuration](https://kubernetes.github.io/ingress-nginx/user-guide/tls/).
+- **Existing certificate:** set `ingressTlsSecretName` to a `kubernetes.io/tls`
+  Secret containing `tls.crt` and `tls.key` in each deployment namespace. Your
+  certificate tooling manages renewal. The certificate must cover the hostname.
+- **cert-manager:** install cert-manager and configure a ClusterIssuer, then set
+  `certManagerClusterIssuer` and leave `ingressTlsSecretName` empty. Each HTTPS
+  Ingress receives the issuer annotation and its own `<deployment>-ingress-tls`
+  Secret name. cert-manager creates and renews the Certificate and Secret. Configure
+  the issuer's validation method for your domains and Traefik; issuance is
+  asynchronous, so saving access settings does not mean the certificate is ready.
+- **Traefik default certificate:** leave both values empty and configure Traefik's
+  default TLS certificate yourself. Empty values do not provision a trusted certificate.
+
+Setting both a TLS Secret and a ClusterIssuer is rejected. DNS must resolve to
+Traefik. HTTPS routes use only the configured HTTPS entrypoint; configure HTTP to
+HTTPS redirection centrally in Traefik if desired. HTTP routes use the HTTP
+entrypoint and do not request certificates.
+
+For non-Helm installations, use `TRITON_DEPLOY_INGRESS_CLASS`,
+`TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT`, `TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT`,
+`TRITON_DEPLOY_INGRESS_TLS_SECRET`, and `TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER`.
+Users cannot select TLS Secrets, issuers, entrypoints, or controllers.
+
+The Triton Control application's own Ingress is configured separately through
+`ingress.className`, `ingress.annotations`, and `ingress.tls`. To request its
+certificate, add `cert-manager.io/cluster-issuer` to those annotations and set a
+TLS host and Secret name.
+
+See [Traefik Ingress configuration](https://doc.traefik.io/traefik/reference/routing-configuration/kubernetes/ingress/)
+and [cert-manager Ingress certificates](https://cert-manager.io/docs/usage/ingress/).
 
 ### Optional basic authentication
 
 Enable **Require basic authentication** and supply a username/password. This
-integration targets ingress-nginx (including an administrator-configured custom
-class name), requires HTTPS, and protects both HTTP inference and metrics routes.
-The backend verifies that the selected IngressClass uses `k8s.io/ingress-nginx`.
-The Helm chart grants the required `get` permission on IngressClasses; installations
-with custom RBAC must grant it too.
-Triton Control generates a salted bcrypt htpasswd entry in the Secret's `auth`
-key and configures the controller's authentication annotations. No plaintext
-password is stored in the database, returned by the access API, or placed in a URL.
-Passwords may contain 1–72 UTF-8 bytes. Clients send HTTP Basic credentials over
-HTTPS when using the exposed endpoint.
+requires HTTPS and protects both HTTP inference and metrics routes. Triton Control
+creates a salted bcrypt htpasswd entry in a Secret's `users` key and a Traefik
+`Middleware` referencing that Secret. The Ingress references the Middleware;
+the middleware removes the Authorization header before forwarding requests.
+No plaintext password is stored in the database or returned by the access API.
+Passwords may contain 1–72 UTF-8 bytes.
 
 When editing, leave both credential fields blank to keep existing credentials.
 Enter both to rotate them, or disable authentication to remove the managed Secret.
+Each Middleware is owned by its Secret, so Kubernetes garbage collection removes
+it when that Secret is deleted. Rotation creates a new Secret and Middleware before
+switching the Ingress. A failed Ingress update keeps the previous credentials.
+A missing or modified retained Middleware requires entering credentials again.
+When moving an existing nginx-authenticated route to Traefik, enter credentials
+again to create the Traefik Middleware; the old credential Secret is removed
+only after the Ingress update succeeds.
+
 Authentication protects the Ingress route; cluster-internal access remains subject
-to your cluster's network policies. See the [ingress-nginx authentication format](https://kubernetes.github.io/ingress-nginx/examples/auth/basic/).
+to your network policies. See [Traefik BasicAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/basicauth/).

@@ -19,21 +19,23 @@ from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAcc
 from app.services.access import get_instance_or_404
 from app.services.kubernetes_client import api_client
 
-AUTH_PREFIX = "nginx.ingress.kubernetes.io/"
+AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
+AUTH_SECRET_ANNOTATION = "triton-control.io/auth-secret"
+MIDDLEWARE_ANNOTATION = f"{AUTH_PREFIX}router.middlewares"
 OWNER_LABEL = "triton-control.io/deployment"
 
 
-def ingress_class(request: DeploymentAccessRequest) -> str:
-    return request.ingress_class_name or os.getenv("TRITON_DEPLOY_INGRESS_CLASS", "nginx").strip() or "nginx"
+def ingress_class() -> str:
+    return os.getenv("TRITON_DEPLOY_INGRESS_CLASS", "traefik").strip() or "traefik"
 
 
 def validate_policy(request: DeploymentAccessRequest, *, creating: bool = False) -> None:
-    if request.basic_auth_enabled:
-        supported_class = os.getenv("TRITON_DEPLOY_INGRESS_CLASS", "nginx").strip() or "nginx"
-        if ingress_class(request) != supported_class:
-            raise BadRequestError("Basic authentication requires the administrator-configured ingress-nginx class")
-        if creating and not request.basic_auth_password:
-            raise BadRequestError("Username and password are required when enabling basic authentication")
+    if creating and request.basic_auth_enabled and not request.basic_auth_password:
+        raise BadRequestError("Username and password are required when enabling basic authentication")
+    if (request.ingress_host and (request.ingress_scheme or "https") == "https"
+            and os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
+            and os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()):
+        raise BadRequestError("Configure either a TLS Secret or a cert-manager ClusterIssuer, not both")
 
 
 def auth_secret_name(deployment_name: str) -> str:
@@ -65,20 +67,27 @@ def access_manifests(
                     "kind": "Secret",
                     "type": "Opaque",
                     "metadata": {"name": auth_secret, "namespace": namespace, "labels": {OWNER_LABEL: deployment_name}},
-                    "stringData": {"auth": f"{request.basic_auth_username}:{hashed}\n"},
+                    "stringData": {"users": f"{request.basic_auth_username}:{hashed}\n"},
                 }
             )
         if not auth_secret:
             raise BadRequestError("Username and password are required when enabling basic authentication")
-        annotations.update(
-            {
-                f"{AUTH_PREFIX}auth-type": "basic",
-                f"{AUTH_PREFIX}auth-secret": auth_secret,
-                f"{AUTH_PREFIX}auth-realm": "Triton authentication required",
-            }
-        )
+        manifests.append({
+            "apiVersion": "traefik.io/v1alpha1",
+            "kind": "Middleware",
+            "metadata": {
+                "name": auth_secret, "namespace": namespace,
+                "labels": {OWNER_LABEL: deployment_name},
+                "annotations": {"kubernetes.io/ingress.class": ingress_class()},
+            },
+            "spec": {"basicAuth": {
+                "secret": auth_secret, "realm": "Triton authentication required", "removeHeader": True,
+            }},
+        })
+        annotations[AUTH_SECRET_ANNOTATION] = auth_secret
+        annotations[MIDDLEWARE_ANNOTATION] = f"{namespace}-{auth_secret}@kubernetescrd"
     spec: dict[str, Any] = {
-        "ingressClassName": ingress_class(request),
+        "ingressClassName": ingress_class(),
         "rules": [
             {
                 "host": request.ingress_host,
@@ -98,12 +107,21 @@ def access_manifests(
     if (request.ingress_scheme or "https") == "https":
         tls: dict[str, Any] = {"hosts": [request.ingress_host]}
         secret = os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
-        if secret:
+        issuer = os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()
+        if issuer:
+            tls["secretName"] = f"{deployment_name}-ingress-tls"
+            annotations["cert-manager.io/cluster-issuer"] = issuer
+        elif secret:
             tls["secretName"] = secret
         spec["tls"] = [tls]
-        annotations[f"{AUTH_PREFIX}ssl-redirect"] = "true"
+        annotations[f"{AUTH_PREFIX}router.tls"] = "true"
+        annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
+            os.getenv("TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT", "websecure").strip() or "websecure"
+        )
     else:
-        annotations[f"{AUTH_PREFIX}ssl-redirect"] = "false"
+        annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
+            os.getenv("TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT", "web").strip() or "web"
+        )
     manifests.append(
         {
             "apiVersion": "networking.k8s.io/v1",
@@ -169,7 +187,10 @@ def _response(instance: Any, ingress: Any) -> DeploymentAccessResponse:
         ingress_host=host,
         ingress_scheme=scheme,
         ingress_class_name=ingress.spec.ingress_class_name,
-        basic_auth_enabled=annotations.get(f"{AUTH_PREFIX}auth-type") == "basic",
+        basic_auth_enabled=bool(
+            (annotations.get(AUTH_SECRET_ANNOTATION) and annotations.get(MIDDLEWARE_ANNOTATION))
+            or annotations.get("nginx.ingress.kubernetes.io/auth-type") == "basic"
+        ),
         tls_secret_name=tls_secret,
     )
 
@@ -213,11 +234,13 @@ def update_access(
             workload = client.AppsV1Api(api).read_namespaced_deployment(name, namespace)
             previous = _read_ingress(net, instance)
             annotations = (previous.metadata.annotations or {}) if previous else {}
-            old_secret = annotations.get(f"{AUTH_PREFIX}auth-secret")
+            old_secret = annotations.get(AUTH_SECRET_ANNOTATION) or annotations.get(
+                "nginx.ingress.kubernetes.io/auth-secret"
+            )
             retained_secret = None
             if request.basic_auth_enabled and not request.basic_auth_password and old_secret:
                 secret = core.read_namespaced_secret(old_secret, namespace)
-                if (secret.metadata.labels or {}).get(OWNER_LABEL) == name and (secret.data or {}).get("auth"):
+                if (secret.metadata.labels or {}).get(OWNER_LABEL) == name and (secret.data or {}).get("users"):
                     retained_secret = old_secret
             manifests = access_manifests(
                 request,
@@ -248,6 +271,15 @@ def update_access(
                     ]
                     core.create_namespaced_secret(namespace, manifest)
                     new_secret = manifest["metadata"]["name"]
+                elif manifest["kind"] == "Middleware":
+                    if new_secret:
+                        try:
+                            create_auth_middleware(api, namespace, manifest)
+                        except ApiException:
+                            _delete_secret(core, namespace, new_secret, name)
+                            raise
+                    else:
+                        validate_auth_middleware(api, namespace, manifest)
                 else:
                     # Preserve unrelated annotations, but explicitly remove old auth/TLS settings.
                     preserved = {
@@ -255,10 +287,11 @@ def update_access(
                         for key, value in annotations.items()
                         if key
                         not in {
-                            f"{AUTH_PREFIX}auth-type",
-                            f"{AUTH_PREFIX}auth-secret",
-                            f"{AUTH_PREFIX}auth-realm",
-                            f"{AUTH_PREFIX}ssl-redirect",
+                            AUTH_SECRET_ANNOTATION, MIDDLEWARE_ANNOTATION,
+                            f"{AUTH_PREFIX}router.tls", f"{AUTH_PREFIX}router.entrypoints",
+                            "cert-manager.io/cluster-issuer",
+                            "nginx.ingress.kubernetes.io/auth-type", "nginx.ingress.kubernetes.io/auth-secret",
+                            "nginx.ingress.kubernetes.io/auth-realm", "nginx.ingress.kubernetes.io/ssl-redirect",
                         }
                     }
                     manifest["metadata"]["annotations"] = {**preserved, **manifest["metadata"]["annotations"]}
@@ -323,15 +356,41 @@ def validate_tls_secret(core: Any, request: DeploymentAccessRequest, namespace: 
 
 
 def validate_controller(net: Any, request: DeploymentAccessRequest) -> None:
-    if not request.basic_auth_enabled:
+    if not request.ingress_host:
         return
     try:
-        controller = net.read_ingress_class(ingress_class(request))
+        controller = net.read_ingress_class(ingress_class())
     except ApiException as exc:
         if exc.status in {403, 404}:
             raise BadRequestError(
-                "Cannot verify the ingress-nginx class; ask an administrator to configure it"
+                "Cannot verify the Traefik class; ask an administrator to configure it"
             ) from exc
         raise
-    if controller.spec.controller != "k8s.io/ingress-nginx":
-        raise BadRequestError("Basic authentication is supported only by the ingress-nginx controller")
+    if controller.spec.controller != "traefik.io/ingress-controller":
+        raise BadRequestError("Deployment Ingress is supported only by the Traefik controller")
+
+
+def create_auth_middleware(api: Any, namespace: str, manifest: dict[str, Any]) -> None:
+    """Own the immutable Middleware by its Secret, so rotation/deletion cleans up both."""
+    secret = client.CoreV1Api(api).read_namespaced_secret(manifest["metadata"]["name"], namespace)
+    manifest["metadata"]["ownerReferences"] = [{
+        "apiVersion": "v1", "kind": "Secret", "name": secret.metadata.name, "uid": secret.metadata.uid,
+    }]
+    client.CustomObjectsApi(api).create_namespaced_custom_object(
+        "traefik.io", "v1alpha1", namespace, "middlewares", manifest,
+    )
+
+
+def validate_auth_middleware(api: Any, namespace: str, manifest: dict[str, Any]) -> None:
+    """Never silently retain credentials behind a missing or modified authentication middleware."""
+    try:
+        existing = client.CustomObjectsApi(api).get_namespaced_custom_object(
+            "traefik.io", "v1alpha1", namespace, "middlewares", manifest["metadata"]["name"],
+        )
+    except ApiException as exc:
+        if exc.status == 404:
+            raise BadRequestError("Authentication middleware is missing; enter credentials again") from exc
+        raise
+    if (existing.get("metadata", {}).get("labels", {}).get(OWNER_LABEL)
+            != manifest["metadata"]["labels"][OWNER_LABEL] or existing.get("spec") != manifest["spec"]):
+        raise BadRequestError("Authentication middleware changed; enter credentials again")

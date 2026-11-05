@@ -391,7 +391,7 @@ pod.
 | Model control mode               | Yes                   | Triton behavior (`explicit` or `poll`).                                                                  | Use mode based on model operation strategy.                                                                                                          |
 | Startup model                    | Optional (`explicit`) | Model loaded at startup (`*` if empty).                                                                  | Control startup footprint when needed.                                                                                                               |
 | Poll interval                    | Optional (`poll`)     | Seconds between repository checks.                                                                       | Tune for change rate and API load.                                                                                                                   |
-| Ingress host/class               | Optional              | Expose deployment through ingress.                                                                       | Use for external cluster access.                                                                                                                     |
+| Ingress host                     | Optional              | Expose deployment through administrator-managed Traefik.                                                                       | Use for external cluster access.                                                                                                                     |
 | `.dockerconfigjson`              | Optional              | Private registry pull credentials.                                                                       | Required for private images.                                                                                                                         |
 | `requirements.txt`               | Optional              | Extra Python packages installed before Triton start.                                                     | Prefer dev/stage; bake into image for production.                                                                                                    |
 | Resources (GPU/CPU/Memory)       | Optional              | Kubernetes GPU limit and CPU/memory resource settings.                                                   | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
@@ -416,8 +416,12 @@ credentials, and optional email value for your own registry:
 
 Ingress/TLS note:
 
-- Add Deployment does not create TLS certificates
-- configure TLS separately via ingress controller (for example cert-manager or existing TLS Secret)
+- The administrator selects the Traefik class, entrypoints and certificate policy.
+- If a cert-manager ClusterIssuer is configured, HTTPS Ingresses automatically request
+  their own certificates; otherwise they use an existing TLS Secret or Traefik's
+  default certificate.
+- Users choose the hostname and access mode, not the controller or certificate issuer.
+- See [Traefik and HTTPS setup](deployment.md#administrator-managed-traefik-and-https).
 
 When ingress is not configured, Triton Control uses internal service DNS:
 

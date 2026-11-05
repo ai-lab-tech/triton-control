@@ -319,17 +319,6 @@
                   />
                 </mat-form-field>
               </div>
-              <div class="form-row">
-                <label class="field-label" for="deployment-ingress-class">Ingress class</label>
-                <mat-form-field appearance="outline">
-                  <input
-                    id="deployment-ingress-class"
-                    matInput
-                    [(ngModel)]="ingressClassName"
-                    placeholder="nginx"
-                  />
-                </mat-form-field>
-              </div>
               <div class="form-row wide ingress-help">
                 <div class="field-hint">
                   HTTPS uses the certificate configured by your administrator. Its domain must cover
@@ -341,7 +330,7 @@
                   >Require basic authentication</mat-checkbox
                 >
                 @if (basicAuthEnabled) {
-                  <p>Requires HTTPS and the administrator-configured ingress-nginx class.</p>
+                  <p>Requires HTTPS. Routing is configured by your administrator.</p>
                   <mat-form-field appearance="outline">
                     <mat-label>Username</mat-label>
                     <input matInput [(ngModel)]="basicAuthUsername" autocomplete="off" />

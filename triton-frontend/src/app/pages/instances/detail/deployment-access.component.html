@@ -35,10 +35,6 @@
           <mat-option value="http">HTTP</mat-option>
         </mat-select>
       </mat-form-field>
-      <mat-form-field appearance="outline">
-        <mat-label>Ingress class (optional)</mat-label>
-        <input matInput [(ngModel)]="ingressClass" placeholder="Administrator default" />
-      </mat-form-field>
       <p>
         HTTPS uses the certificate configured by your administrator. Its domain must cover this
         hostname.
@@ -48,7 +44,7 @@
       >
       @if (authEnabled) {
         <p>
-          Basic authentication requires HTTPS and the administrator-configured ingress-nginx class.
+          Basic authentication requires HTTPS. Routing is configured by your administrator.
         </p>
         @if (access()?.basic_auth_enabled) {
           <p>

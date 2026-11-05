@@ -65,7 +65,6 @@ describe("DeploymentAccessComponent", () => {
         access_mode: "internal",
         ingress_host: undefined,
         ingress_scheme: undefined,
-        ingress_class_name: undefined,
         basic_auth_enabled: false,
         basic_auth_username: undefined,
         basic_auth_password: undefined,
