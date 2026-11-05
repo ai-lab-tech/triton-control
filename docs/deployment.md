@@ -543,3 +543,78 @@ configuration. SQLite/PVC installations must be migrated before upgrading; old
 runs are not migrated automatically. S3 installations retain
 artifacts and PostgreSQL metadata when uninstalled; reinstall against the same
 artifact endpoint and root to retain valid proxy references.
+
+
+## Changing deployment access
+
+For a Kubernetes-managed Triton instance, open its details and select **Deployment
+access → Edit access**. Members with access to that instance and administrators can
+switch between **Internal Service** and **Ingress**. The switch changes the Ingress
+and authentication Secret without restarting Triton or changing its models. The
+ClusterIP Service remains in both modes. Internal mode removes the managed Ingress
+and its authentication Secret; requests already in flight may finish while the
+controller reconciles the change. Other manually created routes are outside this
+setting's scope.
+
+New deployments offer the same choice under **Access**. Existing API clients can
+continue supplying `ingress_host` without `access_mode`. An omitted host means
+internal access. The new `GET /api/deployments/{id}/access` and `PUT` endpoint return
+current Kubernetes exposure settings. `PUT` accepts `access_mode`, `ingress_host`,
+`ingress_scheme`, `ingress_class_name`, and the optional authentication fields.
+
+Triton Control manages new deployments and deployments whose access was changed
+through their internal Service DNS address, including health, metrics and model
+operations. The backend must therefore have cluster DNS/network access. The
+**Deployment access** panel shows the client-facing endpoint separately. Ingress
+exposes Triton's HTTP API and metrics when enabled; gRPC remains on the internal
+Service. Existing deployments retain their stored management URL until access is
+saved.
+
+### Central HTTPS certificates
+
+An administrator provisions and renews the certificate once. Set Helm values:
+
+```yaml
+tritonDeployments:
+  ingressClassName: nginx
+  ingressTlsSecretName: triton-wildcard-tls
+```
+
+Create `triton-wildcard-tls` as a `kubernetes.io/tls` Secret with `tls.crt` and
+`tls.key` in the Triton deployment namespace (normally the Triton Control release
+namespace). Reference an existing Secret managed by your certificate tooling;
+private keys do not go into user forms or Helm values. Certificate renewal updates
+the same Secret and is picked up by the controller. The certificate must cover the
+chosen hostname, and DNS must resolve to the ingress controller.
+
+Alternatively, leave `ingressTlsSecretName` empty and configure the controller's
+default certificate, for example a wildcard for your deployment domain. HTTPS
+Ingresses include a TLS hosts section even when using that default. An empty
+setting does **not** provision a trusted certificate automatically. If deploying
+into multiple namespaces, use the controller default certificate or synchronize
+the named TLS Secret into each namespace with your certificate tooling. Kubernetes
+Ingress Secret references cannot point into another namespace.
+
+For installations without Helm, set `TRITON_DEPLOY_INGRESS_CLASS` and
+`TRITON_DEPLOY_INGRESS_TLS_SECRET` on the backend. Certificate administration remains
+an operator responsibility; instance users cannot select arbitrary TLS Secrets.
+See [controller TLS configuration](https://kubernetes.github.io/ingress-nginx/user-guide/tls/).
+
+### Optional basic authentication
+
+Enable **Require basic authentication** and supply a username/password. This
+integration targets ingress-nginx (including an administrator-configured custom
+class name), requires HTTPS, and protects both HTTP inference and metrics routes.
+The backend verifies that the selected IngressClass uses `k8s.io/ingress-nginx`.
+The Helm chart grants the required `get` permission on IngressClasses; installations
+with custom RBAC must grant it too.
+Triton Control generates a salted bcrypt htpasswd entry in the Secret's `auth`
+key and configures the controller's authentication annotations. No plaintext
+password is stored in the database, returned by the access API, or placed in a URL.
+Passwords may contain 1–72 UTF-8 bytes. Clients send HTTP Basic credentials over
+HTTPS when using the exposed endpoint.
+
+When editing, leave both credential fields blank to keep existing credentials.
+Enter both to rotate them, or disable authentication to remove the managed Secret.
+Authentication protects the Ingress route; cluster-internal access remains subject
+to your cluster's network policies. See the [ingress-nginx authentication format](https://kubernetes.github.io/ingress-nginx/examples/auth/basic/).

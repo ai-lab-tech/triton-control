@@ -1,0 +1,92 @@
+<h3>Deployment access</h3>
+@if (access(); as current) {
+  <p>
+    {{ current.access_mode === "ingress" ? "Ingress" : "Internal Service" }}:
+    <code>{{ current.url }}</code>
+  </p>
+  @if (current.basic_auth_enabled) {
+    <p>Basic authentication enabled.</p>
+  }
+  @if (!editing() && canWrite()) {
+    <button mat-stroked-button type="button" (click)="edit()" [disabled]="busy()">
+      Edit access
+    </button>
+  }
+}
+@if (editing()) {
+  <fieldset class="fields" [disabled]="busy()">
+    <legend>Access settings</legend>
+    <mat-form-field appearance="outline">
+      <mat-label>Access mode</mat-label>
+      <mat-select [(ngModel)]="mode" [disabled]="busy()">
+        <mat-option value="internal">Internal Service</mat-option>
+        <mat-option value="ingress">Ingress</mat-option>
+      </mat-select>
+    </mat-form-field>
+    @if (mode === "ingress") {
+      <mat-form-field appearance="outline">
+        <mat-label>Hostname</mat-label>
+        <input matInput [(ngModel)]="host" placeholder="triton.example.com" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Protocol</mat-label>
+        <mat-select [(ngModel)]="scheme" [disabled]="busy()">
+          <mat-option value="https">HTTPS</mat-option>
+          <mat-option value="http">HTTP</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Ingress class (optional)</mat-label>
+        <input matInput [(ngModel)]="ingressClass" placeholder="Administrator default" />
+      </mat-form-field>
+      <p>
+        HTTPS uses the certificate configured by your administrator. Its domain must cover this
+        hostname.
+      </p>
+      <mat-checkbox [(ngModel)]="authEnabled" [disabled]="busy()"
+        >Require basic authentication</mat-checkbox
+      >
+      @if (authEnabled) {
+        <p>
+          Basic authentication requires HTTPS and the administrator-configured ingress-nginx class.
+        </p>
+        @if (access()?.basic_auth_enabled) {
+          <p>
+            Leave both fields empty to keep existing credentials, or enter both to replace them.
+          </p>
+        }
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput [(ngModel)]="username" autocomplete="off" />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input matInput type="password" [(ngModel)]="password" autocomplete="new-password" />
+        </mat-form-field>
+      }
+    } @else {
+      <p>
+        Removes the Ingress and its managed authentication Secret. The Service remains reachable
+        inside the cluster.
+      </p>
+    }
+    <div class="actions">
+      <button mat-flat-button type="button" (click)="save()" [disabled]="busy() || !valid()">
+        Save access
+      </button>
+      <button mat-button type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
+    </div>
+  </fieldset>
+}
+@if (busy()) {
+  <p role="status">Updating access settings…</p>
+}
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+  <button mat-button type="button" (click)="cancel(); load()" [disabled]="busy()">
+    Reload access
+  </button>
+}
+@if (message()) {
+  <p role="status">{{ message() }}</p>
+}

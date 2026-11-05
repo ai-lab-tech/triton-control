@@ -15,6 +15,7 @@ dependencies = [
     "httpx==0.28.1",
     "graphql-core==3.2.12",
     "cryptography==50.0.0",
+    "bcrypt==4.3.0",
     "cachetools",
     "authlib==1.9.1",
     "itsdangerous==2.2.0",

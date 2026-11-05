@@ -17,6 +17,7 @@ from app.exceptions import BadRequestError
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
+from app.services.deployment.access import validate_policy
 from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
@@ -29,6 +30,7 @@ def create_deployment(
     claims: dict[str, Any],
     schedule_task: Callable[..., None] | None = None,
 ) -> DeploymentResponse:
+    validate_policy(request, creating=True)
     request = resolve_profile_request(request, session, claims)
     name = request.deployment_name
     control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
@@ -37,9 +39,9 @@ def create_deployment(
     svc = f"{name}-service"
     secret = f"{name}-s3-credentials"
     image = request.image
-    triton_url = k8s.pending_url(ns, svc, request.ingress_host, request.ingress_scheme)
+    triton_url = k8s.pending_url(ns, svc)
     metrics_url = (
-        k8s.pending_metrics_url(ns, svc, request.ingress_host, request.ingress_scheme)
+        k8s.pending_metrics_url(ns, svc)
         if request.allow_metrics
         else None
     )

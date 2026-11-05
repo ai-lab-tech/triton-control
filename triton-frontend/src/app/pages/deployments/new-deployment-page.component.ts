@@ -71,6 +71,10 @@ export class NewDeploymentPageComponent {
 
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:26.06-py3";
+  accessMode: "internal" | "ingress" = "internal";
+  basicAuthEnabled = false;
+  basicAuthUsername = "";
+  basicAuthPassword = "";
   ingressHost = "";
   ingressClassName = "";
   selectedS3ProfileId = "";
@@ -120,15 +124,18 @@ export class NewDeploymentPageComponent {
   }
 
   ingressStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
+    if (this.accessMode === "internal")
+      return { label: "Internal", tone: "neutral", detail: "Cluster Service" };
     const hasHost = this.ingressHost.trim().length > 0;
     const hasClass = this.ingressClassName.trim().length > 0;
-    if (!hasHost && !hasClass) {
-      return { label: "Off", tone: "neutral", detail: "No host/class" };
+    if (hasHost) {
+      return {
+        label: "On",
+        tone: "ok",
+        detail: hasClass ? "Host and class set" : "Administrator default class",
+      };
     }
-    if (hasHost && hasClass) {
-      return { label: "On", tone: "ok", detail: "Host and class set" };
-    }
-    return { label: "Check", tone: "warn", detail: "Set host and class" };
+    return { label: "Check", tone: "warn", detail: "Set an Ingress hostname" };
   }
 
   pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
@@ -263,8 +270,15 @@ export class NewDeploymentPageComponent {
     const payload: CreateDeploymentRequest = {
       deployment_name: this.deploymentName.trim(),
       image: this.image.trim(),
-      ingress_host: this.ingressHost.trim() || undefined,
-      ingress_class_name: this.ingressClassName.trim() || undefined,
+      access_mode: this.accessMode,
+      ingress_host: this.accessMode === "ingress" ? this.ingressHost.trim() : undefined,
+      ingress_class_name:
+        this.accessMode === "ingress" ? this.ingressClassName.trim() || undefined : undefined,
+      basic_auth_enabled: this.accessMode === "ingress" && this.basicAuthEnabled,
+      basic_auth_username:
+        this.accessMode === "ingress" && this.basicAuthEnabled ? this.basicAuthUsername : undefined,
+      basic_auth_password:
+        this.accessMode === "ingress" && this.basicAuthEnabled ? this.basicAuthPassword : undefined,
       s3_url: this.buildS3RepositoryUrl(this.s3Url, this.s3Bucket, this.s3Prefix),
       s3_access_key: this.s3AccessKey.trim(),
       s3_secret_key: this.s3SecretKey,
@@ -303,6 +317,7 @@ export class NewDeploymentPageComponent {
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create deployment."), "error");
     } finally {
+      this.basicAuthPassword = "";
       this.deploying.set(false);
     }
   }
@@ -319,6 +334,12 @@ export class NewDeploymentPageComponent {
       this.image.trim().length > 0 &&
       this.s3AccessKey.trim().length > 0 &&
       this.s3SecretKey.trim().length > 0 &&
+      (this.accessMode === "internal" ||
+        (this.ingressHost.trim().length > 0 &&
+          (!this.basicAuthEnabled ||
+            (!!this.basicAuthUsername &&
+              !!this.basicAuthPassword &&
+              !this.ingressHost.trim().toLowerCase().startsWith("http://"))))) &&
       this.hasValidMemoryGi() &&
       !this.deploying()
     );

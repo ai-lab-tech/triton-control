@@ -42,6 +42,9 @@ rules:
     resources: ["statefulsets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   {{- if $clusterWide }}
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get"]
   - apiGroups: ["node.k8s.io"]
     resources: ["runtimeclasses"]
     verbs: ["get"]
@@ -78,6 +81,9 @@ rules:
     verbs: ["get"]
   - apiGroups: ["node.k8s.io"]
     resources: ["runtimeclasses"]
+    verbs: ["get"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -145,6 +145,11 @@
           @if (instance.isSelfDeployed) {
             <div class="panel-card deployment-card">
               <div class="panel-title">Deployment</div>
+              <app-deployment-access
+                [instanceId]="instance.id"
+                [canWrite]="canWriteInstances()"
+                (saved)="refreshAfterAccessChange()"
+              />
               <div class="kv">
                 <span class="kv-label">{{
                   instance.deploymentBackend.includes(",") ? "Backends" : "Backend"

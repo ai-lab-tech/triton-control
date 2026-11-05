@@ -13,14 +13,15 @@ from __future__ import annotations
 
 import re
 from typing import Any, List, Literal, Optional
-from urllib.parse import urlsplit
 
 from packaging.requirements import InvalidRequirement, Requirement
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
+from app.schemas.deployment_access import DeploymentAccessRequest
 
-class CreateDeploymentRequest(SQLModel):
+
+class CreateDeploymentRequest(DeploymentAccessRequest):
     """Request body for ``POST /api/deployments``."""
 
     deployment_name: str
@@ -34,9 +35,6 @@ class CreateDeploymentRequest(SQLModel):
     s3_ca_certificate: Optional[str] = None
     image: str
     dockerconfigjson: Optional[str] = None
-    ingress_host: Optional[str] = None
-    ingress_scheme: Optional[Literal["http", "https"]] = None
-    ingress_class_name: Optional[str] = None
     model_control_mode: Literal["explicit", "poll"] = "explicit"
     repository_poll_secs: int = Field(default=15, gt=0)
     repository_sync_mode: Literal["direct", "init", "sidecar"] = "direct"
@@ -67,26 +65,6 @@ class CreateDeploymentRequest(SQLModel):
             if self.model_control_mode != "explicit":
                 raise ValueError("profile deployments require explicit model control")
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_ingress_url(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        raw_host = (data.get("ingress_host") or "").strip()
-        if not raw_host:
-            return data
-        parsed = urlsplit(raw_host)
-        if not parsed.scheme:
-            return data
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("ingress_host must be a DNS host name or http(s) URL")
-        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            raise ValueError("ingress_host URL must not include a path, query, or fragment")
-        normalized = dict(data)
-        normalized["ingress_host"] = parsed.hostname
-        normalized["ingress_scheme"] = parsed.scheme
-        return normalized
 
     @field_validator(
         "deployment_name",
@@ -161,16 +139,6 @@ class CreateDeploymentRequest(SQLModel):
     def normalize_optional_certificate(cls, value: str | None) -> str | None:
         cleaned = (value or "").strip()
         return cleaned or None
-
-    @field_validator("ingress_host")
-    @classmethod
-    def normalize_ingress_host(cls, value: str | None) -> str | None:
-        cleaned = (value or "").strip().lower().rstrip(".")
-        if not cleaned:
-            return None
-        if "/" in cleaned or "://" in cleaned or not re.fullmatch(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?", cleaned):
-            raise ValueError("ingress_host must be a DNS host name or http(s) URL")
-        return cleaned
 
     @field_validator("requirements_txt")
     @classmethod

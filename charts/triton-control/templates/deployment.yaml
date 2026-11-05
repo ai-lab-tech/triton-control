@@ -73,6 +73,10 @@ spec:
               value: {{ .Values.mlflow.gatewayImage | quote }}
             - name: ARGO_WORKFLOWS_WORKFLOW_SERVICE_ACCOUNT
               value: {{ .Values.argoWorkflows.controller.workflowDefaults.spec.serviceAccountName | quote }}
+            - name: TRITON_DEPLOY_INGRESS_CLASS
+              value: {{ .Values.tritonDeployments.ingressClassName | default "nginx" | quote }}
+            - name: TRITON_DEPLOY_INGRESS_TLS_SECRET
+              value: {{ .Values.tritonDeployments.ingressTlsSecretName | default "" | quote }}
             - name: TRITON_DEPLOY_S3_SYNC_IMAGE
               value: {{ .Values.tritonDeployments.s3SyncImage | quote }}
             - name: TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE

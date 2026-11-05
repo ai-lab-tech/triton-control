@@ -460,13 +460,15 @@ class DeploymentServiceTests(unittest.TestCase):
             "triton-minio-s3-credentials",
             "triton-image",
         )
-        urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
+        with patch("kubernetes.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_service.return_value.spec.ports = []
+            urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
 
         # Assert
         ingress = manifests[3]
         self.assertEqual(ingress["spec"]["rules"][0]["host"], "triton.example.local")
-        self.assertEqual(urls["http"], "https://triton.example.local")
-        self.assertEqual(urls["metrics"], "https://triton.example.local/metrics")
+        self.assertEqual(urls["http"], "http://triton-minio-service.triton-minio.svc.cluster.local:18000")
+        self.assertEqual(urls["metrics"], "http://triton-minio-service.triton-minio.svc.cluster.local:18002/metrics")
 
     def test_Manifests_IngressHttpUrlProvided_UsesHostRuleAndHttpUrls(self) -> None:
         # Arrange
@@ -488,13 +490,15 @@ class DeploymentServiceTests(unittest.TestCase):
             "triton-minio-s3-credentials",
             "triton-image",
         )
-        urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
+        with patch("kubernetes.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_service.return_value.spec.ports = []
+            urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
 
         # Assert
         ingress = manifests[3]
         self.assertEqual(ingress["spec"]["rules"][0]["host"], "triton.example.local")
-        self.assertEqual(urls["http"], "http://triton.example.local")
-        self.assertEqual(urls["metrics"], "http://triton.example.local/metrics")
+        self.assertEqual(urls["http"], "http://triton-minio-service.triton-minio.svc.cluster.local:18000")
+        self.assertEqual(urls["metrics"], "http://triton-minio-service.triton-minio.svc.cluster.local:18002/metrics")
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         # Arrange

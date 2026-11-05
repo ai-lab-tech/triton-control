@@ -22,6 +22,8 @@ from app.schemas import (
     DeploymentResponse,
     InstanceLogsResponse,
 )
+from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
+from app.services.deployment import access as access_service
 from app.services.deployment import deployment as deployment_service
 from app.services.deployment import mlflow as mlflow_service
 
@@ -89,3 +91,24 @@ def get_deployment_logs(
 ) -> InstanceLogsResponse:
     """Return deployment and Kubernetes pod logs for an instance."""
     return InstanceLogsResponse(logs=deployment_service.get_deployment_logs(session, claims, instance_id))
+
+
+@router.get("/{instance_id}/access", response_model=DeploymentAccessResponse)
+@translate_app_errors
+def get_deployment_access(
+    instance_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentAccessResponse:
+    return access_service.get_access(session, claims, instance_id)
+
+
+@router.put("/{instance_id}/access", response_model=DeploymentAccessResponse)
+@translate_app_errors
+def update_deployment_access(
+    instance_id: int,
+    request: DeploymentAccessRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentAccessResponse:
+    return access_service.update_access(request, session, claims, instance_id)

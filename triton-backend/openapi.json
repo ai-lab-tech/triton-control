@@ -1562,6 +1562,108 @@
         }
       }
     },
+    "/api/deployments/{instance_id}/access": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get Deployment Access",
+        "operationId": "get_deployment_access_api_deployments__instance_id__access_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Update Deployment Access",
+        "operationId": "update_deployment_access_api_deployments__instance_id__access_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentAccessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/development": {
       "get": {
         "tags": [
@@ -4160,6 +4262,87 @@
       },
       "CreateDeploymentRequest": {
         "properties": {
+          "access_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "internal",
+                  "ingress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Mode"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "basic_auth_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Username"
+          },
+          "basic_auth_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Password"
+          },
           "deployment_name": {
             "type": "string",
             "title": "Deployment Name"
@@ -4243,43 +4426,6 @@
               }
             ],
             "title": "Dockerconfigjson"
-          },
-          "ingress_host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Host"
-          },
-          "ingress_scheme": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "http",
-                  "https"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Scheme"
-          },
-          "ingress_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Class Name"
           },
           "model_control_mode": {
             "type": "string",
@@ -4653,6 +4799,173 @@
           "created_at"
         ],
         "title": "DashboardAlertDTO"
+      },
+      "DeploymentAccessRequest": {
+        "properties": {
+          "access_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "internal",
+                  "ingress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Mode"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "basic_auth_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Username"
+          },
+          "basic_auth_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Password"
+          }
+        },
+        "type": "object",
+        "title": "DeploymentAccessRequest"
+      },
+      "DeploymentAccessResponse": {
+        "properties": {
+          "access_mode": {
+            "type": "string",
+            "enum": [
+              "internal",
+              "ingress"
+            ],
+            "title": "Access Mode"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "internal_url": {
+            "type": "string",
+            "title": "Internal Url"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "tls_secret_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tls Secret Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_mode",
+          "url",
+          "internal_url"
+        ],
+        "title": "DeploymentAccessResponse"
       },
       "DeploymentDeleteResponse": {
         "properties": {

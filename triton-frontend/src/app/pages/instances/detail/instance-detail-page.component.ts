@@ -18,6 +18,8 @@ import { MatTabChangeEvent } from "@angular/material/tabs";
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
 
+import { DeploymentAccessComponent } from "./deployment-access.component";
+
 import { type Instance } from "../instances.data";
 import {
   DeploymentsService,
@@ -50,6 +52,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    DeploymentAccessComponent,
     DatePipe,
     FormsModule,
     RouterLink,
@@ -226,6 +229,11 @@ export class InstanceDetailPageComponent implements OnInit {
       this.openLogsOnce = false;
     }
     this.startRuntimePolling(id);
+  }
+
+  refreshAfterAccessChange(): void {
+    const instance = this.instance();
+    if (instance) this.store.dispatch(instanceDetailRefreshRequested({ instanceId: instance.id }));
   }
 
   saveS3Config(): void {
