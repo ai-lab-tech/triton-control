@@ -2,6 +2,9 @@
 
 Triton Control can run as a local Compose stack or as a Kubernetes deployment.
 
+For installation, start with [Kubernetes Ingress and TLS setup](ingress-tls.md)
+or the [Minikube development environment](local-kubernetes.md).
+
 ## Optional Email Delivery
 
 Email is not required. The safe default is `EMAIL_DELIVERY_MODE=disabled`, so

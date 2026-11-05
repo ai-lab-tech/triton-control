@@ -25,6 +25,7 @@ nav:
   - Operations:
     - Configuration: configuration.md
     - Deployment: deployment.md
+    - Ingress and TLS Setup: ingress-tls.md
     - Security: security.md
     - Troubleshooting: troubleshooting.md
   - Reference:
@@ -32,6 +33,7 @@ nav:
   - Project:
     - Roadmap: roadmap.md
     - Local Project Development: development.md
+    - Minikube Test Environment: local-kubernetes.md
 
 markdown_extensions:
   - admonition

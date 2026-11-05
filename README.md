@@ -108,78 +108,13 @@ workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Run On Kubernetes
 
-The Helm chart deploys:
+Use the Helm chart in `charts/triton-control`:
 
-- one combined app image with Nginx, Angular, and FastAPI
-- one optional PostgreSQL Deployment
-- one optional Argo Workflows installation
-- one Service for frontend and backend ports
-- optional Ingress routes
+- [Cluster setup: Traefik, DNS and certificates](docs/ingress-tls.md)
+- [Developer test environment: Minikube and mkcert](docs/local-kubernetes.md)
+- [Helm values reference](charts/triton-control/README.md)
 
-OIDC login has been tested with Microsoft Entra ID, Keycloak, and Dex. The
-Kubernetes deployment has also been tested with Argo CD managing the Helm
-release in a GitOps workflow.
-
-The Helm deployment can use the published image directly; users do not need to
-build, pull, or push it on the machine running Helm. Kubernetes pulls the image
-from Docker Hub when it creates the application pod.
-
-Create a values file, for example `values-prod.yaml`:
-
-```yaml
-app:
-  image:
-    repository: ailabtechtriton/triton-control
-    tag: "v1.2.3"
-  secretEnv:
-    SESSION_SECRET: "replace-me"
-    JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
-
-postgresql:
-  enabled: true
-  auth:
-    database: triton_backend
-    username: triton
-    password: "replace-me"
-  persistence:
-    enabled: true
-    size: 20Gi
-
-ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - host: triton-control.example.com
-      paths:
-        frontend:
-          - path: /
-            pathType: Prefix
-        backend:
-          - path: /api
-            pathType: Prefix
-          - path: /auth
-            pathType: Prefix
-          - path: /login
-            pathType: Prefix
-          - path: /logout
-            pathType: Prefix
-          - path: /whoami
-            pathType: Prefix
-```
-
-Install or upgrade:
-
-```bash
-helm upgrade --install triton-control ./charts/triton-control \
-  --namespace triton-control \
-  --create-namespace \
-  -f values-prod.yaml
-```
-
-If `postgresql.enabled=true`, the chart generates and injects `DATABASE_URL`.
-For an external database, set `postgresql.enabled=false` and provide
-`DATABASE_URL` through `app.existingSecret`, `app.env`, or `app.envFrom`.
+The setup guides include example values files and verification commands.
 
 ### Self-Deployed Triton And Perf Analyzer Namespace Behavior
 

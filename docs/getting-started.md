@@ -54,84 +54,9 @@ workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Kubernetes Quick Start
 
-Use Kubernetes when you want to run Triton Control in a shared cluster or close
-to production. The Helm chart is in `charts/triton-control`.
-
-Prerequisites:
-
-- Kubernetes `v1.19` or newer. The chart uses `networking.k8s.io/v1` Ingress,
-  which is stable from Kubernetes `v1.19`.
-- `kubectl` configured for the target cluster.
-- Helm `v3`.
-- Traefik with its Kubernetes Ingress provider enabled if `ingress.enabled=true`.
-- A default StorageClass, or an explicit `postgresql.persistence.storageClass`,
-  when using the bundled PostgreSQL database with persistence enabled.
-
-The cluster pulls the published Triton Control image automatically. No local
-image build, pull, or push is required.
-
-Create a values file for your cluster:
-
-```yaml
-app:
-  image:
-    repository: ailabtechtriton/triton-control
-    tag: "v1.2.3"
-  secretEnv:
-    SESSION_SECRET: "replace-me"
-    JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
-
-postgresql:
-  enabled: true
-  auth:
-    database: triton_backend
-    username: triton
-    password: "replace-me"
-
-ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - host: triton-control.example.com
-      paths:
-        frontend:
-          - path: /
-            pathType: Prefix
-        backend:
-          - path: /api
-            pathType: Prefix
-          - path: /auth
-            pathType: Prefix
-          - path: /login
-            pathType: Prefix
-          - path: /logout
-            pathType: Prefix
-          - path: /whoami
-            pathType: Prefix
-```
-
-Install the chart:
-
-```bash
-helm upgrade --install triton-control ./charts/triton-control \
-  --namespace triton-control \
-  --create-namespace \
-  -f values-k8s.yaml
-```
-
-For a cluster without Ingress, set `ingress.enabled=false` and port-forward the
-frontend service:
-
-```bash
-kubectl -n triton-control port-forward svc/triton-control 8080:80
-```
-
-Then open:
-
-```text
-http://localhost:8080
-```
+Follow [Kubernetes Ingress and TLS setup](ingress-tls.md) for a cluster installation,
+including example Helm values, DNS, certificates and internal-only access.
+For development, use [Minikube with Traefik and mkcert](local-kubernetes.md).
 
 ## Local Development
 

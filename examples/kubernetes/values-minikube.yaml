@@ -1,0 +1,38 @@
+# Local development only. Follow docs/local-kubernetes.md.
+app:
+  image:
+    repository: triton-control
+    tag: dev
+    pullPolicy: Never
+postgresql:
+  auth:
+    existingSecret: triton-control-db
+
+tritonDeployments:
+  ingressEnabled: true
+  allowHttp: false
+  baseDomain: models.triton.test
+  ingressClassName: traefik
+  certManagerClusterIssuer: triton-dev-ca
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: triton-dev-ca
+  hosts:
+    - host: control.triton.test
+      paths:
+        frontend:
+          - {path: /, pathType: Prefix}
+        backend:
+          - {path: /api, pathType: Prefix}
+          - {path: /auth, pathType: Prefix}
+          - {path: /login, pathType: Prefix}
+          - {path: /logout, pathType: Prefix}
+          - {path: /whoami, pathType: Prefix}
+  tls:
+    - hosts: [control.triton.test]
+      secretName: triton-control-tls

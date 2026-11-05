@@ -15,6 +15,9 @@ The combined app image must expose:
 
 Ingress itself is a Kubernetes resource. Traefik with its Kubernetes Ingress provider must already exist in the cluster.
 
+For a complete setup, see [Ingress and TLS](../../docs/ingress-tls.md) or
+[the Minikube development environment](../../docs/local-kubernetes.md).
+
 ## Install
 
 Build prerequisite: Docker or another compatible image builder. Host Node.js,

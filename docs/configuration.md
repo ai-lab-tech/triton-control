@@ -7,6 +7,9 @@ values through Compose environment entries, Helm `app.env`, Helm
 `app.secretEnv`, or a Kubernetes Secret referenced by `app.existingSecret` or
 `app.envFrom`.
 
+For step-by-step Helm, DNS and certificate configuration, see
+[Kubernetes Ingress and TLS setup](ingress-tls.md).
+
 ## OIDC Configuration Source
 
 `OIDC_CONFIG_SOURCE` controls where OIDC settings are managed.
