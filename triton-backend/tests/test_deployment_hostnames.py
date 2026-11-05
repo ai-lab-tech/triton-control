@@ -3,8 +3,8 @@
 import unittest
 from unittest.mock import Mock
 
-from kubernetes import client
-from kubernetes.client.rest import ApiException
+from kubernetes import client  # type: ignore[import-untyped]
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.exceptions import ConflictError
 from app.services.deployment.hostname import hosts_overlap, validate_hostname_available
@@ -68,9 +68,8 @@ class HostnameTests(unittest.TestCase):
         net = self.network(self.route(cls="nginx"))
         net.read_ingress_class.return_value.spec.controller = "k8s.io/ingress-nginx"
         # Act
-        result = validate_hostname_available(net, "model.example.com", "traefik")
+        validate_hostname_available(net, "model.example.com", "traefik")
         # Assert
-        self.assertIsNone(result)
         net.read_ingress_class.assert_called_once()
 
     def test_unclassified_route_conflicts(self):
@@ -119,11 +118,12 @@ class HostnameTests(unittest.TestCase):
         # Arrange
         net = self.network(self.route())
         # Act
-        result = validate_hostname_available(
+        validate_hostname_available(
             net, "model.example.com", "traefik", existing_ingress=("other", "other-ingress"),
         )
         # Assert
-        self.assertIsNone(result)
+        net.list_ingress_for_all_namespaces.assert_called_once()
+        net.read_ingress_class.assert_not_called()
 
     def test_edit_does_not_exclude_same_name_in_other_namespace(self):
         # Arrange

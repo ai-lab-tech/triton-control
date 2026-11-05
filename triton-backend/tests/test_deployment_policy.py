@@ -98,11 +98,11 @@ class DeploymentPolicyTests(unittest.TestCase):
         # Arrange
         request = self.http()
         # Act
-        result = validate_endpoint_policy(
+        validate_endpoint_policy(
             request, self.session, existing_host=request.ingress_host, existing_scheme="http",
         )
-        # Assert
-        self.assertIsNone(result)
+        # Assert: the existing endpoint is accepted even though new HTTP is denied.
+        self.assertFalse(get_policy(self.session).allow_http)
 
     def test_http_hostname_changes_and_https_downgrades_are_blocked(self):
         for host, scheme in (("new.example.com", "http"), ("model.example.com", "https")):
@@ -123,9 +123,9 @@ class DeploymentPolicyTests(unittest.TestCase):
                 # Arrange
                 request = DeploymentAccessRequest(ingress_host=host)
                 # Act
-                result = validate_endpoint_policy(request, self.session)
-                # Assert
-                self.assertIsNone(result)
+                validate_endpoint_policy(request, self.session)
+                # Assert: these modes remain available under the HTTPS-only policy.
+                self.assertFalse(get_policy(self.session).allow_http)
 
     def test_ingress_switch_cannot_be_overridden_in_ui(self):
         # Arrange
@@ -153,9 +153,9 @@ class DeploymentPolicyTests(unittest.TestCase):
         request = DeploymentAccessRequest(access_mode="internal")
         with patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_ENABLED": "false"}):
             # Act
-            result = validate_endpoint_policy(request, self.session)
-        # Assert
-        self.assertIsNone(result)
+            validate_endpoint_policy(request, self.session)
+            # Assert: internal access remains available while Ingress is disabled.
+            self.assertFalse(get_policy(self.session).ingress_enabled)
 
     def test_base_domain_resolves_short_hostname_without_mutating_input(self):
         # Arrange
