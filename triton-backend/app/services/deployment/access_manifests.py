@@ -1,13 +1,15 @@
-"""Build exposure resources without Kubernetes or database I/O."""
+"""Populate exposure YAML templates without Kubernetes or database I/O."""
 
 from __future__ import annotations
 
 import hashlib
 import os
 import uuid
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import bcrypt
+import yaml  # type: ignore[import-untyped]
 
 from app.exceptions import BadRequestError
 from app.schemas.deployment_access import DeploymentAccessRequest
@@ -37,6 +39,16 @@ def auth_secret_name(deployment_name: str) -> str:
     return f"{deployment_name[:32]}-{digest}-auth-{uuid.uuid4().hex[:8]}"
 
 
+def _resource(template: str, name: str, namespace: str, deployment_name: str) -> dict[str, Any]:
+    """Load a fresh resource so per-request changes never modify shared templates."""
+    resource = cast(dict[str, Any], yaml.safe_load(Path(__file__).with_name(template).read_text(encoding="utf-8")))
+    metadata = resource["metadata"]
+    metadata["name"] = name
+    metadata["namespace"] = namespace
+    metadata["labels"][OWNER_LABEL] = deployment_name
+    return resource
+
+
 def access_manifests(
     request: DeploymentAccessRequest,
     namespace: str,
@@ -55,51 +67,32 @@ def access_manifests(
         if request.basic_auth_password and request.basic_auth_username:
             auth_secret = auth_secret_name(deployment_name)
             hashed = bcrypt.hashpw(request.basic_auth_password.get_secret_value().encode(), bcrypt.gensalt()).decode()
-            manifests.append(
-                {
-                    "apiVersion": "v1",
-                    "kind": "Secret",
-                    "type": "Opaque",
-                    "metadata": {"name": auth_secret, "namespace": namespace, "labels": {OWNER_LABEL: deployment_name}},
-                    "stringData": {"users": f"{request.basic_auth_username}:{hashed}\n"},
-                }
-            )
+            secret_manifest = _resource("basic_auth_secret.yaml", auth_secret, namespace, deployment_name)
+            secret_manifest["stringData"]["users"] = f"{request.basic_auth_username}:{hashed}\n"
+            manifests.append(secret_manifest)
         if not auth_secret:
             raise BadRequestError("Username and password are required when enabling basic authentication")
-        manifests.append({
-            "apiVersion": "traefik.io/v1alpha1",
-            "kind": "Middleware",
-            "metadata": {
-                "name": auth_secret, "namespace": namespace,
-                "labels": {OWNER_LABEL: deployment_name},
-                "annotations": {"kubernetes.io/ingress.class": ingress_class()},
-            },
-            "spec": {"basicAuth": {
-                "secret": auth_secret, "realm": "Triton authentication required", "removeHeader": True,
-            }},
-        })
+        middleware = _resource("basic_auth_middleware.yaml", auth_secret, namespace, deployment_name)
+        middleware["metadata"]["annotations"]["kubernetes.io/ingress.class"] = ingress_class()
+        middleware["spec"]["basicAuth"]["secret"] = auth_secret
+        manifests.append(middleware)
         annotations[AUTH_SECRET_ANNOTATION] = auth_secret
         annotations[MIDDLEWARE_ANNOTATION] = f"{namespace}-{auth_secret}@kubernetescrd"
-    spec: dict[str, Any] = {
-        "ingressClassName": ingress_class(),
-        "rules": [
-            {
-                "host": request.ingress_host,
-                "http": {
-                    "paths": [
-                        {
-                            "path": path,
-                            "pathType": "Prefix",
-                            "backend": {"service": {"name": service_name, "port": {"name": port}}},
-                        }
-                        for path, port in ([("/metrics", "metrics")] if allow_metrics else []) + [("/", "http")]
-                    ]
-                },
-            }
-        ],
-    }
+    ingress = _resource("ingress.yaml", f"{deployment_name}-ingress", namespace, deployment_name)
+    ingress["metadata"]["annotations"] = annotations
+    spec = ingress["spec"]
+    spec["ingressClassName"] = ingress_class()
+    rule = spec["rules"][0]
+    rule["host"] = request.ingress_host
+    paths = rule["http"]["paths"]
+    if not allow_metrics:
+        paths = [path for path in paths if path["backend"]["service"]["port"]["name"] != "metrics"]
+        rule["http"]["paths"] = paths
+    for path in paths:
+        path["backend"]["service"]["name"] = service_name
     if (request.ingress_scheme or "https") == "https":
-        tls: dict[str, Any] = {"hosts": [request.ingress_host]}
+        tls = spec["tls"][0]
+        tls["hosts"] = [request.ingress_host]
         secret = os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
         issuer = os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()
         if issuer:
@@ -107,26 +100,14 @@ def access_manifests(
             annotations["cert-manager.io/cluster-issuer"] = issuer
         elif secret:
             tls["secretName"] = secret
-        spec["tls"] = [tls]
         annotations[f"{AUTH_PREFIX}router.tls"] = "true"
         annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
             os.getenv("TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT", "websecure").strip() or "websecure"
         )
     else:
+        del spec["tls"]
         annotations[f"{AUTH_PREFIX}router.entrypoints"] = (
             os.getenv("TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT", "web").strip() or "web"
         )
-    manifests.append(
-        {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "Ingress",
-            "metadata": {
-                "name": f"{deployment_name}-ingress",
-                "namespace": namespace,
-                "labels": {OWNER_LABEL: deployment_name},
-                "annotations": annotations,
-            },
-            "spec": spec,
-        }
-    )
+    manifests.append(ingress)
     return manifests

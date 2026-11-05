@@ -1,0 +1,15 @@
+# Template populated by access_manifests.py before applying to Kubernetes.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: null
+  namespace: null
+  labels:
+    triton-control.io/deployment: null
+  annotations:
+    kubernetes.io/ingress.class: null
+spec:
+  basicAuth:
+    secret: null
+    realm: Triton authentication required
+    removeHeader: true

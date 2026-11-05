@@ -399,6 +399,24 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertEqual(manifests[-3]["kind"], "Secret")
         self.assertNotIn("password", repr(request))
 
+    def test_template_changes_do_not_leak_between_deployments(self):
+        # Arrange
+        first = access.access_manifests(
+            self.request(ingress_scheme="http"), "first", "first", "first-service", allow_metrics=False,
+        )[-1]
+        first["metadata"]["annotations"]["example.com/custom"] = "first-only"
+        # Act
+        second = access.access_manifests(
+            self.request(ingress_host="second"), "second", "second", "second-service",
+        )[-1]
+        # Assert
+        self.assertEqual(second["metadata"]["namespace"], "second")
+        self.assertNotIn("example.com/custom", second["metadata"]["annotations"])
+        self.assertEqual(second["spec"]["tls"], [{"hosts": ["second"]}])
+        paths = second["spec"]["rules"][0]["http"]["paths"]
+        self.assertEqual([path["path"] for path in paths], ["/metrics", "/"])
+        self.assertTrue(all(path["backend"]["service"]["name"] == "second-service" for path in paths))
+
     def test_unauthenticated_ingress_also_requires_traefik(self):
         self.net.read_ingress_class.return_value.spec.controller = "k8s.io/ingress-nginx"
         with self.assertRaises(BadRequestError):
