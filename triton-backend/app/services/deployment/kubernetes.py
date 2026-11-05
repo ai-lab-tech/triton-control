@@ -24,15 +24,17 @@ from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
 
-from app.exceptions import BadGatewayError
+from app.exceptions import BadGatewayError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment.access import (
     OWNER_LABEL,
     access_manifests,
     create_auth_middleware,
+    ingress_class,
     validate_controller,
     validate_tls_secret,
 )
+from app.services.deployment.hostname import validate_hostname_available
 from app.services.deployment.probes import serving_probes
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
 from app.services.kubernetes_client import (
@@ -102,7 +104,9 @@ def apply_deployment_resources(
         _ensure_namespace(api, namespace)
         from kubernetes import client, utils  # type: ignore[import-untyped]
 
-        validate_controller(client.NetworkingV1Api(api), request)
+        networking = client.NetworkingV1Api(api)
+        validate_controller(networking, request)
+        validate_hostname_available(networking, request.ingress_host, ingress_class())
         validate_tls_secret(client.CoreV1Api(api), request, namespace)
         runtime_class_name = gpu_runtime_class_name(api, request.gpu_count)
         applied = []
@@ -128,6 +132,8 @@ def apply_deployment_resources(
             metrics_url=urls["metrics"] if request.allow_metrics else "",
             applied_resources=applied,
         )
+    except ConflictError as exc:
+        record_deployment_failure(instance_id, str(exc))
     except ConfigException:
         record_deployment_failure(instance_id, "Kubernetes configuration could not be loaded")
     except ApiException as exc:

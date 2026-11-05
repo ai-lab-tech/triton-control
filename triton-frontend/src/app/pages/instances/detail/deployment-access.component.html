@@ -1,26 +1,66 @@
-<h3>Deployment access</h3>
 @if (access(); as current) {
-  <p>
-    {{ current.access_mode === "ingress" ? "Ingress" : "Internal Service" }}:
+  <div class="endpoint-header">
+    <div>
+      <h2>
+        {{ current.access_mode === "ingress" ? "External endpoint" : "Cluster-only endpoint" }}
+      </h2>
+      <p class="hint">
+        {{
+          current.access_mode === "ingress"
+            ? "Use this URL to send inference requests."
+            : "This instance is reachable only inside the Kubernetes cluster."
+        }}
+      </p>
+    </div>
+    @if (!editing() && canWrite()) {
+      <button mat-flat-button type="button" (click)="edit()" [disabled]="busy()">
+        Edit endpoint
+      </button>
+    }
+  </div>
+  <div class="endpoint-url">
     <code>{{ current.url }}</code>
-  </p>
-  @if (current.basic_auth_enabled) {
-    <p>Basic authentication enabled.</p>
-  }
-  @if (!editing() && canWrite()) {
-    <button mat-stroked-button type="button" (click)="edit()" [disabled]="busy()">
-      Edit access
+    <button
+      mat-stroked-button
+      type="button"
+      [cdkCopyToClipboard]="current.url"
+      (cdkCopyToClipboardCopied)="copyMessage.set($event ? 'URL copied.' : 'Could not copy URL.')"
+    >
+      Copy URL
     </button>
+  </div>
+  @if (copyMessage()) {
+    <p role="status">{{ copyMessage() }}</p>
   }
+  <div class="authentication">
+    <h3>Authentication</h3>
+    <p>
+      {{
+        current.basic_auth_enabled
+          ? "Basic authentication is required."
+          : "No endpoint authentication configured."
+      }}
+    </p>
+    @if (current.basic_auth_enabled && canWrite() && !editing()) {
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="edit(); changingCredentials.set(true)"
+        [disabled]="busy()"
+      >
+        Change credentials
+      </button>
+    }
+  </div>
 }
 @if (editing()) {
   <fieldset class="fields" [disabled]="busy()">
-    <legend>Access settings</legend>
+    <legend>Endpoint settings</legend>
     <mat-form-field appearance="outline">
       <mat-label>Access mode</mat-label>
       <mat-select [(ngModel)]="mode" [disabled]="busy()">
-        <mat-option value="internal">Internal Service</mat-option>
-        <mat-option value="ingress">Ingress</mat-option>
+        <mat-option value="internal">Cluster only</mat-option>
+        <mat-option value="ingress">External access (Ingress)</mat-option>
       </mat-select>
     </mat-form-field>
     @if (mode === "ingress") {
@@ -35,47 +75,49 @@
           <mat-option value="http">HTTP</mat-option>
         </mat-select>
       </mat-form-field>
-      <p>
-        HTTPS uses the certificate configured by your administrator. Its domain must cover this
-        hostname.
-      </p>
+      <p>HTTPS certificates and routing are managed by your administrator.</p>
       <mat-checkbox [(ngModel)]="authEnabled" [disabled]="busy()"
         >Require basic authentication</mat-checkbox
       >
       @if (authEnabled) {
-        <p>
-          Basic authentication requires HTTPS. Routing is configured by your administrator.
-        </p>
-        @if (access()?.basic_auth_enabled) {
-          <p>
-            Leave both fields empty to keep existing credentials, or enter both to replace them.
-          </p>
+        <p>Basic authentication requires HTTPS. Routing is configured by your administrator.</p>
+        @if (access()?.basic_auth_enabled && !changingCredentials()) {
+          <p>Existing credentials will be kept.</p>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="changingCredentials.set(true)"
+            [disabled]="busy()"
+          >
+            Change credentials
+          </button>
         }
-        <mat-form-field appearance="outline">
-          <mat-label>Username</mat-label>
-          <input matInput [(ngModel)]="username" autocomplete="off" />
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>Password</mat-label>
-          <input matInput type="password" [(ngModel)]="password" autocomplete="new-password" />
-        </mat-form-field>
+        @if (!access()?.basic_auth_enabled || changingCredentials()) {
+          <mat-form-field appearance="outline">
+            <mat-label>Username</mat-label>
+            <input matInput [(ngModel)]="username" autocomplete="off" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Password</mat-label>
+            <input matInput type="password" [(ngModel)]="password" autocomplete="new-password" />
+          </mat-form-field>
+        }
       }
     } @else {
       <p>
-        Removes the Ingress and its managed authentication Secret. The Service remains reachable
-        inside the cluster.
+        External access will be disabled. This instance will remain reachable inside the cluster.
       </p>
     }
     <div class="actions">
       <button mat-flat-button type="button" (click)="save()" [disabled]="busy() || !valid()">
-        Save access
+        Save endpoint
       </button>
       <button mat-button type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
     </div>
   </fieldset>
 }
 @if (busy()) {
-  <p role="status">Updating access settings…</p>
+  <p role="status">{{ editing() ? "Saving endpoint…" : "Loading endpoint…" }}</p>
 }
 @if (error()) {
   <p class="error" role="alert">{{ error() }}</p>

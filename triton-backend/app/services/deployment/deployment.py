@@ -17,7 +17,7 @@ from app.exceptions import BadRequestError
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
-from app.services.deployment.access import validate_policy
+from app.services.deployment.access import validate_new_hostname, validate_policy
 from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
@@ -46,6 +46,7 @@ def create_deployment(
         else None
     )
 
+    validate_new_hostname(request)
     instance = upsert_deployed_instance(
         request, session, claims,
         namespace=ns, deployment_name=deploy, service_name=svc, secret_name=secret,

@@ -51,7 +51,7 @@ class DeploymentAccessTests(unittest.TestCase):
         self.net.read_ingress_class.return_value.spec.controller = "traefik.io/ingress-controller"
         self.apps.read_namespaced_deployment.return_value.metadata.uid = "deployment-uid"
         self.net.read_namespaced_ingress.side_effect = ApiException(status=404)
-        self.net.list_namespaced_ingress.return_value.items = []
+        self.net.list_ingress_for_all_namespaces.return_value.items = []
         self.net.create_namespaced_ingress.side_effect = lambda ns, body: ingress_object(body)
         self.net.replace_namespaced_ingress.side_effect = lambda name, ns, body: ingress_object(body)
         for target, value in [
@@ -236,10 +236,45 @@ class DeploymentAccessTests(unittest.TestCase):
 
     def test_duplicate_host_rejected_before_secret_creation(self):
         other = ingress_object(access.access_manifests(self.request(), "control", "other", "other-service")[-1])
-        self.net.list_namespaced_ingress.return_value.items = [other]
+        self.net.list_ingress_for_all_namespaces.return_value.items = [other]
         with self.assertRaises(ConflictError):
             self.update(self.request(basic_auth_enabled=True, basic_auth_username="bob", basic_auth_password="new"))
         self.core.create_namespaced_secret.assert_not_called()
+
+    def test_creation_preflight_conflict_does_not_create_database_record(self):
+        from app.services.deployment import deployment
+        other = ingress_object(access.access_manifests(self.request(), "other", "model", "svc")[-1])
+        self.net.list_ingress_for_all_namespaces.return_value.items = [other]
+        request = CreateDeploymentRequest(
+            deployment_name="model", image="triton:latest", s3_url="s3://bucket",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+        )
+        with (
+            patch.object(deployment, "resolve_profile_request", return_value=request),
+            patch.object(deployment, "upsert_deployed_instance") as record,
+            self.assertRaises(ConflictError),
+        ):
+            deployment.create_deployment(request, Mock(), {"role": "member"})
+        record.assert_not_called()
+
+    def test_creation_rechecks_hostname_before_creating_resources(self):
+        other = ingress_object(access.access_manifests(self.request(), "other", "model", "svc")[-1])
+        self.net.list_ingress_for_all_namespaces.return_value.items = [other]
+        request = CreateDeploymentRequest(
+            deployment_name="model", image="triton:latest", s3_url="s3://bucket",
+            s3_access_key="key", s3_secret_key="secret", ingress_host="model.example.com",
+            basic_auth_enabled=True, basic_auth_username="user", basic_auth_password="secret",
+        )
+        with (
+            patch.object(k8s, "_client", return_value=Mock()),
+            patch.object(k8s, "_ensure_namespace"),
+            patch.object(k8s, "record_deployment_failure") as failed,
+            patch("kubernetes.utils.create_from_dict") as create,
+        ):
+            k8s.apply_deployment_resources(1, request, "control", "model", "model-service", "s3", "triton:latest")
+        create.assert_not_called()
+        self.custom.create_namespaced_custom_object.assert_not_called()
+        self.assertIn("hostname overlaps", failed.call_args.args[1])
 
     def test_missing_central_tls_secret_rejected_before_ingress_creation(self):
         with patch.dict(os.environ, {"TRITON_DEPLOY_INGRESS_TLS_SECRET": "missing"}):

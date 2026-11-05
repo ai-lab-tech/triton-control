@@ -1048,3 +1048,28 @@
     align-items: stretch;
   }
 }
+
+.tab-panel {
+  align-items: start;
+}
+.panel-card {
+  min-width: 0;
+}
+.endpoints-panel {
+  padding: 1.2rem 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.2rem;
+}
+.external-endpoint-card {
+  border: 1px solid var(--mat-sys-primary, #3f51b5);
+}
+@media (max-width: 960px) {
+  .endpoints-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.endpoint-summary button {
+  justify-self: start;
+}

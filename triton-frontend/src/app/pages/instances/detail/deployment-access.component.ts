@@ -1,4 +1,5 @@
 import { Component, inject, input, OnInit, output, signal } from "@angular/core";
+import { ClipboardModule } from "@angular/cdk/clipboard";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCheckboxModule } from "@angular/material/checkbox";
@@ -13,6 +14,7 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
   selector: "app-deployment-access",
   standalone: true,
   imports: [
+    ClipboardModule,
     FormsModule,
     MatButtonModule,
     MatCheckboxModule,
@@ -25,12 +27,49 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
     `
       :host {
         display: block;
-        margin-top: 1rem;
+      }
+      h2 {
+        font-size: 1.2rem;
+        margin: 0;
+      }
+      h3 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+      .hint {
+        margin: 0.5rem 0 0;
+        opacity: 0.75;
+      }
+      .endpoint-header,
+      .endpoint-url {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .endpoint-url {
+        margin: 1.25rem 0;
+        padding: 1rem;
+        border-radius: 8px;
+        background: var(--mat-sys-surface, #fff);
+      }
+      .endpoint-url code {
+        flex: 1;
+        min-width: 0;
+      }
+      .authentication {
+        padding: 1rem 0;
+      }
+      button {
+        flex-shrink: 0;
       }
       .fields {
         display: grid;
         gap: 0.75rem;
-        margin-top: 1rem;
+        border: 0;
+        padding: 1rem 0;
+        max-width: 640px;
       }
       .actions {
         display: flex;
@@ -49,6 +88,9 @@ export class DeploymentAccessComponent implements OnInit {
   readonly instanceId = input.required<string>();
   readonly canWrite = input(false);
   readonly saved = output<void>();
+  readonly accessChanged = output<DeploymentAccessResponse>();
+  readonly changingCredentials = signal(false);
+  readonly copyMessage = signal("");
   private readonly api = inject(DeploymentsService);
   readonly access = signal<DeploymentAccessResponse | null>(null);
   readonly busy = signal(false);
@@ -75,6 +117,8 @@ export class DeploymentAccessComponent implements OnInit {
           this.api.getDeploymentAccessApiDeploymentsInstanceIdAccessGet(this.instanceId()),
         ),
       );
+      const current = this.access();
+      if (current) this.accessChanged.emit(current);
     } catch (error) {
       this.error.set(mapApiErrorMessage(error, "Could not load access settings."));
     } finally {
@@ -92,6 +136,7 @@ export class DeploymentAccessComponent implements OnInit {
     this.username = "";
     this.password = "";
     this.message.set("");
+    this.changingCredentials.set(false);
     this.editing.set(true);
   }
 
@@ -109,7 +154,10 @@ export class DeploymentAccessComponent implements OnInit {
     if (this.scheme !== "https") return false;
     return (
       (!!this.username && !!this.password) ||
-      (!!this.access()?.basic_auth_enabled && !this.username && !this.password)
+      (!!this.access()?.basic_auth_enabled &&
+        !this.changingCredentials() &&
+        !this.username &&
+        !this.password)
     );
   }
 
@@ -135,9 +183,10 @@ export class DeploymentAccessComponent implements OnInit {
         ),
       );
       this.access.set(response);
+      this.accessChanged.emit(response);
       this.cancel();
       this.message.set(
-        "Access settings saved. The ingress controller may take a moment to apply them.",
+        "Endpoint saved. The ingress controller may take a moment to apply the changes.",
       );
       this.saved.emit();
     } catch (error) {

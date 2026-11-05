@@ -243,7 +243,7 @@ describe("InstanceDetailPageComponent", () => {
     tick();
 
     // Assert
-    expect(component.selectedDetailTabIndex()).toBe(3);
+    expect(component.selectedDetailTabIndex()).toBe(4);
     expect(window.history.state.openLogsOnce).toBeUndefined();
     expect(
       deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,

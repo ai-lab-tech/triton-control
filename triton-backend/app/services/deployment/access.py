@@ -17,6 +17,7 @@ from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.repositories import instances
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
 from app.services.access import get_instance_or_404
+from app.services.deployment.hostname import validate_hostname_available
 from app.services.kubernetes_client import api_client
 
 AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
@@ -36,6 +37,19 @@ def validate_policy(request: DeploymentAccessRequest, *, creating: bool = False)
             and os.getenv("TRITON_DEPLOY_INGRESS_TLS_SECRET", "").strip()
             and os.getenv("TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER", "").strip()):
         raise BadRequestError("Configure either a TLS Secret or a cert-manager ClusterIssuer, not both")
+
+
+def validate_new_hostname(request: DeploymentAccessRequest) -> None:
+    """Return an immediate conflict before creating a database deployment record."""
+    if not request.ingress_host:
+        return
+    try:
+        with api_client() as api:
+            net = client.NetworkingV1Api(api)
+            validate_controller(net, request)
+            validate_hostname_available(net, request.ingress_host, ingress_class())
+    except (ApiException, ConfigException) as exc:
+        raise BadGatewayError("Could not verify hostname availability in Kubernetes") from exc
 
 
 def auth_secret_name(deployment_name: str) -> str:
@@ -250,12 +264,11 @@ def update_access(
                 auth_secret=retained_secret,
                 allow_metrics=bool(instance.metrics_url),
             )
+            validate_hostname_available(
+                net, request.ingress_host, ingress_class(),
+                existing_ingress=(namespace, f"{name}-ingress") if previous else None,
+            )
             if request.ingress_host:
-                for other in net.list_namespaced_ingress(namespace).items:
-                    if other.metadata.name != f"{name}-ingress" and any(
-                        rule.host == request.ingress_host for rule in other.spec.rules or []
-                    ):
-                        raise ConflictError("This Ingress hostname is already used in the deployment namespace")
                 validate_tls_secret(core, request, namespace)
             new_secret = None
             result = None

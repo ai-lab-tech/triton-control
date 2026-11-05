@@ -87,6 +87,34 @@ describe("DeploymentAccessComponent", () => {
     );
   });
 
+  it("requires replacement credentials only after choosing Change credentials", async () => {
+    const fixture = create();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.edit();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[type="password"]')).toBeNull();
+    const changeButton = Array.from(fixture.nativeElement.querySelectorAll("button")).find(
+      (button) => (button as HTMLElement).textContent?.includes("Change credentials"),
+    ) as HTMLButtonElement;
+    changeButton.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[type="password"]')).not.toBeNull();
+    expect(fixture.componentInstance.valid()).toBeFalse();
+    fixture.componentInstance.username = "alice";
+    fixture.componentInstance.password = "replacement";
+    expect(fixture.componentInstance.valid()).toBeTrue();
+    await fixture.componentInstance.save();
+    expect(
+      api.updateDeploymentAccessApiDeploymentsInstanceIdAccessPut.calls.mostRecent().args[0],
+    ).toEqual(
+      jasmine.objectContaining({
+        basic_auth_username: "alice",
+        basic_auth_password: "replacement",
+      }),
+    );
+  });
+
   it("requires both credentials for new auth and rejects HTTP auth", async () => {
     const component = create().componentInstance;
     component.access.set({ ...ingress, basic_auth_enabled: false });

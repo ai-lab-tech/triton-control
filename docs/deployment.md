@@ -573,6 +573,19 @@ saved.
 
 ### Administrator-managed Traefik and HTTPS
 
+Deployment creation and endpoint edits reject hostnames that overlap an existing
+Ingress rule in any namespace for the configured ingress class. Unclassified
+Ingresses are also checked conservatively. Matching includes single-label
+wildcards (for example, `*.example.com` conflicts with `model.example.com`).
+An edit may retain its own hostname. The Helm chart grants cluster-wide
+`list` permission for Ingresses even with namespaced workload permissions;
+custom RBAC must grant this permission too.
+
+Creation checks before accepting the request and again before applying resources.
+These are preflight checks, not an atomic cluster-wide hostname reservation:
+simultaneous writers or resources managed outside Triton Control can still race.
+Use cluster admission policy if strict hostname exclusivity is required.
+
 Traefik is the supported controller. Install it separately with the Kubernetes
 Ingress provider enabled. Basic authentication additionally requires the
 Kubernetes CRD provider and the `middlewares.traefik.io` CRD. Triton Control does
