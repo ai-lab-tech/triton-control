@@ -519,6 +519,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("extension/hf-builder.js", names)
         self.assertIn("extension/hf-builder-client.js", names)
         self.assertIn("extension/profile-api.js", names)
+        self.assertIn("extension/endpoint-config.js", names)
         self.assertIn("extension/s3-browser.js", names)
         self.assertIn("extension/s3-client.js", names)
         self.assertIn("extension/s3-files.js", names)
@@ -534,7 +535,7 @@ class CodeServerTests(unittest.TestCase):
 
         contributes = package_json["contributes"]
 
-        self.assertEqual(package_json["version"], "0.4.10")
+        self.assertEqual(package_json["version"], "0.4.11")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
         self.assertIn("onFileSystem:triton-s3", package_json["activationEvents"])

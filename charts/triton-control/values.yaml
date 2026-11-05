@@ -116,6 +116,12 @@ app:
 
 # Configuration for generated Triton serving deployments.
 tritonDeployments:
+  # Appended to short model hostnames; no wildcard or URL. Empty uses the short hostname unchanged.
+  baseDomain: ""
+  # Allow model Ingress creation/edits, independently of the UI/API Ingress.
+  ingressEnabled: true
+  # Default for new HTTP endpoints; administrators may override in Settings.
+  allowHttp: false
   # Health probes for all serving adapters, separate from app.probes.
   # Startup allows up to 15 minutes for dependency installation and model loading.
   probes:
@@ -137,6 +143,16 @@ tritonDeployments:
       periodSeconds: 10
       timeoutSeconds: 1
       failureThreshold: 12
+
+  # Administrator-managed Traefik class used by deployment access settings.
+  ingressClassName: traefik
+  # Existing kubernetes.io/tls Secret in the deployment namespace. When both
+  # certificate settings are empty, use Traefik's default certificate.
+  ingressTlsSecretName: ""
+  # Optional cert-manager ClusterIssuer; mutually exclusive with ingressTlsSecretName.
+  certManagerClusterIssuer: ""
+  ingressHttpEntrypoint: web
+  ingressHttpsEntrypoint: websecure
 
   # Helper image for repository init containers and S3 sync sidecars.
   s3SyncImage: amazon/aws-cli:2.22.35
@@ -365,12 +381,10 @@ service:
 
 ingress:
   enabled: true
-  className: nginx
-  proxyBodySize: 256m
+  className: traefik
   annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
 
   hosts:
     - host: #triton-control.ai-lab-tech.com

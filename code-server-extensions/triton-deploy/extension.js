@@ -4,6 +4,7 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
+const { endpointPayload } = require("./endpoint-config");
 const profileApi = require("./profile-api");
 const {
   ENSEMBLE_PRESETS,
@@ -459,6 +460,7 @@ function openDeployPanel(context, initial) {
       try {
         const form = await resolveDeploymentProfile(normalizeForm(message.form || {}));
         validateForm(form);
+        endpointPayload(form);
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -678,7 +680,11 @@ async function initialFormValues(sourceFolder) {
     memoryGi: "4",
     gpuCount: serving?.gpuCount ?? (requiresTensorRtLlmImage ? "1" : "0"),
     ingressHost: "",
-    ingressClassName: "",
+    accessMode: "internal",
+    ingressScheme: "https",
+    basicAuthEnabled: false,
+    basicAuthUsername: "",
+    basicAuthPassword: "",
   };
   return initial;
 }
@@ -855,7 +861,11 @@ function normalizeForm(form) {
     memoryGi: String(form.memoryGi || "").trim(),
     gpuCount: String(form.gpuCount || "").trim(),
     ingressHost: String(form.ingressHost || "").trim(),
-    ingressClassName: String(form.ingressClassName || "").trim(),
+    accessMode: form.accessMode === "ingress" ? "ingress" : "internal",
+    ingressScheme: form.ingressScheme === "http" ? "http" : "https",
+    basicAuthEnabled: form.basicAuthEnabled === true,
+    basicAuthUsername: String(form.basicAuthUsername || "").trim(),
+    basicAuthPassword: String(form.basicAuthPassword || ""),
   };
 }
 
@@ -1152,12 +1162,7 @@ function deploymentPayload(form) {
   if (form.gpuCount && Number(form.gpuCount) > 0) {
     payload.gpu_count = Number(form.gpuCount);
   }
-  if (form.ingressHost) {
-    payload.ingress_host = form.ingressHost;
-  }
-  if (form.ingressClassName) {
-    payload.ingress_class_name = form.ingressClassName;
-  }
+  Object.assign(payload, endpointPayload(form));
   return payload;
 }
 
@@ -1195,7 +1200,8 @@ function encodePathSegment(value) {
 }
 
 function renderHtml(webview, nonce, initial) {
-  const state = JSON.stringify(initial).replace(/</g, "\\u003c");
+  const { endpoint, bucket, region, accessKeyId, secretAccessKey, s3CaCertificate, forcePathStyle, ...viewState } = initial;
+  const state = JSON.stringify(viewState).replace(/</g, "\\u003c");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1269,15 +1275,6 @@ function renderHtml(webview, nonce, initial) {
         <label id="poll-interval-field">Poll interval seconds<input name="repositoryPollSecs" type="number" min="1"></label>
       </div>
     </details>
-    <input type="hidden" name="profileName">
-    <input type="hidden" name="endpoint">
-    <input type="hidden" name="bucket">
-    <input type="hidden" name="region">
-    <input type="hidden" name="accessKeyId">
-    <input type="hidden" name="secretAccessKey">
-    <input type="hidden" name="s3CaCertificate">
-    <input class="hidden" type="checkbox" name="forcePathStyle">
-
     <details class="wide">
       <summary>Extra Python Packages</summary>
       <div class="details-grid">
@@ -1298,24 +1295,41 @@ function renderHtml(webview, nonce, initial) {
       </div>
     </details>
     <details class="wide">
-      <summary>Ingress</summary>
+      <summary>External access</summary>
       <div class="details-grid">
-        <div class="wide details-hint">Hostname or URL. Without a scheme, <code>https://</code> is used.</div>
-        <label>Ingress host<input name="ingressHost" placeholder="http://triton.example.local"></label>
-        <label>Ingress class<input name="ingressClassName" placeholder="nginx"></label>
-        <div class="wide details-hint">TLS is not created here. Provide certificates through your ingress controller.</div>
+        <label>Access mode<select name="accessMode">
+          <option value="internal">Cluster only</option>
+          <option value="ingress" id="ingress-option" disabled>External access (Ingress)</option>
+        </select></label>
+        <div id="endpoint-policy" class="wide details-hint">Loading endpoint policy…</div>
+        <div id="endpoint-preview" class="wide details-hint"></div>
+        <div id="ingress-fields" class="wide" hidden><div class="details-grid">
+          <label>Hostname<input name="ingressHost" placeholder="e.g. smollm"></label>
+          <label>Protocol<select name="ingressScheme">
+            <option value="https">HTTPS</option>
+            <option value="http" id="http-option" disabled>HTTP</option>
+          </select></label>
+          <div class="wide details-hint">Enter only the short hostname, e.g. smollm, without a domain. Select the protocol separately. Routing and certificates are configured by your administrator.</div>
+          <label><input name="basicAuthEnabled" type="checkbox">Require basic authentication (HTTPS only)</label>
+          <div id="auth-fields" class="wide" hidden><div class="details-grid">
+            <label>Username<input name="basicAuthUsername" autocomplete="off"></label>
+            <label>Password<input name="basicAuthPassword" type="password" autocomplete="new-password"></label>
+          </div></div>
+        </div></div>
       </div>
     </details>
     <div class="wide"><button id="submit" type="submit">Upload and Deploy</button></div>
   </form>
   <div id="status" class="status"></div>
   <script nonce="${nonce}">
+    const endpointPayload = ${endpointPayload.toString()};
     const vscode = acquireVsCodeApi();
     const initial = ${state};
     const form = document.getElementById('deploy-form');
     const statusEl = document.getElementById('status');
     const submit = document.getElementById('submit');
     let profiles = [];
+    let endpointPolicy = { ingress_enabled: false, allow_http: false };
 
     for (const [key, value] of Object.entries(initial)) {
       const input = form.elements[key];
@@ -1327,6 +1341,38 @@ function renderHtml(webview, nonce, initial) {
     updateDestinationPath();
     updateModelControlLabel();
     loadS3Profiles();
+    loadEndpointPolicy();
+    form.addEventListener('input', updateEndpointFields);
+    form.elements.accessMode.addEventListener('change', updateEndpointFields);
+    form.elements.basicAuthEnabled.addEventListener('change', updateEndpointFields);
+    form.elements.ingressScheme.addEventListener('change', updateEndpointFields);
+    updateEndpointFields();
+
+    function updateEndpointFields() {
+      document.getElementById('ingress-fields').hidden = form.elements.accessMode.value !== 'ingress';
+      document.getElementById('auth-fields').hidden = !form.elements.basicAuthEnabled.checked;
+      const host = form.elements.ingressHost.value.trim();
+      const fullHost = host && endpointPolicy.base_domain ? host + '.' + endpointPolicy.base_domain : host;
+      document.getElementById('endpoint-preview').textContent = host && form.elements.accessMode.value === 'ingress'
+        ? 'Endpoint: ' + form.elements.ingressScheme.value + '://' + fullHost : '';
+
+    }
+    async function loadEndpointPolicy() {
+      try {
+        const response = await fetch('/api/deployments/policy', { credentials: 'include' });
+        if (!response.ok) throw new Error('Could not load endpoint policy.');
+        endpointPolicy = await response.json();
+        document.getElementById('ingress-option').disabled = endpointPolicy.ingress_enabled !== true;
+        document.getElementById('http-option').disabled = endpointPolicy.allow_http !== true;
+        document.getElementById('endpoint-policy').textContent = !endpointPolicy.ingress_enabled
+          ? 'External access is disabled by the administrator.'
+          : endpointPolicy.allow_http ? 'HTTP and HTTPS are allowed.' : 'HTTPS only.';
+        if (endpointPolicy.base_domain) document.getElementById('endpoint-policy').textContent += ' Domain: ' + endpointPolicy.base_domain + ' (appended automatically).';
+        updateEndpointFields();
+      } catch {
+        document.getElementById('endpoint-policy').textContent = 'Could not load endpoint policy. Reopen this form to retry. Cluster-only deployment is available.';
+      }
+    }
 
     form.addEventListener('input', updateFormPreviews);
     form.addEventListener('change', updateFormPreviews);
@@ -1338,6 +1384,11 @@ function renderHtml(webview, nonce, initial) {
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      try {
+        if (!form.elements.profileId.value) throw new Error('Select an S3 profile.');
+        endpointPayload(readForm(), endpointPolicy);
+      }
+      catch (error) { statusEl.className = 'status error'; statusEl.textContent = error.message; return; }
       submit.disabled = true;
       statusEl.className = 'status';
       statusEl.textContent = 'Uploading model repository to S3...';
@@ -1367,9 +1418,13 @@ function renderHtml(webview, nonce, initial) {
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(body.detail || 'Failed to create deployment.');
+            const detail = Array.isArray(body.detail)
+              ? body.detail.map(item => item.msg || 'Invalid request').join('; ')
+              : body.detail;
+            throw new Error(detail || 'Failed to create deployment.');
           }
           statusEl.className = 'status success';
+          form.elements.basicAuthPassword.value = '';
           statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
           await notifyDeploymentNavigation(body.instance_id);
           const navigationMessage = {
@@ -1400,7 +1455,7 @@ function renderHtml(webview, nonce, initial) {
     async function loadS3Profiles() {
       try {
         const response = await fetch('/api/s3-profiles', { credentials: 'include' });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error('Could not load S3 profiles. Reopen the form to retry.');
         profiles = await response.json();
         const select = form.elements.profileId;
         select.innerHTML = '<option value="">Select an admin-configured S3 profile</option>';
@@ -1413,19 +1468,19 @@ function renderHtml(webview, nonce, initial) {
         if (profiles.length) {
           select.value = String(profiles[0].id);
           applyS3Profile(profiles[0]);
+        } else {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'No S3 profiles available. Create a profile in Triton Control, then reopen this form.';
         }
-      } catch {}
+      } catch (error) {
+        statusEl.className = 'status error';
+        statusEl.textContent = error.message;
+      }
     }
 
     function applyS3Profile(profile) {
-      form.elements.profileName.value = profile.name || '';
-      form.elements.endpoint.value = profile.endpoint || '';
-      form.elements.bucket.value = profile.bucket || '';
-      form.elements.region.value = profile.region || 'us-east-1';
-      form.elements.accessKeyId.value = profile.access_key || '';
-      form.elements.secretAccessKey.value = profile.secret_key || '';
-      form.elements.forcePathStyle.checked = profile.force_path_style !== false;
-      form.elements.s3CaCertificate.value = profile.ca_certificate || '';
+      form.elements.prefix.value = profile.prefix || '';
+      updateDestinationPath();
     }
 
     function readForm() {
@@ -1440,10 +1495,10 @@ function renderHtml(webview, nonce, initial) {
     function updateDestinationPath() {
       const destination = document.getElementById('destination-path');
       const data = readForm();
-      const endpoint = String(data.endpoint || '').trim().replace(/^s3:\\/\\//i, '').replace(/\\/+$/g, '');
-      const bucket = cleanS3Path(data.bucket || 'bucket');
+      const profile = profiles.find(item => String(item.id) === data.profileId);
+      const bucket = cleanS3Path(profile?.bucket || 'bucket');
       const target = cleanS3Path([data.prefix, data.deploymentName || 'model-repository-path'].filter(Boolean).join('/'));
-      const root = endpoint ? 's3://' + endpoint + '/' + bucket : 's3://' + bucket;
+      const root = 's3://' + bucket;
       destination.textContent = [root, target].filter(Boolean).join('/');
     }
 

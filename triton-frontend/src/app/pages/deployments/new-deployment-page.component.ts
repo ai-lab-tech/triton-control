@@ -1,3 +1,4 @@
+import { isEndpointHostname, resolvedEndpointHostname } from "../../shared/endpoint-hostname";
 import { Component, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
@@ -71,8 +72,12 @@ export class NewDeploymentPageComponent {
 
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:26.06-py3";
+  accessMode: "internal" | "ingress" = "internal";
+  basicAuthEnabled = false;
+  basicAuthUsername = "";
+  basicAuthPassword = "";
   ingressHost = "";
-  ingressClassName = "";
+  ingressScheme: "http" | "https" = "https";
   selectedS3ProfileId = "";
   s3Url = "";
   s3Bucket = "";
@@ -103,20 +108,46 @@ export class NewDeploymentPageComponent {
   readonly message = this._message.asReadonly();
   readonly messageTone = this._messageTone.asReadonly();
 
+  readonly baseDomain = signal("");
+  readonly allowHttp = signal(false);
+  readonly ingressEnabled = signal(false);
+  async loadEndpointPolicy(): Promise<void> {
+    try {
+      const policy = await firstValueFrom(
+        this.deploymentsApi.getDeploymentPolicyApiDeploymentsPolicyGet(),
+      );
+      this.baseDomain.set(policy.base_domain || "");
+      this.allowHttp.set(policy.allow_http);
+      this.ingressEnabled.set(policy.ingress_enabled);
+    } catch {
+      this.allowHttp.set(false);
+      this.ingressEnabled.set(false);
+    }
+  }
+
   constructor() {
+    void this.loadEndpointPolicy();
     void this.loadS3Profiles();
   }
 
+  endpointPreview(): string {
+    return this.ingressHost.trim()
+      ? this.ingressScheme + "://" + resolvedEndpointHostname(this.ingressHost, this.baseDomain())
+      : "";
+  }
+
   ingressStatus(): { label: string; tone: "neutral" | "ok" | "warn" | "error"; detail: string } {
+    if (this.accessMode === "internal")
+      return { label: "Internal", tone: "neutral", detail: "Cluster Service" };
     const hasHost = this.ingressHost.trim().length > 0;
-    const hasClass = this.ingressClassName.trim().length > 0;
-    if (!hasHost && !hasClass) {
-      return { label: "Off", tone: "neutral", detail: "No host/class" };
+    if (hasHost) {
+      return {
+        label: "On",
+        tone: "ok",
+        detail: "Administrator-managed ingress",
+      };
     }
-    if (hasHost && hasClass) {
-      return { label: "On", tone: "ok", detail: "Host and class set" };
-    }
-    return { label: "Check", tone: "warn", detail: "Set host and class" };
+    return { label: "Check", tone: "warn", detail: "Set an Ingress hostname" };
   }
 
   requirementsStatus(): {
@@ -221,8 +252,14 @@ export class NewDeploymentPageComponent {
     const payload: CreateDeploymentRequest = {
       deployment_name: this.deploymentName.trim(),
       image: this.image.trim(),
-      ingress_host: this.ingressHost.trim() || undefined,
-      ingress_class_name: this.ingressClassName.trim() || undefined,
+      access_mode: this.accessMode,
+      ingress_scheme: this.accessMode === "ingress" ? this.ingressScheme : undefined,
+      ingress_host: this.accessMode === "ingress" ? this.ingressHost.trim() : undefined,
+      basic_auth_enabled: this.accessMode === "ingress" && this.basicAuthEnabled,
+      basic_auth_username:
+        this.accessMode === "ingress" && this.basicAuthEnabled ? this.basicAuthUsername : undefined,
+      basic_auth_password:
+        this.accessMode === "ingress" && this.basicAuthEnabled ? this.basicAuthPassword : undefined,
       s3_profile_id: Number(this.selectedS3ProfileId),
       repository_prefix: this.s3Prefix.trim().replace(/^\/+|\/+$/g, ""),
       model_control_mode: this.modelControlMode,
@@ -253,6 +290,7 @@ export class NewDeploymentPageComponent {
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create deployment."), "error");
     } finally {
+      this.basicAuthPassword = "";
       this.deploying.set(false);
     }
   }
@@ -267,6 +305,14 @@ export class NewDeploymentPageComponent {
       this.s3Profiles().some((profile) => String(profile.id) === this.selectedS3ProfileId) &&
       this.deploymentName.trim().length > 0 &&
       this.image.trim().length > 0 &&
+      (this.accessMode === "internal" ||
+        (this.ingressEnabled() &&
+          isEndpointHostname(this.ingressHost) &&
+          (this.allowHttp() || this.ingressScheme === "https") &&
+          (!this.basicAuthEnabled ||
+            (!!this.basicAuthUsername &&
+              !!this.basicAuthPassword &&
+              this.ingressScheme === "https")))) &&
       this.hasValidMemoryGi() &&
       !this.deploying()
     );

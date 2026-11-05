@@ -52,7 +52,25 @@ Core capabilities include:
   authenticated MLflow UI
 - embedded Argo Workflows UI and API through an authenticated backend proxy
 
-## Run With Docker Compose
+## Run On Kubernetes
+
+Requires Kubernetes with a default StorageClass, kubectl and Helm.
+Run from the repository root:
+
+```bash
+helm upgrade --install triton-control ./charts/triton-control \
+  --namespace triton-control --create-namespace \
+  --set ingress.enabled=false,tritonDeployments.ingressEnabled=false \
+  --wait --timeout 10m
+kubectl -n triton-control port-forward svc/triton-control 8080:8080
+```
+
+Open [localhost:8080](http://localhost:8080) and create your administrator account.
+This installs the chart's release image. Building from source: [developer setup](docs/local-kubernetes.md).
+
+[Ingress and TLS](docs/ingress-tls.md) · [Helm configuration](charts/triton-control/README.md) · [Minikube](docs/local-kubernetes.md)
+
+## Demo With Docker Compose
 
 With Docker installed, start the published image:
 
@@ -81,7 +99,7 @@ For Triton running on the host, use
 Before a non-development deployment, replace the secrets and database password
 defined in `compose.yaml`.
 
-## Run With Podman Compose
+## Demo With Podman Compose
 
 With Podman and `podman-compose` installed, start the published image:
 
@@ -105,102 +123,6 @@ The backend API is available at `http://localhost:8000` and PostgreSQL at
 
 Podman Compose does not provide Kubernetes. Deployments, Development
 workspaces, managed MLflow, and Argo Workflows are therefore disabled.
-
-## Run On Kubernetes
-
-The Helm chart deploys:
-
-- one combined app image with Nginx, Angular, and FastAPI
-- one optional PostgreSQL Deployment
-- one optional Argo Workflows installation
-- one Service for frontend and backend ports
-- optional Ingress routes
-
-OIDC login has been tested with Microsoft Entra ID, Keycloak, and Dex. The
-Kubernetes deployment has also been tested with Argo CD managing the Helm
-release in a GitOps workflow.
-
-The Helm deployment can use the published image directly; users do not need to
-build, pull, or push it on the machine running Helm. Kubernetes pulls the image
-from Docker Hub when it creates the application pod.
-
-Create a values file, for example `values-prod.yaml`:
-
-```yaml
-app:
-  image:
-    repository: ailabtechtriton/triton-control
-    tag: "v1.2.3"
-  secretEnv:
-    SESSION_SECRET: "replace-me"
-    JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
-
-postgresql:
-  enabled: true
-  auth:
-    database: triton_backend
-    username: triton
-    password: "replace-me"
-  persistence:
-    enabled: true
-    size: 20Gi
-
-ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - host: triton-control.example.com
-      paths:
-        frontend:
-          - path: /
-            pathType: Prefix
-        backend:
-          - path: /api
-            pathType: Prefix
-          - path: /auth
-            pathType: Prefix
-          - path: /login
-            pathType: Prefix
-          - path: /logout
-            pathType: Prefix
-          - path: /whoami
-            pathType: Prefix
-```
-
-Install or upgrade:
-
-```bash
-helm upgrade --install triton-control ./charts/triton-control \
-  --namespace triton-control \
-  --create-namespace \
-  -f values-prod.yaml
-```
-
-If `postgresql.enabled=true`, the chart generates and injects `DATABASE_URL`.
-For an external database, set `postgresql.enabled=false` and provide
-`DATABASE_URL` through `app.existingSecret`, `app.env`, or `app.envFrom`.
-
-### Self-Deployed Triton And Perf Analyzer Namespace Behavior
-
-When you create a self-deployed Triton instance or run a model performance
-Job, namespace behavior depends on backend runtime context. Performance Jobs
-run as non-root with one active run per model; see [Model performance Jobs](docs/model-performance-jobs.md).
-
-- Triton Control backend running in Kubernetes (in-cluster detection):
-  self-deployed Triton and Perf Analyzer are created in the same namespace as
-  the Triton Control pod.
-- Triton Control backend running outside Kubernetes (for example local dev with
-  `KUBERNETES_KUBECONFIG_PATH`):
-  self-deployed Triton remains name-based, while Perf Analyzer defaults to the
-  shared `triton-control` namespace.
-
-In-cluster detection is automatic and uses Kubernetes runtime signals
-(ServiceAccount files and Kubernetes service environment).
-
-`KUBERNETES_KUBECONFIG_PATH` is intended as a local development/testing
-override for Triton Control running outside Kubernetes. In-cluster production
-deployments should use ServiceAccount-based in-cluster configuration.
 
 ## Run Locally With Python And npm
 

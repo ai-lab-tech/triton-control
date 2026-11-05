@@ -125,10 +125,12 @@ the filesystem watcher or the view refresh action runs.
    `config.pbtxt`. If no model name is found, it asks for one. When neither
    backend nor platform is declared, the form shows
    `No backend or platform in config.pbtxt`.
-4. Select an S3 profile or expand manual S3 settings. The **Repository prefix**
+4. Select a saved S3 profile. The **Repository prefix**
    is an optional parent path; the upload target preview shows the final
-   `s3://...` path before deploy. Expand **Ingress** to optionally configure the
-   same ingress host and class settings available in Add Deployment.
+   `s3://...` path before deploy. Expand **External access** to choose cluster-only access or an Ingress
+   hostname, HTTP/HTTPS, and optional basic authentication. External access and
+   HTTP are available only when permitted by the administrator. Controller class,
+   routing and certificates are administrator-managed.
 5. The extension uploads files below `bucket/prefix/model-repository-path`.
 6. The webview calls `/api/deployments` with the current Triton Control browser
    session, so the normal Add Deployment path is reused.
@@ -291,48 +293,14 @@ The selected profile is used both for uploading the chosen repository from
 code-server and for creating the Triton deployment. The deployment receives its
 own Kubernetes Secret for the in-pod S3 repository connection.
 
-When a profile is selected, manual S3 connection fields remain collapsed. For
-manual S3 deployments, enter the endpoint, bucket, credentials, optional
-repository prefix, and confirm the **Target path** preview at the end of the
-manual section.
+The deployment form requires a saved profile. Manage connection credentials and
+optional CA certificates in Triton Control's **S3 Profiles** menu. Set the
+repository prefix in the form and check **S3 upload target** before deploying.
 
-## Manual S3 Settings
-
-Manual S3 settings remain available in a collapsed section for one-off
-deployments or for saving a new profile from the extension. Defaults can still
-come from code-server settings or environment variables:
-
-- `tritonControlDeploy.s3Endpoint` or `AWS_ENDPOINT_URL` / `S3_ENDPOINT`
-- `tritonControlDeploy.s3Bucket` or `S3_BUCKET`
-- `tritonControlDeploy.s3Prefix` or `S3_PREFIX`
-- `tritonControlDeploy.s3Region` or `AWS_REGION`
-- `tritonControlDeploy.s3AccessKeyId` or `AWS_ACCESS_KEY_ID`
-- `tritonControlDeploy.s3SecretAccessKey` or `AWS_SECRET_ACCESS_KEY`
-
-If S3/R2 Explorer is configured, this extension reuses:
-
-- `s3x.endpointUrl`
-- `s3x.region`
-- `s3x.accessKeyId`
-- `s3x.secretAccessKey`
-- `s3x.forcePathStyle`
-
-In Triton Control-managed workspaces, code-server settings are backed by
-`/workspace/.triton-control/code-server-settings.json` so they survive pod
-restarts. Extensions installed from the code-server UI are stored at
-`/workspace/.triton-control/code-server-extensions`.
-
-Local, MinIO, minikube, `.local`, `.internal`, and IP endpoints should use
-path-style addressing to avoid bucket-prefixed DNS lookups such as
-`bucket.host.minikube.internal`.
-
-Keep `tritonControlDeploy.s3ForcePathStyle` enabled for providers and custom
-endpoints that require path-style bucket URLs. Disable it only when your S3
-provider requires virtual-host bucket URLs.
-
-For Triton deployments using HTTPS S3 endpoints, paste the optional S3 CA
-certificate into the S3 profile or manual deploy form. It is passed to Triton
-Control as `s3_ca_certificate` so the Triton pod trusts the object store.
+The extension fetches current credentials through the managed workspace endpoint
+when uploading. For MinIO and other custom endpoints, configure path-style
+addressing in the profile. An HTTPS S3 CA certificate is passed to the Triton pod
+so it can trust the object store.
 
 ## Detected Backend and Model Control
 
@@ -378,3 +346,31 @@ npm run package
 ```
 
 Install the generated `.vsix` in code-server.
+
+### Endpoint policy
+
+The deployment form reads `GET /api/deployments/policy`. When
+`tritonDeployments.ingressEnabled=false`, only cluster-only deployments are
+available. HTTP additionally requires administrator permission; basic
+authentication requires HTTPS and both username and password. Passwords are
+sent only with the deployment request, not saved in extension settings.
+
+The backend rechecks policy and hostname conflicts when processing
+`POST /api/deployments`. A failed policy lookup leaves external access disabled.
+For existing deployments, use Triton Control's **Endpoints** tab.
+
+Hostname fields accept only a DNS hostname, e.g. `smollm`, without
+`http://`, `https://`, a port or a path. Choose the protocol separately
+(`ingress_scheme` in REST/MLflow configuration). URLs previously supplied in
+`ingress_host` must be split into these two fields; existing deployed endpoints
+are unchanged.
+
+
+Hostname input always accepts only a short name such as `smollm`, never a full
+domain. The administrator-configured domain is appended by the API; an empty
+domain leaves the short name unchanged.
+
+The deployment form uses saved S3 profiles only. Manual S3 connection fields and
+profile creation have been removed from this form. Manage profiles in Triton
+Control. The workspace resolves the selected profile again before uploading, so
+current credentials are used and are not saved to extension settings by this form.

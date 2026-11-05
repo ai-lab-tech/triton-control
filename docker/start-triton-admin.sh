@@ -6,35 +6,37 @@ sed "s/__CLIENT_MAX_BODY_SIZE__/${client_max_body_size}/g" /etc/nginx/nginx.conf
 
 python - <<'PY'
 import os
-import socket
 import sys
 import time
-from urllib.parse import urlparse
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import NullPool
 
 database_url = os.environ.get("DATABASE_URL", "")
 if not database_url:
     sys.exit(0)
 
-parsed = urlparse(database_url)
-host = parsed.hostname
-port = parsed.port or 5432
-if not host:
-    sys.exit(0)
-
+url = make_url(database_url)
+connect_args = {"connect_timeout": 3} if url.get_backend_name() == "postgresql" else {}
+engine = create_engine(url, connect_args=connect_args, poolclass=NullPool)
 deadline = time.monotonic() + int(os.environ.get("DATABASE_WAIT_TIMEOUT", "60"))
-last_error = None
 
-while time.monotonic() < deadline:
-    try:
-        with socket.create_connection((host, port), timeout=3):
-            print(f"Database is reachable at {host}:{port}", flush=True)
+try:
+    while time.monotonic() < deadline:
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            print("Database is ready", flush=True)
             sys.exit(0)
-    except OSError as exc:
-        last_error = exc
-        print(f"Waiting for database at {host}:{port}: {exc}", flush=True)
-        time.sleep(2)
+        except OperationalError:
+            # Never print connection errors: they may contain credentials.
+            print("Waiting for database readiness", flush=True)
+            time.sleep(2)
+finally:
+    engine.dispose()
 
-print(f"Database did not become reachable at {host}:{port}: {last_error}", file=sys.stderr, flush=True)
+print("Database did not become ready before the timeout", file=sys.stderr, flush=True)
 sys.exit(1)
 PY
 

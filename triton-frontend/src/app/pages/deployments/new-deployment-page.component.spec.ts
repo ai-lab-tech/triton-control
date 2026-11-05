@@ -37,6 +37,7 @@ describe("NewDeploymentPageComponent", () => {
     TestBed.inject(HttpTestingController)
       .expectOne("http://localhost:8000/api/s3-profiles")
       .flush(profiles);
+    fixture.componentInstance.ingressEnabled.set(true);
     fixture.componentInstance.s3Profiles.set([
       {
         id: 1,
@@ -87,13 +88,44 @@ describe("NewDeploymentPageComponent", () => {
     component.s3Url = "s3://http://minio:9000/triton-models";
     component.deploymentName = "triton-minio";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-py3";
-    component.ingressHost = "triton.example.local";
+    component.accessMode = "ingress";
+    component.ingressHost = "triton";
 
     // Act
     const canDeploy = component.canDeploy();
 
     // Assert
     expect(canDeploy).toBeTrue();
+  });
+
+  it("blocks HTTP unless allowed and always requires HTTPS for basic auth", () => {
+    const component = createComponent().componentInstance;
+    component.s3Url = "s3://bucket";
+    component.deploymentName = "model";
+    component.accessMode = "ingress";
+    component.ingressHost = "smollm";
+    component.ingressScheme = "http";
+    expect(component.canDeploy()).toBeFalse();
+    component.allowHttp.set(true);
+    expect(component.canDeploy()).toBeTrue();
+    component.ingressHost = "http://smollm";
+    expect(component.canDeploy()).toBeFalse();
+    component.ingressHost = "smollm";
+    component.ingressEnabled.set(false);
+    expect(component.canDeploy()).toBeFalse();
+    component.ingressEnabled.set(true);
+    component.basicAuthEnabled = true;
+    component.basicAuthUsername = "user";
+    component.basicAuthPassword = "password";
+    expect(component.canDeploy()).toBeFalse();
+  });
+
+  it("previews the base domain without appending it to the submitted hostname", () => {
+    const component = createComponent().componentInstance;
+    component.ingressHost = "smollm";
+    component.baseDomain.set("models.example.com");
+    expect(component.endpointPreview()).toBe("https://smollm.models.example.com");
+    expect(component.ingressHost).toBe("smollm");
   });
 
   it("CanDeploy_ImageMissing_ReturnsFalse", () => {
@@ -184,7 +216,8 @@ describe("NewDeploymentPageComponent", () => {
     component.deploymentName = "triton-minio";
     component.image = "nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3";
     component.s3Url = "s3://http://minio:9000/triton-models";
-    component.ingressHost = "triton.example.local";
+    component.accessMode = "ingress";
+    component.ingressHost = "triton";
     component.repositoryPollSecs = 9;
     component.modelName = "simple_identity";
     component.requirementsTxt.set("numpy\n");
@@ -200,7 +233,7 @@ describe("NewDeploymentPageComponent", () => {
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         s3_profile_id: 1,
-        ingress_host: "triton.example.local",
+        ingress_host: "triton",
         model_control_mode: "poll",
         repository_sync_mode: "sidecar",
         repository_poll_secs: 9,

@@ -12,7 +12,12 @@ import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatSelectModule } from "@angular/material/select";
 import { MatTabsModule } from "@angular/material/tabs";
 import { firstValueFrom } from "rxjs";
-import { type EmailSettingsDTO, UsersService } from "../../api/generated";
+import {
+  type EmailSettingsDTO,
+  UsersService,
+  DeploymentsService,
+  DeploymentPolicyResponse,
+} from "../../api/generated";
 
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
@@ -68,6 +73,48 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
 export class SettingsPageComponent {
   private readonly store = inject(Store);
   private readonly usersApi = inject(UsersService);
+  private readonly deploymentsApi = inject(DeploymentsService);
+  readonly deploymentPolicy = signal<DeploymentPolicyResponse | null>(null);
+  readonly policyBusy = signal(false);
+  readonly policyMessage = signal("");
+  httpPolicyChoice: "default" | "allow" | "deny" = "default";
+
+  async loadDeploymentPolicy(): Promise<void> {
+    this.policyBusy.set(true);
+    this.policyMessage.set("");
+    try {
+      const policy = await firstValueFrom(
+        this.deploymentsApi.getDeploymentPolicyApiDeploymentsPolicyGet(),
+      );
+      this.deploymentPolicy.set(policy);
+      this.httpPolicyChoice =
+        policy.source === "environment" ? "default" : policy.allow_http ? "allow" : "deny";
+    } catch {
+      this.policyMessage.set("Could not load endpoint policy. Please retry.");
+    } finally {
+      this.policyBusy.set(false);
+    }
+  }
+
+  async saveDeploymentPolicy(): Promise<void> {
+    if (this.policyBusy() || !this.deploymentPolicy()) return;
+    this.policyBusy.set(true);
+    try {
+      const policy = await firstValueFrom(
+        this.deploymentsApi.updateDeploymentPolicyApiDeploymentsPolicyPut({
+          allow_http:
+            this.httpPolicyChoice === "default" ? null : this.httpPolicyChoice === "allow",
+        }),
+      );
+      this.deploymentPolicy.set(policy);
+      this.policyMessage.set("Endpoint policy saved.");
+    } catch {
+      this.policyMessage.set("Could not save endpoint policy. Please retry.");
+    } finally {
+      this.policyBusy.set(false);
+    }
+  }
+
   private savedEmailSettingsSnapshot = "";
 
   readonly loading = toSignal(this.store.select(selectSettingsLoading), { initialValue: false });
@@ -140,6 +187,7 @@ export class SettingsPageComponent {
 
     this.store.dispatch(settingsPageOpened());
     void this.loadEmailSettings();
+    void this.loadDeploymentPolicy();
   }
 
   saveSettings(): void {

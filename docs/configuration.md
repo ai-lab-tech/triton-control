@@ -7,6 +7,9 @@ values through Compose environment entries, Helm `app.env`, Helm
 `app.secretEnv`, or a Kubernetes Secret referenced by `app.existingSecret` or
 `app.envFrom`.
 
+For step-by-step Helm, DNS and certificate configuration, see
+[Kubernetes Ingress and TLS setup](ingress-tls.md).
+
 ## OIDC Configuration Source
 
 `OIDC_CONFIG_SOURCE` controls where OIDC settings are managed.
@@ -75,6 +78,14 @@ password resets display progress while waiting for the bounded SMTP operation.
 | `ARGO_WORKFLOWS_NAMESPACE`                                                         | No                                 | Helm release namespace                                       | Namespace containing Triton Control, Argo components, and user Workflows.                                                                                                                                                                                                       |
 | `ARGO_WORKFLOWS_SERVICE_NAME`                                                      | No                                 | Helm-derived                                                 | Argo Server Service name shown in status responses.                                                                                                                                                                                                                             |
 | `ARGO_WORKFLOWS_BASE_PATH`                                                         | No                                 | `/api/workflows/proxy/`                                      | Browser-facing proxy path; must match Argo Server `baseHref`.                                                                                                                                                                                                                   |
+| `TRITON_DEPLOY_INGRESS_CLASS` | No | `traefik` | Administrator-selected IngressClass for managed deployments. Must use `traefik.io/ingress-controller`; users cannot override it. |
+| `TRITON_DEPLOY_BASE_DOMAIN` | No | unset | Appended centrally to short model hostnames, e.g. `models.example.com`. No wildcard or URL. Users always enter a short hostname without a domain. Empty uses that name unchanged. |
+| `TRITON_DEPLOY_INGRESS_ENABLED` | No | `true` | Allow model Ingress creation and edits. When false, only cluster-only access can be saved; existing endpoints remain active until explicitly disabled. Independent of the control UI Ingress. |
+| `TRITON_DEPLOY_ALLOW_HTTP` | No | `false` | Default permission for new HTTP model endpoints. Settings → Endpoints can override this or reset to this default. Basic authentication still requires HTTPS. |
+| `TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT` | No | `web` | Traefik entrypoint for HTTP deployment routes. |
+| `TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT` | No | `websecure` | Traefik entrypoint for HTTPS deployment routes. Configure HTTP redirects centrally in Traefik. |
+| `TRITON_DEPLOY_INGRESS_TLS_SECRET` | No | unset | Existing TLS Secret in the deployment namespace. Mutually exclusive with the ClusterIssuer setting. |
+| `TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER` | No | unset | Existing cert-manager ClusterIssuer for automatic per-deployment HTTPS certificates. If both certificate settings are empty, Traefik's default certificate is used. |
 | `TRITON_DEPLOY_S3_SYNC_IMAGE`                                                      | No                                 | `amazon/aws-cli:2.22.35`                                     | Default image for vLLM S3 repository init containers and sidecars created by Add Deployment. For a host-run backend, set it in `triton-backend/.env` or the backend process environment. Helm sets it from `tritonDeployments.s3SyncImage`. Non-vLLM deployments do not use it. |
 | `TRITON_DEPLOY_MODEL_REPOSITORY_EMPTYDIR_SIZE`                                     | No                                 | unset                                                        | Optional Kubernetes `emptyDir.sizeLimit` for the local `/models` volume used by vLLM init/sidecar repository sync. Helm sets it from `tritonDeployments.modelRepositoryEmptyDirSize`.                                                                                           |
 | `TRITON_DEPLOY_S3_SYNC_STAGING_EMPTYDIR_SIZE`                                      | No                                 | unset                                                        | Optional Kubernetes `emptyDir.sizeLimit` for the `/staging` volume used by vLLM init/sidecar repository sync. Helm sets it from `tritonDeployments.s3SyncStagingEmptyDirSize`.                                                                                                  |

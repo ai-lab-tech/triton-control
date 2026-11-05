@@ -115,29 +115,3 @@ spec:
     - name: metrics
       port: 18002
       targetPort: 8002
-      
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {ingress_name}
-  namespace: {namespace}
-spec:
-  ingressClassName: {ingress_class_name}
-  rules:
-    - {ingress_host_rule}http:
-        paths:
-          - path: /metrics
-            pathType: Prefix
-            backend:
-              service:
-                name: {service_name}
-                port:
-                  name: metrics
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {service_name}
-                port:
-                  name: http

@@ -1372,6 +1372,76 @@
         ]
       }
     },
+    "/api/deployments/policy": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get Deployment Policy",
+        "operationId": "get_deployment_policy_api_deployments_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentPolicyResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Update Deployment Policy",
+        "operationId": "update_deployment_policy_api_deployments_policy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentPolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/deployments/mlflow": {
       "get": {
         "tags": [
@@ -1623,6 +1693,108 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InstanceLogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deployments/{instance_id}/access": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get Deployment Access",
+        "operationId": "get_deployment_access_api_deployments__instance_id__access_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Update Deployment Access",
+        "operationId": "update_deployment_access_api_deployments__instance_id__access_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentAccessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentAccessResponse"
                 }
               }
             }
@@ -4238,6 +4410,77 @@
       },
       "CreateDeploymentRequest": {
         "properties": {
+          "access_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "internal",
+                  "ingress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Mode"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host",
+            "description": "Short hostname only, e.g. smollm. No domain, URL, port or path. The administrator configures the domain."
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "basic_auth_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Username"
+          },
+          "basic_auth_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Password"
+          },
           "deployment_name": {
             "type": "string",
             "title": "Deployment Name"
@@ -4321,43 +4564,6 @@
               }
             ],
             "title": "Dockerconfigjson"
-          },
-          "ingress_host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Host"
-          },
-          "ingress_scheme": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "http",
-                  "https"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Scheme"
-          },
-          "ingress_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingress Class Name"
           },
           "model_control_mode": {
             "type": "string",
@@ -4732,6 +4938,174 @@
         ],
         "title": "DashboardAlertDTO"
       },
+      "DeploymentAccessRequest": {
+        "properties": {
+          "access_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "internal",
+                  "ingress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Mode"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host",
+            "description": "Short hostname only, e.g. smollm. No domain, URL, port or path. The administrator configures the domain."
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "basic_auth_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Username"
+          },
+          "basic_auth_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basic Auth Password"
+          }
+        },
+        "type": "object",
+        "title": "DeploymentAccessRequest"
+      },
+      "DeploymentAccessResponse": {
+        "properties": {
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hostname"
+          },
+          "access_mode": {
+            "type": "string",
+            "enum": [
+              "internal",
+              "ingress"
+            ],
+            "title": "Access Mode"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "internal_url": {
+            "type": "string",
+            "title": "Internal Url"
+          },
+          "ingress_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Host"
+          },
+          "ingress_scheme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Scheme"
+          },
+          "ingress_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingress Class Name"
+          },
+          "basic_auth_enabled": {
+            "type": "boolean",
+            "title": "Basic Auth Enabled",
+            "default": false
+          },
+          "tls_secret_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tls Secret Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_mode",
+          "url",
+          "internal_url"
+        ],
+        "title": "DeploymentAccessResponse"
+      },
       "DeploymentDeleteResponse": {
         "properties": {
           "status": {
@@ -4755,6 +5129,63 @@
         ],
         "title": "DeploymentDeleteResponse",
         "description": "Response after deleting a Kubernetes-managed Triton deployment."
+      },
+      "DeploymentPolicyResponse": {
+        "properties": {
+          "base_domain": {
+            "type": "string",
+            "title": "Base Domain",
+            "default": ""
+          },
+          "ingress_enabled": {
+            "type": "boolean",
+            "title": "Ingress Enabled"
+          },
+          "allow_http": {
+            "type": "boolean",
+            "title": "Allow Http"
+          },
+          "default_allow_http": {
+            "type": "boolean",
+            "title": "Default Allow Http"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "admin"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingress_enabled",
+          "allow_http",
+          "default_allow_http",
+          "source"
+        ],
+        "title": "DeploymentPolicyResponse"
+      },
+      "DeploymentPolicyUpdate": {
+        "properties": {
+          "allow_http": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Http"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allow_http"
+        ],
+        "title": "DeploymentPolicyUpdate"
       },
       "DeploymentResponse": {
         "properties": {
@@ -4792,6 +5223,17 @@
             },
             "type": "array",
             "title": "Applied Resources"
+          },
+          "external_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Url"
           }
         },
         "type": "object",

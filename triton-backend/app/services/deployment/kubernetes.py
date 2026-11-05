@@ -24,8 +24,17 @@ from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
 
-from app.exceptions import BadGatewayError
+from app.db.database import session_factory
+from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
+from app.services.deployment.access import (
+    create_auth_middleware,
+    validate_controller,
+    validate_tls_secret,
+)
+from app.services.deployment.access_manifests import OWNER_LABEL, access_manifests, ingress_class
+from app.services.deployment.hostname import validate_hostname_available
+from app.services.deployment.policy import validate_endpoint_policy, validate_ingress
 from app.services.deployment.probes import serving_probes
 from app.services.deployment.records import record_deployment_failure, update_instance_after_apply
 from app.services.kubernetes_client import (
@@ -91,8 +100,18 @@ def apply_deployment_resources(
     from kubernetes.utils.create_from_yaml import FailToCreateError  # type: ignore[import-untyped]
 
     try:
+        validate_ingress(request)
+        if request.ingress_host and request.ingress_scheme == "http":
+            with session_factory() as session:
+                validate_endpoint_policy(request, session)
         api = _client()
         _ensure_namespace(api, namespace)
+        from kubernetes import client, utils  # type: ignore[import-untyped]
+
+        networking = client.NetworkingV1Api(api)
+        validate_controller(networking, request)
+        validate_hostname_available(networking, request.ingress_host, ingress_class())
+        validate_tls_secret(client.CoreV1Api(api), request, namespace)
         runtime_class_name = gpu_runtime_class_name(api, request.gpu_count)
         applied = []
         for manifest in _manifests(
@@ -104,9 +123,10 @@ def apply_deployment_resources(
             image,
             runtime_class_name=runtime_class_name,
         ):
-            from kubernetes import utils  # type: ignore[import-untyped]
-
-            utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
+            if manifest["kind"] == "Middleware":
+                create_auth_middleware(api, namespace, manifest)
+            else:
+                utils.create_from_dict(api, data=manifest, namespace=namespace, verbose=False, apply=True)
             meta = manifest.get("metadata") or {}
             applied.append(f"{manifest.get('kind', 'Resource')}/{meta.get('name', 'unknown')}")
         urls = _deployment_urls(request, api, namespace, service_name)
@@ -116,16 +136,24 @@ def apply_deployment_resources(
             metrics_url=urls["metrics"] if request.allow_metrics else "",
             applied_resources=applied,
         )
+    except (ConflictError, BadRequestError) as exc:
+        record_deployment_failure(instance_id, str(exc))
     except ConfigException:
         record_deployment_failure(instance_id, "Kubernetes configuration could not be loaded")
     except ApiException as exc:
-        record_deployment_failure(instance_id, _api_error(exc))
+        record_deployment_failure(
+            instance_id, "Kubernetes deployment failed" if request.basic_auth_enabled else _api_error(exc)
+        )
     except FailToCreateError as exc:
         errs = getattr(exc, "api_exceptions", []) or []
         message = "; ".join(_api_error(e) for e in errs) or "Failed to apply Kubernetes resources"
-        record_deployment_failure(instance_id, message)
+        record_deployment_failure(
+            instance_id, "Failed to apply Kubernetes resources" if request.basic_auth_enabled else message
+        )
     except Exception as exc:
-        record_deployment_failure(instance_id, f"Deployment failed: {exc}")
+        record_deployment_failure(
+            instance_id, "Deployment failed" if request.basic_auth_enabled else f"Deployment failed: {exc}"
+        )
 
 
 def is_pod_ready(namespace: str, deployment_name: str) -> bool:
@@ -230,6 +258,10 @@ def delete_deployment_resources(
     _delete(core.delete_namespaced_secret, "Secret", secret_name)
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(deployment_name))
     _delete(net.delete_namespaced_ingress, "Ingress", f"{deployment_name}-ingress")
+    for secret in core.list_namespaced_secret(
+        namespace, label_selector=f"{OWNER_LABEL}={deployment_name}"
+    ).items:
+        _delete(core.delete_namespaced_secret, "Secret", secret.metadata.name)
     return ", ".join(deleted) if deleted else "No deployment resources found to delete."
 
 
@@ -346,15 +378,7 @@ def resolve_deployment_service_urls(namespace: str, service_name: str) -> dict[s
 def _deployment_urls(
     request: CreateDeploymentRequest, api: Any, namespace: str, service_name: str
 ) -> dict[str, str]:
-    if request.ingress_host:
-        host = request.ingress_host
-        if not (host.startswith("http://") or host.startswith("https://")):
-            host = f"{request.ingress_scheme or 'https'}://{host}"
-        host = host.rstrip("/")
-        return {"http": host, "metrics": f"{host}/metrics"}
-    if not request.ingress_class_name:
-        return _cluster_service_urls(api, namespace, service_name)
-    return resolve_service_urls(api, namespace, service_name)
+    return _cluster_service_urls(api, namespace, service_name)
 
 
 def _cluster_service_urls(api: Any, namespace: str, service_name: str) -> dict[str, str]:
@@ -447,8 +471,6 @@ def _manifests(
         ),
         namespace=q(namespace),
         deployment_name=q(deployment_name),
-        ingress_name=q(f"{deployment_name}-ingress"),
-        ingress_host_rule=_ingress_host_rule(request.ingress_host, q),
         service_name=q(service_name),
         secret_name=q(secret_name),
         image=q(image),
@@ -466,7 +488,6 @@ def _manifests(
         health_probes="\n".join(
             "          " + line for line in yaml.safe_dump(probes, sort_keys=False).splitlines()
         ),
-        ingress_class_name=request.ingress_class_name or "nginx",
     )
     manifests = [m for m in yaml.safe_load_all(rendered) if m]
     for manifest in manifests:
@@ -475,9 +496,10 @@ def _manifests(
                 manifest["spec"]["template"]["spec"]["runtimeClassName"] = runtime_class_name
             if request.repository_sync_mode != "direct":
                 _add_local_s3_repository(manifest, request, secret_name)
-    # Ingress is optional; avoid creating catch-all ingress entries when no host is provided.
-    if not (request.ingress_host or "").strip():
-        manifests = [m for m in manifests if str(m.get("kind", "")).lower() != "ingress"]
+    manifests = [m for m in manifests if m.get("kind") != "Ingress"]
+    manifests.extend(access_manifests(
+        request, namespace, deployment_name, service_name, allow_metrics=request.allow_metrics,
+    ))
     return manifests
 
 
@@ -512,12 +534,6 @@ def _image_pull_secret_reference(dockerconfigjson: str | None, deployment_name: 
     if not dockerconfigjson:
         return ""
     return f"      imagePullSecrets:\n        - name: {_image_pull_secret_name(deployment_name)}\n"
-
-
-def _ingress_host_rule(ingress_host: str | None, q: Any) -> str:
-    if not ingress_host:
-        return ""
-    return f"host: {q(ingress_host)}\n      "
 
 
 def _triton_server_args(request: CreateDeploymentRequest) -> str:

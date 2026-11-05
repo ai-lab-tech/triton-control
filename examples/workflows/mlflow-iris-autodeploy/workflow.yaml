@@ -38,7 +38,7 @@ spec:
       - |
         export HOME=/tmp
         python -m pip install --no-cache-dir --index-url https://pypi.org/simple --target /tmp/python-packages \
-          mlflow-triton-control \
+          "mlflow-triton-control==0.4.4" \
           "mlflow==3.14.0" \
           "numpy==2.2.6" "pandas==2.3.3" "scikit-learn==1.7.2" "cloudpickle==3.1.2"
         export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"

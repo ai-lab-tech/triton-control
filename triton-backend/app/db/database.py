@@ -81,6 +81,7 @@ def init_db() -> None:
         AccountLifecycleTokenEntity,
         CodeServerEntity,
         DashboardAlertEntity,
+        DeploymentPolicyEntity,
         EmailConfigEntity,
         ErrorEventEntity,
         MlflowEntity,

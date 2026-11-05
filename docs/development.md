@@ -6,6 +6,8 @@ This page covers development of Triton Control itself. For the user-facing
 
 Use local Python for the backend and npm for the frontend.
 
+For Kubernetes integration tests, follow [Minikube development setup](local-kubernetes.md).
+
 ## Prerequisites
 
 - Python `3.12`.

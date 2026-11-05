@@ -566,6 +566,7 @@ Selecting a single model folder preserves the parent repository layout. The
 form shows an **S3 upload target** preview before deploy. Deployment requests
 contain `s3_profile_id` and the uploaded repository's `repository_prefix`;
 the backend resolves the connection settings from the profile.
+Manage connection credentials in Triton Control’s **S3 Profiles** menu.
 
 Model control is displayed as a summary and configured in the collapsed
 **Model control** section. **Polling mode** shows the poll interval field;

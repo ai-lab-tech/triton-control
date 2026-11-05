@@ -22,10 +22,33 @@ from app.schemas import (
     DeploymentResponse,
     InstanceLogsResponse,
 )
+from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
+from app.schemas.deployment_policy import DeploymentPolicyResponse, DeploymentPolicyUpdate
+from app.services.deployment import access as access_service
 from app.services.deployment import deployment as deployment_service
 from app.services.deployment import mlflow as mlflow_service
+from app.services.deployment import policy as policy_service
 
 router = APIRouter(prefix="/api/deployments", tags=["deployments"])
+
+
+@router.get("/policy", response_model=DeploymentPolicyResponse)
+@translate_app_errors
+def get_deployment_policy(
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentPolicyResponse:
+    return policy_service.get_policy(session)
+
+
+@router.put("/policy", response_model=DeploymentPolicyResponse)
+@translate_app_errors
+def update_deployment_policy(
+    request: DeploymentPolicyUpdate,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentPolicyResponse:
+    return policy_service.update_policy(request, session, claims)
 
 
 @router.get("/mlflow")
@@ -89,3 +112,24 @@ def get_deployment_logs(
 ) -> InstanceLogsResponse:
     """Return deployment and Kubernetes pod logs for an instance."""
     return InstanceLogsResponse(logs=deployment_service.get_deployment_logs(session, claims, instance_id))
+
+
+@router.get("/{instance_id}/access", response_model=DeploymentAccessResponse)
+@translate_app_errors
+def get_deployment_access(
+    instance_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentAccessResponse:
+    return access_service.get_access(session, claims, instance_id)
+
+
+@router.put("/{instance_id}/access", response_model=DeploymentAccessResponse)
+@translate_app_errors
+def update_deployment_access(
+    instance_id: int,
+    request: DeploymentAccessRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentAccessResponse:
+    return access_service.update_access(request, session, claims, instance_id)

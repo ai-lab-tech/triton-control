@@ -15,6 +15,7 @@ dependencies = [
     "httpx==0.28.1",
     "graphql-core==3.2.12",
     "cryptography==50.0.0",
+    "bcrypt==4.3.0",
     "cachetools",
     "authlib==1.9.1",
     "itsdangerous==2.2.0",
@@ -61,6 +62,7 @@ select = ["E", "F", "W", "I"]
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.services.deployment" = ["*.yaml"]
 "app.services.perf_analyzer" = ["*.yaml"]
 "app.services.development" = ["hf-builder-version.txt", "mlflow-triton-control-version.txt"]
 

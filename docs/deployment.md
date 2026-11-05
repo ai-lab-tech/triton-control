@@ -2,6 +2,9 @@
 
 Triton Control can run as a local Compose stack or as a Kubernetes deployment.
 
+For installation, start with [Kubernetes Ingress and TLS setup](ingress-tls.md)
+or the [Minikube development environment](local-kubernetes.md).
+
 ## Optional Email Delivery
 
 Email is not required. The safe default is `EMAIL_DELIVERY_MODE=disabled`, so
@@ -118,7 +121,7 @@ Required:
 
 Usually required:
 
-- An Ingress controller, such as nginx-ingress, if `ingress.enabled=true`.
+- Traefik with its Kubernetes Ingress provider enabled if `ingress.enabled=true`.
 - DNS for the configured Ingress host.
 - A TLS certificate Secret when exposing the application over HTTPS.
 - A default StorageClass, or `postgresql.persistence.storageClass`, when using
@@ -553,3 +556,192 @@ configuration. SQLite/PVC installations must be migrated before upgrading; old
 runs are not migrated automatically. S3 installations retain
 artifacts and PostgreSQL metadata when uninstalled; reinstall against the same
 artifact endpoint and root to retain valid proxy references.
+
+
+## Changing deployment access
+
+For a Kubernetes-managed Triton instance, open **Endpoints → Edit endpoint**.
+Members assigned to the instance and administrators can switch between
+**Cluster only** and **External access (Ingress)**. The switch changes the Ingress
+and authentication Secret without restarting Triton or changing its models. The
+ClusterIP Service remains in both modes. Internal mode removes the managed Ingress
+and its authentication Secret; requests already in flight may finish while the
+controller reconciles the change. Other manually created routes are outside this
+setting's scope.
+
+New deployments offer the same choice under **Access**. Existing API clients can
+continue supplying `ingress_host` without `access_mode`. An omitted host means
+internal access. The new `GET /api/deployments/{id}/access` and `PUT` endpoint return
+current Kubernetes exposure settings. `PUT` accepts `access_mode`, `ingress_host`,
+`ingress_scheme` and the optional authentication fields. Users cannot supply
+`ingress_class_name`; the administrator controls the class for every deployment.
+
+Triton Control manages new deployments and deployments whose access was changed
+through their internal Service DNS address, including health, metrics and model
+operations. The backend must therefore have cluster DNS/network access. The
+**Endpoints** tab shows the client-facing endpoint separately. Ingress
+exposes Triton's HTTP API and metrics when enabled; gRPC remains on the internal
+Service. Existing deployments retain their stored management URL until access is
+saved.
+
+### Administrator-managed Traefik and HTTPS
+
+Model Ingress can be disabled independently of Triton Control's UI/API Ingress:
+
+```yaml
+ingress:
+  enabled: false
+tritonDeployments:
+  ingressEnabled: false
+```
+
+`tritonDeployments.ingressEnabled` defaults to `true` for compatibility. Setting
+it to `false` hides new external-access options and rejects model Ingress
+creation and edits in the backend, including queued creation. Existing model
+Ingresses are not automatically removed; users can still switch them to
+cluster-only access. **Settings → Endpoints** shows this deployment-managed
+switch. The HTTP permission override cannot enable Ingress when this switch is
+off. No database migration is needed for this switch.
+
+New model endpoints require HTTPS by default. To permit HTTP through Helm:
+
+```yaml
+tritonDeployments:
+  allowHttp: true
+```
+
+Administrators can override this default in **Settings → Endpoints**, or select
+**Use deployment default** to remove the override. The page shows the effective
+policy and its source. The override is persisted in the `deployment_policy`
+table, created automatically at startup. This policy controls model endpoints,
+not the Triton Control UI's own Ingress.
+
+Disabling HTTP blocks new HTTP endpoints, transitions from HTTPS to HTTP, and
+hostname changes on HTTP endpoints. Existing HTTP endpoints remain active and
+can retain their current hostname; they can also switch to HTTPS or cluster-only
+access. Basic authentication always requires HTTPS. Enforcement runs in the
+backend for creation and editing, including a recheck before queued creation.
+
+
+Deployment creation and endpoint edits reject hostnames that overlap an existing
+Ingress rule in any namespace for the configured ingress class or another class
+using the Traefik controller. Unclassified routes and missing IngressClass resources
+are checked conservatively; only verified different controllers are excluded.
+This may also reject overlaps between separately operated Traefik controllers.
+Matching includes single-label wildcards (for example, `*.example.com` conflicts with `model.example.com`).
+An edit may retain its own hostname. The Helm chart grants cluster-wide
+`list` permission for Ingresses even with namespaced workload permissions;
+custom RBAC must grant this permission too.
+
+Creation checks before accepting the request and again before applying resources.
+These are preflight checks, not an atomic cluster-wide hostname reservation:
+simultaneous writers or resources managed outside Triton Control can still race.
+Use cluster admission policy if strict hostname exclusivity is required.
+
+Traefik is the supported controller. Install it separately with the Kubernetes
+Ingress provider enabled. Basic authentication additionally requires the
+Kubernetes CRD provider and the `middlewares.traefik.io` CRD. Triton Control does
+not install or configure the controller itself.
+
+Administrators configure the class and entrypoints through Helm:
+
+```yaml
+tritonDeployments:
+  ingressClassName: traefik
+  ingressHttpEntrypoint: web
+  ingressHttpsEntrypoint: websecure
+  ingressTlsSecretName: triton-wildcard-tls
+  certManagerClusterIssuer: ""
+```
+
+The backend verifies that the configured IngressClass uses
+`traefik.io/ingress-controller` for every exposed deployment. Custom Traefik class
+names are supported; user overrides and other controllers are rejected. Configure
+both Traefik providers to observe the deployment namespace and the chosen class.
+The chart grants the backend `get` permission on IngressClasses and `get`/`create`
+on Traefik Middlewares in its managed namespace (or cluster-wide when configured).
+
+Choose one certificate strategy:
+
+- **Existing certificate:** set `ingressTlsSecretName` to a `kubernetes.io/tls`
+  Secret containing `tls.crt` and `tls.key` in each deployment namespace. Your
+  certificate tooling manages renewal. The certificate must cover the hostname.
+- **cert-manager:** install cert-manager and configure a ClusterIssuer, then set
+  `certManagerClusterIssuer` and leave `ingressTlsSecretName` empty. Each HTTPS
+  Ingress receives the issuer annotation and its own `<deployment>-ingress-tls`
+  Secret name. cert-manager creates and renews the Certificate and Secret. Configure
+  the issuer's validation method for your domains and Traefik; issuance is
+  asynchronous, so saving access settings does not mean the certificate is ready.
+- **Traefik default certificate:** leave both values empty and configure Traefik's
+  default TLS certificate yourself. Empty values do not provision a trusted certificate.
+
+Setting both a TLS Secret and a ClusterIssuer is rejected. DNS must resolve to
+Traefik. HTTPS routes use only the configured HTTPS entrypoint; configure HTTP to
+HTTPS redirection centrally in Traefik if desired. HTTP routes use the HTTP
+entrypoint and do not request certificates.
+
+For non-Helm installations, use `TRITON_DEPLOY_INGRESS_CLASS`,
+`TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT`, `TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT`,
+`TRITON_DEPLOY_INGRESS_TLS_SECRET`, and `TRITON_DEPLOY_CERT_MANAGER_CLUSTER_ISSUER`.
+Users cannot select TLS Secrets, issuers, entrypoints, or controllers.
+
+The Triton Control application's own Ingress is configured separately through
+`ingress.className`, `ingress.annotations`, and `ingress.tls`. To request its
+certificate, add `cert-manager.io/cluster-issuer` to those annotations and set a
+TLS host and Secret name.
+
+See [Traefik Ingress configuration](https://doc.traefik.io/traefik/reference/routing-configuration/kubernetes/ingress/)
+and [cert-manager Ingress certificates](https://cert-manager.io/docs/usage/ingress/).
+
+### Optional basic authentication
+
+Enable **Require basic authentication** and supply a username/password. This
+requires HTTPS and protects both HTTP inference and metrics routes. Triton Control
+creates a salted bcrypt htpasswd entry in a Secret's `users` key and a Traefik
+`Middleware` referencing that Secret. The Ingress references the Middleware;
+the middleware removes the Authorization header before forwarding requests.
+No plaintext password is stored in the database or returned by the access API.
+Passwords may contain 1–72 UTF-8 bytes.
+
+When editing, leave both credential fields blank to keep existing credentials.
+Enter both to rotate them, or disable authentication to remove the managed Secret.
+Each Middleware is owned by its Secret, so Kubernetes garbage collection removes
+it when that Secret is deleted. Rotation creates a new Secret and Middleware before
+switching the Ingress. A failed Ingress update keeps the previous credentials.
+A missing or modified retained Middleware requires entering credentials again.
+When moving an existing nginx-authenticated route to Traefik, enter credentials
+again to create the Traefik Middleware; the old credential Secret is removed
+only after the Ingress update succeeds.
+
+Authentication protects the Ingress route; cluster-internal access remains subject
+to your network policies. See [Traefik BasicAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/basicauth/).
+
+### Plugin endpoint configuration
+
+Code-server (**External access**) and MLflow use the same deployment API and
+admin policy. Supply only a short hostname, without a domain, protocol, port or path:
+
+```json
+{"access_mode":"ingress","ingress_host":"smollm","ingress_scheme":"https"}
+```
+
+Optional `basic_auth_*` settings require HTTPS. MLflow's `external_url`
+is the public endpoint; `url` remains internal. Update installed plugins
+to use these options.
+
+### Model base domain
+
+```yaml
+tritonDeployments:
+  ingressEnabled: true
+  baseDomain: models.example.com
+```
+
+Enter `smollm`; the API creates `smollm.models.example.com`.
+Users always enter a short hostname, never a full domain or URL.
+Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
+the short hostname is used unchanged. Invalid domain configuration rejects new external
+hostnames but still permits internal deployments and removing existing exposure.
+Existing endpoints keep their domain when credentials or protocol are edited.
+Changing the short hostname uses the current base domain.
+Triton Control's own hostname is configured under `ingress.hosts`.

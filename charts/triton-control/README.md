@@ -13,7 +13,10 @@ The combined app image must expose:
 - frontend HTTP on `app.ports.frontend`, default `8080`
 - backend API on `app.ports.backend`, default `8000`
 
-Ingress itself is a Kubernetes resource. The ingress controller Pod, for example nginx-ingress, must already exist in the cluster.
+Ingress itself is a Kubernetes resource. Traefik with its Kubernetes Ingress provider must already exist in the cluster.
+
+For a complete setup, see [Ingress and TLS](../../docs/ingress-tls.md) or
+[the Minikube development environment](../../docs/local-kubernetes.md).
 
 ## Install
 
@@ -146,8 +149,14 @@ postgresql:
     size: 20Gi
 
 ingress:
-  className: nginx
-  proxyBodySize: 256m
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - hosts: [triton-control.example.com]
+      secretName: triton-control-tls
   hosts:
     - host: triton-control.example.com
       paths:
@@ -169,7 +178,21 @@ ingress:
 
 If `postgresql.enabled` is `true`, the chart injects `DATABASE_URL` into the app from the generated PostgreSQL Secret. If you use an external database, set `postgresql.enabled=false` and provide `DATABASE_URL` through `app.existingSecret` or `app.env`.
 
-For larger file uploads through nginx ingress, set `ingress.proxyBodySize` (for example `256m` or `1g`).
+Configure upload limits and timeouts in Traefik's administrator-managed configuration.
+The old nginx-specific `ingress.proxyBodySize` value is no longer used.
+The example above requires cert-manager and an existing `letsencrypt-prod` ClusterIssuer.
+
+For managed Triton deployments, configure `tritonDeployments.ingressClassName`
+(default `traefik`), `ingressHttpEntrypoint` (`web`), and `ingressHttpsEntrypoint`
+(`websecure`). Choose either `ingressTlsSecretName` for an existing certificate or
+`certManagerClusterIssuer` for automatic per-Ingress certificates. Both empty uses
+Traefik's administrator-configured default certificate. These settings are separate
+from the application's own `ingress` section. Users cannot override the controller.
+
+Deployment basic authentication requires Traefik's Kubernetes CRD provider and
+`middlewares.traefik.io` CRD. The chart grants the backend `get`/`create` access to
+Middlewares; each generated Middleware is garbage-collected with its credential
+Secret. See [deployment access](../../docs/deployment.md#administrator-managed-traefik-and-https).
 
 Set `development.hfBuilder.version` to override the tested HF builder release
 shipped with the backend. Leave it empty to follow the verified default.
@@ -179,7 +202,7 @@ Set `development.mlflow.tritonControlVersion` to override the tested
 default, maintained by CI like HF Triton Builder.
 
 <!-- mlflow-plugin-version:start -->
-Tested MLflow Triton plugin version: `0.4.2`.
+Tested MLflow Triton plugin version: `0.4.4`.
 <!-- mlflow-plugin-version:end -->
 
 ## Development Workspace HTTPS Certificates
@@ -529,3 +552,32 @@ Keep `argoWorkflows.enabled=false` when Argo Workflows is managed by a separate
 Helm or GitOps release. The future Triton Control proxy/configuration layer
 should support connecting to that existing internal Argo Server as a separate
 operating mode.
+
+### HTTP model endpoint policy
+
+`tritonDeployments.allowHttp` defaults to `false` (HTTPS only). Administrators
+can override it in **Settings → Endpoints** and reset to the deployment default.
+Existing HTTP endpoints remain active; new HTTP endpoints and HTTP hostname
+changes require permission. Basic authentication requires HTTPS.
+
+### Disable model Ingress
+
+Set `tritonDeployments.ingressEnabled: false` to prohibit model Ingress creation
+and edits. It defaults to `true` and is independent of `ingress.enabled`, which
+controls only Triton Control's UI/API. Existing model endpoints remain active;
+users can explicitly switch them to cluster-only access. The admin HTTP policy
+cannot override this deployment-level switch.
+
+### Model base domain
+
+```yaml
+tritonDeployments:
+  ingressEnabled: true
+  baseDomain: models.example.com
+```
+
+Enter `smollm`; the API creates `smollm.models.example.com`.
+Users always enter a short hostname, never a full domain or URL.
+Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
+the short hostname is used unchanged. Existing endpoints are preserved.
+Triton Control's own hostname is configured under `ingress.hosts`.

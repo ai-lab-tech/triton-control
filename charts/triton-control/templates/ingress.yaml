@@ -9,9 +9,6 @@ metadata:
   {{- with .Values.ingress.annotations }}
   {{- $annotations = merge $annotations . -}}
   {{- end }}
-  {{- if .Values.ingress.proxyBodySize }}
-  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/proxy-body-size" (.Values.ingress.proxyBodySize | toString) -}}
-  {{- end }}
   {{- if gt (len $annotations) 0 }}
   annotations:
     {{- toYaml $annotations | nindent 4 }}

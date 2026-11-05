@@ -195,7 +195,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(request.s3_url, "s3://https://object-store.example.com/triton-models")
         self.assertIsNone(request.s3_ca_certificate)
 
-    def test_CreateDeploymentRequest_IngressHttpUrl_NormalizesHostAndScheme(self) -> None:
+    def test_CreateDeploymentRequest_HostnameAndSeparateScheme(self) -> None:
         # Act
         request = CreateDeploymentRequest(
             deployment_name="triton",
@@ -203,7 +203,7 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://bucket",
             s3_access_key="ak",
             s3_secret_key="secret",
-            ingress_host="http://triton.example.local/",
+            ingress_host="triton.example.local", ingress_scheme="http",
         )
 
         # Assert
@@ -477,13 +477,15 @@ class DeploymentServiceTests(unittest.TestCase):
             "triton-minio-s3-credentials",
             "triton-image",
         )
-        urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
+        with patch("kubernetes.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_service.return_value.spec.ports = []
+            urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
 
         # Assert
         ingress = manifests[3]
         self.assertEqual(ingress["spec"]["rules"][0]["host"], "triton.example.local")
-        self.assertEqual(urls["http"], "https://triton.example.local")
-        self.assertEqual(urls["metrics"], "https://triton.example.local/metrics")
+        self.assertEqual(urls["http"], "http://triton-minio-service.triton-minio.svc.cluster.local:18000")
+        self.assertEqual(urls["metrics"], "http://triton-minio-service.triton-minio.svc.cluster.local:18002/metrics")
 
     def test_Manifests_IngressHttpUrlProvided_UsesHostRuleAndHttpUrls(self) -> None:
         # Arrange
@@ -493,7 +495,7 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://http://minio:9000/triton-models",
             s3_access_key="minioadmin",
             s3_secret_key="super-secret-value",
-            ingress_host="http://triton.example.local",
+            ingress_host="triton.example.local", ingress_scheme="http",
         )
 
         # Act
@@ -505,13 +507,15 @@ class DeploymentServiceTests(unittest.TestCase):
             "triton-minio-s3-credentials",
             "triton-image",
         )
-        urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
+        with patch("kubernetes.client.CoreV1Api") as core:
+            core.return_value.read_namespaced_service.return_value.spec.ports = []
+            urls = k8s._deployment_urls(request, object(), "triton-minio", "triton-minio-service")
 
         # Assert
         ingress = manifests[3]
         self.assertEqual(ingress["spec"]["rules"][0]["host"], "triton.example.local")
-        self.assertEqual(urls["http"], "http://triton.example.local")
-        self.assertEqual(urls["metrics"], "http://triton.example.local/metrics")
+        self.assertEqual(urls["http"], "http://triton-minio-service.triton-minio.svc.cluster.local:18000")
+        self.assertEqual(urls["metrics"], "http://triton-minio-service.triton-minio.svc.cluster.local:18002/metrics")
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         # Arrange

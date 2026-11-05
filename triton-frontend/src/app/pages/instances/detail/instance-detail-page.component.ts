@@ -5,7 +5,7 @@ import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angula
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { EMPTY, Subject, firstValueFrom, interval, switchMap, timer } from "rxjs";
 
-import { DatePipe } from "@angular/common";
+import { DatePipe, NgTemplateOutlet } from "@angular/common";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { MatCardModule } from "@angular/material/card";
@@ -21,9 +21,12 @@ import { MatTabChangeEvent } from "@angular/material/tabs";
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
 
+import { DeploymentAccessComponent } from "./deployment-access.component";
+
 import { type Instance } from "../instances.data";
 import {
   DeploymentsService,
+  DeploymentAccessResponse,
   InstancesService,
   UpdateInstanceS3Request,
   UpdateTritonInstanceRequest,
@@ -53,8 +56,10 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    DeploymentAccessComponent,
     MatSelectModule,
     DatePipe,
+    NgTemplateOutlet,
     FormsModule,
     RouterLink,
     MatCardModule,
@@ -122,6 +127,7 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly deploymentLogsLoading = signal(false);
   readonly deploymentLogsError = signal("");
   readonly selectedDetailTabIndex = signal(0);
+  readonly endpointAccess = signal<DeploymentAccessResponse | null>(null);
   readonly deploymentDeleting = signal(false);
   readonly deploymentDeleteError = signal("");
   private dialogPointerStartedOnBackdrop = false;
@@ -225,11 +231,16 @@ export class InstanceDetailPageComponent implements OnInit {
     this.loadRequested.set(true);
     this.store.dispatch(instanceDetailPageOpened({ instanceId: id }));
     if (this.openLogsOnce) {
-      this.selectedDetailTabIndex.set(3);
+      this.selectedDetailTabIndex.set(4);
       this.logsTabActive$.next(true);
       this.openLogsOnce = false;
     }
     this.startRuntimePolling(id);
+  }
+
+  refreshAfterAccessChange(): void {
+    const instance = this.instance();
+    if (instance) this.store.dispatch(instanceDetailRefreshRequested({ instanceId: instance.id }));
   }
 
   saveS3Config(): void {

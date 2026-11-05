@@ -119,7 +119,7 @@
       <mat-tab label="Overview">
         <div class="tab-panel">
           <div class="panel-card access-card">
-            <div class="panel-title">Access</div>
+            <div class="panel-title">Users &amp; permissions</div>
             <div class="access-summary">
               <span class="access-count">{{ instance.assignedUsers.length }}</span>
               <span class="access-text">{{
@@ -187,93 +187,30 @@
               </div>
             </div>
           }
-          <div class="panel-card networking-card">
-            <div class="networking-card-header">
-              <div class="panel-title">Networking</div>
-              @if (canWriteInstances()) {
-                <button
-                  mat-stroked-button
-                  type="button"
-                  class="network-copy-btn"
-                  (click)="openTritonDialog()"
-                >
-                  <span class="material-icons">tune</span>
-                  Edit
-                </button>
-              }
-            </div>
-            <div class="kv">
-              <span class="kv-label">Base URL</span>
-              <span class="kv-value network-url-row">
-                <code class="network-url">{{ instance.url }}</code>
-                <button
-                  mat-stroked-button
-                  type="button"
-                  class="network-copy-btn"
-                  (click)="copyBaseUrl(instance.url)"
-                >
-                  <span class="material-icons">content_copy</span>
-                  Copy
-                </button>
-              </span>
-            </div>
-            <div class="kv">
-              <span class="kv-label">Metrics URL</span>
-              <span class="kv-value">
-                @if (instance.metricsUrl) {
-                  <code class="network-url">{{ instance.metricsUrl }}</code>
-                } @else {
-                  <span>Not configured</span>
+          <div class="panel-card endpoint-summary">
+            <div class="panel-title">Endpoint</div>
+            @if (endpointAccess(); as endpoint) {
+              <code class="network-url">{{ endpoint.url }}</code>
+              <div class="chip-row">
+                <span class="chip">{{
+                  endpoint.access_mode === "ingress" ? "External access" : "Cluster only"
+                }}</span>
+                @if (endpoint.basic_auth_enabled) {
+                  <span class="chip">Basic authentication</span>
                 }
-              </span>
-            </div>
-            <div class="kv">
-              <span class="kv-label">SSL</span>
-              <span class="kv-value">
-                {{
-                  instance.tritonVerifySsl
-                    ? "Certificate verification enabled"
-                    : "Certificate verification disabled"
-                }}
-              </span>
-            </div>
-            <div class="kv">
-              <span class="kv-label">Live</span>
-              <span class="kv-value">
-                <span
-                  class="chip network-status-chip"
-                  [attr.data-tone]="instance.healthLive ? 'ok' : 'down'"
-                >
-                  {{ instance.healthLive ? "200 OK" : "Unavailable" }}
-                </span>
-              </span>
-            </div>
-            <div class="kv">
-              <span class="kv-label">Ready</span>
-              <span class="kv-value">
-                <span
-                  class="chip network-status-chip"
-                  [attr.data-tone]="instance.healthReady ? 'ok' : 'warn'"
-                >
-                  {{ instance.healthReady ? "200 OK" : "Not Ready" }}
-                </span>
-              </span>
-            </div>
-            @if (instance.healthLastCheckedAt) {
-              <div class="kv">
-                <span class="kv-label">Last check</span>
-                <span class="kv-value">{{ instance.healthLastCheckedAt | date: "medium" }}</span>
               </div>
+            } @else {
+              <p class="panel-hint">
+                {{
+                  instance.isSelfDeployed
+                    ? "View endpoint configuration and authentication."
+                    : instance.url
+                }}
+              </p>
             }
-            @if (copyBaseUrlMessage) {
-              <div class="panel-hint">{{ copyBaseUrlMessage }}</div>
-            }
-            @if (instance.healthError) {
-              <div class="panel-hint health-error">{{ instance.healthError }}</div>
-            }
-            @if (instance.metricsError) {
-              <div class="panel-hint health-error">{{ instance.metricsError }}</div>
-            }
+            <button mat-stroked-button type="button" (click)="selectedDetailTabIndex.set(2)">
+              {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
+            </button>
           </div>
           <div class="panel-card">
             <div class="panel-title">Triton /v2 Metadata</div>
@@ -432,6 +369,120 @@
               }
             </div>
           </div>
+        </div>
+      </mat-tab>
+      <mat-tab label="Endpoints">
+        <div class="endpoints-panel">
+          <ng-template #backendConnection>
+            <div class="panel-card networking-card">
+              <div class="networking-card-header">
+                <div class="panel-title">
+                  {{ instance.isSelfDeployed ? "Internal connection" : "Backend connection" }}
+                </div>
+                @if (canWriteInstances()) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="network-copy-btn"
+                    (click)="openTritonDialog()"
+                  >
+                    <span class="material-icons">tune</span>
+                    Edit
+                  </button>
+                }
+              </div>
+              @if (instance.isSelfDeployed) {
+                <p class="panel-hint">
+                  Used by Triton Control to communicate with this instance inside the cluster.
+                </p>
+              }
+              <div class="kv">
+                <span class="kv-label">{{
+                  instance.isSelfDeployed ? "Cluster URL" : "Backend URL"
+                }}</span>
+                <span class="kv-value network-url-row">
+                  <code class="network-url">{{ instance.url }}</code>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="network-copy-btn"
+                    (click)="copyBaseUrl(instance.url)"
+                  >
+                    <span class="material-icons">content_copy</span>
+                    Copy
+                  </button>
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Metrics URL</span>
+                <span class="kv-value">
+                  @if (instance.metricsUrl) {
+                    <code class="network-url">{{ instance.metricsUrl }}</code>
+                  } @else {
+                    <span>Not configured</span>
+                  }
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Backend certificate verification</span>
+                <span class="kv-value">
+                  {{
+                    instance.tritonVerifySsl
+                      ? "Certificate verification enabled"
+                      : "Certificate verification disabled"
+                  }}
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Live</span>
+                <span class="kv-value">
+                  <span
+                    class="chip network-status-chip"
+                    [attr.data-tone]="instance.healthLive ? 'ok' : 'down'"
+                  >
+                    {{ instance.healthLive ? "200 OK" : "Unavailable" }}
+                  </span>
+                </span>
+              </div>
+              <div class="kv">
+                <span class="kv-label">Ready</span>
+                <span class="kv-value">
+                  <span
+                    class="chip network-status-chip"
+                    [attr.data-tone]="instance.healthReady ? 'ok' : 'warn'"
+                  >
+                    {{ instance.healthReady ? "200 OK" : "Not Ready" }}
+                  </span>
+                </span>
+              </div>
+              @if (instance.healthLastCheckedAt) {
+                <div class="kv">
+                  <span class="kv-label">Last check</span>
+                  <span class="kv-value">{{ instance.healthLastCheckedAt | date: "medium" }}</span>
+                </div>
+              }
+              @if (copyBaseUrlMessage) {
+                <div class="panel-hint">{{ copyBaseUrlMessage }}</div>
+              }
+              @if (instance.healthError) {
+                <div class="panel-hint health-error">{{ instance.healthError }}</div>
+              }
+              @if (instance.metricsError) {
+                <div class="panel-hint health-error">{{ instance.metricsError }}</div>
+              }
+            </div>
+          </ng-template>
+          @if (instance.isSelfDeployed) {
+            <section class="panel-card external-endpoint-card">
+              <app-deployment-access
+                [instanceId]="instance.id"
+                [canWrite]="canWriteInstances()"
+                (accessChanged)="endpointAccess.set($event)"
+                (saved)="refreshAfterAccessChange()"
+              />
+            </section>
+          }
+          <ng-container [ngTemplateOutlet]="backendConnection" />
         </div>
       </mat-tab>
       <mat-tab label="S3 Connection">

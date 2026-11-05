@@ -418,6 +418,14 @@ class ErrorEventEntity(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
+class DeploymentPolicyEntity(SQLModel, table=True):
+    """Optional administrator override of the deployment HTTP policy."""
+
+    __tablename__ = "deployment_policy"
+    id: int = Field(default=1, primary_key=True)
+    allow_http: bool | None = Field(default=None)
+
+
 class RegistryConfigEntity(SQLModel, table=True):
     """Singleton registry credentials managed through admin settings."""
     __tablename__ = "registry_config"

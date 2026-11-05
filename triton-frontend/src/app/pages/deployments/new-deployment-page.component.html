@@ -193,7 +193,7 @@
           <mat-expansion-panel-header>
             <mat-panel-title>
               <span class="material-icons">route</span>
-              <span>Ingress</span>
+              <span>Access</span>
             </mat-panel-title>
             <mat-panel-description>
               <span class="panel-status-chip" [attr.data-tone]="ingressPanel.tone">{{
@@ -203,38 +203,88 @@
             </mat-panel-description>
           </mat-expansion-panel-header>
           <div class="form-grid split">
-            <div class="form-row wide ingress-help">
-              <div class="field-hint">
-                Hostname or URL. Without a scheme, <code>https://</code> is used.
+            <mat-form-field appearance="outline">
+              <mat-label>Access mode</mat-label>
+              <mat-select [(ngModel)]="accessMode">
+                <mat-option value="internal">Internal Service</mat-option>
+                @if (ingressEnabled()) {
+                  <mat-option value="ingress">Ingress</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            @if (!ingressEnabled()) {
+              <p>External access is unavailable. Only cluster-only deployments are allowed.</p>
+            }
+            @if (accessMode === "ingress") {
+              <div class="form-row wide ingress-help">
+                <div class="field-hint">
+                  Enter only the hostname, e.g. <code>smollm</code>. Select the protocol separately.
+                  @if (baseDomain()) {
+                    The domain <code>{{ baseDomain() }}</code> is appended automatically.
+                  }
+                  @if (allowHttp()) {
+                    HTTP and HTTPS are allowed.
+                  } @else {
+                    Your administrator requires HTTPS.
+                  }
+                </div>
               </div>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-ingress-host">Ingress host</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="deployment-ingress-host"
-                  matInput
-                  [(ngModel)]="ingressHost"
-                  placeholder="http://triton.example.local"
-                />
-              </mat-form-field>
-            </div>
-            <div class="form-row">
-              <label class="field-label" for="deployment-ingress-class">Ingress class</label>
-              <mat-form-field appearance="outline">
-                <input
-                  id="deployment-ingress-class"
-                  matInput
-                  [(ngModel)]="ingressClassName"
-                  placeholder="nginx"
-                />
-              </mat-form-field>
-            </div>
-            <div class="form-row wide ingress-help">
-              <div class="field-hint">
-                TLS is not created here. Provide certificates through your ingress controller.
+              <div class="form-row">
+                <label class="field-label" for="deployment-ingress-host">Ingress host</label>
+                <mat-form-field appearance="outline">
+                  <input
+                    id="deployment-ingress-host"
+                    matInput
+                    [(ngModel)]="ingressHost"
+                    placeholder="e.g. smollm"
+                  />
+                </mat-form-field>
               </div>
-            </div>
+              <div class="form-row">
+                <label class="field-label">Protocol</label>
+                <mat-form-field appearance="outline">
+                  <mat-label>Protocol</mat-label>
+                  <mat-select [(ngModel)]="ingressScheme">
+                    <mat-option value="https">HTTPS</mat-option>
+                    @if (allowHttp()) {
+                      <mat-option value="http">HTTP</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+              @if (endpointPreview()) {
+                <p class="wide">
+                  Endpoint: <code>{{ endpointPreview() }}</code>
+                </p>
+              }
+              <div class="form-row wide ingress-help">
+                <div class="field-hint">
+                  HTTPS uses the certificate configured by your administrator. Its domain must cover
+                  this hostname.
+                </div>
+              </div>
+              <div class="form-row wide">
+                <mat-checkbox [(ngModel)]="basicAuthEnabled"
+                  >Require basic authentication</mat-checkbox
+                >
+                @if (basicAuthEnabled) {
+                  <p>Requires HTTPS. Routing is configured by your administrator.</p>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Username</mat-label>
+                    <input matInput [(ngModel)]="basicAuthUsername" autocomplete="off" />
+                  </mat-form-field>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Password</mat-label>
+                    <input
+                      matInput
+                      type="password"
+                      [(ngModel)]="basicAuthPassword"
+                      autocomplete="new-password"
+                    />
+                  </mat-form-field>
+                }
+              </div>
+            }
           </div>
         </mat-expansion-panel>
 
