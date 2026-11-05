@@ -189,13 +189,83 @@ class DeploymentAccessTests(unittest.TestCase):
         self.assertNotIn(access.MIDDLEWARE_ANNOTATION, annotations)
         self.core.delete_namespaced_secret.assert_called_once_with("old-auth", "control")
 
-    def test_unowned_secret_is_never_deleted_or_reused(self):
+    def test_unowned_secret_is_never_reused(self):
+        # Arrange
         self.existing(authenticated=True)
         self.core.read_namespaced_secret.return_value.metadata.labels = {}
+        request = self.request(basic_auth_enabled=True)
+        # Act
         with self.assertRaises(BadRequestError):
-            self.update(self.request(basic_auth_enabled=True))
-        self.update(DeploymentAccessRequest(access_mode="internal"))
+            self.update(request)
+        # Assert
+        self.net.replace_namespaced_ingress.assert_not_called()
         self.core.delete_namespaced_secret.assert_not_called()
+
+    def test_removing_ingress_does_not_delete_unowned_secret(self):
+        # Arrange
+        self.existing(authenticated=True)
+        self.core.read_namespaced_secret.return_value.metadata.labels = {}
+        request = DeploymentAccessRequest(access_mode="internal")
+        # Act
+        response = self.update(request)
+        # Assert
+        self.assertEqual(response.access_mode, "internal")
+        self.net.delete_namespaced_ingress.assert_called_once()
+        self.core.delete_namespaced_secret.assert_not_called()
+
+    def test_ambiguous_ingress_failure_keeps_new_credentials(self):
+        for creating in (True, False):
+            for status in (500, 502, 503, 504):
+                with self.subTest(creating=creating, status=status):
+                    # Arrange
+                    if not creating:
+                        self.existing(authenticated=True)
+                    write = self.net.create_namespaced_ingress if creating else self.net.replace_namespaced_ingress
+                    committed = []
+
+                    def commit_then_fail(*args):
+                        committed.append(args[-1])
+                        raise ApiException(status=status)
+
+                    write.side_effect = commit_then_fail
+                    request = self.request(
+                        basic_auth_enabled=True, basic_auth_username="alice", basic_auth_password="replacement",
+                    )
+                    # Act
+                    with self.assertRaises(BadGatewayError):
+                        self.update(request)
+                    # Assert
+                    secret = self.core.create_namespaced_secret.call_args.args[1]["metadata"]["name"]
+                    self.assertEqual(committed[0]["metadata"]["annotations"][access.AUTH_SECRET_ANNOTATION], secret)
+                    self.core.delete_namespaced_secret.assert_not_called()
+                    access.instances.save.assert_not_called()
+
+    def test_credential_rotation_preserves_existing_domain(self):
+        # Arrange
+        existing = self.existing(authenticated=True)
+        existing.spec.rules[0].host = "model.old.example"
+        request = self.request(
+            basic_auth_enabled=True, basic_auth_username="alice", basic_auth_password="replacement",
+        )
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "new.example"}):
+            # Act
+            response = self.update(request)
+        # Assert
+        self.assertEqual(response.ingress_host, "model.old.example")
+        self.assertEqual(response.hostname, "model")
+        body = self.net.replace_namespaced_ingress.call_args.args[2]
+        self.assertEqual(body["spec"]["tls"][0]["hosts"], ["model.old.example"])
+
+    def test_explicit_hostname_change_uses_current_domain(self):
+        # Arrange
+        existing = self.existing()
+        existing.spec.rules[0].host = "model.old.example"
+        request = self.request(ingress_host="renamed")
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "new.example"}):
+            # Act
+            response = self.update(request)
+        # Assert
+        self.assertEqual(response.ingress_host, "renamed.new.example")
 
     def test_replacement_conflict_does_not_delete_old_credentials(self):
         self.existing(authenticated=True)

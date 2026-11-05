@@ -31,13 +31,15 @@ def short_hostname(host: str | None) -> str | None:
     return host.split(".", 1)[0] if host else host
 
 
-def resolve_hostname(request: RequestT) -> RequestT:
+def resolve_hostname(request: RequestT, *, existing_host: str | None = None) -> RequestT:
     """Resolve user-supplied names once; queued tasks receive the full host."""
     host = request.ingress_host
     if not host:
         return request
     if "." in host:
         raise BadRequestError("Enter a short hostname only, without a domain, protocol, port or path")
+    if existing_host and host == short_hostname(existing_host):
+        return request.model_copy(update={"ingress_host": existing_host})
     domain = base_domain()
     if not domain:
         return request

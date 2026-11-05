@@ -167,7 +167,9 @@ export class DeploymentAccessComponent implements OnInit {
 
   endpointPreview(): string {
     return this.host.trim()
-      ? this.scheme + "://" + resolvedEndpointHostname(this.host, this.baseDomain())
+      ? this.scheme +
+          "://" +
+          resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host)
       : "";
   }
 
@@ -179,7 +181,8 @@ export class DeploymentAccessComponent implements OnInit {
       !this.allowHttp() &&
       !(
         this.access()?.ingress_scheme === "http" &&
-        resolvedEndpointHostname(this.host, this.baseDomain()) === this.access()?.ingress_host
+        resolvedEndpointHostname(this.host, this.baseDomain(), this.access()?.ingress_host) ===
+          this.access()?.ingress_host
       )
     )
       return false;

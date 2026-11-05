@@ -732,5 +732,6 @@ Users always enter a short hostname, never a full domain or URL.
 Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
 the short hostname is used unchanged. Invalid domain configuration rejects new external
 hostnames but still permits internal deployments and removing existing exposure.
-Existing endpoints are preserved.
+Existing endpoints keep their domain when credentials or protocol are edited.
+Changing the short hostname uses the current base domain.
 Triton Control's own hostname is configured under `ingress.hosts`.

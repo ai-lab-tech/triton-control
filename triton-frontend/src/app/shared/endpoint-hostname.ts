@@ -5,7 +5,12 @@ export function isEndpointHostname(value: string): boolean {
   );
 }
 
-export function resolvedEndpointHostname(value: string, baseDomain: string): string {
+export function resolvedEndpointHostname(
+  value: string,
+  baseDomain: string,
+  existingHost?: string | null,
+): string {
   const host = value.trim().toLowerCase().replace(/\.$/, "");
+  if (existingHost && host === existingHost.split(".")[0]) return existingHost;
   return !host || !baseDomain ? host : host + "." + baseDomain;
 }

@@ -1,7 +1,7 @@
 import { TestBed } from "@angular/core/testing";
 import { provideNoopAnimations } from "@angular/platform-browser/animations";
 import { of, throwError } from "rxjs";
-import { DeploymentsService } from "../../../api/generated";
+import { DeploymentAccessResponse, DeploymentsService } from "../../../api/generated";
 import { DeploymentAccessComponent } from "./deployment-access.component";
 
 describe("DeploymentAccessComponent", () => {
@@ -219,5 +219,44 @@ describe("DeploymentAccessComponent", () => {
     expect(component.editing()).toBeFalse();
     await component.save();
     expect(api.updateDeploymentAccessApiDeploymentsInstanceIdAccessPut).not.toHaveBeenCalled();
+  });
+  it("keeps the existing domain in the preview after an admin domain change", () => {
+    // Arrange
+    const component = create().componentInstance;
+    component.access.set(ingress as DeploymentAccessResponse);
+    component.baseDomain.set("new.example");
+    // Act
+    component.edit();
+    // Assert
+    expect(component.endpointPreview()).toBe("https://model.example.com");
+  });
+
+  it("allows existing HTTP after a domain change while new HTTP is disabled", () => {
+    // Arrange
+    const component = create().componentInstance;
+    component.access.set({
+      ...ingress,
+      ingress_scheme: "http",
+      basic_auth_enabled: false,
+    } as DeploymentAccessResponse);
+    component.baseDomain.set("new.example");
+    component.allowHttp.set(false);
+    // Act
+    component.edit();
+    // Assert
+    expect(component.valid()).toBeTrue();
+    expect(component.endpointPreview()).toBe("http://model.example.com");
+  });
+
+  it("uses the configured domain when the user changes the short hostname", () => {
+    // Arrange
+    const component = create().componentInstance;
+    component.access.set(ingress as DeploymentAccessResponse);
+    component.baseDomain.set("new.example");
+    component.edit();
+    // Act
+    component.host = "renamed";
+    // Assert
+    expect(component.endpointPreview()).toBe("https://renamed.new.example");
   });
 });

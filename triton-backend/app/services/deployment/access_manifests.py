@@ -129,5 +129,3 @@ def access_manifests(
         }
     )
     return manifests
-
-

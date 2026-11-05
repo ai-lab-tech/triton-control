@@ -129,6 +129,102 @@ def _delete_secret(core: Any, namespace: str, name: str | None, deployment_name:
             raise
 
 
+def _reconcile_access(
+    api: Any, instance: Any, workload: Any, previous: Any, request: DeploymentAccessRequest,
+) -> tuple[DeploymentAccessResponse, str | None]:
+    """Apply Kubernetes exposure; return the obsolete credential for post-save cleanup."""
+    namespace, name = instance.deployment_namespace, instance.deployment_name
+    net, core = client.NetworkingV1Api(api), client.CoreV1Api(api)
+    annotations = (previous.metadata.annotations or {}) if previous else {}
+    old_secret = annotations.get(AUTH_SECRET_ANNOTATION) or annotations.get(
+        "nginx.ingress.kubernetes.io/auth-secret"
+    )
+    retained_secret = None
+    if request.basic_auth_enabled and not request.basic_auth_password and old_secret:
+        secret = core.read_namespaced_secret(old_secret, namespace)
+        if (secret.metadata.labels or {}).get(OWNER_LABEL) == name and (secret.data or {}).get("users"):
+            retained_secret = old_secret
+    manifests = access_manifests(
+        request,
+        namespace,
+        name,
+        instance.deployment_service_name,
+        auth_secret=retained_secret,
+        allow_metrics=bool(instance.metrics_url),
+    )
+    validate_hostname_available(
+        net, request.ingress_host, ingress_class(),
+        existing_ingress=(namespace, f"{name}-ingress") if previous else None,
+    )
+    if request.ingress_host:
+        validate_tls_secret(core, request, namespace)
+    new_secret = None
+    result = None
+    for manifest in manifests:
+        if manifest["kind"] == "Secret":
+            manifest["metadata"]["ownerReferences"] = [
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "name": name,
+                    "uid": workload.metadata.uid,
+                }
+            ]
+            core.create_namespaced_secret(namespace, manifest)
+            new_secret = manifest["metadata"]["name"]
+        elif manifest["kind"] == "Middleware":
+            if new_secret:
+                try:
+                    create_auth_middleware(api, namespace, manifest)
+                except ApiException:
+                    _delete_secret(core, namespace, new_secret, name)
+                    raise
+            else:
+                validate_auth_middleware(api, namespace, manifest)
+        else:
+            # Preserve unrelated annotations, but explicitly remove old auth/TLS settings.
+            preserved = {
+                key: value
+                for key, value in annotations.items()
+                if key
+                not in {
+                    AUTH_SECRET_ANNOTATION, MIDDLEWARE_ANNOTATION,
+                    f"{AUTH_PREFIX}router.tls", f"{AUTH_PREFIX}router.entrypoints",
+                    "cert-manager.io/cluster-issuer",
+                    "nginx.ingress.kubernetes.io/auth-type", "nginx.ingress.kubernetes.io/auth-secret",
+                    "nginx.ingress.kubernetes.io/auth-realm", "nginx.ingress.kubernetes.io/ssl-redirect",
+                }
+            }
+            manifest["metadata"]["annotations"] = {**preserved, **manifest["metadata"]["annotations"]}
+            try:
+                if previous:
+                    manifest["metadata"]["labels"] = {
+                        **(previous.metadata.labels or {}), **manifest["metadata"]["labels"]
+                    }
+                    if previous.metadata.owner_references:
+                        manifest["metadata"]["ownerReferences"] = previous.metadata.owner_references
+                    if previous.metadata.finalizers:
+                        manifest["metadata"]["finalizers"] = previous.metadata.finalizers
+                    manifest["metadata"]["resourceVersion"] = previous.metadata.resource_version
+                    result = net.replace_namespaced_ingress(f"{name}-ingress", namespace, manifest)
+                else:
+                    result = net.create_namespaced_ingress(namespace, manifest)
+            except ApiException as exc:
+                # Server/gateway errors may arrive after the write committed.
+                # Only definitive rejections permit deleting new credentials.
+                if exc.status in {400, 401, 403, 404, 409, 422}:
+                    _delete_secret(core, namespace, new_secret, name)
+                raise
+    if not manifests and previous:
+        net.delete_namespaced_ingress(
+            f"{name}-ingress",
+            namespace,
+            body={"preconditions": {"resourceVersion": previous.metadata.resource_version}},
+        )
+    response = _response(instance, result)
+    return response, old_secret if old_secret != retained_secret else None
+
+
 def update_access(
     request: DeploymentAccessRequest,
     session: Any,
@@ -148,101 +244,17 @@ def update_access(
             workload = client.AppsV1Api(api).read_namespaced_deployment(name, namespace)
             previous = _read_ingress(net, instance)
             current = _response(instance, previous)
-            request = resolve_hostname(request)
+            request = resolve_hostname(request, existing_host=current.ingress_host)
             validate_endpoint_policy(
                 request, session, existing_host=current.ingress_host, existing_scheme=current.ingress_scheme,
             )
-            annotations = (previous.metadata.annotations or {}) if previous else {}
-            old_secret = annotations.get(AUTH_SECRET_ANNOTATION) or annotations.get(
-                "nginx.ingress.kubernetes.io/auth-secret"
-            )
-            retained_secret = None
-            if request.basic_auth_enabled and not request.basic_auth_password and old_secret:
-                secret = core.read_namespaced_secret(old_secret, namespace)
-                if (secret.metadata.labels or {}).get(OWNER_LABEL) == name and (secret.data or {}).get("users"):
-                    retained_secret = old_secret
-            manifests = access_manifests(
-                request,
-                namespace,
-                name,
-                instance.deployment_service_name,
-                auth_secret=retained_secret,
-                allow_metrics=bool(instance.metrics_url),
-            )
-            validate_hostname_available(
-                net, request.ingress_host, ingress_class(),
-                existing_ingress=(namespace, f"{name}-ingress") if previous else None,
-            )
-            if request.ingress_host:
-                validate_tls_secret(core, request, namespace)
-            new_secret = None
-            result = None
-            for manifest in manifests:
-                if manifest["kind"] == "Secret":
-                    manifest["metadata"]["ownerReferences"] = [
-                        {
-                            "apiVersion": "apps/v1",
-                            "kind": "Deployment",
-                            "name": name,
-                            "uid": workload.metadata.uid,
-                        }
-                    ]
-                    core.create_namespaced_secret(namespace, manifest)
-                    new_secret = manifest["metadata"]["name"]
-                elif manifest["kind"] == "Middleware":
-                    if new_secret:
-                        try:
-                            create_auth_middleware(api, namespace, manifest)
-                        except ApiException:
-                            _delete_secret(core, namespace, new_secret, name)
-                            raise
-                    else:
-                        validate_auth_middleware(api, namespace, manifest)
-                else:
-                    # Preserve unrelated annotations, but explicitly remove old auth/TLS settings.
-                    preserved = {
-                        key: value
-                        for key, value in annotations.items()
-                        if key
-                        not in {
-                            AUTH_SECRET_ANNOTATION, MIDDLEWARE_ANNOTATION,
-                            f"{AUTH_PREFIX}router.tls", f"{AUTH_PREFIX}router.entrypoints",
-                            "cert-manager.io/cluster-issuer",
-                            "nginx.ingress.kubernetes.io/auth-type", "nginx.ingress.kubernetes.io/auth-secret",
-                            "nginx.ingress.kubernetes.io/auth-realm", "nginx.ingress.kubernetes.io/ssl-redirect",
-                        }
-                    }
-                    manifest["metadata"]["annotations"] = {**preserved, **manifest["metadata"]["annotations"]}
-                    try:
-                        if previous:
-                            manifest["metadata"]["labels"] = {
-                                **(previous.metadata.labels or {}), **manifest["metadata"]["labels"]
-                            }
-                            if previous.metadata.owner_references:
-                                manifest["metadata"]["ownerReferences"] = previous.metadata.owner_references
-                            if previous.metadata.finalizers:
-                                manifest["metadata"]["finalizers"] = previous.metadata.finalizers
-                            manifest["metadata"]["resourceVersion"] = previous.metadata.resource_version
-                            result = net.replace_namespaced_ingress(f"{name}-ingress", namespace, manifest)
-                        else:
-                            result = net.create_namespaced_ingress(namespace, manifest)
-                    except ApiException:
-                        _delete_secret(core, namespace, new_secret, name)
-                        raise
-            if not manifests and previous:
-                net.delete_namespaced_ingress(
-                    f"{name}-ingress",
-                    namespace,
-                    body={"preconditions": {"resourceVersion": previous.metadata.resource_version}},
-                )
-            response = _response(instance, result)
+            response, obsolete_secret = _reconcile_access(api, instance, workload, previous, request)
             # Management always uses cluster DNS; never store plaintext ingress credentials.
             instance.url = response.internal_url
             if instance.metrics_url:
                 instance.metrics_url = response.internal_url.replace(":18000", ":18002/metrics")
             instances.save(session, instance)
-            if old_secret and old_secret != retained_secret:
-                _delete_secret(core, namespace, old_secret, name)
+            _delete_secret(core, namespace, obsolete_secret, name)
             return response
     except ApiException as exc:
         if exc.status == 409:
