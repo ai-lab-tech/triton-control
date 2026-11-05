@@ -13,6 +13,7 @@ const frontendUrl = process.env.SMOKE_FRONTEND_URL ?? "http://127.0.0.1:4200";
 type CreatedResources = {
   instanceIds: number[];
   userIds: number[];
+  s3ProfileIds: number[];
 };
 
 async function ensureBootstrap(request: APIRequestContext) {
@@ -76,6 +77,7 @@ test.describe.serial("smoke", () => {
   const created: CreatedResources = {
     instanceIds: [],
     userIds: [],
+    s3ProfileIds: [],
   };
 
   test.afterEach(async ({ request }) => {
@@ -86,6 +88,13 @@ test.describe.serial("smoke", () => {
       const id = created.instanceIds.pop();
       if (id) {
         await deleteInstanceIfExists(request, authHeaders, id);
+      }
+    }
+    while (created.s3ProfileIds.length) {
+      const id = created.s3ProfileIds.pop();
+      if (id) {
+        const response = await request.delete(`/api/s3-profiles/${id}`, { headers: authHeaders });
+        expect([200, 404]).toContain(response.status());
       }
     }
     while (created.userIds.length) {
@@ -156,41 +165,69 @@ test.describe.serial("smoke", () => {
     created.instanceIds.push(createdInstance.id);
     expect(createdInstance.metrics_url).toContain("/metrics");
 
-    const updateS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
+    // Arrange: administrators manage storage credentials in reusable profiles.
+    const createProfileResp = await request.post("/api/s3-profiles", {
       headers: authHeaders,
       data: {
-        enabled: true,
-        endpoint: "http://127.0.0.1:9000",
+        name: `smoke-s3-${suffix}`,
+        endpoint: tritonUrl,
         bucket: "smoke-bucket",
         region: "us-east-1",
-        prefix: "models/",
         access_key: "smoke-access",
         secret_key: "smoke-secret",
-        verify_ssl: false,
-        ca_certificate: "",
-        address_style: "path",
+        force_path_style: true,
       },
     });
-    expect(updateS3Resp.ok()).toBeTruthy();
+    expect(createProfileResp.ok(), await createProfileResp.text()).toBeTruthy();
+    const profile = await createProfileResp.json();
+    created.s3ProfileIds.push(profile.id);
 
-    const editS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
+    // Act: the instance selects a profile rather than supplying connection credentials.
+    const updateS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
+      headers: authHeaders,
+      data: { enabled: true, s3_profile_id: profile.id, prefix: "models/" },
+    });
+
+    // Assert
+    expect(profile.secret_key).toBe("");
+    expect(updateS3Resp.ok(), await updateS3Resp.text()).toBeTruthy();
+    const s3Config = await updateS3Resp.json();
+    expect(s3Config.bucket).toBe("smoke-bucket");
+    expect(s3Config.secret_configured).toBeTruthy();
+
+    // Arrange: update the central profile, then reapply it to the instance.
+    const editProfileResp = await request.put(`/api/s3-profiles/${profile.id}`, {
       headers: authHeaders,
       data: {
-        enabled: true,
-        endpoint: "http://127.0.0.1:9000",
         bucket: "smoke-bucket-updated",
-        region: "us-east-1",
-        prefix: "models-updated/",
         access_key: "smoke-access-updated",
         secret_key: "smoke-secret-updated",
-        verify_ssl: false,
-        ca_certificate: "",
-        address_style: "path",
       },
     });
-    expect(editS3Resp.ok()).toBeTruthy();
+    expect(editProfileResp.ok(), await editProfileResp.text()).toBeTruthy();
+
+    // Act
+    const editS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
+      headers: authHeaders,
+      data: { enabled: true, s3_profile_id: profile.id, prefix: "models-updated/" },
+    });
+
+    // Assert
+    expect(editS3Resp.ok(), await editS3Resp.text()).toBeTruthy();
     const s3ConfigEdited = await editS3Resp.json();
     expect(s3ConfigEdited.bucket).toBe("smoke-bucket-updated");
+    expect(s3ConfigEdited.access_key).toBe("smoke-access-updated");
+    expect(s3ConfigEdited.prefix).toBe("models-updated/");
+    expect(s3ConfigEdited.secret_configured).toBeTruthy();
+
+    // Act: manual connection overrides are rejected even when a profile is selected.
+    const manualS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
+      headers: authHeaders,
+      data: { enabled: true, s3_profile_id: profile.id, secret_key: "manual-override" },
+    });
+
+    // Assert
+    expect(manualS3Resp.status()).toBe(400);
 
     const deleteS3Resp = await request.put(`/api/instances/${createdInstance.id}/s3`, {
       headers: authHeaders,

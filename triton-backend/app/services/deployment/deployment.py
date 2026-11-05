@@ -24,6 +24,7 @@ from app.services.deployment.profile_request import resolve_profile_request
 from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
+from app.services.registry_settings import apply_registry_settings
 
 
 def create_deployment(
@@ -35,6 +36,7 @@ def create_deployment(
     request = resolve_hostname(request)
     validate_policy(request, creating=True)
     validate_endpoint_policy(request, session)
+    request = apply_registry_settings(request, session)
     request = resolve_profile_request(request, session, claims)
     name = request.deployment_name
     control_ns = in_cluster_namespace() if is_running_in_cluster() else ""

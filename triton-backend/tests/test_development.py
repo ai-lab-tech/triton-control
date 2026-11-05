@@ -569,7 +569,7 @@ class CodeServerTests(unittest.TestCase):
     def test_CreateCodeServer_KubernetesDisabled_RaisesBadRequest(self) -> None:
         with patch("app.services.development.workspaces.kubernetes_enabled", return_value=False):
             with self.assertRaises(BadRequestError):
-                workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
+                workspaces.create_code_server(self._request(), SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"})
 
     def test_CreateCodeServer_NewWorkspace_CreatesOwnedRecord(self) -> None:
         created: dict[str, object] = {}
@@ -595,7 +595,7 @@ class CodeServerTests(unittest.TestCase):
             "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, row: row,
         ) as save:
-            result = workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
+            result = workspaces.create_code_server(self._request(), SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"})
 
         create.assert_called_once()
         save.assert_called_once()
@@ -617,7 +617,7 @@ class CodeServerTests(unittest.TestCase):
             return_value=existing,
         ), patch("app.services.development.workspaces.k8s.apply_code_server_resources") as apply_resources:
             with self.assertRaises(BadRequestError):
-                workspaces.create_code_server(self._request(), SimpleNamespace(), {"email": "u@example.com"})
+                workspaces.create_code_server(self._request(), SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"})
 
         apply_resources.assert_not_called()
 
@@ -630,7 +630,7 @@ class CodeServerTests(unittest.TestCase):
             return_value=None,
         ):
             with self.assertRaises(NotFoundError):
-                workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 99)
+                workspaces.get_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 99)
 
     def test_GetCodeServer_StatusChanges_PersistsReadyStatus(self) -> None:
         row = self._row(status="creating", status_message="Pending")
@@ -648,7 +648,7 @@ class CodeServerTests(unittest.TestCase):
             "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, saved: saved,
         ) as save:
-            result = workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
+            result = workspaces.get_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 2)
 
         save.assert_called_once()
         self.assertEqual(result.status, "ready")
@@ -667,7 +667,7 @@ class CodeServerTests(unittest.TestCase):
             "app.services.development.workspaces.code_servers.save",
             side_effect=lambda _session, saved: saved,
         ) as save:
-            result = workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
+            result = workspaces.get_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 2)
 
         save.assert_called_once()
         self.assertEqual(result.status, "unavailable")
@@ -683,7 +683,7 @@ class CodeServerTests(unittest.TestCase):
             "app.services.development.workspaces.k8s.delete_code_server_resources",
             return_value="StatefulSet/code-7-dev-workspace",
         ) as delete_k8s, patch("app.services.development.workspaces.code_servers.delete") as delete_row:
-            result = workspaces.delete_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
+            result = workspaces.delete_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 2)
 
         delete_k8s.assert_called_once_with(
             namespace="triton-control",
@@ -705,7 +705,7 @@ class CodeServerTests(unittest.TestCase):
             side_effect=RuntimeError("no kubeconfig"),
         ):
             with self.assertRaises(BadRequestError):
-                workspaces.delete_code_server(SimpleNamespace(), {"email": "u@example.com"}, 2)
+                workspaces.delete_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 2)
 
     def test_WorkspaceNamespace_OutOfClusterWithoutEnv_UsesControlNamespace(self) -> None:
         with patch("app.services.development.workspaces.is_running_in_cluster", return_value=False), patch.dict(
@@ -751,7 +751,7 @@ class CodeServerTests(unittest.TestCase):
             "app.services.development.workspaces.code_servers.list_for_owner",
             return_value=[row],
         ) as list_for_owner, patch("app.services.development.workspaces._refresh_status") as refresh_status:
-            result = workspaces.list_code_servers(SimpleNamespace(), {"email": "u@example.com"})
+            result = workspaces.list_code_servers(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"})
 
         list_for_owner.assert_called_once_with(ANY, 7)
         refresh_status.assert_called_once_with(ANY, row)
@@ -767,25 +767,25 @@ class CodeServerTests(unittest.TestCase):
             return_value=row,
         ):
             with self.assertRaises(ForbiddenError):
-                workspaces.get_code_server(SimpleNamespace(), {"email": "u@example.com"}, 3)
+                workspaces.get_code_server(SimpleNamespace(get=lambda *args: None), {"email": "u@example.com"}, 3)
 
     def test_ApiEndpoints_DelegateToWorkspaceService(self) -> None:
         dto = self._row()
         with patch("app.services.development.workspaces.list_code_servers", return_value=[dto]) as list_service:
-            self.assertEqual(code_server_api.list_code_servers(session=SimpleNamespace(), claims={}), [dto])
+            self.assertEqual(code_server_api.list_code_servers(session=SimpleNamespace(get=lambda *args: None), claims={}), [dto])
         with patch("app.services.development.workspaces.create_code_server", return_value=dto) as create_service:
             self.assertEqual(
-                code_server_api.create_code_server(self._request(), session=SimpleNamespace(), claims={}),
+                code_server_api.create_code_server(self._request(), session=SimpleNamespace(get=lambda *args: None), claims={}),
                 dto,
             )
         with patch("app.services.development.workspaces.get_code_server", return_value=dto) as get_service:
-            self.assertEqual(code_server_api.get_code_server(2, session=SimpleNamespace(), claims={}), dto)
+            self.assertEqual(code_server_api.get_code_server(2, session=SimpleNamespace(get=lambda *args: None), claims={}), dto)
         with patch(
             "app.services.development.workspaces.delete_code_server",
             return_value=SimpleNamespace(status="deleted"),
         ) as delete_service:
             self.assertEqual(
-                code_server_api.delete_code_server(2, session=SimpleNamespace(), claims={}).status,
+                code_server_api.delete_code_server(2, session=SimpleNamespace(get=lambda *args: None), claims={}).status,
                 "deleted",
             )
 
@@ -801,7 +801,7 @@ class CodeServerTests(unittest.TestCase):
         class SessionContext:
             def __enter__(self) -> SimpleNamespace:
                 events.append("enter")
-                return SimpleNamespace()
+                return SimpleNamespace(get=lambda *args: None)
 
             def __exit__(self, *_args: object) -> None:
                 events.append("exit")
@@ -825,7 +825,7 @@ class CodeServerTests(unittest.TestCase):
             response = asyncio.run(
                 code_server_api.proxy_code_server(
                     2,
-                    request=SimpleNamespace(),
+                    request=SimpleNamespace(get=lambda *args: None),
                     path="stable/resource",
                     claims={"email": "u@example.com"},
                 ),
@@ -841,7 +841,7 @@ class CodeServerTests(unittest.TestCase):
         class SessionContext:
             def __enter__(self) -> SimpleNamespace:
                 events.append("enter")
-                return SimpleNamespace()
+                return SimpleNamespace(get=lambda *args: None)
 
             def __exit__(self, *_args: object) -> None:
                 events.append("exit")
@@ -948,7 +948,7 @@ class CodeServerTests(unittest.TestCase):
         core_api = SimpleNamespace(
             list_namespaced_pod=lambda **_kwargs: SimpleNamespace(items=[ready_pod]),
         )
-        apps_api = SimpleNamespace(read_namespaced_stateful_set=lambda **_kwargs: SimpleNamespace())
+        apps_api = SimpleNamespace(read_namespaced_stateful_set=lambda **_kwargs: SimpleNamespace(get=lambda *args: None))
 
         with patch("app.services.development.kubernetes.api_client", return_value=object()), patch(
             "kubernetes.client.AppsV1Api",

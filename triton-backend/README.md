@@ -153,3 +153,23 @@ rejection and protected creator tags, and runs the unmodified MLflow SDK through
 training, metric logging, artifact upload, and model registration. It removes
 the test containers on exit and retains the built test image for subsequent
 runs. It does not change the Kubernetes installation.
+
+### Central workload credentials
+
+Administrators configure image pull credentials under **Settings → Registry** and
+S3 connections through the existing **S3 Profiles** admin menu entry. New deployments, development
+workspaces, MLflow installations and profiling jobs use the stored registry
+credentials automatically. Existing Kubernetes workloads are unchanged; recreate
+them to use new registry credentials.
+
+Registry credentials are encrypted using `REGISTRY_SECRET_ENCRYPTION_KEY`, falling
+back to a stable `SESSION_SECRET`. Keep this key across restarts; after changing it,
+save the registry credentials again. Read endpoints return configuration status,
+never the registry secret.
+
+Deployment and instance S3 forms accept a profile and repository prefix. Manual
+connection credentials are rejected at the API/service boundary. Profiles owned
+by administrators are available to members; existing personal profiles remain
+available to their owners and can be maintained by administrators. Browser profile
+responses omit secret keys. Authenticated managed workspaces still receive the
+credentials required for S3 uploads through their dedicated profile endpoint.

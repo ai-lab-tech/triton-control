@@ -22,6 +22,7 @@ from app.services.development import kubernetes as workspace_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.mlflow import config
 from app.services.mlflow import kubernetes as k8s
+from app.services.registry_settings import apply_registry_settings
 
 _install_lock = Lock()
 _MLFLOW_NAMESPACE = "triton-control"
@@ -72,6 +73,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict
         profile = s3_profiles.find_for_owner(session, owner.id or 0, request.s3_profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
+        request = apply_registry_settings(request, session)
         storage = k8s.storage_configuration(profile, mlflow.prepare_backend_store(session))
         name = request.installation_name
         namespace = _MLFLOW_NAMESPACE

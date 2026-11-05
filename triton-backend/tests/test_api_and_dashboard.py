@@ -437,25 +437,14 @@ class ApiHelperTests(unittest.TestCase):
         instance = self._instance()
         session = _FakeSession(get_map={1: instance})
         claims = {"role": "admin"}
-
-        request = UpdateInstanceS3Request(
-            enabled=True,
-            endpoint="https://new-minio",
-            bucket="new-bucket",
-            region="eu",
-            prefix="new/",
-            access_key="new-ak",
-            secret_key="new-secret",
-            use_https=False,
-            verify_ssl=True,
-            ca_certificate="cert",
-            address_style="virtual",
-        )
-
+        profile = SimpleNamespace(endpoint="https://new-minio", bucket="new-bucket", region="eu",
+                                  access_key="new-ak", secret_key_enc="new-secret", ca_certificate="cert",
+                                  force_path_style=False)
+        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="new/")
         # Act
-        with patch("app.services.storage.s3.hash_secret", return_value="hashed"), patch("app.services.storage.s3.encrypt_secret", return_value="enc2"):
+        with patch("app.services.storage.s3.require_user_entity", return_value=SimpleNamespace(id=1)), \
+             patch("app.services.storage.s3.s3_profiles.find_for_owner", return_value=profile):
             dto = update_instance_s3(1, request, session=session, claims=claims)
-
         # Assert
         self.assertTrue(dto.enabled)
         self.assertTrue(dto.use_https)
@@ -463,44 +452,8 @@ class ApiHelperTests(unittest.TestCase):
         self.assertEqual(dto.access_key, "new-ak")
         self.assertTrue(dto.secret_configured)
         self.assertEqual(dto.ca_certificate, "cert")
-        self.assertEqual(instance.s3_secret_key_hash, "hashed")
-        self.assertEqual(instance.s3_secret_key_enc, "enc2")
-
-        # Arrange: a follow-up partial update should keep the stored CA when
-        # SSL verification remains enabled and no replacement certificate is sent.
-        request = UpdateInstanceS3Request(enabled=True)
-
         # Act
-        dto = update_instance_s3(1, request, session=session, claims=claims)
-
-        # Assert
-        self.assertTrue(dto.verify_ssl)
-        self.assertEqual(dto.ca_certificate, "cert")
-
-        # Arrange: new S3 configuration with no region should store the default AWS region.
-        instance = self._instance()
-        instance.s3_region = None
-        instance.s3_secret_key_enc = None
-        session = _FakeSession(get_map={1: instance})
-        request = UpdateInstanceS3Request(
-            enabled=True,
-            endpoint="https://new-minio",
-            bucket="new-bucket",
-            access_key="new-ak",
-            secret_key="new-secret",
-        )
-
-        # Act
-        with patch("app.services.storage.s3.hash_secret", return_value="hashed"), patch("app.services.storage.s3.encrypt_secret", return_value="enc2"):
-            dto = update_instance_s3(1, request, session=session, claims=claims)
-
-        # Assert
-        self.assertEqual(dto.region, "us-east-1")
-
-        # Act
-        disable = UpdateInstanceS3Request(enabled=False)
-        dto = update_instance_s3(1, disable, session=session, claims=claims)
-
+        dto = update_instance_s3(1, UpdateInstanceS3Request(enabled=False), session=session, claims=claims)
         # Assert
         self.assertFalse(dto.enabled)
         self.assertIsNone(instance.s3_endpoint)

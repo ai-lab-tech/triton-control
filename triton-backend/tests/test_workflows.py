@@ -206,8 +206,7 @@ class WorkflowsTests(unittest.TestCase):
     def test_CreateWorkflowS3Credential_MemberDelegates(self) -> None:
         payload = workflows_api.CreateWorkflowS3CredentialRequest(
             name="finance-prod",
-            access_key_id="AKIA123",
-            secret_access_key="SECRET123",
+            s3_profile_id=1,
         )
         expected = workflows_api.WorkflowS3CredentialDTO(
             id=2,

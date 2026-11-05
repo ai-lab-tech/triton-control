@@ -63,7 +63,7 @@ export class S3ProfilesPageComponent {
   }
 
   canManage(): boolean {
-    return this.auth.canWriteInstances();
+    return this.auth.isAdmin();
   }
 
   usesHttpsS3(): boolean {

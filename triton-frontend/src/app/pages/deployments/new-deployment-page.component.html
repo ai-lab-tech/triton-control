@@ -63,15 +63,15 @@
               [(ngModel)]="selectedS3ProfileId"
               (selectionChange)="s3ProfileChanged()"
             >
-              <mat-option value="">Manual S3 settings</mat-option>
+              <mat-option value="">Select an S3 profile</mat-option>
               @for (profile of s3Profiles(); track profile.id) {
                 <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
               }
             </mat-select>
-            <mat-hint>Choose a profile or enter connection settings manually.</mat-hint>
+            <mat-hint>Choose an admin-configured S3 profile.</mat-hint>
           </mat-form-field>
         </div>
-        @if (!usesManualS3Settings()) {
+        @if (selectedS3ProfileId) {
           <div class="form-row wide">
             <label class="field-label" for="deployment-s3-prefix"
               >Repository prefix
@@ -93,98 +93,6 @@
               <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
             </div>
           </div>
-        }
-        @if (usesManualS3Settings()) {
-          <mat-expansion-panel class="form-row wide compact-panel">
-            <mat-expansion-panel-header>
-              <mat-panel-title>
-                <span class="material-icons">storage</span>
-                <span>Manual S3 settings</span>
-              </mat-panel-title>
-              <mat-panel-description>Connection for this deployment</mat-panel-description>
-            </mat-expansion-panel-header>
-            <div class="form-grid split">
-              <div class="form-row">
-                <label class="field-label" for="deployment-s3-url">S3 endpoint</label>
-                <mat-form-field appearance="outline">
-                  <input
-                    id="deployment-s3-url"
-                    matInput
-                    [(ngModel)]="s3Url"
-                    placeholder="https://object-store.example.com"
-                  />
-                </mat-form-field>
-              </div>
-              <div class="form-row">
-                <label class="field-label" for="deployment-s3-bucket">Bucket</label>
-                <mat-form-field appearance="outline">
-                  <input id="deployment-s3-bucket" matInput [(ngModel)]="s3Bucket" />
-                </mat-form-field>
-              </div>
-              <div class="form-row wide">
-                <label class="field-label" for="deployment-manual-s3-prefix"
-                  >Repository prefix
-                  <span class="field-hint">Optional S3 path prefix inside the bucket</span>
-                </label>
-                <mat-form-field appearance="outline">
-                  <input
-                    id="deployment-manual-s3-prefix"
-                    matInput
-                    [(ngModel)]="s3Prefix"
-                    placeholder="team/model-repository"
-                  />
-                </mat-form-field>
-              </div>
-              <div class="form-row">
-                <label class="field-label" for="deployment-s3-access-key">Access Key</label>
-                <mat-form-field appearance="outline">
-                  <input id="deployment-s3-access-key" matInput [(ngModel)]="s3AccessKey" />
-                </mat-form-field>
-              </div>
-              <div class="form-row">
-                <label class="field-label" for="deployment-s3-secret-key">Secret Key</label>
-                <mat-form-field appearance="outline">
-                  <input
-                    id="deployment-s3-secret-key"
-                    matInput
-                    [(ngModel)]="s3SecretKey"
-                    type="password"
-                    autocomplete="new-password"
-                  />
-                </mat-form-field>
-              </div>
-              <div class="form-row">
-                <label class="field-label" for="deployment-s3-region">Region</label>
-                <mat-form-field appearance="outline">
-                  <input id="deployment-s3-region" matInput [(ngModel)]="s3Region" />
-                </mat-form-field>
-              </div>
-              @if (usesHttpsS3()) {
-                <div class="form-row wide">
-                  <label class="field-label" for="deployment-s3-ca-certificate"
-                    >S3 CA certificate</label
-                  >
-                  <mat-form-field appearance="outline">
-                    <textarea
-                      id="deployment-s3-ca-certificate"
-                      matInput
-                      rows="5"
-                      [(ngModel)]="s3CaCertificate"
-                      placeholder="-----BEGIN CERTIFICATE-----"
-                    ></textarea>
-                    <mat-hint> Optional, only for private or internal CA chains. </mat-hint>
-                  </mat-form-field>
-                </div>
-              }
-              <div class="form-row wide s3-destination">
-                <span class="material-icons" aria-hidden="true">folder_open</span>
-                <div>
-                  <div class="destination-title">Target path</div>
-                  <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
-                </div>
-              </div>
-            </div>
-          </mat-expansion-panel>
         }
       </div>
     </div>
@@ -380,34 +288,7 @@
           </div>
         </mat-expansion-panel>
 
-        <mat-expansion-panel>
-          @let pullSecretPanel = pullSecretStatus();
-          <mat-expansion-panel-header>
-            <mat-panel-title>
-              <span class="material-icons">key</span>
-              <span>Image Pull Secret</span>
-            </mat-panel-title>
-            <mat-panel-description>
-              <span class="panel-status-chip" [attr.data-tone]="pullSecretPanel.tone">{{
-                pullSecretPanel.label
-              }}</span>
-              <span class="panel-status-detail">{{ pullSecretPanel.detail }}</span>
-            </mat-panel-description>
-          </mat-expansion-panel-header>
-          <div class="form-row wide">
-            <label class="field-label" for="deployment-dockerconfigjson"
-              >Registry credentials (.dockerconfigjson)</label
-            >
-            <div class="field-hint">Docker auth JSON for private images.</div>
-            <ngx-monaco-editor
-              id="deployment-dockerconfigjson"
-              class="dockerconfigjson-editor"
-              [options]="dockerconfigjsonEditorOptions"
-              [ngModel]="dockerconfigjson()"
-              (ngModelChange)="dockerconfigjson.set($event)"
-            ></ngx-monaco-editor>
-          </div>
-        </mat-expansion-panel>
+        <p>Image pull credentials are managed centrally in admin Settings.</p>
 
         <mat-expansion-panel>
           @let requirementsPanel = requirementsStatus();

@@ -322,6 +322,7 @@ class DeploymentAccessTests(unittest.TestCase):
             s3_access_key="key", s3_secret_key="secret", ingress_host="model",
         )
         with (
+            patch.object(deployment, "apply_registry_settings", return_value=request),
             patch.object(deployment, "resolve_profile_request", return_value=request),
             patch.object(deployment, "upsert_deployed_instance") as record,
             self.assertRaises(ConflictError),

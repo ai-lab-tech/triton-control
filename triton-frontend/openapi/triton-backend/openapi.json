@@ -94,6 +94,84 @@
         }
       }
     },
+    "/api/settings/registry": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Registry Settings",
+        "operationId": "get_registry_settings_api_settings_registry_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Get Registry Settings Api Settings Registry Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Put Registry Settings",
+        "operationId": "put_registry_settings_api_settings_registry_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Put Registry Settings Api Settings Registry Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/auth/options": {
       "get": {
         "tags": [
@@ -6331,6 +6409,20 @@
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
       },
+      "RegistryUpdate": {
+        "properties": {
+          "dockerconfigjson": {
+            "type": "string",
+            "maxLength": 500000,
+            "title": "Dockerconfigjson"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dockerconfigjson"
+        ],
+        "title": "RegistryUpdate"
+      },
       "S3DeleteResponse": {
         "properties": {
           "path": {
@@ -7112,6 +7204,18 @@
       },
       "UpdateInstanceS3Request": {
         "properties": {
+          "s3_profile_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Profile Id"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled",

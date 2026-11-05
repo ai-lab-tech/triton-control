@@ -16,6 +16,7 @@ from app.schemas import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServe
 from app.services.development import kubernetes as k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.oidc.config import kubernetes_enabled
+from app.services.registry_settings import apply_registry_settings
 
 
 def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServerDTO]:
@@ -44,6 +45,7 @@ def create_code_server(
     statefulset_name = resource_prefix
     service_name = f"{resource_prefix}-svc"
     secret_name = f"{resource_prefix}-secret"
+    request = apply_registry_settings(request, session)
     applied_resources = k8s.apply_code_server_resources(
         request,
         namespace=namespace,

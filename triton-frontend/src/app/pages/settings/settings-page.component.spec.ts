@@ -167,7 +167,7 @@ describe("SettingsPageComponent", () => {
     ).map((tab) => tab.textContent?.trim());
 
     // Assert
-    expect(tabLabels).toEqual(["OIDC", "Email", "Endpoints"]);
+    expect(tabLabels).toEqual(["OIDC", "Email", "Endpoints", "Registry"]);
   });
 
   it("SaveSettings_SaveSucceeds_ShowsSuccessMessage", async () => {

@@ -8,12 +8,10 @@ import { firstValueFrom, interval } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
-import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatSelectModule } from "@angular/material/select";
 import { MatInputModule } from "@angular/material/input";
-import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 
 import { BASE_PATH } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
@@ -45,7 +43,6 @@ type MlflowStatusResponse = {
 type InstallMlflowRequest = {
   s3_profile_id: number;
   installation_name: string;
-  dockerconfigjson?: string;
 };
 
 @Component({
@@ -55,21 +52,11 @@ type InstallMlflowRequest = {
     FormsModule,
     MatButtonModule,
     MatCardModule,
-    MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatSelectModule,
-    MonacoEditorModule,
     RouterLink,
-  ],
-  providers: [
-    {
-      provide: NGX_MONACO_EDITOR_CONFIG,
-      useValue: {
-        baseUrl: "assets",
-      },
-    },
   ],
   templateUrl: "./mlflow-page.component.html",
   styleUrl: "./mlflow-page.component.scss",
@@ -87,14 +74,6 @@ export class MlflowPageComponent implements OnDestroy {
   installationName = "mlflow";
   s3ProfileId: number | null = null;
   readonly s3Profiles = signal<{ id: number; name: string; bucket: string; prefix: string }[]>([]);
-  dockerconfigjson = "";
-  readonly dockerconfigjsonEditorOptions = {
-    theme: "vs-dark",
-    language: "json",
-    automaticLayout: true,
-    minimap: { enabled: false },
-    wordWrap: "on" as const,
-  };
 
   readonly loading = signal(true);
   readonly installing = signal(false);
@@ -186,23 +165,6 @@ export class MlflowPageComponent implements OnDestroy {
     }
   }
 
-  pullSecretStatus(): { label: string; tone: "neutral" | "ok" | "error"; detail: string } {
-    const raw = this.dockerconfigjson.trim();
-    if (!raw) {
-      return { label: "Not configured", tone: "neutral", detail: "No pull secret provided" };
-    }
-    try {
-      const parsed = JSON.parse(raw) as { auths?: Record<string, unknown> };
-      const auths = parsed && typeof parsed === "object" ? parsed.auths : undefined;
-      if (auths && typeof auths === "object" && Object.keys(auths).length > 0) {
-        return { label: "Configured", tone: "ok", detail: "Registry auth configured" };
-      }
-      return { label: "Invalid", tone: "error", detail: "Missing auths entries" };
-    } catch {
-      return { label: "Invalid", tone: "error", detail: "Invalid JSON format" };
-    }
-  }
-
   canInstall(): boolean {
     return (
       !this.installing() &&
@@ -223,7 +185,6 @@ export class MlflowPageComponent implements OnDestroy {
       const payload: InstallMlflowRequest = {
         s3_profile_id: this.s3ProfileId!,
         installation_name: this.installationName.trim(),
-        dockerconfigjson: this.dockerconfigjson.trim() || undefined,
       };
       const installation = await firstValueFrom(
         this.http.post<MlflowInstallResponse>(`${this.basePath}/api/mlflow`, payload),

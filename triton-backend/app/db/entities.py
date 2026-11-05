@@ -424,3 +424,10 @@ class DeploymentPolicyEntity(SQLModel, table=True):
     __tablename__ = "deployment_policy"
     id: int = Field(default=1, primary_key=True)
     allow_http: bool | None = Field(default=None)
+
+
+class RegistryConfigEntity(SQLModel, table=True):
+    """Singleton registry credentials managed through admin settings."""
+    __tablename__ = "registry_config"
+    id: int = Field(default=1, primary_key=True)
+    dockerconfigjson_enc: str = Field(default="", repr=False)

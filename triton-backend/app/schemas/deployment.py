@@ -53,17 +53,19 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
         if self.repository_sync_mode == "init" and self.model_control_mode != "explicit":
             raise ValueError("init repository sync supports only explicit model control mode")
         if self.s3_profile_id is None:
+            # Also used internally after resolving an admin-managed profile.
             if not all((self.s3_url, self.s3_access_key, self.s3_secret_key)):
-                raise ValueError("s3_url, s3_access_key and s3_secret_key are required")
+                raise ValueError("Select an admin-configured S3 profile")
             if self.repository_prefix is not None or self.model_uri is not None:
                 raise ValueError("profile repository fields require s3_profile_id")
-        else:
-            if any((self.s3_url, self.s3_access_key, self.s3_secret_key)):
-                raise ValueError("s3_profile_id cannot be combined with S3 credentials")
-            if not all((self.repository_prefix, self.model_uri, self.model_name)):
-                raise ValueError("repository_prefix, model_uri and model_name are required")
+            return self
+        if any((self.s3_url, self.s3_access_key, self.s3_secret_key, self.s3_ca_certificate)):
+            raise ValueError("S3 connection settings must be configured in an S3 profile")
+        if self.model_uri:
+            if not all((self.repository_prefix, self.model_name)):
+                raise ValueError("repository_prefix and model_name are required with model_uri")
             if self.model_control_mode != "explicit":
-                raise ValueError("profile deployments require explicit model control")
+                raise ValueError("model URI deployments require explicit model control")
         return self
 
     @field_validator(

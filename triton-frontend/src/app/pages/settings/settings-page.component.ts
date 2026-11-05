@@ -1,3 +1,4 @@
+import { RegistrySettingsComponent } from "./registry-settings.component";
 import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
@@ -55,6 +56,7 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
   selector: "app-settings-page",
   standalone: true,
   imports: [
+    RegistrySettingsComponent,
     FormsModule,
     MatCardModule,
     MatButtonModule,

@@ -67,6 +67,7 @@ class InstanceS3ConfigDTO(SQLModel):
 
 
 class UpdateInstanceS3Request(SQLModel):
+    s3_profile_id: Optional[int] = Field(default=None, gt=0)
     enabled: bool = False
     endpoint: Optional[str] = None
     bucket: Optional[str] = None
