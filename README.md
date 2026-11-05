@@ -108,25 +108,21 @@ workspaces, managed MLflow, and Argo Workflows are therefore disabled.
 
 ## Run On Kubernetes
 
-Prerequisites: a Kubernetes cluster with a default StorageClass, configured
-`kubectl`, and Helm. Run the following commands from the repository root:
+Requires Kubernetes with a default StorageClass, kubectl and Helm.
+Run from the repository root:
 
 ```bash
 helm upgrade --install triton-control ./charts/triton-control \
   --namespace triton-control --create-namespace \
-  --set ingress.enabled=false \
-  --set tritonDeployments.ingressEnabled=false \
+  --set ingress.enabled=false,tritonDeployments.ingressEnabled=false \
   --wait --timeout 10m
-
 kubectl -n triton-control port-forward svc/triton-control 8080:8080
 ```
 
-Open [http://localhost:8080](http://localhost:8080) and create the first administrator.
-This setup needs no ingress controller or cert-manager.
+Open [localhost:8080](http://localhost:8080) and create your administrator account.
+This installs the chart's release image. Building from source: [developer setup](docs/local-kubernetes.md).
 
-For shared installations, see [Ingress and TLS setup](docs/ingress-tls.md) and
-[Helm configuration](charts/triton-control/README.md).
-For development, see [the Minikube test environment](docs/local-kubernetes.md).
+[Ingress and TLS](docs/ingress-tls.md) · [Helm configuration](charts/triton-control/README.md) · [Minikube](docs/local-kubernetes.md)
 
 ## Run Locally With Python And npm
 

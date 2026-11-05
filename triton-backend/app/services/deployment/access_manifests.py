@@ -13,7 +13,8 @@ from app.exceptions import BadRequestError
 from app.schemas.deployment_access import DeploymentAccessRequest
 
 AUTH_PREFIX = "traefik.ingress.kubernetes.io/"
-AUTH_SECRET_ANNOTATION = "triton-control.io/auth-secret"
+# Kubernetes annotation key naming a Secret; this is not a credential.
+AUTH_SECRET_ANNOTATION = "triton-control.io/auth-secret"  # nosec B105
 MIDDLEWARE_ANNOTATION = f"{AUTH_PREFIX}router.middlewares"
 OWNER_LABEL = "triton-control.io/deployment"
 
