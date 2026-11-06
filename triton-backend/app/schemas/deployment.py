@@ -40,6 +40,8 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
     repository_sync_mode: Literal["direct", "init", "sidecar"] = "direct"
     repository_sync_image: Optional[str] = None
     model_name: Optional[str] = None
+    example_model_name: Optional[str] = None
+    example_request: Optional[dict[str, Any]] = None
     allow_metrics: bool = True
     requirements_txt: Optional[str] = None
     gpu_count: Optional[int] = None
@@ -50,6 +52,9 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
 
     @model_validator(mode="after")
     def validate_repository_modes(self) -> CreateDeploymentRequest:
+        if self.example_request is not None:
+            if not self.example_model_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", self.example_model_name):
+                raise ValueError("A valid example_model_name is required with example_request")
         if self.repository_sync_mode == "init" and self.model_control_mode != "explicit":
             raise ValueError("init repository sync supports only explicit model control mode")
         if self.s3_profile_id is None:
@@ -100,7 +105,7 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
             raise ValueError("s3_url must start with s3:// (or use http:// / https:// endpoint form)")
         return normalized.rstrip()
 
-    @field_validator("model_name", "dockerconfigjson", "repository_sync_image")
+    @field_validator("model_name", "example_model_name", "dockerconfigjson", "repository_sync_image")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         cleaned = (value or "").strip()

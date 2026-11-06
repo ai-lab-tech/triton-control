@@ -126,6 +126,24 @@
       </div>
       <mat-accordion class="optional-sections">
         <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>Example inference request</mat-panel-title>
+            <mat-panel-description>Optional default input</mat-panel-description>
+          </mat-expansion-panel-header>
+          <mat-form-field appearance="outline">
+            <mat-label>Example model name</mat-label>
+            <input matInput [(ngModel)]="exampleModelName" placeholder="e.g. classifier" />
+          </mat-form-field>
+          <div class="field-hint">
+            Paste a complete Triton request JSON object.
+          </div>
+          <ngx-monaco-editor
+            class="requirements-editor"
+            [options]="exampleEditorOptions"
+            [(ngModel)]="exampleRequest"
+          ></ngx-monaco-editor>
+        </mat-expansion-panel>
+        <mat-expansion-panel>
           @let modelControlPanel = modelControlStatus();
           <mat-expansion-panel-header>
             <mat-panel-title>

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap, ParamMap } from "@angular/router";
-import { BehaviorSubject, of, throwError } from "rxjs";
+import { BehaviorSubject, of, Subject, throwError } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { InstancesService } from "../../../api/generated/index";
 import { InstanceModelInferPageComponent } from "./instance-model-infer-page.component";
@@ -52,6 +52,9 @@ describe("InstanceModelInferPageComponent", () => {
     instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
       of({ max_batch_size: 8 } as any),
     );
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      throwError(() => ({ status: 404 })),
+    );
 
     await TestBed.configureTestingModule({
       imports: [InstanceModelInferPageComponent],
@@ -81,6 +84,105 @@ describe("InstanceModelInferPageComponent", () => {
 
   afterEach(() => {
     mockStore?.resetSelectors();
+  });
+
+  it("loads the repository example as the default request and sends it unchanged", async () => {
+    const payload = { inputs: [{ name: "x", datatype: "INT64", shape: [1], data: [42] }] };
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      of({ content: JSON.stringify(payload) } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    const dispatch = spyOn(mockStore, "dispatch");
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual(payload);
+    await component.sendInference();
+    expect(dispatch).toHaveBeenCalledWith(
+      inferRequestStarted({
+        payload,
+        instanceId: "7",
+        modelName: "model-a",
+        version: "1",
+      }),
+    );
+    expect(localStorage.getItem("triton-infer-body:7:model-a:1")).toBeNull();
+  });
+
+  it("preserves saved input over the repository example", async () => {
+    localStorage.setItem("triton-infer-body:7:model-a:1", '{"inputs":[],"id":"saved"}');
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent).id).toBe("saved");
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("loads the new model's example when the route changes", async () => {
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.callFake(
+      (_id: any, path: any): any => of({ content: JSON.stringify({ inputs: [], id: path }) }),
+    );
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(JSON.parse(component.editorContent).id).toBe("model-a/request.json");
+    routeParamMap$.next(convertToParamMap({ id: "7", modelName: "model-b", version: "1" }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(JSON.parse(component.editorContent).id).toBe("model-b/request.json");
+  });
+
+  it("does not load another model's root-level example", async () => {
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.calls.allArgs(),
+    ).toEqual([["7", "model-a/request.json"]]);
+  });
+
+  it("ignores an invalid repository example", async () => {
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      of({ content: "invalid json" } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual({ inputs: [] });
+    expect(component.displayError()).toBe("");
+  });
+
+  it("does not replace edits made while the example is loading", async () => {
+    const response = new Subject<any>();
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      response,
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    const loading = component.ngOnInit();
+    await Promise.resolve();
+    await Promise.resolve();
+    component.editorContent = '{"inputs":[],"id":"edited"}';
+    response.next({ content: '{"inputs":[],"id":"example"}' });
+    response.complete();
+    await loading;
+    expect(JSON.parse(component.editorContent).id).toBe("edited");
+  });
+
+  it("loads request.json directly from a model-root repository prefix", async () => {
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: true, prefix: "repo/model-a" },
+      } as any),
+    );
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.callFake(
+      (_id: any, path: any): any =>
+        path === "request.json"
+          ? of({ content: '{"inputs":[],"id":"root"}' })
+          : throwError(() => ({ status: 404 })),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent).id).toBe("root");
   });
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {

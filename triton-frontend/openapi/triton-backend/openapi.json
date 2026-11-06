@@ -4612,6 +4612,29 @@
             ],
             "title": "Model Name"
           },
+          "example_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Model Name"
+          },
+          "example_request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Request"
+          },
           "allow_metrics": {
             "type": "boolean",
             "title": "Allow Metrics",

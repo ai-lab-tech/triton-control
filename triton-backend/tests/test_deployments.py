@@ -51,6 +51,42 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_secret_key="super-secret-value",
         )
 
+    def test_example_is_saved_before_resources_are_scheduled(self):
+        session, request, claims = self._profile_fixture("admin")
+        request.example_model_name = "model"
+        request.example_request = {"inputs": []}
+        events = []
+        with patch.object(
+            deployments, "save_deployment_example", side_effect=lambda req: events.append("saved"),
+        ) as save:
+            with patch.object(deployments, "upsert_deployed_instance", return_value=SimpleNamespace(id=7)):
+                deployments.create_deployment(request, session, claims, lambda *args: events.append("scheduled"))
+        self.assertEqual(events, ["saved", "scheduled"])
+        self.assertEqual(save.call_args.args[0].example_request, {"inputs": []})
+        self.assertEqual(save.call_args.args[0].s3_url, "s3://http://minio:9000/triton-models/")
+
+    def test_example_storage_failure_does_not_create_or_schedule_deployment(self):
+        session, request, claims = self._profile_fixture("admin")
+        request.example_model_name = "model"
+        request.example_request = {"inputs": []}
+        schedule = Mock()
+        with patch.object(deployments, "save_deployment_example", side_effect=BadRequestError("missing model")):
+            with patch.object(deployments, "upsert_deployed_instance") as upsert:
+                with self.assertRaises(BadRequestError):
+                    deployments.create_deployment(request, session, claims, schedule)
+        upsert.assert_not_called()
+        schedule.assert_not_called()
+
+    def test_duplicate_deployment_does_not_overwrite_example(self):
+        session, request, claims = self._profile_fixture("admin")
+        request.example_model_name = "model"
+        request.example_request = {"inputs": []}
+        with patch.object(deployments, "validate_deployment_available", side_effect=ConflictError("duplicate")):
+            with patch.object(deployments, "save_deployment_example") as save:
+                with self.assertRaises(ConflictError):
+                    deployments.create_deployment(request, session, claims, Mock())
+        save.assert_not_called()
+
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange
         session, request, claims = self._profile_fixture("admin")
@@ -902,7 +938,9 @@ class DeploymentServiceTests(unittest.TestCase):
 
     @patch("app.services.deployment.deployment.prepare_instance_deletion")
     @patch("app.services.deployment.records.prepare_instance_deletion")
-    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self, _record_perf, _deployment_perf) -> None:
+    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(
+        self, _record_perf, _deployment_perf,
+    ) -> None:
         # Arrange
         instance = SimpleNamespace(
             id=2,
