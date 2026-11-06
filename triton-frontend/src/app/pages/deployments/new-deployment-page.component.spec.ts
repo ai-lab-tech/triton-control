@@ -67,6 +67,40 @@ describe("NewDeploymentPageComponent", () => {
     expect(component).toBeTruthy();
   });
 
+  it("submits an optional example with its model name", async () => {
+    const component = createComponent().componentInstance;
+    component.deploymentName = "example";
+    component.exampleModelName = "classifier";
+    component.exampleRequest = '{"inputs":[]}';
+    const api = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
+    api.createDeploymentApiDeploymentsPost.and.returnValue(
+      of({ instance_id: 7 }) as unknown as ReturnType<
+        DeploymentsService["createDeploymentApiDeploymentsPost"]
+      >,
+    );
+    spyOn(TestBed.inject(Router), "navigateByUrl").and.resolveTo(true);
+    await component.deploy();
+    expect(api.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        example_model_name: "classifier",
+        example_request: { inputs: [] },
+      }),
+    );
+  });
+
+  it("rejects invalid example JSON or a missing target before deployment", async () => {
+    const component = createComponent().componentInstance;
+    component.deploymentName = "example";
+    spyOn(component, "canDeploy").and.returnValue(true);
+    const api = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
+    for (const value of ["invalid", "[]", '{"inputs":[]}']) {
+      component.exampleRequest = value;
+      await component.deploy();
+      expect(component.message()).toContain("Invalid example request:");
+    }
+    expect(api.createDeploymentApiDeploymentsPost).not.toHaveBeenCalled();
+  });
+
   it("CanDeploy_MissingProfile_ReturnsFalse", () => {
     // Arrange
     const fixture = createComponent();

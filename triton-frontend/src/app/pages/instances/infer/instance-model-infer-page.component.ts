@@ -139,12 +139,15 @@ export class InstanceModelInferPageComponent implements OnInit {
 }`;
   private _editorContent = this.inferBodyDefault;
   private initializedRouteKey = "";
+  private bodyRevision = 0;
+  private hasSavedBody = false;
 
   get editorContent(): string {
     return this._editorContent;
   }
 
   set editorContent(value: string) {
+    this.bodyRevision++;
     this._editorContent = value;
     try {
       localStorage.setItem(this.inferBodyStorageKey(), value);
@@ -167,8 +170,12 @@ export class InstanceModelInferPageComponent implements OnInit {
       if (!this.hasValidRoute() || this.initializedRouteKey === routeKey) {
         return;
       }
+      const routeChanged = !!this.initializedRouteKey;
       this.initializedRouteKey = routeKey;
       this.loadRouteState();
+      if (routeChanged) {
+        void this.resolveInstance();
+      }
     });
   }
 
@@ -196,11 +203,14 @@ export class InstanceModelInferPageComponent implements OnInit {
   }
 
   private loadRouteState(): void {
+    this.bodyRevision++;
+    this.hasSavedBody = false;
     this.canPersistResult.set(false);
     this.clearInferResult();
 
     try {
       const saved = localStorage.getItem(this.inferBodyStorageKey());
+      this.hasSavedBody = saved !== null;
       this._editorContent = saved || this.inferBodyDefault;
       this.loadSavedInferResult();
     } catch {
@@ -373,25 +383,39 @@ export class InstanceModelInferPageComponent implements OnInit {
   }
 
   private async resolveInstance(): Promise<void> {
+    const routeKey = this.inferBodyStorageKey();
+    const revision = this.bodyRevision;
+    const instanceId = this.instanceId();
+    const modelName = this.modelName();
     this.resolvingInstance = true;
     this.resolveError.set("");
     try {
       const instance = (await firstValueFrom(
-        this.instancesApi.getInstanceApiInstancesInstanceIdGet(this.instanceId()),
+        this.instancesApi.getInstanceApiInstancesInstanceIdGet(instanceId),
       )) as TritonInstanceDTO;
+
+      if (routeKey !== this.inferBodyStorageKey()) return;
 
       this.instanceName = instance?.name ?? this.instanceName;
       this.instanceUrl.set(instance?.url ?? this.instanceUrl());
       this.instanceS3.set((instance?.s3 ?? null) as InstanceS3ConfigDTO | null);
       const usesGenerate = await this.resolveUsesGenerateEndpoint();
+      if (routeKey !== this.inferBodyStorageKey()) return;
       this.usesGenerateEndpoint.set(usesGenerate);
-      if (usesGenerate && this.editorContent.trim() === this.inferBodyDefault.trim()) {
-        this._editorContent = this.generateBodyDefault;
+      const payload =
+        instance?.inference_examples?.[modelName] ??
+        (instance?.example_model_name === modelName ? instance?.example_request : null);
+      const example = payload != null ? JSON.stringify(payload, null, 2) : null;
+      if (routeKey !== this.inferBodyStorageKey()) return;
+      if (!this.hasSavedBody && revision === this.bodyRevision) {
+        this._editorContent =
+          example ?? (usesGenerate ? this.generateBodyDefault : this.inferBodyDefault);
       }
     } catch {
-      this.resolveError.set("Failed to load instance details.");
+      if (routeKey === this.inferBodyStorageKey())
+        this.resolveError.set("Failed to load instance details.");
     } finally {
-      this.resolvingInstance = false;
+      if (routeKey === this.inferBodyStorageKey()) this.resolvingInstance = false;
     }
   }
 

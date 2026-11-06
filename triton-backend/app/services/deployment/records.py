@@ -78,6 +78,8 @@ def upsert_deployed_instance(
             f"Initial health: {snap['health_error'] or 'healthy'}"
         ),
         "is_self_deployed": True,
+        "example_model_name": request.example_model_name if request.example_request is not None else None,
+        "example_request": request.example_request,
         "mlflow_model_uri": request.model_uri,
         "mlflow_model_name": request.model_name if request.model_uri else None,
         "s3_enabled": True,
@@ -93,6 +95,16 @@ def upsert_deployed_instance(
         "s3_secret_key_enc": encrypt_secret(request.s3_secret_key or ""),
         "s3_address_style": "path",
     }
+    validate_deployment_available(session, deployment_name, triton_url)
+    row = instances.create(session, created_by_user_id=user.id, **values)
+    if deployment_name not in (user.assigned_instances or []):
+        user.assigned_instances = [*user.assigned_instances, deployment_name]
+        users.save(session, user)
+    return row
+
+
+def validate_deployment_available(session: Session, deployment_name: str, triton_url: str) -> None:
+    """Reject duplicate deployment names and target URLs."""
     if instances.find_by_name(session, deployment_name):
         raise ConflictError(
             f"Deployment name '{deployment_name}' already exists. "
@@ -103,11 +115,6 @@ def upsert_deployed_instance(
             f"Deployment target URL '{triton_url}' already exists. "
             "Choose a different deployment name or delete the existing deployment first."
         )
-    row = instances.create(session, created_by_user_id=user.id, **values)
-    if deployment_name not in (user.assigned_instances or []):
-        user.assigned_instances = [*user.assigned_instances, deployment_name]
-        users.save(session, user)
-    return row
 
 
 def update_instance_after_apply(

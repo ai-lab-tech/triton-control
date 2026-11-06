@@ -11,7 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.deployment_api import create_deployment as create_deployment_api
 from app.api.deployment_api import delete_deployment as delete_deployment_api
-from app.db.entities import S3ProfileEntity, UserEntity
+from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment import deployment as deployments
@@ -28,6 +28,11 @@ class _FakeSession:
 
 
 class DeploymentServiceTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(deployments, "collect_deployment_examples", return_value={})
+        self.collect_examples = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _profile_fixture(self, role: str):
         engine = create_engine("sqlite://")
         SQLModel.metadata.create_all(engine)
@@ -50,6 +55,42 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_access_key="minioadmin",
             s3_secret_key="super-secret-value",
         )
+
+    def test_example_is_persisted_in_database_without_s3_access(self):
+        session, request, claims = self._profile_fixture("admin")
+        request.example_model_name = "model"
+        request.example_request = {"inputs": [{"name": "x", "data": [42]}]}
+        schedule = Mock()
+        with patch(
+            "app.services.storage.s3_client.build_s3_client", side_effect=AssertionError("Unexpected S3 access"),
+        ):
+            response = deployments.create_deployment(request, session, claims, schedule)
+        session.expire_all()
+        row = session.get(TritonInstanceEntity, response.instance_id)
+        self.assertEqual(row.example_model_name, "model")
+        self.assertEqual(row.example_request, request.example_request)
+        schedule.assert_called_once()
+
+    def test_omitted_example_leaves_database_fields_empty(self):
+        session, request, claims = self._profile_fixture("admin")
+        response = deployments.create_deployment(request, session, claims, Mock())
+        row = session.get(TritonInstanceEntity, response.instance_id)
+        self.assertIsNone(row.example_model_name)
+        self.assertIsNone(row.example_request)
+
+    def test_repository_examples_are_saved_before_scheduling_and_remain_in_database(self):
+        session, request, claims = self._profile_fixture("admin")
+        examples = {"model-a": {"inputs": [], "id": "first"}, "model-b": {"inputs": [], "id": "second"}}
+        self.collect_examples.return_value = examples
+        scheduled_examples = []
+        def schedule(*args):
+            session.expire_all()
+            scheduled_examples.append(session.get(TritonInstanceEntity, args[1]).inference_examples)
+        response = deployments.create_deployment(request, session, claims, schedule)
+        self.assertEqual(scheduled_examples, [examples])
+        self.collect_examples.return_value = {}
+        session.expire_all()
+        self.assertEqual(session.get(TritonInstanceEntity, response.instance_id).inference_examples, examples)
 
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange
@@ -902,7 +943,9 @@ class DeploymentServiceTests(unittest.TestCase):
 
     @patch("app.services.deployment.deployment.prepare_instance_deletion")
     @patch("app.services.deployment.records.prepare_instance_deletion")
-    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(self, _record_perf, _deployment_perf) -> None:
+    def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(
+        self, _record_perf, _deployment_perf,
+    ) -> None:
         # Arrange
         instance = SimpleNamespace(
             id=2,

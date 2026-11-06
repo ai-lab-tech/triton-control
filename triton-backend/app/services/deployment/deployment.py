@@ -14,14 +14,19 @@ from typing import Any, Callable
 from sqlmodel import Session
 
 from app.exceptions import BadRequestError
+from app.repositories import instances
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
 from app.services.deployment.access import validate_new_hostname
 from app.services.deployment.access_manifests import validate_policy
+from app.services.deployment.examples import collect_deployment_examples
 from app.services.deployment.policy import resolve_hostname, validate_endpoint_policy
 from app.services.deployment.profile_request import resolve_profile_request
-from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
+from app.services.deployment.records import (
+    delete_instance_record,
+    upsert_deployed_instance,
+)
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.registry_settings import apply_registry_settings
@@ -58,6 +63,10 @@ def create_deployment(
         namespace=ns, deployment_name=deploy, service_name=svc, secret_name=secret,
         image=image, triton_url=triton_url, metrics_url=metrics_url, initial_snapshot=k8s.pending_snapshot(),
     )
+    examples = collect_deployment_examples(request, instance)
+    if examples:
+        instance.inference_examples = examples
+        instances.save(session, instance)
     args = (instance.id or 0, request, ns, deploy, svc, secret, image)
     if schedule_task:
         schedule_task(k8s.apply_deployment_resources, *args)
