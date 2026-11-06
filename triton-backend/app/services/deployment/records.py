@@ -78,6 +78,8 @@ def upsert_deployed_instance(
             f"Initial health: {snap['health_error'] or 'healthy'}"
         ),
         "is_self_deployed": True,
+        "example_model_name": request.example_model_name if request.example_request is not None else None,
+        "example_request": request.example_request,
         "mlflow_model_uri": request.model_uri,
         "mlflow_model_name": request.model_name if request.model_uri else None,
         "s3_enabled": True,
@@ -102,7 +104,7 @@ def upsert_deployed_instance(
 
 
 def validate_deployment_available(session: Session, deployment_name: str, triton_url: str) -> None:
-    """Reject duplicate deployments before changing shared repository files."""
+    """Reject duplicate deployment names and target URLs."""
     if instances.find_by_name(session, deployment_name):
         raise ConflictError(
             f"Deployment name '{deployment_name}' already exists. "

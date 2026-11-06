@@ -11,7 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.deployment_api import create_deployment as create_deployment_api
 from app.api.deployment_api import delete_deployment as delete_deployment_api
-from app.db.entities import S3ProfileEntity, UserEntity
+from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
 from app.services.deployment import deployment as deployments
@@ -51,41 +51,27 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_secret_key="super-secret-value",
         )
 
-    def test_example_is_saved_before_resources_are_scheduled(self):
+    def test_example_is_persisted_in_database_without_s3_access(self):
         session, request, claims = self._profile_fixture("admin")
         request.example_model_name = "model"
-        request.example_request = {"inputs": []}
-        events = []
-        with patch.object(
-            deployments, "save_deployment_example", side_effect=lambda req: events.append("saved"),
-        ) as save:
-            with patch.object(deployments, "upsert_deployed_instance", return_value=SimpleNamespace(id=7)):
-                deployments.create_deployment(request, session, claims, lambda *args: events.append("scheduled"))
-        self.assertEqual(events, ["saved", "scheduled"])
-        self.assertEqual(save.call_args.args[0].example_request, {"inputs": []})
-        self.assertEqual(save.call_args.args[0].s3_url, "s3://http://minio:9000/triton-models/")
-
-    def test_example_storage_failure_does_not_create_or_schedule_deployment(self):
-        session, request, claims = self._profile_fixture("admin")
-        request.example_model_name = "model"
-        request.example_request = {"inputs": []}
+        request.example_request = {"inputs": [{"name": "x", "data": [42]}]}
         schedule = Mock()
-        with patch.object(deployments, "save_deployment_example", side_effect=BadRequestError("missing model")):
-            with patch.object(deployments, "upsert_deployed_instance") as upsert:
-                with self.assertRaises(BadRequestError):
-                    deployments.create_deployment(request, session, claims, schedule)
-        upsert.assert_not_called()
-        schedule.assert_not_called()
+        with patch(
+            "app.services.storage.s3_client.build_s3_client", side_effect=AssertionError("Unexpected S3 access"),
+        ):
+            response = deployments.create_deployment(request, session, claims, schedule)
+        session.expire_all()
+        row = session.get(TritonInstanceEntity, response.instance_id)
+        self.assertEqual(row.example_model_name, "model")
+        self.assertEqual(row.example_request, request.example_request)
+        schedule.assert_called_once()
 
-    def test_duplicate_deployment_does_not_overwrite_example(self):
+    def test_omitted_example_leaves_database_fields_empty(self):
         session, request, claims = self._profile_fixture("admin")
-        request.example_model_name = "model"
-        request.example_request = {"inputs": []}
-        with patch.object(deployments, "validate_deployment_available", side_effect=ConflictError("duplicate")):
-            with patch.object(deployments, "save_deployment_example") as save:
-                with self.assertRaises(ConflictError):
-                    deployments.create_deployment(request, session, claims, Mock())
-        save.assert_not_called()
+        response = deployments.create_deployment(request, session, claims, Mock())
+        row = session.get(TritonInstanceEntity, response.instance_id)
+        self.assertIsNone(row.example_model_name)
+        self.assertIsNone(row.example_request)
 
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange

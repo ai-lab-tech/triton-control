@@ -6983,6 +6983,29 @@
             ],
             "title": "Deployment Secret Name"
           },
+          "example_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Model Name"
+          },
+          "example_request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example Request"
+          },
           "deployment_backend": {
             "type": "string",
             "title": "Deployment Backend",

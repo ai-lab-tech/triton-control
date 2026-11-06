@@ -1,15 +1,14 @@
-"""Example requests are optional and saved only for the selected repository model."""
+"""Deployment examples stay in the database and are exposed to inference clients."""
 
-import json
 import unittest
-from unittest.mock import patch
+from datetime import datetime
 
-from botocore.exceptions import ClientError
 from pydantic import ValidationError
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.exceptions import BadGatewayError, BadRequestError
+from app.db.entities import TritonInstanceEntity
+from app.mappers.instance import entity_to_dto
 from app.schemas import CreateDeploymentRequest
-from app.services.deployment.example_request import save_deployment_example
 
 
 class DeploymentExampleTests(unittest.TestCase):
@@ -24,50 +23,26 @@ class DeploymentExampleTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValidationError):
                 self.request(example_model_name=name, example_request={"inputs": []})
 
-    @patch("app.services.deployment.example_request.build_s3_client")
-    def test_absent_example_does_not_touch_repository(self, build):
-        save_deployment_example(self.request())
-        build.assert_not_called()
+    def test_nonfinite_json_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.request(example_model_name="model", example_request={"x": float("nan")})
 
-    @patch("app.services.deployment.example_request.build_s3_client")
-    def test_example_saved_beside_matching_model_config(self, build):
-        client = build.return_value
-        client.list_objects_v2.return_value = {"Contents": [
-            {"Key": "repo/other/config.pbtxt"}, {"Key": "repo/model/config.pbtxt"},
-        ]}
+    def test_database_examples_are_isolated_by_deployment_and_returned_in_dto(self):
+        engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
+        SQLModel.metadata.create_all(engine)
         payload = {"inputs": [{"name": "x", "shape": [1], "datatype": "INT64", "data": [42]}]}
-        save_deployment_example(self.request(example_model_name="model", example_request=payload))
-        args = client.put_object.call_args.kwargs
-        self.assertEqual(args["Bucket"], "models")
-        self.assertEqual(args["Key"], "repo/model/request.json")
-        self.assertEqual(json.loads(args["Body"]), payload)
-        self.assertEqual(args["ContentType"], "application/json")
-
-    @patch("app.services.deployment.example_request.build_s3_client")
-    def test_model_root_prefix_does_not_duplicate_model_folder(self, build):
-        client = build.return_value
-        client.list_objects_v2.return_value = {"Contents": [{"Key": "repo/model/config.pbtxt"}]}
-        request = self.request(example_model_name="model", example_request={"inputs": []})
-        request.s3_url += "/model"
-        save_deployment_example(request)
-        self.assertEqual(client.put_object.call_args.kwargs["Key"], "repo/model/request.json")
-
-    @patch("app.services.deployment.example_request.build_s3_client")
-    def test_unknown_model_is_rejected_without_writing(self, build):
-        client = build.return_value
-        client.list_objects_v2.return_value = {"Contents": [{"Key": "repo/other/config.pbtxt"}]}
-        with self.assertRaises(BadRequestError):
-            save_deployment_example(self.request(example_model_name="model", example_request={}))
-        client.put_object.assert_not_called()
-
-    @patch("app.services.deployment.example_request.build_s3_client")
-    def test_storage_write_failure_is_reported(self, build):
-        client = build.return_value
-        client.list_objects_v2.return_value = {"Contents": [{"Key": "repo/model/config.pbtxt"}]}
-        client.put_object.side_effect = ClientError({"Error": {"Code": "AccessDenied"}}, "PutObject")
-        with self.assertRaises(BadGatewayError):
-            save_deployment_example(self.request(example_model_name="model", example_request={}))
-
-    def test_nonfinite_json_is_rejected_before_storage_access(self):
-        with self.assertRaises(BadRequestError):
-            save_deployment_example(self.request(example_model_name="model", example_request={"x": float("nan")}))
+        with Session(engine) as session:
+            first = TritonInstanceEntity(
+                name="first", url="http://first", s3_bucket="same", s3_prefix="repo",
+                example_model_name="model", example_request=payload, created_at=datetime.now(),
+            )
+            second = TritonInstanceEntity(name="second", url="http://second", s3_bucket="same", s3_prefix="repo")
+            session.add(first)
+            session.add(second)
+            session.commit()
+            session.expire_all()
+            dto = entity_to_dto(session.get(TritonInstanceEntity, first.id))
+            self.assertEqual(dto.example_model_name, "model")
+            self.assertEqual(dto.example_request, payload)
+            self.assertIsNone(session.get(TritonInstanceEntity, second.id).example_request)

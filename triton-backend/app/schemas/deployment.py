@@ -11,6 +11,7 @@ Pure schema module - no service, repository, or HTTP imports.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, List, Literal, Optional
 
@@ -84,6 +85,13 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
         if not cleaned:
             raise ValueError("value must not be empty")
         return cleaned
+
+    @field_validator("example_request")
+    @classmethod
+    def validate_example_json(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is not None:
+            json.dumps(value, allow_nan=False)
+        return value
 
     @field_validator("deployment_name")
     @classmethod

@@ -402,10 +402,15 @@ export class InstanceModelInferPageComponent implements OnInit {
       const usesGenerate = await this.resolveUsesGenerateEndpoint();
       if (routeKey !== this.inferBodyStorageKey()) return;
       this.usesGenerateEndpoint.set(usesGenerate);
-      const example =
-        !this.hasSavedBody && this.instanceS3()?.enabled
-          ? await this.loadExampleRequest(instanceId, modelName, this.instanceS3()?.prefix ?? "")
+      const storedExample =
+        instance?.example_model_name === modelName && instance?.example_request != null
+          ? JSON.stringify(instance.example_request, null, 2)
           : null;
+      const example =
+        storedExample ??
+        (!this.hasSavedBody && this.instanceS3()?.enabled
+          ? await this.loadExampleRequest(instanceId, modelName, this.instanceS3()?.prefix ?? "")
+          : null);
       if (routeKey !== this.inferBodyStorageKey()) return;
       if (!this.hasSavedBody && revision === this.bodyRevision) {
         this._editorContent =
