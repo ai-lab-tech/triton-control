@@ -557,7 +557,7 @@ async function collectSimpleUploadForm(initial) {
 
   const profiles = await deploymentProfiles();
   const selected = await vscode.window.showQuickPick(profiles.map((profile) => ({
-    label: profile.name, description: profile.bucket, profile,
+    label: profile.name, description: profileApi.profileDescription(profile), profile,
   })), { title: "Select an admin-configured S3 profile" });
   if (!selected) return null;
   Object.assign(values, await resolveDeploymentProfile({ ...values, profileId: selected.profile.id }));
@@ -1261,6 +1261,7 @@ function renderHtml(webview, nonce, initial) {
       </div>
     </div>
     <label class="wide">S3 profile<select name="profileId" required><option value="">Select an admin-configured S3 profile</option></select></label>
+    <div id="s3-profile-usage" class="wide" hidden>Usage: <strong>MLflow artifact store</strong></div>
     <label class="wide">Repository prefix<input name="prefix" placeholder="team/model-repository"></label>
     <div class="wide preview">
       <strong>S3 upload target</strong>
@@ -1479,6 +1480,7 @@ function renderHtml(webview, nonce, initial) {
     }
 
     function applyS3Profile(profile) {
+      document.getElementById('s3-profile-usage').hidden = !profile.used_by_mlflow;
       form.elements.prefix.value = profile.prefix || '';
       updateDestinationPath();
     }

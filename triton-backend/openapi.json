@@ -5137,6 +5137,20 @@
             "title": "Base Domain",
             "default": ""
           },
+          "default_base_domain": {
+            "type": "string",
+            "title": "Default Base Domain",
+            "default": ""
+          },
+          "base_domain_source": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "admin"
+            ],
+            "title": "Base Domain Source",
+            "default": "environment"
+          },
           "ingress_enabled": {
             "type": "boolean",
             "title": "Ingress Enabled"
@@ -5179,6 +5193,17 @@
               }
             ],
             "title": "Allow Http"
+          },
+          "base_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Domain"
           }
         },
         "type": "object",
@@ -6558,6 +6583,11 @@
             "type": "string",
             "title": "Name"
           },
+          "used_by_mlflow": {
+            "type": "boolean",
+            "title": "Used By Mlflow",
+            "default": false
+          },
           "endpoint": {
             "type": "string",
             "title": "Endpoint"
@@ -7799,6 +7829,11 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "used_by_mlflow": {
+            "type": "boolean",
+            "title": "Used By Mlflow",
+            "default": false
           },
           "endpoint": {
             "type": "string",

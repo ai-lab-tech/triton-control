@@ -44,6 +44,92 @@ class DeploymentPolicyTests(unittest.TestCase):
         self.assertFalse(result.allow_http)
         self.assertEqual(result.source, "environment")
 
+    def test_admin_domain_override_is_persisted_and_used_for_new_hostnames(self):
+        # Arrange
+        request = DeploymentPolicyUpdate(allow_http=None, base_domain=" MODELS.Example.com. ")
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "helm.example.com"}):
+            # Act
+            result = update_policy(request, self.session, {"role": "admin"})
+            with Session(self.engine) as other:
+                resolved = resolve_hostname(DeploymentAccessRequest(ingress_host="model"), other)
+            # Assert
+            self.assertEqual(result.base_domain, "models.example.com")
+            self.assertEqual(result.default_base_domain, "helm.example.com")
+            self.assertEqual(result.base_domain_source, "admin")
+            self.assertEqual(resolved.ingress_host, "model.models.example.com")
+
+    def test_null_domain_restores_environment_configuration(self):
+        # Arrange
+        update_policy(DeploymentPolicyUpdate(allow_http=True, base_domain="admin.example.com"),
+                      self.session, {"role": "admin"})
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "helm.example.com"}):
+            # Act
+            result = update_policy(DeploymentPolicyUpdate(allow_http=True, base_domain=None),
+                                   self.session, {"role": "admin"})
+            # Assert
+            self.assertEqual(result.base_domain, "helm.example.com")
+            self.assertEqual(result.base_domain_source, "environment")
+            self.assertTrue(result.allow_http)
+
+    def test_empty_domain_explicitly_disables_environment_suffix(self):
+        # Arrange
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "helm.example.com"}):
+            # Act
+            result = update_policy(DeploymentPolicyUpdate(allow_http=None, base_domain=""),
+                                   self.session, {"role": "admin"})
+            resolved = resolve_hostname(DeploymentAccessRequest(ingress_host="model"), self.session)
+            # Assert
+            self.assertEqual(result.base_domain, "")
+            self.assertEqual(result.base_domain_source, "admin")
+            self.assertEqual(resolved.ingress_host, "model")
+
+    def test_http_only_update_preserves_domain_override(self):
+        # Arrange
+        update_policy(DeploymentPolicyUpdate(allow_http=None, base_domain="admin.example.com"),
+                      self.session, {"role": "admin"})
+        # Act
+        result = update_policy(DeploymentPolicyUpdate(allow_http=True), self.session, {"role": "admin"})
+        # Assert
+        self.assertEqual(result.base_domain, "admin.example.com")
+        self.assertTrue(result.allow_http)
+
+    def test_invalid_domain_rejects_entire_update(self):
+        for domain in ("https://models.example.com", "*.example.com", "example.com/path", "bad_domain", "x" * 254):
+            with self.subTest(domain=domain):
+                # Arrange
+                request = DeploymentPolicyUpdate(allow_http=True, base_domain=domain)
+                # Act
+                with self.assertRaises(BadRequestError):
+                    update_policy(request, self.session, {"role": "admin"})
+                # Assert
+                self.assertFalse(get_policy(self.session).allow_http)
+                self.assertEqual(get_policy(self.session).base_domain_source, "environment")
+
+    def test_invalid_environment_reset_preserves_saved_policy(self):
+        # Arrange
+        update_policy(DeploymentPolicyUpdate(allow_http=False, base_domain="valid.example.com"),
+                      self.session, {"role": "admin"})
+        request = DeploymentPolicyUpdate(allow_http=True, base_domain=None)
+        with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "*.invalid.example"}):
+            # Act
+            with self.assertRaises(BadRequestError):
+                update_policy(request, self.session, {"role": "admin"})
+            # Assert: verify committed state through a fresh session.
+            with Session(self.engine) as other:
+                saved = get_policy(other)
+            self.assertEqual(saved.base_domain, "valid.example.com")
+            self.assertFalse(saved.allow_http)
+
+    def test_existing_hostname_is_preserved_after_domain_override_changes(self):
+        # Arrange
+        update_policy(DeploymentPolicyUpdate(allow_http=None, base_domain="new.example.com"),
+                      self.session, {"role": "admin"})
+        # Act
+        result = resolve_hostname(DeploymentAccessRequest(ingress_host="model"), self.session,
+                                  existing_host="model.old.example.com")
+        # Assert
+        self.assertEqual(result.ingress_host, "model.old.example.com")
+
     def test_default_rejects_new_http_endpoint(self):
         # Arrange
         request = self.http()
@@ -87,7 +173,7 @@ class DeploymentPolicyTests(unittest.TestCase):
         for role in ("member", "viewer"):
             with self.subTest(role=role):
                 # Arrange
-                request = DeploymentPolicyUpdate(allow_http=True)
+                request = DeploymentPolicyUpdate(allow_http=True, base_domain="admin.example.com")
                 # Act
                 with self.assertRaises(ForbiddenError):
                     update_policy(request, self.session, {"role": role})

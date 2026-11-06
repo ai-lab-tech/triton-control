@@ -31,6 +31,7 @@ const vscode = {
   ProgressLocation: { Notification: 1 },
   ViewColumn: { Active: 1 },
   window: {
+    registerFileDecorationProvider: () => ({ dispose() {} }),
     withProgress: async (_, run) => run({ report() {} }, token),
     showWarningMessage: async () => choices.shift(),
     showInformationMessage: (message) => messages.push(message),
@@ -59,6 +60,73 @@ const target = {
   bucket: "models",
   prefix: "workflows/",
 };
+
+test("MLflow artifact profiles are marked in browser roots without changing names or IDs", async () => {
+  // Arrange
+  const browser = new S3Browser();
+  browser.session.profiles = async () => [
+    { ...profile, used_by_mlflow: true }, { ...profile, id: 2, name: "other" },
+  ];
+  // Act
+  const roots = await browser.getChildren();
+  // Assert
+  assert.equal(roots[0].label, "dev");
+  assert.equal(roots[0].description, "models · Usage: MLflow artifact store");
+  assert.equal(roots[0].profileId, 1);
+  assert.equal(roots[1].label, "other");
+  assert.equal(roots[1].description, "models");
+});
+
+test("profile chooser separates actual names from MLflow usage", async (t) => {
+  // Arrange
+  const session = new ProfileSession(() => {});
+  session.profiles = async () => [{ ...profile, used_by_mlflow: true }];
+  const original = vscode.window.showQuickPick;
+  let options;
+  vscode.window.showQuickPick = async (items) => { options = items; return items[0]; };
+  t.after(() => { vscode.window.showQuickPick = original; });
+  // Act
+  await session.connect();
+  // Assert
+  assert.equal(options[0].label, "dev");
+  assert.equal(options[0].description, "models · Usage: MLflow artifact store");
+  assert.equal(session.selectedProfileId, 1);
+});
+
+test("Explorer marks only MLflow profile roots and removes the badge when usage ends", async (t) => {
+  // Arrange
+  const saved = { workspace: vscode.workspace, commands: vscode.commands,
+    register: vscode.window.registerFileDecorationProvider, profiles: ProfileSession.prototype.profiles };
+  const root = { scheme: "triton-s3", authority: "profile-1", toString: () => "triton-s3://profile-1/" };
+  let decorations, usedByMlflow = true;
+  const subscriptions = [];
+  vscode.workspace = { isTrusted: true, workspaceFolders: [{ uri: root }],
+    registerFileSystemProvider: () => ({ dispose() {} }),
+    onDidChangeWorkspaceFolders: () => ({ dispose() {} }) };
+  vscode.commands = { registerCommand: () => ({ dispose() {} }), executeCommand: async () => {} };
+  vscode.window.registerFileDecorationProvider = (value) => { decorations = value; return { dispose() {} }; };
+  ProfileSession.prototype.profiles = async () => [{ ...profile, used_by_mlflow: usedByMlflow }];
+  Module._load = function (name, ...args) { return name === "vscode" ? vscode : originalLoad.call(this, name, ...args); };
+  t.after(() => {
+    Module._load = originalLoad;
+    for (const subscription of subscriptions) subscription.dispose?.();
+    vscode.workspace = saved.workspace;
+    vscode.commands = saved.commands;
+    vscode.window.registerFileDecorationProvider = saved.register;
+    ProfileSession.prototype.profiles = saved.profiles;
+  });
+  registerS3Browser({ subscriptions, globalState: { get: (key, fallback) => key === "s3.disconnected" ? true : fallback } });
+  // Act
+  const decorated = await decorations.provideFileDecoration(root);
+  const child = await decorations.provideFileDecoration({ ...root, toString: () => "triton-s3://profile-1/model/" });
+  usedByMlflow = false;
+  const cleared = await decorations.provideFileDecoration(root);
+  // Assert
+  assert.deepEqual(decorated, { badge: "ML", tooltip: "Usage: MLflow artifact store" });
+  assert.equal(child, undefined);
+  assert.equal(cleared, undefined);
+  assert.equal(typeof decorations.onDidChangeFileDecorations, "function");
+});
 
 test("managed profiles load without URL, credentials, or webview prompts", async (t) => {
   const original = profileApi.requestJson;

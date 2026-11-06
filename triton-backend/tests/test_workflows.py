@@ -200,7 +200,7 @@ class WorkflowsTests(unittest.TestCase):
                 claims={"role": "member"},
             )
 
-        mocked.assert_called_once_with(session)
+        mocked.assert_called_once_with(session, {"role": "member"})
         self.assertEqual(result, expected)
 
     def test_CreateWorkflowS3Credential_MemberDelegates(self) -> None:
@@ -307,7 +307,7 @@ class WorkflowsTests(unittest.TestCase):
                 claims={"role": "member"},
             )
 
-        mocked.assert_called_once_with(session, 5)
+        mocked.assert_called_once_with(session, 5, {"role": "member"})
         self.assertEqual(result, expected)
 
     def test_CreateCredential_DuplicateName_RaisesConflict(self) -> None:
@@ -365,6 +365,7 @@ class WorkflowsTests(unittest.TestCase):
                 "app.services.workflows.credentials.workflow_s3_credentials.create",
                 side_effect=RuntimeError("database unavailable"),
             ),
+            patch.object(credentials, "require_user_entity", return_value=SimpleNamespace(id=7, role="member")),
             patch("app.services.workflows.credentials._delete_secret") as delete_secret,
         ):
             with self.assertRaises(RuntimeError):
@@ -373,24 +374,25 @@ class WorkflowsTests(unittest.TestCase):
         delete_secret.assert_called_once_with("triton-control", "workflow-s3-finance")
 
     def test_DeleteCredential_MissingRecord_RaisesNotFound(self) -> None:
-        with patch(
-            "app.services.workflows.credentials.workflow_s3_credentials.find_by_id",
-            return_value=None,
+        with (
+            patch.object(credentials, "require_user_entity", return_value=SimpleNamespace(id=7, role="member")),
+            patch("app.services.workflows.credentials.workflow_s3_credentials.find_by_id", return_value=None),
         ):
             with self.assertRaises(NotFoundError):
-                credentials.delete_credential(SimpleNamespace(), 99)
+                credentials.delete_credential(SimpleNamespace(), 99, {})
 
     def test_DeleteCredential_RemovesSecretAndRecord(self) -> None:
-        row = SimpleNamespace(name="finance", namespace="ns", secret_name="secret")
+        row = SimpleNamespace(name="finance", namespace="ns", secret_name="secret", created_by_user_id=7)
         with (
             patch(
                 "app.services.workflows.credentials.workflow_s3_credentials.find_by_id",
                 return_value=row,
             ),
+            patch.object(credentials, "require_user_entity", return_value=SimpleNamespace(id=7, role="member")),
             patch("app.services.workflows.credentials._delete_secret") as delete_secret,
             patch("app.services.workflows.credentials.workflow_s3_credentials.delete") as delete_record,
         ):
-            result = credentials.delete_credential(SimpleNamespace(), 7)
+            result = credentials.delete_credential(SimpleNamespace(), 7, {})
 
         delete_secret.assert_called_once_with("ns", "secret")
         delete_record.assert_called_once()

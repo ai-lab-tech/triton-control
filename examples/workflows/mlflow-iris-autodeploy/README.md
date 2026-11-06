@@ -25,14 +25,9 @@ Follow the steps below to upload the script and run the training and deployment.
 
 1. In Triton Control, enable **MLflow** with an S3 artifact store and enable
    **Argo Workflows**.
-2. Open **Triton Control → MLflow**. Below the page title, check **S3 profile**
-   for the profile name and **Artifacts** for its S3 path.
-   Link that profile under **Triton Control → Workflows → Configure S3 Secrets**
-   and use it when uploading the training script in step 4.
-
-   > [!WARNING]
-   > The profile's bucket must match the bucket shown in MLflow's **Artifacts**.
-   > Using a different bucket lets training finish, but deployment fails.
+2. Under **Workflows → Configure S3 Secrets**, link the S3 profile marked
+   **MLflow artifact store**. Select the same marked profile in code-server when
+   uploading `train.py`. Profiles are global; each user creates their own Argo link.
 
 3. Follow [Create a Development Workspace](../sklearn-iris-training/README.md#1-create-a-development-workspace).
    When the workspace is ready, open **code-server** from **Development**.
@@ -61,17 +56,18 @@ and edit these settings:
 
 With exactly one of your S3 profiles linked under **Workflows → Configure S3
 Secrets** in the workflow namespace, no profile annotation is needed. Triton
-Control selects it automatically.
+Control selects it automatically. The **MLflow artifact store** marker does not
+override this selection.
 
 **With multiple linked profiles, you must select one by name.** Add the annotation
-to the existing `metadata` block in `workflow.yaml`, replacing `workflow-training`
-with the saved profile name:
+to the existing `metadata` block in `workflow.yaml`. Replace `dev` with the name
+of the profile marked **MLflow artifact store**:
 
 ```yaml
 metadata:
   name: mlflow-iris-autodeploy
   annotations:
-    triton-control.ai/mlflow-s3-profile-name: workflow-training
+    triton-control.ai/mlflow-s3-profile-name: dev
 ```
 
 Open **Triton Control → Workflows → Submit New Workflow → Edit using full workflow options**.
@@ -121,11 +117,12 @@ python3 -m pip install --user "numpy==1.26.4" "pandas==2.3.3" \
   "scikit-learn==1.7.2" "cloudpickle==3.1.2"
 ```
 
-Use the S3 profile shown on the **MLflow** page and a new deployment name:
+Use the name of the profile marked **MLflow artifact store** and a new deployment
+name (replace `dev` below):
 
 ```bash
 export TRITON_DEPLOYMENT_NAME="iris-classifier-manual"
-export TRITON_CONTROL_S3_PROFILE_NAME="your-mlflow-profile"
+export TRITON_CONTROL_S3_PROFILE_NAME="dev"
 python3 train.py
 ```
 
@@ -133,3 +130,14 @@ The serving image defaults to `nvcr.io/nvidia/tritonserver:26.10-py3`; override 
 with `TRITON_SERVING_IMAGE`. The deployment readiness timeout is 600 seconds.
 Use a new deployment name for each run; the plugin creates deployments rather
 than updating existing ones.
+
+## S3 profile mismatch
+
+If deployment reports `model_uri must name a model in the selected S3 profile bucket`,
+compare the model's `s3://<bucket>/...` artifact path with the selected profile's
+bucket. They must match. The profile must also point to the storage endpoint
+containing those artifacts and have read access.
+
+The **MLflow artifact store** marker identifies the current MLflow configuration.
+Older experiments can still use a previous artifact location; changing the selected
+profile does not move their artifacts.

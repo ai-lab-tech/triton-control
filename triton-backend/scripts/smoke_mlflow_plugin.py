@@ -53,17 +53,25 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
             else:
                 raise AssertionError("Another owner could read the deployment")
 
+        shared_name = "global-profile"
+        shared = client.create_deployment(
+            shared_name, model_uri=model_uri, config={**config, "s3_profile_name": "other-owner"}
+        )
+        assert shared["name"] == shared_name and shared["status"] == "ready", shared
+        assert client.get_deployment(shared_name)["model_name"] == "classifier"
+        assert client.delete_deployment(shared_name)["status"] == "deleted"
+
         try:
             client.create_deployment(
-                "foreign-profile", model_uri=model_uri, config={**config, "s3_profile_name": "other-owner"}
+                "missing-profile", model_uri=model_uri, config={**config, "s3_profile_name": "does-not-exist"}
             )
         except MlflowException as error:
             assert "404" in str(error), str(error)
         else:
-            raise AssertionError("Another owner's S3 profile was accepted")
+            raise AssertionError("A nonexistent S3 profile was accepted")
         assert client.delete_deployment(name)["status"] == "deleted"
         assert client.list_deployments() == []
-    print("Backend deployment create/get/list/delete, requirements transfer and ownership checks passed")
+    print("Backend deployment lifecycle, requirements transfer, global profiles and deployment ownership checks passed")
 
 
 def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | None = None) -> None:

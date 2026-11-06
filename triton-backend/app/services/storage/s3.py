@@ -134,8 +134,8 @@ def update_instance_s3(
             raise BadRequestError("Select an admin-configured S3 profile")
         if any((request.endpoint, request.bucket, request.access_key, request.secret_key, request.ca_certificate)):
             raise BadRequestError("S3 connection settings must be configured in an S3 profile")
-        user = require_user_entity(session, claims)
-        profile = s3_profiles.find_for_owner(session, user.id or 0, request.s3_profile_id)
+        require_user_entity(session, claims)
+        profile = s3_profiles.get(session, request.s3_profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
         request = request.model_copy(update={

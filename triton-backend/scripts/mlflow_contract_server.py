@@ -1,6 +1,6 @@
 """Disposable backend API fixture for the published MLflow plugin compatibility job.
 
-Uses real routes, authentication, schemas, profile ownership and deployment records.
+Uses real routes, authentication, schemas, global profiles and deployment ownership.
 Only Kubernetes writes and Triton readiness probes are replaced; no cluster is used.
 """
 
