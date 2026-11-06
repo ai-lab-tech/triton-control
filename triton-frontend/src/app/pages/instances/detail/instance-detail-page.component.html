@@ -668,8 +668,17 @@
           <mat-form-field appearance="outline">
             <mat-label>S3 profile</mat-label>
             <mat-select [(ngModel)]="selectedS3ProfileId">
+              <mat-select-trigger>
+                @for (profile of s3Profiles(); track profile.id) {
+                  @if (profile.id.toString() === selectedS3ProfileId) {
+                    <app-s3-profile-label [profile]="profile" />
+                  }
+                }
+              </mat-select-trigger>
               @for (profile of s3Profiles(); track profile.id) {
-                <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+                <mat-option [value]="profile.id.toString()"
+                  ><app-s3-profile-label [profile]="profile"
+                /></mat-option>
               }
             </mat-select>
             <mat-hint>Profiles are configured by an administrator under S3 Profiles.</mat-hint>

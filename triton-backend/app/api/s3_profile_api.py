@@ -1,4 +1,4 @@
-"""HTTP endpoints for reusable user-owned S3 deployment profiles."""
+"""HTTP endpoints for global S3 deployment profiles."""
 
 from typing import Any
 

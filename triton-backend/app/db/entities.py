@@ -328,14 +328,13 @@ class CodeServerEntity(SQLModel, table=True):
 
 
 class S3ProfileEntity(SQLModel, table=True):
-    """Reusable S3 credentials owned by one user."""
+    """Global S3 credentials; owner_user_id records the creator."""
 
     __tablename__ = "s3_profiles"
     __table_args__ = (
         UniqueConstraint(
-            "owner_user_id",
             "name",
-            name="uq_s3_profile_owner_name",
+            name="uq_s3_profile_name",
         ),
     )
 
@@ -361,8 +360,9 @@ class WorkflowS3CredentialEntity(SQLModel, table=True):
     __tablename__ = "workflow_s3_credentials"
     __table_args__ = (
         UniqueConstraint(
+            "created_by_user_id",
             "name",
-            name="uq_workflow_s3_credential_name",
+            name="uq_workflow_s3_credential_owner_name",
         ),
         UniqueConstraint(
             "namespace",
@@ -419,11 +419,12 @@ class ErrorEventEntity(SQLModel, table=True):
 
 
 class DeploymentPolicyEntity(SQLModel, table=True):
-    """Optional administrator override of the deployment HTTP policy."""
+    """Optional administrator overrides for model endpoints."""
 
     __tablename__ = "deployment_policy"
     id: int = Field(default=1, primary_key=True)
     allow_http: bool | None = Field(default=None)
+    base_domain: str | None = Field(default=None)
 
 
 class RegistryConfigEntity(SQLModel, table=True):

@@ -69,8 +69,8 @@ def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict
         if mlflow.get(session) is not None:
             raise ConflictError("MLflow is already installed")
 
-        owner = require_user_entity(session, claims)
-        profile = s3_profiles.find_for_owner(session, owner.id or 0, request.s3_profile_id)
+        require_user_entity(session, claims)
+        profile = s3_profiles.get(session, request.s3_profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
         request = apply_registry_settings(request, session)

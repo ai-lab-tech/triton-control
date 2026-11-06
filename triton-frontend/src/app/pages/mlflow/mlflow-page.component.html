@@ -35,9 +35,17 @@
               <label class="field-label" for="mlflow-s3-profile">Artifact storage S3 profile</label>
               <mat-form-field appearance="outline">
                 <mat-select id="mlflow-s3-profile" [(ngModel)]="s3ProfileId" required>
+                  <mat-select-trigger>
+                    @for (profile of s3Profiles(); track profile.id) {
+                      @if (profile.id === s3ProfileId) {
+                        <app-s3-profile-label [profile]="profile" />
+                      }
+                    }
+                  </mat-select-trigger>
                   @for (profile of s3Profiles(); track profile.id) {
                     <mat-option [value]="profile.id"
-                      >{{ profile.name }} — {{ profile.bucket }}</mat-option
+                      ><app-s3-profile-label [profile]="profile" /> —
+                      {{ profile.bucket }}</mat-option
                     >
                   }
                 </mat-select>

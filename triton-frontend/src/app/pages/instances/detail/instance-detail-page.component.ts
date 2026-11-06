@@ -1,3 +1,4 @@
+import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { HttpClient } from "@angular/common/http";
 import { MatSelectModule } from "@angular/material/select";
 import { BASE_PATH } from "../../../api/generated";
@@ -56,6 +57,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    S3ProfileLabelComponent,
     DeploymentAccessComponent,
     MatSelectModule,
     DatePipe,
@@ -78,7 +80,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
 export class InstanceDetailPageComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly apiBase = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
-  readonly s3Profiles = signal<{ id: number; name: string }[]>([]);
+  readonly s3Profiles = signal<{ id: number; name: string; used_by_mlflow?: boolean }[]>([]);
   readonly s3ProfilesError = signal("");
   selectedS3ProfileId = "";
   private async loadS3Profiles(): Promise<void> {
@@ -86,7 +88,9 @@ export class InstanceDetailPageComponent implements OnInit {
     try {
       this.s3Profiles.set(
         await firstValueFrom(
-          this.http.get<{ id: number; name: string }[]>(`${this.apiBase}/api/s3-profiles`),
+          this.http.get<{ id: number; name: string; used_by_mlflow?: boolean }[]>(
+            `${this.apiBase}/api/s3-profiles`,
+          ),
         ),
       );
     } catch {

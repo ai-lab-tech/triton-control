@@ -33,7 +33,7 @@ def create_deployment(
     claims: dict[str, Any],
     schedule_task: Callable[..., None] | None = None,
 ) -> DeploymentResponse:
-    request = resolve_hostname(request)
+    request = resolve_hostname(request, session)
     validate_policy(request, creating=True)
     validate_endpoint_policy(request, session)
     request = apply_registry_settings(request, session)

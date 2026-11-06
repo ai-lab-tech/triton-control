@@ -42,6 +42,30 @@ describe("S3CredentialsDialogComponent", () => {
     expect(fixture.componentInstance.canCreate()).toBeFalse();
   });
 
+  it("shows MLflow usage separately on linked profile cards", async () => {
+    const fixture = await setup(
+      [{ ...profile, used_by_mlflow: true }],
+      [
+        {
+          id: 1,
+          name: "dev (9)",
+          s3_profile_id: 9,
+          s3_profile_name: "dev",
+          secret_name: "workflow-s3-dev",
+          namespace: "test",
+        },
+      ],
+    );
+    const card = fixture.nativeElement.querySelector(".credential-name");
+    expect(card.querySelector(".profile-name").textContent).toBe("dev");
+    expect(card.querySelector(".usage-badge").textContent).toContain("MLflow artifact store");
+    const component = fixture.componentInstance;
+    component.profiles.set([{ ...profile, used_by_mlflow: false }]);
+    fixture.detectChanges();
+    expect(card.querySelector(".usage-badge")).toBeNull();
+    expect(card.querySelector(".profile-name").textContent).toBe("dev");
+  });
+
   it("links the selected profile without requiring typed values", async () => {
     const fixture = await setup([profile]);
     const component = fixture.componentInstance;

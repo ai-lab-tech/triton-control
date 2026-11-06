@@ -78,6 +78,17 @@ export class SettingsPageComponent {
   readonly policyBusy = signal(false);
   readonly policyMessage = signal("");
   httpPolicyChoice: "default" | "allow" | "deny" = "default";
+  baseDomainChoice: "default" | "custom" = "default";
+  modelBaseDomain = "";
+  readonly policyMessageTone = signal<"success" | "error">("success");
+
+  private applyDeploymentPolicy(policy: DeploymentPolicyResponse): void {
+    this.deploymentPolicy.set(policy);
+    this.httpPolicyChoice =
+      policy.source === "environment" ? "default" : policy.allow_http ? "allow" : "deny";
+    this.baseDomainChoice = policy.base_domain_source === "admin" ? "custom" : "default";
+    this.modelBaseDomain = policy.base_domain || "";
+  }
 
   async loadDeploymentPolicy(): Promise<void> {
     this.policyBusy.set(true);
@@ -86,10 +97,9 @@ export class SettingsPageComponent {
       const policy = await firstValueFrom(
         this.deploymentsApi.getDeploymentPolicyApiDeploymentsPolicyGet(),
       );
-      this.deploymentPolicy.set(policy);
-      this.httpPolicyChoice =
-        policy.source === "environment" ? "default" : policy.allow_http ? "allow" : "deny";
+      this.applyDeploymentPolicy(policy);
     } catch {
+      this.policyMessageTone.set("error");
       this.policyMessage.set("Could not load endpoint policy. Please retry.");
     } finally {
       this.policyBusy.set(false);
@@ -104,12 +114,18 @@ export class SettingsPageComponent {
         this.deploymentsApi.updateDeploymentPolicyApiDeploymentsPolicyPut({
           allow_http:
             this.httpPolicyChoice === "default" ? null : this.httpPolicyChoice === "allow",
+          base_domain: this.baseDomainChoice === "default" ? null : this.modelBaseDomain.trim(),
         }),
       );
-      this.deploymentPolicy.set(policy);
-      this.policyMessage.set("Endpoint policy saved.");
-    } catch {
-      this.policyMessage.set("Could not save endpoint policy. Please retry.");
+      this.applyDeploymentPolicy(policy);
+      this.policyMessageTone.set("success");
+      this.policyMessage.set("Endpoint settings saved.");
+    } catch (error) {
+      this.policyMessageTone.set("error");
+      const detail = (error as { error?: { detail?: unknown } })?.error?.detail;
+      this.policyMessage.set(
+        typeof detail === "string" ? detail : "Could not save endpoint settings. Please retry.",
+      );
     } finally {
       this.policyBusy.set(false);
     }
