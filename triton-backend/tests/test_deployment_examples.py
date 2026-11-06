@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime
 from io import BytesIO
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
@@ -22,7 +23,7 @@ class DeploymentExampleTests(unittest.TestCase):
 
     @patch("app.services.deployment.examples.require_s3_client")
     def test_form_example_takes_priority_without_any_repository_access(self, client):
-        payload = {"inputs": []}
+        payload: dict[str, Any] = {"inputs": []}
         result = collect_deployment_examples(
             self.request(example_model_name="model", example_request=payload), self.instance(),
         )
