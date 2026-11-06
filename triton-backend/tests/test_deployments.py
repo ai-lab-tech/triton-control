@@ -28,6 +28,11 @@ class _FakeSession:
 
 
 class DeploymentServiceTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(deployments, "collect_deployment_examples", return_value={})
+        self.collect_examples = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _profile_fixture(self, role: str):
         engine = create_engine("sqlite://")
         SQLModel.metadata.create_all(engine)
@@ -72,6 +77,20 @@ class DeploymentServiceTests(unittest.TestCase):
         row = session.get(TritonInstanceEntity, response.instance_id)
         self.assertIsNone(row.example_model_name)
         self.assertIsNone(row.example_request)
+
+    def test_repository_examples_are_saved_before_scheduling_and_remain_in_database(self):
+        session, request, claims = self._profile_fixture("admin")
+        examples = {"model-a": {"inputs": [], "id": "first"}, "model-b": {"inputs": [], "id": "second"}}
+        self.collect_examples.return_value = examples
+        scheduled_examples = []
+        def schedule(*args):
+            session.expire_all()
+            scheduled_examples.append(session.get(TritonInstanceEntity, args[1]).inference_examples)
+        response = deployments.create_deployment(request, session, claims, schedule)
+        self.assertEqual(scheduled_examples, [examples])
+        self.collect_examples.return_value = {}
+        session.expire_all()
+        self.assertEqual(session.get(TritonInstanceEntity, response.instance_id).inference_examples, examples)
 
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange

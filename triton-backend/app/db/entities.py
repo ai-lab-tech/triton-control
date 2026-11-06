@@ -62,6 +62,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     deployment_log: str = Field(default="")
     is_self_deployed: bool = Field(default=False)
     example_model_name: Optional[str] = None
+    inference_examples: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
     example_request: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON, nullable=True))
     mlflow_model_uri: Optional[str] = None
     mlflow_model_name: Optional[str] = None

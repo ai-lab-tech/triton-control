@@ -6994,6 +6994,14 @@
             ],
             "title": "Example Model Name"
           },
+          "inference_examples": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Inference Examples"
+          },
           "example_request": {
             "anyOf": [
               {

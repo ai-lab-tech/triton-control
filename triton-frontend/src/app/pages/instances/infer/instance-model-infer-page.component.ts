@@ -402,15 +402,10 @@ export class InstanceModelInferPageComponent implements OnInit {
       const usesGenerate = await this.resolveUsesGenerateEndpoint();
       if (routeKey !== this.inferBodyStorageKey()) return;
       this.usesGenerateEndpoint.set(usesGenerate);
-      const storedExample =
-        instance?.example_model_name === modelName && instance?.example_request != null
-          ? JSON.stringify(instance.example_request, null, 2)
-          : null;
-      const example =
-        storedExample ??
-        (!this.hasSavedBody && this.instanceS3()?.enabled
-          ? await this.loadExampleRequest(instanceId, modelName, this.instanceS3()?.prefix ?? "")
-          : null);
+      const payload =
+        instance?.inference_examples?.[modelName] ??
+        (instance?.example_model_name === modelName ? instance?.example_request : null);
+      const example = payload != null ? JSON.stringify(payload, null, 2) : null;
       if (routeKey !== this.inferBodyStorageKey()) return;
       if (!this.hasSavedBody && revision === this.bodyRevision) {
         this._editorContent =
@@ -422,39 +417,6 @@ export class InstanceModelInferPageComponent implements OnInit {
     } finally {
       if (routeKey === this.inferBodyStorageKey()) this.resolvingInstance = false;
     }
-  }
-
-  private async loadExampleRequest(
-    instanceId: string,
-    modelName: string,
-    prefix: string,
-  ): Promise<string | null> {
-    const paths = [`${modelName}/request.json`];
-    if (
-      prefix
-        .replace(/^\/+|\/+$/g, "")
-        .split("/")
-        .at(-1) === modelName
-    ) {
-      paths.push("request.json");
-    }
-    for (const path of paths) {
-      try {
-        const response = await firstValueFrom(
-          this.instancesApi.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet(
-            instanceId,
-            path,
-          ),
-        );
-        const payload: unknown = JSON.parse(response.content);
-        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-          return JSON.stringify(payload, null, 2);
-        }
-      } catch {
-        // Missing or invalid examples leave the standard default available.
-      }
-    }
-    return null;
   }
 
   private async resolveUsesGenerateEndpoint(): Promise<boolean> {

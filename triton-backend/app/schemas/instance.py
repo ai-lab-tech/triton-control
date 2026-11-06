@@ -115,6 +115,7 @@ class TritonInstanceDTO(SQLModel):
     deployment_service_name: Optional[str] = None
     deployment_secret_name: Optional[str] = None
     example_model_name: Optional[str] = None
+    inference_examples: dict[str, dict[str, Any]] = Field(default_factory=dict)
     example_request: Optional[dict[str, Any]] = None
     deployment_backend: str = ""
     deployment_log: str = ""
