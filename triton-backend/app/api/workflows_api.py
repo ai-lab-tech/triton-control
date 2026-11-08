@@ -12,7 +12,6 @@ from app.core.identity import require_user_entity
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.exceptions import BadRequestError, UnauthorizedError
-from app.repositories import s3_profiles
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
     CreateWorkflowS3CredentialRequest,
@@ -20,6 +19,7 @@ from app.schemas import (
     WorkflowS3CredentialDTO,
 )
 from app.schemas.workflows import WorkflowS3ProfileChoice, WorkspaceArgoUpgradeResponse
+from app.services.storage.s3_profiles import profile_dtos
 from app.services.workflows import credentials, proxy, status, workspace_access
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
@@ -42,10 +42,11 @@ def list_s3_profile_choices(
     claims: dict[str, Any] = Depends(get_claims),
 ) -> list[WorkflowS3ProfileChoice]:
     require_member_or_admin(claims)
-    owner = require_user_entity(session, claims)
+    require_user_entity(session, claims)
     return [WorkflowS3ProfileChoice(
         id=p.id, name=p.name, endpoint=p.endpoint, bucket=p.bucket, region=p.region,
-    ) for p in s3_profiles.list_for_owner(session, owner.id or 0)]
+        used_by_mlflow=p.used_by_mlflow,
+    ) for p in profile_dtos(session)]
 
 
 @router.post("/s3-credentials/{credential_id}/sync", response_model=WorkflowS3CredentialDTO)
@@ -67,7 +68,7 @@ def list_workflow_s3_credentials(
 ) -> list[WorkflowS3CredentialDTO]:
     """List workflow S3 credentials managed by Triton Control."""
     require_member_or_admin(claims)
-    return credentials.list_credentials(session)
+    return credentials.list_credentials(session, claims)
 
 
 @router.post("/s3-credentials", response_model=WorkflowS3CredentialDTO)
@@ -93,7 +94,7 @@ def delete_workflow_s3_credential(
 ) -> WorkflowS3CredentialDeleteResponse:
     """Delete a workflow S3 credential and its mirrored Kubernetes secret."""
     require_member_or_admin(claims)
-    return credentials.delete_credential(session, credential_id)
+    return credentials.delete_credential(session, credential_id, claims)
 
 
 @router.post("/upgrade-workspaces", response_model=WorkspaceArgoUpgradeResponse)

@@ -15,8 +15,8 @@ from app.schemas.deployment_policy import DeploymentPolicyResponse, DeploymentPo
 RequestT = TypeVar("RequestT", bound=DeploymentAccessRequest)
 
 
-def base_domain() -> str:
-    value = os.getenv("TRITON_DEPLOY_BASE_DOMAIN", "").strip().lower().rstrip(".")
+def _normalize_base_domain(value: str) -> str:
+    value = value.strip().lower().rstrip(".")
     if value and (len(value) > 253 or any(
         not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in value.split(".")
     )):
@@ -26,12 +26,21 @@ def base_domain() -> str:
     return value
 
 
+def base_domain(session: Session | None = None) -> str:
+    override = deployment_policy.get_base_domain_override(session) if session is not None else None
+    return _normalize_base_domain(
+        os.getenv("TRITON_DEPLOY_BASE_DOMAIN", "") if override is None else override
+    )
+
+
 def short_hostname(host: str | None) -> str | None:
     """Return the editable name; domains are always managed by the administrator."""
     return host.split(".", 1)[0] if host else host
 
 
-def resolve_hostname(request: RequestT, *, existing_host: str | None = None) -> RequestT:
+def resolve_hostname(
+    request: RequestT, session: Session | None = None, *, existing_host: str | None = None,
+) -> RequestT:
     """Resolve user-supplied names once; queued tasks receive the full host."""
     host = request.ingress_host
     if not host:
@@ -40,7 +49,7 @@ def resolve_hostname(request: RequestT, *, existing_host: str | None = None) -> 
         raise BadRequestError("Enter a short hostname only, without a domain, protocol, port or path")
     if existing_host and host == short_hostname(existing_host):
         return request.model_copy(update={"ingress_host": existing_host})
-    domain = base_domain()
+    domain = base_domain(session)
     if not domain:
         return request
     full_host = f"{host}.{domain}"
@@ -61,9 +70,12 @@ def validate_ingress(request: DeploymentAccessRequest) -> None:
 def get_policy(session: Session) -> DeploymentPolicyResponse:
     default = os.getenv("TRITON_DEPLOY_ALLOW_HTTP", "false").strip().lower() in {"1", "true", "yes", "on"}
     override = deployment_policy.get_override(session)
+    domain_override = deployment_policy.get_base_domain_override(session)
     return DeploymentPolicyResponse(
         ingress_enabled=ingress_enabled(),
-        base_domain=base_domain(),
+        base_domain=base_domain(session),
+        default_base_domain=os.getenv("TRITON_DEPLOY_BASE_DOMAIN", "").strip().lower().rstrip("."),
+        base_domain_source="environment" if domain_override is None else "admin",
         allow_http=default if override is None else override,
         default_allow_http=default,
         source="environment" if override is None else "admin",
@@ -74,7 +86,15 @@ def update_policy(
     request: DeploymentPolicyUpdate, session: Session, claims: dict[str, Any],
 ) -> DeploymentPolicyResponse:
     require_admin(claims)
-    deployment_policy.save_override(session, request.allow_http)
+    domain = _normalize_base_domain(request.base_domain) if request.base_domain is not None else None
+    update_domain = "base_domain" in request.model_fields_set
+    effective_domain = domain if update_domain else deployment_policy.get_base_domain_override(session)
+    _normalize_base_domain(
+        os.getenv("TRITON_DEPLOY_BASE_DOMAIN", "") if effective_domain is None else effective_domain
+    )
+    deployment_policy.save_override(
+        session, request.allow_http, base_domain=domain, update_base_domain=update_domain,
+    )
     return get_policy(session)
 
 

@@ -397,3 +397,88 @@
 .test-email-spinner {
   --mdc-circular-progress-active-indicator-color: currentColor;
 }
+
+.endpoint-card {
+  max-width: 64rem;
+  margin-top: 1.5rem;
+}
+
+.endpoint-status,
+.endpoint-current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.endpoint-status {
+  margin: 1.25rem 0;
+}
+
+.endpoint-badge {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: #ccfbf1;
+  color: #115e59;
+  font-weight: 600;
+}
+
+.endpoint-badge.disabled {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.endpoint-source,
+.endpoint-note {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.endpoint-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+}
+
+.endpoint-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+}
+
+.endpoint-setting h3,
+.endpoint-setting p {
+  margin: 0;
+}
+
+.endpoint-current {
+  min-height: 2rem;
+  overflow-wrap: anywhere;
+}
+
+.endpoint-details {
+  margin-top: 1.5rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.endpoint-details summary {
+  cursor: pointer;
+}
+
+.endpoint-save:not(:disabled) {
+  background: #0f766e;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.2);
+}
+
+.endpoint-save {
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  letter-spacing: normal;
+}

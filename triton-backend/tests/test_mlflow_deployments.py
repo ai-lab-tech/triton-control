@@ -31,17 +31,17 @@ class ProfileDeploymentTests(unittest.TestCase):
             model_uri=uri, repository_prefix="dev", model_name="iris_classifier",
         )
 
-    def test_profile_resolves_only_for_owner(self) -> None:
+    def test_global_profile_resolves_for_all_users(self) -> None:
         with Session(self.engine) as session:
             resolved = profile_request.resolve_profile_request(
                 self._request(), session, {"email": "owner@example.com", "auth_provider": "local"}
             )
             self.assertEqual(resolved.s3_url, "s3://https://s3.example.test/triton-models/dev")
             self.assertEqual(resolved.s3_access_key, "access")
-            with self.assertRaises(NotFoundError):
-                profile_request.resolve_profile_request(
-                    self._request(), session, {"email": "other@example.com", "auth_provider": "local"}
-                )
+            other = profile_request.resolve_profile_request(
+                self._request(), session, {"email": "other@example.com", "auth_provider": "local"}
+            )
+            self.assertEqual(other.s3_access_key, "access")
 
     def test_model_uri_bucket_must_match_profile(self) -> None:
         with Session(self.engine) as session:
@@ -70,29 +70,31 @@ class ProfileDeploymentTests(unittest.TestCase):
             with self.assertRaises(BadRequestError):
                 profile_request.resolve_profile_request(request, session, {})
 
-    def test_workspace_token_requires_owned_profile(self) -> None:
+    def test_workspace_token_uses_global_profile(self) -> None:
         claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workspace_deployment"}
         with Session(self.engine) as session:
             resolved = profile_request.resolve_profile_request(self._request(), session, claims)
             self.assertEqual(resolved.s3_access_key, "access")
-            with self.assertRaises(NotFoundError):
-                profile_request.resolve_profile_request(
-                    self._request(), session, {**claims, "email": "other@example.com"},
-                )
+            other = profile_request.resolve_profile_request(
+                self._request(), session, {**claims, "email": "other@example.com"},
+            )
+            self.assertEqual(other.s3_access_key, "access")
             with self.assertRaises(BadRequestError):
                 profile_request.resolve_profile_request(CreateDeploymentRequest(
                     deployment_name="legacy", image="triton:test", s3_url="s3://bucket",
                     s3_access_key="access", s3_secret_key="secret",
                 ), session, claims)
 
-    def test_automatic_workflow_token_accepts_different_names_and_requires_owned_profiles(self):
+    def test_automatic_workflow_token_accepts_different_names_and_global_profiles(self):
         claims = {"email": "owner@example.com", "auth_provider": "local", "token_use": "workflow_deployment"}
         with Session(self.engine) as session:
             for name in ["first-model", "second-model"]:
                 request = self._request().model_copy(update={"deployment_name": name})
                 self.assertEqual(profile_request.resolve_profile_request(request, session, claims).deployment_name, name)
-            with self.assertRaises(NotFoundError):
-                profile_request.resolve_profile_request(self._request(), session, {**claims, "email": "other@example.com"})
+            other = profile_request.resolve_profile_request(
+                self._request(), session, {**claims, "email": "other@example.com"},
+            )
+            self.assertEqual(other.s3_access_key, "access")
             with self.assertRaises(BadRequestError):
                 profile_request.resolve_profile_request(self._request().model_copy(update={"s3_profile_id": None}), session, claims)
 

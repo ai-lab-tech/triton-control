@@ -278,8 +278,12 @@ folders beside `/workspace` in the native **Explorer**. Administrators create
 profiles through the existing **S3 Profiles** account menu entry.
 Each profile stores its endpoint, bucket, optional prefix, region, access key,
 stored secret key, addressing mode, and optional public CA certificate.
-The workspace can use administrator-owned profiles and its owner's existing
-personal profiles.
+Every active member/admin workspace can use all global S3 profiles, regardless
+of who created them. The profile currently selected for the managed MLflow
+artifact store shows a separate **MLflow artifact store** usage badge in profile selectors.
+In Code Server, usage appears in selector descriptions and as an **ML** Explorer
+badge with a tooltip. Profile names remain unchanged.
+This label does not change the profile name used in workflow annotations.
 
 ### Connect, Switch, and Disconnect
 

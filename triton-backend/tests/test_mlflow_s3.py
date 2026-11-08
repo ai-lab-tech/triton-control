@@ -33,15 +33,15 @@ class MlflowS3Tests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValidationError):
                 InstallMlflowRequest.model_validate(payload)
 
-    def test_other_users_profile_is_rejected_before_creating_resources(self):
+    def test_missing_profile_is_rejected_before_creating_resources(self):
         with patch.object(installer.mlflow, "get", return_value=None), patch.object(
             installer, "require_user_entity", return_value=SimpleNamespace(id=7)
-        ), patch.object(installer.s3_profiles, "find_for_owner", return_value=None) as lookup, patch.object(
+        ), patch.object(installer.s3_profiles, "get", return_value=None) as lookup, patch.object(
             installer.k8s, "apply_installation_resources"
         ) as apply:
             with self.assertRaises(NotFoundError):
                 installer.install_mlflow(InstallMlflowRequest(s3_profile_id=3), MagicMock(), {"role": "member"})
-            lookup.assert_called_once_with(unittest.mock.ANY, 7, 3)
+            lookup.assert_called_once_with(unittest.mock.ANY, 3)
             apply.assert_not_called()
 
     def test_s3_install_has_no_pvc_and_credentials_only_in_secret(self):

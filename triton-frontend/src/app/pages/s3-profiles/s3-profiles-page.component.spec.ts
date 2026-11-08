@@ -37,6 +37,62 @@ describe("S3ProfilesPageComponent", () => {
     return fixture;
   }
 
+  it("MemberCanViewGlobalProfilesWithoutManagementControls", async () => {
+    // Arrange
+    TestBed.inject(AuthStore).setAuthenticatedUser({ name: "Member", role: "member" });
+    const fixture = createComponent([
+      {
+        id: 7,
+        name: "global-models",
+        used_by_mlflow: true,
+        endpoint: "https://s3",
+        bucket: "models",
+      },
+    ]);
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+    // Assert
+    expect(fixture.nativeElement.querySelector(".profile-name").textContent).toBe("global-models");
+    expect(fixture.nativeElement.querySelector(".usage-badge").textContent).toContain(
+      "MLflow artifact store",
+    );
+    expect(fixture.nativeElement.querySelector("input")).toBeNull();
+  });
+
+  for (const action of ["saveProfile", "deleteProfile"] as const) {
+    it(`blocks member ${action} without sending a mutation`, async () => {
+      // Arrange
+      TestBed.inject(AuthStore).setAuthenticatedUser({ name: "Member", role: "member" });
+      const fixture = createComponent([
+        { id: 7, name: "dev", endpoint: "https://s3", bucket: "models" },
+      ]);
+      await fixture.whenStable();
+      // Act
+      await fixture.componentInstance[action]();
+      // Assert
+      TestBed.inject(HttpTestingController).expectNone((request) => request.method !== "GET");
+    });
+  }
+
+  it("shows MLflow usage separately from the editable profile name", async () => {
+    const fixture = createComponent([
+      { id: 7, name: "dev", used_by_mlflow: true, endpoint: "https://s3", bucket: "models" },
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("#s3-profile-name").value).toBe("dev");
+    expect(fixture.nativeElement.querySelector(".profile-usage dt").textContent).toBe("Usage");
+    expect(fixture.nativeElement.querySelector(".profile-usage dd").textContent).toBe(
+      "MLflow artifact store",
+    );
+    const trigger = fixture.nativeElement.querySelector("mat-select-trigger");
+    expect(trigger.querySelector(".profile-name").textContent).toBe("dev");
+    expect(trigger.querySelector(".usage-badge")).not.toBeNull();
+  });
+
   it("CreateComponent_ProfilesLoaded_SelectsFirstProfile", async () => {
     const fixture = createComponent([
       {

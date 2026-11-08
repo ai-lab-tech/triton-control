@@ -104,9 +104,9 @@ connection examples.
 
 ## S3 Credentials
 
-Only administrators can create, edit, or delete S3 profiles. Administrator-owned
-profiles are available to members; legacy personal profiles remain accessible
-to their owners and administrators. Browser profile responses omit secret keys.
+Only administrators can create, edit, or delete S3 profiles. All profiles are
+global and available to administrators and members, including legacy profiles.
+The stored creator does not restrict profile visibility. Browser profile responses omit secret keys.
 Deployment and instance connection requests select profiles instead of supplying
 credentials. The authenticated workspace profile endpoint returns credentials
 needed for direct S3 operations.
@@ -146,8 +146,8 @@ The native code-server S3 browser authenticates to its workspace-scoped profile
 endpoint using `TRITON_CONTROL_PROFILE_TOKEN`, injected from a Kubernetes Secret.
 The backend verifies the workspace owner and account status before returning
 profiles. This token is not accepted as general application API authentication.
-Processes in the workspace can use it to retrieve administrator-owned and the owner's personal S3 profiles, so
-workspace code runs within that owner's storage access boundary.
+Processes in an active member/admin workspace can retrieve all global S3 profiles
+and use their credentials for direct storage access.
 
 The extension uses S3 credentials in memory and does not persist them to editor
 settings or `.aws/credentials`. HTTPS verification uses the selected profile's

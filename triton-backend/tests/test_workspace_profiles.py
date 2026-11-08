@@ -1,4 +1,4 @@
-"""Workspace-only profile authentication and current owner isolation."""
+"""Workspace-only profile authentication and workspace authentication."""
 
 import base64
 import unittest
@@ -12,7 +12,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.development_api import router
 from app.db.database import get_session
-from app.db.entities import CodeServerEntity, S3ProfileEntity, UserEntity
+from app.db.entities import CodeServerEntity, MlflowEntity, S3ProfileEntity, UserEntity
 from app.exceptions import ForbiddenError, UnauthorizedError
 from app.services.development.profiles import workspace_profiles
 
@@ -40,9 +40,9 @@ class WorkspaceProfileTests(unittest.TestCase):
         self.addCleanup(self.engine.dispose)
         self.addCleanup(self.session.close)
 
-    def test_OwnedProfilesReflectEditsAndDeletion(self) -> None:
+    def test_GlobalProfilesReflectEditsAndDeletion(self) -> None:
         profiles = workspace_profiles(self.session, "dev", "code-1", "token-code-1-secret")
-        self.assertEqual([p.id for p in profiles], [1])
+        self.assertEqual([p.id for p in profiles], [1, 2])
         row = self.session.get(S3ProfileEntity, 1)
         assert row
         row.ca_certificate = "updated-ca"
@@ -52,7 +52,18 @@ class WorkspaceProfileTests(unittest.TestCase):
                          "updated-ca")
         self.session.delete(row)
         self.session.commit()
-        self.assertEqual(workspace_profiles(self.session, "dev", "code-1", "token-code-1-secret"), [])
+        self.assertEqual([p.id for p in workspace_profiles(self.session, "dev", "code-1", "token-code-1-secret")], [2])
+
+    def test_WorkspaceProfilesMarkGlobalMlflowStorage(self) -> None:
+        # Arrange
+        self.session.add(MlflowEntity(s3_profile_id=2, namespace="ns", deployment_name="mlflow",
+                                     service_name="mlflow", image="mlflow:test"))
+        self.session.commit()
+        # Act
+        profiles = workspace_profiles(self.session, "dev", "code-1", "token-code-1-secret")
+        # Assert
+        self.assertEqual({p.id: p.used_by_mlflow for p in profiles}, {1: False, 2: True})
+        self.assertEqual(profiles[1].name, "profile-2")
 
     def test_TokenCannotAccessAnotherWorkspaceOrNamespace(self) -> None:
         for namespace, name, token in [("dev", "code-2", "token-code-1-secret"),
@@ -88,7 +99,7 @@ class WorkspaceProfileTests(unittest.TestCase):
             response = client.get(url, headers={"Authorization": "Bearer token-code-1-secret"})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers["cache-control"], "no-store")
-            self.assertEqual([p["id"] for p in response.json()], [1])
+            self.assertEqual([p["id"] for p in response.json()], [1, 2])
             self.assertEqual(client.get(url.replace("code-1", "code-2"), headers={
                 "Authorization": "Bearer token-code-1-secret",
             }).status_code, 401)

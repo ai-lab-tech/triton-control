@@ -415,13 +415,14 @@ S3 deployment profiles:
 - Administrators manage reusable S3 profiles through the existing **S3 Profiles**
   account menu entry. Profiles store endpoint, bucket, prefix, region, addressing
   mode, CA certificate, access key, and secret key.
-- Administrator-owned profiles are available to members. Existing personal
-  profiles remain available to their owners and can also be managed by admins.
+- All profiles are global and available to administrators and members, including
+  existing profiles. Only administrators can create, edit, or delete them.
+  Profile names must be unique; rename legacy duplicates before resolving by name.
 - Deployment and instance connection forms require a profile and accept an
   optional repository prefix. Manual connection settings are rejected.
 - Browser requests to `/api/s3-profiles` return metadata with blank secret keys;
   deployment requests send a profile ID instead of copying credentials.
-- The native code-server S3 browser loads the workspace owner's profiles through
+- The native code-server S3 browser loads all global profiles through
   `/api/development/workspace-s3-profiles/<namespace>/<statefulset-name>` using
   its injected workspace token. It uses credentials and CA certificates in
   memory. See [Development Workspaces](development-workspaces.md#credentials-and-certificates).
@@ -736,6 +737,10 @@ tritonDeployments:
   ingressEnabled: true
   baseDomain: models.example.com
 ```
+
+Admins can override this default in **Settings → Endpoints**, which shows whether
+the active value comes from **Helm / environment** or an **Admin override**.
+Select **Use Helm / environment default** to reset it.
 
 Enter `smollm`; the API creates `smollm.models.example.com`.
 Users always enter a short hostname, never a full domain or URL.

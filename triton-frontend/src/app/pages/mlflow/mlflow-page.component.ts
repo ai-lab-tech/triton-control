@@ -1,3 +1,4 @@
+import { S3ProfileLabelComponent } from "../../shared/s3-profile-label.component";
 import { Component, DestroyRef, OnDestroy, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { HttpClient } from "@angular/common/http";
@@ -49,6 +50,7 @@ type InstallMlflowRequest = {
   selector: "app-mlflow-page",
   standalone: true,
   imports: [
+    S3ProfileLabelComponent,
     FormsModule,
     MatButtonModule,
     MatCardModule,
@@ -73,7 +75,9 @@ export class MlflowPageComponent implements OnDestroy {
 
   installationName = "mlflow";
   s3ProfileId: number | null = null;
-  readonly s3Profiles = signal<{ id: number; name: string; bucket: string; prefix: string }[]>([]);
+  readonly s3Profiles = signal<
+    { id: number; name: string; used_by_mlflow?: boolean; bucket: string; prefix: string }[]
+  >([]);
 
   readonly loading = signal(true);
   readonly installing = signal(false);
@@ -251,9 +255,9 @@ export class MlflowPageComponent implements OnDestroy {
 
   private async loadS3Profiles(): Promise<void> {
     const profiles = await firstValueFrom(
-      this.http.get<{ id: number; name: string; bucket: string; prefix: string }[]>(
-        `${this.basePath}/api/s3-profiles`,
-      ),
+      this.http.get<
+        { id: number; name: string; used_by_mlflow?: boolean; bucket: string; prefix: string }[]
+      >(`${this.basePath}/api/s3-profiles`),
     );
     this.s3Profiles.set(profiles);
   }

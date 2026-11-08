@@ -10,7 +10,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api.registry_api import get_registry_settings, put_registry_settings
 from app.db.entities import RegistryConfigEntity, S3ProfileEntity, TritonInstanceEntity, UserEntity
-from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import s3_profiles as profile_repository
 from app.schemas import CreateDeploymentRequest, CreateS3ProfileRequest, UpdateS3ProfileRequest
 from app.schemas.development import CreateCodeServerRequest
@@ -118,15 +118,15 @@ class CentralSettingsTests(unittest.TestCase):
                 # Assert
                 self.assertEqual(error.exception.errors()[0]["loc"], ("dockerconfigjson",))
 
-    def test_member_choices_include_shared_and_owned_profiles_only(self):
+    def test_member_choices_include_all_global_profiles(self):
         # Arrange
         shared = self.profile()
         owned = self.profile(owner=2, name="owned")
-        self.profile(owner=3, name="private")
+        other = self.profile(owner=3, name="other")
         # Act
         choices = s3_profiles.list_profiles(self.session, self.member)
         # Assert
-        self.assertEqual({p.id for p in choices}, {shared.id, owned.id})
+        self.assertEqual({p.id for p in choices}, {shared.id, owned.id, other.id})
         self.assertTrue(all(p.secret_key == "" for p in choices))
 
     def test_admin_can_resolve_every_offered_profile(self):
@@ -151,17 +151,16 @@ class CentralSettingsTests(unittest.TestCase):
         self.assertEqual(len(resolved), 2)
         self.assertTrue(all(request.s3_secret_key == "storage-secret" for request in resolved))
 
-    def test_member_cannot_resolve_another_members_profile(self):
+    def test_member_can_resolve_another_creators_profile(self):
         # Arrange
         private = self.profile(owner=3)
         request = CreateDeploymentRequest(deployment_name="test", image="triton", s3_profile_id=private.id)
         # Act
-        with self.assertRaises(NotFoundError) as error:
-            resolve_profile_request(request, self.session, self.member)
+        result = resolve_profile_request(request, self.session, self.member)
         # Assert
-        self.assertIn("S3 profile not found", str(error.exception))
+        self.assertEqual(result.s3_secret_key, "storage-secret")
 
-    def test_admin_rename_checks_the_profile_owners_namespace(self):
+    def test_admin_rename_rejects_existing_global_name(self):
         # Arrange
         original = self.profile(owner=2, name="original")
         self.profile(owner=2, name="occupied")
@@ -172,16 +171,17 @@ class CentralSettingsTests(unittest.TestCase):
         self.assertEqual(profile_repository.get(self.session, original.id).name, "original")
         self.assertTrue(self.session.is_active)
 
-    def test_admin_rename_does_not_conflict_with_admins_own_profile(self):
+    def test_admin_rename_rejects_name_from_another_creator(self):
         # Arrange
         original = self.profile(owner=2, name="original")
         self.profile(owner=1, name="admin-name")
         # Act
-        result = s3_profiles.update_profile(
-            self.session, self.admin, original.id, UpdateS3ProfileRequest(name="admin-name")
-        )
+        with self.assertRaises(ConflictError):
+            s3_profiles.update_profile(
+                self.session, self.admin, original.id, UpdateS3ProfileRequest(name="admin-name")
+            )
         # Assert
-        self.assertEqual(result.name, "admin-name")
+        self.assertEqual(profile_repository.get(self.session, original.id).name, "original")
         self.assertEqual(profile_repository.get(self.session, original.id).owner_user_id, 2)
 
     def test_member_cannot_create_profile(self):

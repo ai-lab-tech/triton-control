@@ -36,6 +36,9 @@ class DeploymentAccessTests(unittest.TestCase):
                 "TRITON_DEPLOY_INGRESS_HTTPS_ENTRYPOINT": "websecure",
             },
         )
+        domain_override = patch("app.repositories.deployment_policy.get_base_domain_override", return_value=None)
+        domain_override.start()
+        self.addCleanup(domain_override.stop)
         self.env.start()
         self.addCleanup(self.env.stop)
         self.instance = SimpleNamespace(
@@ -607,6 +610,17 @@ class DeploymentAccessTests(unittest.TestCase):
         request = DeploymentAccessRequest(ingress_host="smollm", ingress_scheme="https")
         self.assertEqual(request.ingress_host, "smollm")
         self.assertEqual(request.ingress_scheme, "https")
+
+    def test_admin_domain_override_applies_to_ingress_and_tls(self):
+        # Arrange
+        with patch("app.repositories.deployment_policy.get_base_domain_override", return_value="admin.example.com"):
+            # Act
+            response = self.update(self.request(ingress_host="model"))
+        # Assert
+        ingress = self.net.create_namespaced_ingress.call_args.args[1]
+        self.assertEqual(ingress["spec"]["rules"][0]["host"], "model.admin.example.com")
+        self.assertEqual(ingress["spec"]["tls"][0]["hosts"], ["model.admin.example.com"])
+        self.assertEqual(response.ingress_host, "model.admin.example.com")
 
     def test_base_domain_applies_to_ingress_tls_and_response(self):
         with patch.dict(os.environ, {"TRITON_DEPLOY_BASE_DOMAIN": "models.example.com"}):

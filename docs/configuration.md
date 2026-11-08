@@ -71,7 +71,7 @@ password resets display progress while waiting for the bounded SMTP operation.
 | `TRITON_DEPLOY_CODE_SERVER_EXTENSION_DIR`                                          | No                                 | auto-detected                                                | Optional source directory for the bundled Triton Deploy extension used by Development workspaces. Set this for local backend runs if the repository extension directory is not found automatically. Use forward slashes in Windows `.env` files.                                |
 | `DEVELOPMENT_CODE_SERVER_VERSION` | No | `4.125.0` | Managed code-server runtime version. The native S3 Windows-style drag customization supports this pinned build and rejects incompatible workbench bundles. Custom images with code-server must provide the supported build and a writable bundle. |
 | `DEVELOPMENT_PROFILE_API_URL` | No | `http://triton-control:8000` outside Helm | Internal Triton Control backend base URL. Helm derives it from Service name, namespace and backend port. Passed as `TRITON_CONTROL_URL` to managed code-server workspaces and Argo container/script templates submitted through Triton Control. The MLflow deployment plugin uses it with `--target triton-control`. The MLflow server itself does not need this variable. |
-| `TRITON_CONTROL_TOKEN` | Automatically managed in code-server | Workspace Secret reference | Injected into managed code-server containers for the MLflow deployment plugin. Bound to the workspace and its current active member/admin owner; permits only owned profile-reference resolution and MLflow deployment operations. It cannot read S3 credentials or use unrelated APIs. Existing workspaces receive it through the MLflow tracking upgrade or recreation. Outside managed workspaces/workflows, supply an appropriate user token yourself. |
+| `TRITON_CONTROL_TOKEN` | Automatically managed in code-server | Workspace Secret reference | Injected into managed code-server containers for the MLflow deployment plugin. Bound to the workspace and its current active member/admin owner; permits only global profile-reference resolution and MLflow deployment operations. It cannot read S3 credentials or use unrelated APIs. Existing workspaces receive it through the MLflow tracking upgrade or recreation. Outside managed workspaces/workflows, supply an appropriate user token yourself. |
 | `DEVELOPMENT_HF_BUILDER_VERSION` | No | tested release | Overrides the verified `triton-hf-builder` release shipped with the backend. Helm: `development.hfBuilder.version`. |
 | `ARGO_WORKFLOWS_ENABLED`                                                           | No                                 | `false`                                                      | Enables the global Argo Workflows status and authenticated proxy. Helm sets this from `argoWorkflows.enabled`.                                                                                                                                                                  |
 | `ARGO_WORKFLOWS_SERVER_URL`                                                        | When enabled                       | Helm-derived Service URL                                     | Internal Argo Server base URL, normally port `2746`.                                                                                                                                                                                                                            |
@@ -79,7 +79,7 @@ password resets display progress while waiting for the bounded SMTP operation.
 | `ARGO_WORKFLOWS_SERVICE_NAME`                                                      | No                                 | Helm-derived                                                 | Argo Server Service name shown in status responses.                                                                                                                                                                                                                             |
 | `ARGO_WORKFLOWS_BASE_PATH`                                                         | No                                 | `/api/workflows/proxy/`                                      | Browser-facing proxy path; must match Argo Server `baseHref`.                                                                                                                                                                                                                   |
 | `TRITON_DEPLOY_INGRESS_CLASS` | No | `traefik` | Administrator-selected IngressClass for managed deployments. Must use `traefik.io/ingress-controller`; users cannot override it. |
-| `TRITON_DEPLOY_BASE_DOMAIN` | No | unset | Appended centrally to short model hostnames, e.g. `models.example.com`. No wildcard or URL. Users always enter a short hostname without a domain. Empty uses that name unchanged. |
+| `TRITON_DEPLOY_BASE_DOMAIN` | No | unset | Default appended to short model hostnames, e.g. `models.example.com`. Admins can override it in Settings → Endpoints or reset to the Helm/environment default. No wildcard or URL. Empty uses the short hostname unchanged. Domain changes apply to new or renamed endpoints; existing hostnames remain unchanged. |
 | `TRITON_DEPLOY_INGRESS_ENABLED` | No | `true` | Allow model Ingress creation and edits. When false, only cluster-only access can be saved; existing endpoints remain active until explicitly disabled. Independent of the control UI Ingress. |
 | `TRITON_DEPLOY_ALLOW_HTTP` | No | `false` | Default permission for new HTTP model endpoints. Settings → Endpoints can override this or reset to this default. Basic authentication still requires HTTPS. |
 | `TRITON_DEPLOY_INGRESS_HTTP_ENTRYPOINT` | No | `web` | Traefik entrypoint for HTTP deployment routes. |
@@ -209,3 +209,15 @@ plain HTTP inside the cluster behind the ingress controller.
 
 Set `SERVER_HTTPS_ENABLED=true` only when Uvicorn itself terminates TLS and can
 read `TLS_KEY_FILE` and `TLS_CERT_FILE`.
+
+### Existing S3 profile databases
+
+On backend startup, existing `s3_profiles` tables receive a unique index on
+`name`, replacing the former per-creator uniqueness constraint. Profile IDs,
+credentials, and links remain unchanged. Repeated startups are safe.
+
+If profiles from different creators have the same name, startup stops with an
+error listing the conflicting names. No profiles are automatically renamed or
+deleted. Assign distinct names to those rows in `s3_profiles`, then restart the
+backend. Update any workflow annotations that select a renamed profile by name;
+references using profile IDs remain valid.
