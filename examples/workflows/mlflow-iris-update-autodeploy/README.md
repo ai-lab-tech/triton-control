@@ -14,7 +14,8 @@ instead of extending a previous test model to versions 3 or 4. A failed deployme
 leaves the already logged model available for inspection.
 
 Use the included [train.py](train.py) and [workflow.yaml](workflow.yaml).
-The local plugin version remains `0.4.5.dev3`; nothing is published to PyPI.
+The workflow installs the published `mlflow-triton==0.4.5` and
+`mlflow-triton-control==0.4.5` wheels directly from PyPI.
 
 ## Prepare
 
@@ -33,21 +34,9 @@ The local plugin version remains `0.4.5.dev3`; nothing is published to PyPI.
    `workflows/mlflow-iris-update-autodeploy/train.py`. Set the workflow's `s3-script-key`
    to that full S3 key, including any profile prefix.
 
-5. Copy both locally built wheels from this repository's
-   `dist/mlflow-triton-0.4.5.dev3/` into the same code-server workspace. Upload them
-   using the same S3 profile as `train.py`:
-
-   | Local wheel | S3 key |
-   | --- | --- |
-   | `mlflow_triton-0.4.5.dev3-py3-none-any.whl` | `workflows/mlflow-iris-update-autodeploy/mlflow_triton-0.4.5.dev3-py3-none-any.whl` |
-   | `mlflow_triton_control-0.4.5.dev3-py3-none-any.whl` | `workflows/mlflow-iris-update-autodeploy/mlflow_triton_control-0.4.5.dev3-py3-none-any.whl` |
-
-The workflow downloads the script and both wheels through Argo S3 input artifacts.
-It installs the plugin **from those wheel files**, not from PyPI. Both are local
-`0.4.5.dev3` builds; nothing was published to PyPI. Ordinary dependencies such as
-MLflow and scikit-learn are still installed from PyPI. Checksums and source build
-information are included next to the wheels. The `dist/` directory is ignored by
-Git, so transfer these local build files separately when using another checkout.
+The workflow downloads `train.py` through an Argo S3 input artifact and installs
+both plugin wheels directly from PyPI. No plugin files need to be uploaded to S3.
+MLflow and the training dependencies are also installed from PyPI.
 
 ## Run through Argo
 
@@ -60,7 +49,6 @@ and edit these settings:
 | Parameter `deployment-name` | `iris-classifier-updated`; choose an unused deployment name |
 | Optional annotation `triton-control.ai/mlflow-s3-profile-name` | Only needed to select a profile when multiple profiles are linked |
 | `s3-script-key` | Uploaded training script's full S3 key |
-| `s3-core-wheel-key`, `s3-control-wheel-key` | Uploaded wheels' full S3 keys, including any profile prefix |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
 With exactly one of your S3 profiles linked under **Workflows → Configure S3
@@ -83,7 +71,7 @@ Open **Triton Control → Workflows → Submit New Workflow → Edit using full 
 Paste the entire edited `workflow.yaml`, including `spec.arguments.parameters`,
 then create the workflow.
 
-The workflow has one **train** node that installs the local plugin wheels and
+The workflow has one **train** node that installs the published plugin wheels from PyPI and
 training dependencies, then runs `train.py`. The script logs the update first and
 only then deploys the returned model URI. Deployment happens inside that
 script, not in a separate Argo step.
@@ -125,16 +113,16 @@ setting. Existing models from earlier tests are not changed.
 
 When creating the **Development** workspace, leave **Install MLflow** enabled.
 The workspace supplies the MLflow and Triton Control connection settings. Install
-the two local wheels explicitly so this example uses the update-capable plugin
-instead of the workspace's default release.
+the pinned plugin versions from PyPI so it uses the same versions as the workflow.
 
-In the code-server terminal, install both local wheels and this example's training dependencies:
+In the code-server terminal, install both plugins from PyPI and this example's training dependencies:
 
 ```bash
 cd /workspace/mlflow-iris-update-autodeploy
-python3 -m pip install --user \
-  ./mlflow_triton-0.4.5.dev3-py3-none-any.whl \
-  ./mlflow_triton_control-0.4.5.dev3-py3-none-any.whl \
+python3 -m pip install --user --index-url https://pypi.org/simple \
+  --only-binary=mlflow-triton,mlflow-triton-control \
+  "mlflow-triton==0.4.5" \
+  "mlflow-triton-control==0.4.5" \
   "mlflow==3.14.0" "numpy==2.2.6" "pandas==2.3.3" \
   "scikit-learn==1.7.2" "cloudpickle==3.1.2"
 ```

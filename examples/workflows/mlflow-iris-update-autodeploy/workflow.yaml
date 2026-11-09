@@ -14,10 +14,6 @@ spec:
     parameters:
     - name: s3-script-key
       value: workflows/mlflow-iris-update-autodeploy/train.py
-    - name: s3-core-wheel-key
-      value: workflows/mlflow-iris-update-autodeploy/mlflow_triton-0.4.5.dev3-py3-none-any.whl
-    - name: s3-control-wheel-key
-      value: workflows/mlflow-iris-update-autodeploy/mlflow_triton_control-0.4.5.dev3-py3-none-any.whl
     - name: deployment-name
       value: iris-classifier-updated
     - name: triton-image
@@ -32,18 +28,6 @@ spec:
           none: {}
         s3:
           key: '{{workflow.parameters.s3-script-key}}'
-      - name: core-plugin-wheel
-        path: /tmp/mlflow_triton-0.4.5.dev3-py3-none-any.whl
-        archive:
-          none: {}
-        s3:
-          key: '{{workflow.parameters.s3-core-wheel-key}}'
-      - name: control-plugin-wheel
-        path: /tmp/mlflow_triton_control-0.4.5.dev3-py3-none-any.whl
-        archive:
-          none: {}
-        s3:
-          key: '{{workflow.parameters.s3-control-wheel-key}}'
     container:
       image: python:3.12-slim
       imagePullPolicy: IfNotPresent
@@ -53,9 +37,9 @@ spec:
       args:
       - |
         export HOME=/tmp
-        python -m pip install --timeout 120 --retries 10 --no-cache-dir --index-url https://pypi.org/simple --target /tmp/python-packages \
-          /tmp/mlflow_triton-0.4.5.dev3-py3-none-any.whl \
-          /tmp/mlflow_triton_control-0.4.5.dev3-py3-none-any.whl \
+        python -m pip install --timeout 120 --retries 10 --no-cache-dir --index-url https://pypi.org/simple --only-binary=mlflow-triton,mlflow-triton-control --target /tmp/python-packages \
+          "mlflow-triton==0.4.5" \
+          "mlflow-triton-control==0.4.5" \
           "mlflow==3.14.0" \
           "numpy==2.2.6" "pandas==2.3.3" "scikit-learn==1.7.2" "cloudpickle==3.1.2"
         export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"

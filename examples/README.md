@@ -97,7 +97,7 @@ workflows/
 | `s3_upload/local-model-upload-s3-polling` | Upload a model to an existing polling instance | `python` |
 | `workflows/sklearn-iris-training` | Run scikit-learn training through Argo with S3-backed source and result artifacts | Training workflow |
 | `workflows/mlflow-iris-autodeploy` | Train Iris, generate its Triton adapter, and deploy from one Python script | MLflow and Python workflow |
-| `workflows/mlflow-iris-update-autodeploy` | Train, log, retrain and update Iris using local plugin wheels, then deploy version 2 | MLflow update workflow |
+| `workflows/mlflow-iris-update-autodeploy` | Train, log, retrain and update Iris using plugin wheels from PyPI, then deploy version 2 | MLflow update workflow |
 
 ## Runtime Notes
 
