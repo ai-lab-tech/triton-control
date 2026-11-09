@@ -107,8 +107,10 @@ def init_db() -> None:
     _migrate_oidc_config_table()
     _migrate_perf_analyzer_table()
     _migrate_s3_profiles_table()
+    _migrate_s3_profile_name_uniqueness()
     _migrate_mlflow_table()
     _migrate_workflow_s3_profile_links()
+    _migrate_deployment_policy_table()
 
 
 def _migrate_users_account_lifecycle() -> None:
@@ -416,11 +418,32 @@ def _migrate_s3_profiles_table() -> None:
                     ca_certificate TEXT NOT NULL DEFAULT '',
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    CONSTRAINT uq_s3_profile_owner_name UNIQUE (owner_user_id, name)
+                    CONSTRAINT uq_s3_profile_name UNIQUE (name)
                 )
                 """
             )
         )
+
+
+def _migrate_s3_profile_name_uniqueness() -> None:
+    """Enforce global names on existing tables without rewriting profile data."""
+    with engine.begin() as conn:
+        if conn.dialect.name == "postgresql":
+            # Keep concurrent startup processes and writes out until the index exists.
+            conn.execute(text("LOCK TABLE s3_profiles IN ACCESS EXCLUSIVE MODE"))
+        duplicates = conn.execute(text(
+            "SELECT name FROM s3_profiles GROUP BY name HAVING COUNT(*) > 1 ORDER BY name"
+        )).scalars().all()
+        if duplicates:
+            names = ", ".join(repr(name) for name in duplicates)
+            raise RuntimeError(
+                "Cannot enforce globally unique S3 profile names; duplicate names: "
+                f"{names}. Assign distinct names to these profiles in s3_profiles and restart. "
+                "No profiles were renamed or deleted."
+            )
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_s3_profile_name ON s3_profiles (name)"))
+        if conn.dialect.name == "postgresql":
+            conn.execute(text("ALTER TABLE s3_profiles DROP CONSTRAINT IF EXISTS uq_s3_profile_owner_name"))
 
 
 def _migrate_mlflow_table() -> None:
@@ -469,3 +492,18 @@ def _migrate_workflow_s3_profile_links() -> None:
             CREATE INDEX IF NOT EXISTS ix_workflow_s3_credentials_s3_profile_id
             ON workflow_s3_credentials (s3_profile_id)
         """))
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_workflow_s3_credential_owner_name
+            ON workflow_s3_credentials (created_by_user_id, name)
+        """))
+        conn.execute(text("""
+            ALTER TABLE workflow_s3_credentials DROP CONSTRAINT IF EXISTS uq_workflow_s3_credential_name
+        """))
+
+
+def _migrate_deployment_policy_table() -> None:
+    """Preserve existing HTTP policy while adding the optional base domain override."""
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE deployment_policy ADD COLUMN IF NOT EXISTS base_domain VARCHAR"
+        ))

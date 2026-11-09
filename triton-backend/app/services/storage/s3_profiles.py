@@ -1,4 +1,4 @@
-"""Reusable S3 deployment profiles owned by users."""
+"""Global, admin-managed S3 deployment profiles."""
 
 from __future__ import annotations
 
@@ -20,16 +20,25 @@ from app.services.workflows.credentials import sync_profile_credentials
 
 def list_profiles(session: Session, claims: dict[str, Any]) -> list[S3ProfileDTO]:
     require_member_or_admin(claims)
-    owner = require_user_entity(session, claims)
-    rows = s3_profiles.list_for_owner(session, owner.id or 0)
-    return [_to_dto(profile) for profile in rows]
+    require_user_entity(session, claims)
+    return profile_dtos(session)
+
+
+def profile_dtos(session: Session, *, include_secret: bool = False) -> list[S3ProfileDTO]:
+    """Mark the current MLflow artifact profile without changing its stored name."""
+    installation = mlflow.get(session)
+    profile_id = installation.s3_profile_id if installation else None
+    return [
+        _to_dto(profile, include_secret=include_secret, used_by_mlflow=profile.id == profile_id)
+        for profile in s3_profiles.list_all(session)
+    ]
 
 
 def resolve_profile_reference(session: Session, claims: dict[str, Any], name: str) -> dict[str, int | str]:
     """Resolve a visible profile name without exposing any storage credentials."""
     require_member_or_admin(claims)
-    owner = require_user_entity(session, claims)
-    profiles = s3_profiles.list_visible_by_name(session, owner.id or 0, _clean_required(name, "Profile name"))
+    require_user_entity(session, claims)
+    profiles = s3_profiles.list_by_name(session, _clean_required(name, "Profile name"))
     if not profiles:
         raise NotFoundError("S3 profile not found")
     if len(profiles) > 1:
@@ -49,7 +58,7 @@ def create_profile(
     owner = require_user_entity(session, claims)
     owner_id = owner.id or 0
     name = _clean_required(request.name, "Profile name")
-    if s3_profiles.find_by_name_for_owner(session, owner_id, name):
+    if s3_profiles.list_by_name(session, name):
         raise ConflictError("S3 profile name already exists")
     secret = _clean_required(request.secret_key, "S3 secret key")
     profile = s3_profiles.create(
@@ -81,10 +90,11 @@ def update_profile(
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
+    linked_credentials = workflow_s3_credentials.list_for_profile(session, profile_id)
     if request.name is not None:
         name = _clean_required(request.name, "Profile name")
-        existing = s3_profiles.find_by_name_for_owner(session, profile.owner_user_id, name)
-        if existing and existing.id != profile.id:
+        existing = s3_profiles.list_by_name(session, name)
+        if any(row.id != profile.id for row in existing):
             raise ConflictError("S3 profile name already exists")
         profile.name = name
     if request.endpoint is not None:
@@ -107,7 +117,7 @@ def update_profile(
         profile.ca_certificate = request.ca_certificate.strip()
     profile.updated_at = datetime.utcnow()
     # Persist pending status with the profile, so interrupted syncs remain visible.
-    for linked in workflow_s3_credentials.list_for_profile(session, profile_id):
+    for linked in linked_credentials:
         linked.sync_error = "Profile updated; S3 configuration synchronization pending."
         session.add(linked)
     profile = s3_profiles.save(session, profile)
@@ -135,10 +145,13 @@ def _get_profile(session: Session, profile_id: int) -> S3ProfileEntity:
     return profile
 
 
-def _to_dto(profile: S3ProfileEntity, *, include_secret: bool = False) -> S3ProfileDTO:
+def _to_dto(
+    profile: S3ProfileEntity, *, include_secret: bool = False, used_by_mlflow: bool = False,
+) -> S3ProfileDTO:
     return S3ProfileDTO(
         id=profile.id or 0,
         name=profile.name,
+        used_by_mlflow=used_by_mlflow,
         endpoint=profile.endpoint,
         bucket=profile.bucket,
         region=profile.region or "us-east-1",

@@ -76,20 +76,55 @@ describe("SettingsPageComponent", () => {
     };
   });
 
-  it("saves an administrator HTTP override and can reset to the deployment default", async () => {
+  for (const [choice, expected] of [
+    ["allow", true],
+    ["default", null],
+  ] as const) {
+    it(`saves the ${choice} HTTP policy choice`, async () => {
+      // Arrange
+      const fixture = TestBed.createComponent(SettingsPageComponent);
+      await fixture.whenStable();
+      fixture.componentInstance.httpPolicyChoice = choice;
+      const api = TestBed.inject(DeploymentsService);
+      // Act
+      await fixture.componentInstance.saveDeploymentPolicy();
+      // Assert
+      expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledOnceWith({
+        allow_http: expected,
+        base_domain: null,
+      });
+    });
+  }
+
+  it("saves a trimmed custom model base domain", async () => {
+    // Arrange
     const fixture = TestBed.createComponent(SettingsPageComponent);
     await fixture.whenStable();
-    const component = fixture.componentInstance;
-    component.httpPolicyChoice = "allow";
-    await component.saveDeploymentPolicy();
+    fixture.componentInstance.baseDomainChoice = "custom";
+    fixture.componentInstance.modelBaseDomain = " models.example.com ";
     const api = TestBed.inject(DeploymentsService);
-    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledWith({
-      allow_http: true,
-    });
-    component.httpPolicyChoice = "default";
-    await component.saveDeploymentPolicy();
-    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledWith({
+    // Act
+    await fixture.componentInstance.saveDeploymentPolicy();
+    // Assert
+    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledOnceWith({
       allow_http: null,
+      base_domain: "models.example.com",
+    });
+  });
+
+  it("restores the Helm domain despite a previously entered custom value", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(SettingsPageComponent);
+    await fixture.whenStable();
+    fixture.componentInstance.baseDomainChoice = "default";
+    fixture.componentInstance.modelBaseDomain = "models.example.com";
+    const api = TestBed.inject(DeploymentsService);
+    // Act
+    await fixture.componentInstance.saveDeploymentPolicy();
+    // Assert
+    expect(api.updateDeploymentPolicyApiDeploymentsPolicyPut).toHaveBeenCalledOnceWith({
+      allow_http: null,
+      base_domain: null,
     });
   });
 

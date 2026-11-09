@@ -54,7 +54,7 @@ def prepare_submission(path: str, body: bytes, claims: dict[str, Any]) -> tuple[
         if isinstance(reference, dict):
             selected = next((row for row in linked if row.secret_name == reference.get("configMap")), None)
             if selected and selected.s3_profile_id:
-                profile = s3_profiles.find_for_owner(session, owner_id or 0, selected.s3_profile_id)
+                profile = s3_profiles.get(session, selected.s3_profile_id)
                 profile_name = profile.name if profile else None
         identity = {
             "email": user.email, "name": user.name, "role": user.role,
@@ -132,7 +132,7 @@ def _needs_artifact_repository(value: Any) -> bool:
 def _select_artifact_repository(
     workflow: dict[str, Any], session: Session, namespace: str, owner_id: int,
 ) -> None:
-    """Select only a repository linked to a profile owned by the submitter."""
+    """Select a submitter-owned repository linked to a global S3 profile."""
     metadata = workflow.get("metadata") or {}
     annotations = metadata.get("annotations") or {}
     spec = workflow.get("spec") or {}
@@ -146,7 +146,10 @@ def _select_artifact_repository(
         raise BadRequestError("Specify exactly one MLflow S3 profile name or ID")
     profile = None
     if profile_name:
-        profile = s3_profiles.find_by_name_for_owner(session, owner_id, profile_name)
+        profiles = s3_profiles.list_by_name(session, profile_name)
+        if len(profiles) > 1:
+            raise BadRequestError("S3 profile name is ambiguous; select a profile by ID or rename duplicate profiles")
+        profile = profiles[0] if profiles else None
         if profile is None:
             raise NotFoundError("S3 profile not found")
     elif profile_id_raw:
@@ -154,14 +157,14 @@ def _select_artifact_repository(
             profile_id = int(profile_id_raw)
         except (TypeError, ValueError) as exc:
             raise BadRequestError("A valid MLflow S3 profile ID is required") from exc
-        profile = s3_profiles.find_for_owner(session, owner_id, profile_id)
+        profile = s3_profiles.get(session, profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
     linked = [
         row for row in workflow_s3_credentials.list_all(session)
         if row.namespace == namespace and row.created_by_user_id == owner_id
         and row.s3_profile_id is not None
-        and s3_profiles.find_for_owner(session, owner_id, row.s3_profile_id) is not None
+        and s3_profiles.get(session, row.s3_profile_id) is not None
         and (profile is None or row.s3_profile_id == profile.id)
     ]
     if not linked:

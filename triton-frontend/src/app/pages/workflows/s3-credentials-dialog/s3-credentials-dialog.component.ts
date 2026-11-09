@@ -1,3 +1,4 @@
+import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { Component, inject, signal } from "@angular/core";
 import { DatePipe } from "@angular/common";
 import { MatSelectModule } from "@angular/material/select";
@@ -29,12 +30,20 @@ type WorkflowS3CredentialDTO = {
   last_synced_at?: string | null;
 };
 
-type ProfileChoice = { id: number; name: string; endpoint: string; bucket: string; region: string };
+type ProfileChoice = {
+  id: number;
+  name: string;
+  used_by_mlflow?: boolean;
+  endpoint: string;
+  bucket: string;
+  region: string;
+};
 
 @Component({
   selector: "app-s3-credentials-dialog",
   standalone: true,
   imports: [
+    S3ProfileLabelComponent,
     FormsModule,
     MatSelectModule,
     DatePipe,
@@ -74,6 +83,10 @@ export class S3CredentialsDialogComponent {
 
   close(): void {
     this.dialogRef.close();
+  }
+
+  isMlflowProfile(profileId: number | null | undefined): boolean {
+    return this.profiles().some((profile) => profile.id === profileId && profile.used_by_mlflow);
   }
 
   selectedProfile(): ProfileChoice | undefined {

@@ -21,7 +21,7 @@ class ProfileSession {
     }
     const selected = await vscode.window.showQuickPick(profiles.map((profile) => ({
       label: profile.name,
-      description: profile.bucket,
+      description: profileApi.profileDescription(profile),
       profileId: profile.id,
     })), { title: "Choose S3 profile", placeHolder: "Select a saved S3 profile" });
     if (!selected) return;
@@ -117,6 +117,7 @@ class S3Browser {
         title: "Load More",
         arguments: [node],
       };
+    if (node.root) item.description = node.description;
     if (node.kind === "file")
       item.description = `${node.size.toLocaleString()} bytes`;
     if (node.bucket)
@@ -131,7 +132,8 @@ class S3Browser {
       return profiles.filter((p) => !this.session.selectedProfileId || p.id === this.session.selectedProfileId).map((p) => ({
         kind: "folder",
         root: true,
-        label: `${p.name} · ${p.bucket}`,
+        label: p.name,
+        description: profileApi.profileDescription(p),
         profileId: p.id,
         bucket: p.bucket,
         prefix: p.prefix ? `${p.prefix.replace(/^\/+|\/+$/g, "")}/` : "",
@@ -571,6 +573,22 @@ function registerS3Browser(context) {
   const provider = new S3FileSystem((id) => browser.profile(id));
   context.subscriptions.push(browser, provider,
     vscode.workspace.registerFileSystemProvider(SCHEME, provider, { isCaseSensitive: true }));
+  context.subscriptions.push(vscode.window.registerFileDecorationProvider({
+    onDidChangeFileDecorations: browser.onDidChangeTreeData,
+    async provideFileDecoration(uri) {
+      if (uri.scheme !== SCHEME || !(vscode.workspace.workspaceFolders || []).some(
+        (folder) => folder.uri.toString() === uri.toString(),
+      )) return;
+      const match = /^(?:profile|endpoint)-(\d+)$/.exec(uri.authority);
+      if (!match) return;
+      try {
+        const profiles = await browser.session.profiles();
+        if (profiles.some((profile) => profile.id === Number(match[1]) && profile.used_by_mlflow)) {
+          return { badge: "ML", tooltip: "Usage: MLflow artifact store" };
+        }
+      } catch { /* Profile refresh reports authentication and connection errors. */ }
+    },
+  }));
   const updateConnectionContext = () => vscode.commands.executeCommand("setContext", "tritonControl.s3Connected",
     (vscode.workspace.workspaceFolders || []).some((folder) => folder.uri.scheme === SCHEME));
   updateConnectionContext();
@@ -594,7 +612,7 @@ function registerS3Browser(context) {
     }
     if (choose) {
       const choice = await vscode.window.showQuickPick(profiles.map((profile) => ({
-        label: profile.name, description: profile.bucket, profile,
+        label: profile.name, description: profileApi.profileDescription(profile), profile,
       })), { title: "Choose S3 profile" });
       if (!choice) return;
       profiles = [choice.profile];
@@ -666,7 +684,7 @@ function registerS3Browser(context) {
     const roots = (vscode.workspace.workspaceFolders || []).filter((folder) => folder.uri.scheme === SCHEME);
     if (roots.length === 1) return selectedProfile(roots[0].uri);
     const profiles = await browser.session.profiles();
-    return (await vscode.window.showQuickPick(profiles.map((profile) => ({ label: profile.name, description: profile.bucket, profile })),
+    return (await vscode.window.showQuickPick(profiles.map((profile) => ({ label: profile.name, description: profileApi.profileDescription(profile), profile })),
       { title: "Choose S3 profile" }))?.profile;
   }
   function requireEndpointProfile(profile) {
@@ -712,7 +730,7 @@ function registerS3Browser(context) {
   });
   command("tritonControl.connectS3", () => mountProfiles(true));
   command("tritonControl.switchS3Profile", () => mountProfiles(true));
-  command("tritonControl.refreshS3", () => mountProfiles(false, true));
+  command("tritonControl.refreshS3", () => { browser.refresh(); return mountProfiles(false, true); });
   command("tritonControl.disconnectS3", async () => {
     mountGeneration++;
     await context.globalState.update("s3.disconnected", true);

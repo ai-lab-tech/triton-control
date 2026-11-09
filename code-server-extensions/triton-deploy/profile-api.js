@@ -53,4 +53,8 @@ function requestJson(endpoint, path, { token, body } = {}) {
     req.end(payload);
   });
 }
-module.exports = { apiUrl, requestJson };
+function profileDescription(profile) {
+  return [profile.bucket, profile.used_by_mlflow ? "Usage: MLflow artifact store" : ""].filter(Boolean).join(" · ");
+}
+
+module.exports = { apiUrl, requestJson, profileDescription };

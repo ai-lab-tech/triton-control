@@ -63,9 +63,18 @@
               [(ngModel)]="selectedS3ProfileId"
               (selectionChange)="s3ProfileChanged()"
             >
+              <mat-select-trigger>
+                @for (profile of s3Profiles(); track profile.id) {
+                  @if (profile.id.toString() === selectedS3ProfileId) {
+                    <app-s3-profile-label [profile]="profile" />
+                  }
+                }
+              </mat-select-trigger>
               <mat-option value="">Select an S3 profile</mat-option>
               @for (profile of s3Profiles(); track profile.id) {
-                <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+                <mat-option [value]="profile.id.toString()"
+                  ><app-s3-profile-label [profile]="profile"
+                /></mat-option>
               }
             </mat-select>
             <mat-hint>Choose an admin-configured S3 profile.</mat-hint>

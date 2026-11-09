@@ -646,68 +646,118 @@
       </div>
     </mat-tab>
     <mat-tab label="Endpoints">
-      <mat-card>
-        <mat-card-header><mat-card-title>HTTP endpoints</mat-card-title></mat-card-header>
+      <mat-card class="card endpoint-card">
+        <mat-card-header><mat-card-title>Model endpoints</mat-card-title></mat-card-header>
         <mat-card-content>
-          <p>Control whether users may expose model deployments over unencrypted HTTP.</p>
           @if (deploymentPolicy(); as policy) {
-            <p>
-              Model base domain:
-              {{ policy.base_domain || "Not configured (short hostnames used unchanged)" }}
-            </p>
-            <p>
-              <strong>Model Ingress:</strong>
-              {{ policy.ingress_enabled ? "Enabled" : "Disabled" }} by deployment configuration.
-            </p>
+            <div class="endpoint-status">
+              <span class="endpoint-badge" [class.disabled]="!policy.ingress_enabled">
+                Ingress {{ policy.ingress_enabled ? "enabled" : "disabled" }}
+              </span>
+              <span class="endpoint-source">Helm / environment</span>
+            </div>
             @if (!policy.ingress_enabled) {
-              <p>
-                HTTP permission does not enable model Ingress. Configure
-                tritonDeployments.ingressEnabled in Helm to allow external endpoints.
+              <p class="endpoint-note">
+                Enable model Ingress in Helm to expose external endpoints.
               </p>
             }
-            <p>
-              <strong>Effective policy:</strong>
-              {{ policy.allow_http ? "HTTP and HTTPS allowed" : "HTTPS only" }}
-            </p>
-            <p>
-              Source:
-              {{
-                policy.source === "admin" ? "Administrator override" : "Deployment configuration"
-              }}. Deployment default:
-              {{ policy.default_allow_http ? "HTTP allowed" : "HTTPS only" }}.
-            </p>
-            <mat-form-field appearance="outline">
-              <mat-label>Allow HTTP endpoints</mat-label>
-              <mat-select [(ngModel)]="httpPolicyChoice" [disabled]="policyBusy()">
-                <mat-option value="default">Use deployment default</mat-option>
-                <mat-option value="deny">No — HTTPS only</mat-option>
-                <mat-option value="allow">Yes — allow HTTP</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <p>
-              Existing HTTP endpoints keep working. Disabling HTTP blocks new HTTP endpoints and
-              HTTP hostname changes. Basic authentication always requires HTTPS.
-            </p>
-            <button
-              mat-flat-button
-              type="button"
-              (click)="saveDeploymentPolicy()"
-              [disabled]="policyBusy()"
-            >
-              Save policy
-            </button>
+            <div class="endpoint-fields">
+              <section class="endpoint-setting" aria-labelledby="base-domain-heading">
+                <h3 id="base-domain-heading">Model base domain</h3>
+                <div class="endpoint-current">
+                  <strong>{{ policy.base_domain || "Not configured" }}</strong>
+                  <span class="endpoint-source">{{
+                    policy.base_domain_source === "admin" ? "Admin override" : "Helm / environment"
+                  }}</span>
+                </div>
+                <mat-form-field appearance="outline">
+                  <mat-label>Domain configuration</mat-label>
+                  <mat-select [(ngModel)]="baseDomainChoice" [disabled]="policyBusy()">
+                    <mat-option value="default">Use Helm / environment default</mat-option>
+                    <mat-option value="custom">Set in Triton Control</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                @if (baseDomainChoice === "custom") {
+                  <mat-form-field appearance="outline">
+                    <mat-label>Model base domain</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="modelBaseDomain"
+                      [disabled]="policyBusy()"
+                      placeholder="models.example.com"
+                    />
+                    <mat-hint>Domain only; leave empty to use short hostnames.</mat-hint>
+                  </mat-form-field>
+                } @else {
+                  <p class="endpoint-note">
+                    Default: {{ policy.default_base_domain || "Not configured" }}
+                  </p>
+                }
+              </section>
+              <section class="endpoint-setting" aria-labelledby="http-policy-heading">
+                <h3 id="http-policy-heading">HTTP access</h3>
+                <div class="endpoint-current">
+                  <strong>{{ policy.allow_http ? "HTTP and HTTPS" : "HTTPS only" }}</strong>
+                  <span class="endpoint-source">{{
+                    policy.source === "admin" ? "Admin override" : "Helm / environment"
+                  }}</span>
+                </div>
+                <mat-form-field appearance="outline">
+                  <mat-label>Allow HTTP endpoints</mat-label>
+                  <mat-select [(ngModel)]="httpPolicyChoice" [disabled]="policyBusy()">
+                    <mat-option value="default">Use Helm / environment default</mat-option>
+                    <mat-option value="deny">No — HTTPS only</mat-option>
+                    <mat-option value="allow">Yes — allow HTTP</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                <p class="endpoint-note">
+                  Default: {{ policy.default_allow_http ? "HTTP and HTTPS" : "HTTPS only" }}
+                </p>
+              </section>
+            </div>
+            <details class="endpoint-details">
+              <summary>How endpoint settings apply</summary>
+              <p>
+                Domain changes apply to new or renamed endpoints. Existing endpoints keep their
+                hostname and protocol. Basic authentication requires HTTPS.
+              </p>
+              <p>
+                Helm defaults: <code>tritonDeployments.baseDomain</code> and
+                <code>tritonDeployments.allowHttp</code>. Environment:
+                <code>TRITON_DEPLOY_BASE_DOMAIN</code> and <code>TRITON_DEPLOY_ALLOW_HTTP</code>.
+              </p>
+            </details>
+            <div class="actions">
+              <button
+                mat-flat-button
+                class="endpoint-save"
+                type="button"
+                (click)="saveDeploymentPolicy()"
+                [disabled]="policyBusy()"
+              >
+                <mat-icon>save</mat-icon>
+                {{ policyBusy() ? "Saving…" : "Save endpoint settings" }}
+              </button>
+            </div>
           } @else {
             <button
-              mat-button
+              mat-stroked-button
               type="button"
               (click)="loadDeploymentPolicy()"
               [disabled]="policyBusy()"
             >
-              Reload policy
+              {{ policyBusy() ? "Loading…" : "Reload settings" }}
             </button>
           }
           @if (policyMessage()) {
-            <p role="status">{{ policyMessage() }}</p>
+            <p
+              class="settings-message"
+              [class.success]="policyMessageTone() === 'success'"
+              [class.error]="policyMessageTone() === 'error'"
+              role="status"
+            >
+              {{ policyMessage() }}
+            </p>
           }
         </mat-card-content>
       </mat-card>

@@ -1,4 +1,4 @@
-"""Resolve a user-owned S3 profile into the existing deployment request shape."""
+"""Resolve a global S3 profile into the existing deployment request shape."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def resolve_profile_request(
     request: CreateDeploymentRequest, session: Session, claims: dict[str, Any]
 ) -> CreateDeploymentRequest:
     if claims.get("token_use") in {"workspace_deployment", "workflow_deployment"} and request.s3_profile_id is None:
-        raise BadRequestError("Managed deployment credentials require an owned S3 profile")
+        raise BadRequestError("Managed deployment credentials require an S3 profile")
     if claims.get("token_use") == "mlflow_workflow":
         if (
             request.s3_profile_id != claims.get("allowed_s3_profile_id")
@@ -31,8 +31,8 @@ def resolve_profile_request(
     if request.s3_profile_id is None:
         raise BadRequestError("Select an admin-configured S3 profile")
 
-    user = require_user_entity(session, claims)
-    profile = s3_profiles.find_for_owner(session, user.id or 0, request.s3_profile_id)
+    require_user_entity(session, claims)
+    profile = s3_profiles.get(session, request.s3_profile_id)
     if profile is None:
         raise NotFoundError("S3 profile not found")
 

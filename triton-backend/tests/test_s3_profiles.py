@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api import workflows_api
-from app.db.entities import S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
+from app.db.entities import MlflowEntity, S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.schemas import CreateS3ProfileRequest, UpdateS3ProfileRequest
 from app.schemas.workflows import CreateWorkflowS3CredentialRequest
@@ -201,7 +201,7 @@ class S3ProfileTests(unittest.TestCase):
                 self.assertEqual(base64.b64decode(body.data["secret-access-key"]), b"retry-secret")
                 with self.assertRaises(ConflictError):
                     s3_profiles.delete_profile(session, self._claims(), profile.id)
-                credentials.delete_credential(session, created.id)
+                credentials.delete_credential(session, created.id, self._claims())
                 core.delete_namespaced_config_map.assert_called_once()
                 self.assertEqual(s3_profiles.delete_profile(session, self._claims(), profile.id), {"status": "deleted"})
 
@@ -215,27 +215,68 @@ class S3ProfileTests(unittest.TestCase):
         session.commit()
         return owned, foreign, {"user_id": 7, "email": "member@example.com", "role": "member"}
 
-    def test_ProfileChoices_MemberReceivesOwnedMetadataOnly(self) -> None:
+    def test_ProfileChoices_MemberReceivesGlobalMetadata(self) -> None:
         # Arrange
         with self._session() as session:
-            owned, _, claims = self._member_profiles(session)
+            owned, foreign, claims = self._member_profiles(session)
             # Act
             choices = workflows_api.list_s3_profile_choices(session=session, claims=claims)
             # Assert
-            self.assertEqual([p.id for p in choices], [owned.id])
-            self.assertEqual(set(choices[0].model_dump()), {"id", "name", "endpoint", "bucket", "region"})
+            self.assertEqual([p.id for p in choices], [foreign.id, owned.id])
+            self.assertEqual(
+                set(choices[0].model_dump()), {"id", "name", "endpoint", "bucket", "region", "used_by_mlflow"},
+            )
 
-    def test_LinkProfile_MemberCannotLinkForeignProfile(self) -> None:
+    def test_MlflowProfileMarkerTracksInstallationForProfilesAndWorkflowChoices(self) -> None:
         # Arrange
         with self._session() as session:
-            _, foreign, claims = self._member_profiles(session)
-            request = CreateWorkflowS3CredentialRequest(name="forbidden", s3_profile_id=foreign.id)
-            with patch("app.services.workflows.credentials._apply_secret") as apply:
+            owned, foreign, claims = self._member_profiles(session)
+            installation = MlflowEntity(s3_profile_id=foreign.id, namespace="ns", deployment_name="mlflow",
+                                         service_name="mlflow", image="mlflow:test")
+            session.add(installation)
+            session.commit()
+            # Act
+            profiles = s3_profiles.list_profiles(session, claims)
+            choices = workflows_api.list_s3_profile_choices(session=session, claims=claims)
+            session.delete(installation)
+            session.commit()
+            after_uninstall = s3_profiles.list_profiles(session, claims)
+            # Assert
+            for rows in (profiles, choices):
+                self.assertEqual({p.id: p.used_by_mlflow for p in rows}, {owned.id: False, foreign.id: True})
+                self.assertEqual(next(p.name for p in rows if p.id == foreign.id), "foreign")
+            self.assertFalse(any(p.used_by_mlflow for p in after_uninstall))
+
+    def test_ProfileNamesAreUniqueAcrossCreators(self) -> None:
+        # Arrange
+        with self._session() as session:
+            self._create_user(session)
+            session.add(S3ProfileEntity(owner_user_id=99, name="global", endpoint="https://s3",
+                                        bucket="models", access_key="key"))
+            session.commit()
+            # Act / Assert
+            with self.assertRaises(ConflictError):
+                s3_profiles.create_profile(session, self._claims(), CreateS3ProfileRequest(
+                    name="global", endpoint="https://s3", bucket="models", access_key="key", secret_key="secret",
+                ))
+
+    def test_LinkProfile_MemberCanLinkGlobalProfile(self) -> None:
+        # Arrange
+        with self._session() as session:
+            _, profile, claims = self._member_profiles(session)
+            request = CreateWorkflowS3CredentialRequest(name="global-link", s3_profile_id=profile.id)
+            with (
+                patch("app.services.workflows.credentials.decrypt_secret", return_value="secret"),
+                patch("app.services.workflows.credentials._apply_secret") as apply,
+                patch("app.services.workflows.credentials._secret_exists", return_value=False),
+                patch("app.services.workflows.credentials._workflow_namespace", return_value="ns"),
+                patch("app.services.workflows.credentials.sync_profile_credentials"),
+            ):
                 # Act
-                with self.assertRaises(NotFoundError):
-                    credentials.create_credential(request, session, claims)
-                # Assert
-                apply.assert_not_called()
+                linked = credentials.create_credential(request, session, claims)
+            # Assert
+            self.assertEqual(linked.s3_profile_id, profile.id)
+            apply.assert_called_once()
 
     def test_RetrySync_MemberCannotSyncForeignProfile(self) -> None:
         # Arrange

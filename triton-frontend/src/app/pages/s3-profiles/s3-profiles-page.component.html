@@ -3,7 +3,13 @@
 
   <mat-card class="card">
     @if (!canManage()) {
-      <div class="message error">Admin role required.</div>
+      <div class="message">Global S3 profiles are managed by administrators.</div>
+      @for (profile of profiles(); track profile.id) {
+        <div class="form-row">
+          <strong><app-s3-profile-label [profile]="profile" /></strong>
+          <span>{{ profile.endpoint }} / {{ profile.bucket }}</span>
+        </div>
+      }
     } @else {
       <div class="toolbar">
         <mat-form-field appearance="outline">
@@ -12,9 +18,21 @@
             [(ngModel)]="selectedId"
             (selectionChange)="selectProfile($event.value)"
           >
+            <mat-select-trigger>
+              @if (!selectedId) {
+                New profile
+              }
+              @for (profile of profiles(); track profile.id) {
+                @if (profile.id.toString() === selectedId) {
+                  <app-s3-profile-label [profile]="profile" />
+                }
+              }
+            </mat-select-trigger>
             <mat-option value="">New profile</mat-option>
             @for (profile of profiles(); track profile.id) {
-              <mat-option [value]="profile.id.toString()">{{ profile.name }}</mat-option>
+              <mat-option [value]="profile.id.toString()"
+                ><app-s3-profile-label [profile]="profile"
+              /></mat-option>
             }
           </mat-select>
         </mat-form-field>
@@ -24,6 +42,12 @@
         </button>
       </div>
 
+      @if (draft.used_by_mlflow) {
+        <dl class="profile-usage">
+          <dt>Usage</dt>
+          <dd>MLflow artifact store</dd>
+        </dl>
+      }
       <div class="form-grid">
         <div class="form-row">
           <label class="field-label" for="s3-profile-name">Profile name</label>

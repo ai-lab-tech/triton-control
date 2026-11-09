@@ -142,9 +142,7 @@ workflow namespace (normally `triton-control`):
 Both resources use the same generated name, such as `workflow-s3-dev-1-a1b2c3`.
 The dialog shows the name, namespace, workflow reference, and synchronization status.
 The workflow credential API returns metadata, not the secret key or CA contents.
-Linking makes these credentials available to workflows in the shared workflow
-namespace. Administrator-owned source profiles are shared with members; legacy
-personal source profiles remain available to their owners.
+S3 profiles are global. Each user links a profile once; workflows use that user’s links.
 
 ### Upload Scripts and Inspect Results
 
@@ -175,14 +173,14 @@ metadata:
     triton-control.ai/mlflow-s3-profile-name: workflow-training
 ```
 
-The named profile must belong to the submitter and already be linked in this
+The named global profile must already be linked by the submitter in this
 namespace. An ambiguous or missing selection is rejected before the workflow or
 its managed tokens are created. The selected profile name is also supplied as
 `TRITON_CONTROL_S3_PROFILE_NAME` to container/script steps.
 
 Every container/script step receives `TRITON_CONTROL_URL` and a temporary
 `TRITON_CONTROL_TOKEN` automatically. The token authenticates as the submitter and
-can manage their MLflow deployments using their own S3 profiles. It is restricted
+can manage their MLflow deployments using global S3 profiles. It is restricted
 to deployment APIs and expires after 60 minutes. No deployment-template or
 deployment-name annotation is needed; the training code chooses the deployment
 name in `create_deployment()`. Ordinary workflow parameters can supply that name.
@@ -221,7 +219,7 @@ Saving the source profile synchronizes its endpoint, bucket, region, credentials
 and CA settings to all linked workflow resources without changing their names.
 New runs use the updated configuration; running workflows may retain values
 already loaded. The dialog shows the last successful sync and any sync error.
-The profile owner can click **Sync now** to retry. Existing links created before
+The workflow link owner can click **Sync now** to retry. Existing links created before
 repository support need **Sync now** once after upgrading to create their ConfigMap.
 
 Removing a link deletes its workflow ConfigMap and Secret, so workflows using that

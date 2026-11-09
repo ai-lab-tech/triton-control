@@ -1,3 +1,4 @@
+import { S3ProfileLabelComponent } from "../../shared/s3-profile-label.component";
 import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { HttpClient } from "@angular/common/http";
@@ -15,6 +16,7 @@ import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
 type S3Profile = {
+  used_by_mlflow?: boolean;
   id: number;
   name: string;
   endpoint: string;
@@ -31,6 +33,7 @@ type S3Profile = {
   selector: "app-s3-profiles-page",
   standalone: true,
   imports: [
+    S3ProfileLabelComponent,
     FormsModule,
     MatButtonModule,
     MatCardModule,
@@ -71,7 +74,7 @@ export class S3ProfilesPageComponent {
   }
 
   async loadProfiles(): Promise<void> {
-    if (!this.canManage()) return;
+    if (!this.auth.canWriteInstances()) return;
     this.loading.set(true);
     try {
       const profiles = await firstValueFrom(

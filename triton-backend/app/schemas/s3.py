@@ -53,6 +53,7 @@ class S3DeleteResponse(SQLModel):
 class S3ProfileDTO(SQLModel):
     id: int
     name: str
+    used_by_mlflow: bool = False
     endpoint: str
     bucket: str
     region: str = "us-east-1"

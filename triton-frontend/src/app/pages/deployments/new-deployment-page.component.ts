@@ -1,3 +1,4 @@
+import { S3ProfileLabelComponent } from "../../shared/s3-profile-label.component";
 import { isEndpointHostname, resolvedEndpointHostname } from "../../shared/endpoint-hostname";
 import { Component, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
@@ -19,6 +20,7 @@ import { BASE_PATH, CreateDeploymentRequest, DeploymentsService } from "../../ap
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
 type S3Profile = {
+  used_by_mlflow?: boolean;
   id: number;
   name: string;
   endpoint: string;
@@ -39,6 +41,7 @@ const DEFAULT_GPU_COUNT = 0;
   selector: "app-new-deployment-page",
   standalone: true,
   imports: [
+    S3ProfileLabelComponent,
     FormsModule,
     MatButtonModule,
     MatCardModule,

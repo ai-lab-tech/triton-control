@@ -1,4 +1,4 @@
-"""Owner-scoped S3 profiles for a managed workspace, without browser authentication."""
+"""Global S3 profiles for a managed workspace, without browser authentication."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from sqlmodel import Session
 from app.core.access_control import require_member_or_admin
 from app.core.identity import claims_from_user
 from app.exceptions import ForbiddenError, UnauthorizedError
-from app.repositories import developments, s3_profiles, users
+from app.repositories import developments, users
 from app.schemas import S3ProfileDTO
 from app.services.kubernetes_client import api_client
-from app.services.storage.s3_profiles import _to_dto
+from app.services.storage.s3_profiles import profile_dtos
 
 
 def workspace_profiles(
@@ -41,4 +41,4 @@ def workspace_profiles(
     # Resolve the current owner/role on every request. This token is accepted only
     # by this read-only endpoint; it cannot authenticate to other application APIs.
     require_member_or_admin(claims_from_user(owner, {}))
-    return [_to_dto(profile, include_secret=True) for profile in s3_profiles.list_for_owner(session, owner.id or 0)]
+    return profile_dtos(session, include_secret=True)

@@ -60,6 +60,7 @@ class CreateWorkflowS3CredentialRequest(SQLModel):
 class WorkflowS3ProfileChoice(SQLModel):
     id: int
     name: str
+    used_by_mlflow: bool = False
     endpoint: str
     bucket: str
     region: str

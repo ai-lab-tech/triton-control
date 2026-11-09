@@ -13,9 +13,11 @@ def find_by_id(session: Session, credential_id: int) -> WorkflowS3CredentialEnti
     return session.get(WorkflowS3CredentialEntity, credential_id)
 
 
-def find_by_name(session: Session, name: str) -> WorkflowS3CredentialEntity | None:
+def find_by_name(session: Session, name: str, owner_id: int) -> WorkflowS3CredentialEntity | None:
     return session.exec(
-        select(WorkflowS3CredentialEntity).where(WorkflowS3CredentialEntity.name == name),
+        select(WorkflowS3CredentialEntity).where(
+            WorkflowS3CredentialEntity.name == name, WorkflowS3CredentialEntity.created_by_user_id == owner_id,
+        ),
     ).first()
 
 
@@ -62,3 +64,9 @@ def list_for_profile(session: Session, profile_id: int) -> list[WorkflowS3Creden
     return list(session.exec(select(WorkflowS3CredentialEntity).where(
         WorkflowS3CredentialEntity.s3_profile_id == profile_id,
     )).all())
+
+
+def list_for_owner(session: Session, owner_id: int) -> list[WorkflowS3CredentialEntity]:
+    return list(session.exec(select(WorkflowS3CredentialEntity).where(
+        WorkflowS3CredentialEntity.created_by_user_id == owner_id,
+    ).order_by(WorkflowS3CredentialEntity.created_at.desc())).all())  # type: ignore[attr-defined]

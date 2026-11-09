@@ -24,8 +24,9 @@ from app.services.workflows.artifact_repository import REPOSITORY_KEY, delete_re
 from app.services.workflows.config import get_config
 
 
-def list_credentials(session: Session) -> list[WorkflowS3CredentialDTO]:
-    rows = workflow_s3_credentials.list_all(session)
+def list_credentials(session: Session, claims: dict[str, object]) -> list[WorkflowS3CredentialDTO]:
+    user = require_user_entity(session, claims)
+    rows = workflow_s3_credentials.list_for_owner(session, user.id or 0)
     return [_to_dto(row) for row in rows]
 
 
@@ -37,7 +38,7 @@ def create_credential(
     user = require_user_entity(session, claims)
     profile = None
     if request.s3_profile_id is not None:
-        profile = s3_profiles.find_for_owner(session, user.id or 0, request.s3_profile_id)
+        profile = s3_profiles.get(session, request.s3_profile_id)
         if not profile:
             raise NotFoundError("S3 profile not found")
         try:
@@ -61,7 +62,7 @@ def create_credential(
     name = request.name.strip()
     secret_name = _secret_name(name)
 
-    if workflow_s3_credentials.find_by_name(session, name):
+    if workflow_s3_credentials.find_by_name(session, name, user.id or 0):
         raise ConflictError(f"Workflow S3 credential '{name}' already exists.")
     if workflow_s3_credentials.find_by_secret_name(session, namespace, secret_name):
         raise ConflictError(f"Kubernetes secret '{secret_name}' is already managed in namespace '{namespace}'.")
@@ -95,9 +96,12 @@ def create_credential(
     return _to_dto(row)
 
 
-def delete_credential(session: Session, credential_id: int) -> WorkflowS3CredentialDeleteResponse:
+def delete_credential(
+    session: Session, credential_id: int, claims: dict[str, object],
+) -> WorkflowS3CredentialDeleteResponse:
     row = workflow_s3_credentials.find_by_id(session, credential_id)
-    if not row:
+    user = require_user_entity(session, claims)
+    if not row or (row.created_by_user_id != user.id and user.role != "admin"):
         raise NotFoundError("Workflow S3 credential not found")
     if getattr(row, "s3_profile_id", None):
         delete_repository(row)
@@ -252,9 +256,9 @@ def sync_profile_credentials(session: Session, profile_id: int) -> None:
 def retry_sync(session: Session, claims: dict[str, object], credential_id: int) -> WorkflowS3CredentialDTO:
     user = require_user_entity(session, claims)
     row = workflow_s3_credentials.find_by_id(session, credential_id)
-    if not row or not row.s3_profile_id:
+    if not row or not row.s3_profile_id or (row.created_by_user_id != user.id and user.role != "admin"):
         raise NotFoundError("Linked workflow credential not found")
-    if not s3_profiles.find_for_owner(session, user.id or 0, row.s3_profile_id):
+    if not s3_profiles.get(session, row.s3_profile_id):
         raise NotFoundError("S3 profile not found")
     sync_profile_credentials(session, row.s3_profile_id)
     session.refresh(row)

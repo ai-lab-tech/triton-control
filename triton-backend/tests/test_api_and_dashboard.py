@@ -443,7 +443,7 @@ class ApiHelperTests(unittest.TestCase):
         request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="new/")
         # Act
         with patch("app.services.storage.s3.require_user_entity", return_value=SimpleNamespace(id=1)), \
-             patch("app.services.storage.s3.s3_profiles.find_for_owner", return_value=profile):
+             patch("app.services.storage.s3.s3_profiles.get", return_value=profile):
             dto = update_instance_s3(1, request, session=session, claims=claims)
         # Assert
         self.assertTrue(dto.enabled)

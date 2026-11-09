@@ -211,11 +211,11 @@ class WorkflowDelegationTests(unittest.TestCase):
         self.assertIn("valueFrom", tokens[0])
         self.assertNotIn("fake-token", json.dumps(env))
 
-    def test_other_user_cannot_select_profile(self) -> None:
+    def test_other_user_must_link_global_profile_before_submitting(self) -> None:
         with (
             patch("app.services.workflows.mlflow_delegation.session_factory", side_effect=lambda: Session(self.engine)),
         ):
-            with self.assertRaises(NotFoundError):
+            with self.assertRaisesRegex(BadRequestError, "Link an S3 profile"):
                 mlflow_delegation.prepare_submission(
                     "api/v1/workflows/triton-control", self._submission(),
                     {"email": "other@example.com", "auth_provider": "local", "role": "member"},
@@ -265,6 +265,20 @@ class WorkflowDelegationTests(unittest.TestCase):
 
     def test_explicit_profile_name_selects_between_multiple_links(self):
         self._add_linked_profile()
+        submission = self._plain_s3_submission()
+        submission["workflow"]["metadata"]["annotations"] = {
+            "triton-control.ai/mlflow-s3-profile-name": "second",
+        }
+        result = self._submit(submission, secret="workflow-s3-second")
+        self.assertEqual(result["spec"]["artifactRepositoryRef"]["configMap"], "workflow-s3-second")
+
+    def test_profile_name_resolves_global_profile_with_owned_workflow_secret(self):
+        self._add_linked_profile()
+        with Session(self.engine) as session:
+            profile = session.get(S3ProfileEntity, 12)
+            profile.owner_user_id = 8
+            session.add(profile)
+            session.commit()
         submission = self._plain_s3_submission()
         submission["workflow"]["metadata"]["annotations"] = {
             "triton-control.ai/mlflow-s3-profile-name": "second",

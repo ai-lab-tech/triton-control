@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -91,17 +92,20 @@ class ProfileResolutionTests(unittest.TestCase):
                 self.assertEqual(response.json(), {"id": 14, "name": "shared-training"})
                 self.assertNotIn("private", response.text)
 
-    def test_admin_resolves_another_members_legacy_profile(self):
-        claims = {"email": "admin@example.com", "auth_provider": "local", "role": "admin"}
+    def test_member_resolves_another_members_legacy_profile(self):
+        claims = self.claims
         response = self.request("/api/s3-profiles/resolve", claims, params={"name": "foreign"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"id": 13, "name": "foreign"})
 
-    def test_duplicate_visible_names_are_rejected(self):
-        self.add_shared_profile(name="training")
+    def test_database_rejects_duplicate_names_from_another_creator(self):
+        # Arrange: training already belongs to another creator.
+        # Act
+        with self.assertRaises(IntegrityError):
+            self.add_shared_profile(name="training")
+        # Assert
         response = self.request("/api/s3-profiles/resolve", params={"name": "training"})
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("ambiguous", response.json()["detail"])
+        self.assertEqual(response.json(), {"id": 11, "name": "training"})
 
     def test_scoped_workflow_cannot_resolve_unapproved_shared_profile(self):
         self.add_shared_profile()
@@ -109,8 +113,8 @@ class ProfileResolutionTests(unittest.TestCase):
         response = self.request("/api/s3-profiles/resolve", claims, params={"name": "shared-training"})
         self.assertEqual(response.status_code, 403)
 
-    def test_unknown_foreign_case_mismatched_or_empty_name_is_rejected(self):
-        for name in ["unknown", "foreign", "Training", ""]:
+    def test_unknown_case_mismatched_or_empty_name_is_rejected(self):
+        for name in ["unknown", "Training", ""]:
             with self.subTest(name=name):
                 response = self.request("/api/s3-profiles/resolve", params={"name": name})
                 self.assertIn(response.status_code, [400, 404])
@@ -130,9 +134,9 @@ class ProfileResolutionTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_automatic_workflow_token_resolves_own_profiles_only(self):
+    def test_automatic_workflow_token_resolves_global_profiles(self):
         claims = {**self.claims, "token_use": "workflow_deployment"}
         for name in ["training", "other-owned"]:
             self.assertEqual(self.request("/api/s3-profiles/resolve", claims, params={"name": name}).status_code, 200)
-        self.assertEqual(self.request("/api/s3-profiles/resolve", claims, params={"name": "foreign"}).status_code, 404)
+        self.assertEqual(self.request("/api/s3-profiles/resolve", claims, params={"name": "foreign"}).status_code, 200)
         self.assertEqual(self.request("/api/s3-profiles", claims).status_code, 403)
