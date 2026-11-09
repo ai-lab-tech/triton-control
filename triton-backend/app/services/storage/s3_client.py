@@ -105,7 +105,7 @@ def is_s3_configured(entity: TritonInstanceEntity) -> bool:
     )
 
 
-def build_s3_client(entity_or_config: TritonInstanceEntity | S3Config) -> Any:
+def build_s3_client(entity_or_config: TritonInstanceEntity | S3Config, *, client_config: Config | None = None) -> Any:
     """Build a boto3 S3 client from a ``TritonInstanceEntity`` or ``S3Config``.
 
     The caller is responsible for ensuring that ``s3_endpoint``,
@@ -140,7 +140,9 @@ def build_s3_client(entity_or_config: TritonInstanceEntity | S3Config) -> Any:
         region_name=cfg.get("s3_region"),
         use_ssl=use_https,
         verify=verify,
-        config=Config(s3={"addressing_style": cast(Literal["auto", "virtual", "path"], address_style)}),
+        config=Config(s3={"addressing_style": cast(Literal["auto", "virtual", "path"], address_style)}).merge(
+            client_config or Config()
+        ),
     )
 
 

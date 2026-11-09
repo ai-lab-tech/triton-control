@@ -21,6 +21,7 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlmodel import Session
 
@@ -46,14 +47,14 @@ from app.services.triton.config import extract_triton_version, validate_triton_c
 DEFAULT_S3_REGION = "us-east-1"
 
 
-def require_s3_client(entity: Any) -> Any:
+def require_s3_client(entity: Any, *, client_config: Config | None = None) -> Any:
     """Validate S3 config and return a boto3 client, raising BadRequestError if misconfigured."""
     if not entity.s3_endpoint or not entity.s3_bucket:
         raise BadRequestError("S3 endpoint and bucket are required")
     if not entity.s3_access_key or not entity.s3_secret_key_enc:
         raise BadRequestError("S3 credentials are not configured")
     try:
-        return build_s3_client(entity)
+        return build_s3_client(entity, client_config=client_config) if client_config else build_s3_client(entity)
     except RuntimeError as exc:
         raise BadRequestError(str(exc)) from exc
 

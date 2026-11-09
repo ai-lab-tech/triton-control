@@ -567,11 +567,13 @@ shapes, datatypes and data. The example is stored in the database for that
 deployment and model. Repository files in S3 are never created or changed by
 this field. A custom S3 repository does not need to contain `request.json`.
 
-During deployment, a supplied form example takes priority and is saved in the
-instance database record. If no example is supplied, Triton Control reads each
+During deployment, a supplied form example takes priority and is saved once in the
+instance's `inference_examples` map. If no example is supplied, the background
+deployment task reads each
 model's `request.json` beside `config.pbtxt` and saves its contents in the database.
 For repositories containing multiple models, examples are stored by model name.
-Missing, invalid or unreadable optional examples do not prevent deployment.
+Example capture is best effort. Missing, invalid or large examples, or slow storage,
+may cause examples to be skipped, but do not prevent deployment.
 
 The inference page uses previously saved or currently edited user input first,
 then the database example for the selected model, then the standard empty request
@@ -584,7 +586,9 @@ not loaded into the JSON editor.
 
 Startup migration adds `example_model_name`, `example_request` and
 `inference_examples` to `triton_instances`. Existing manually supplied examples
-remain usable; repository snapshots are captured for new deployments.
+remain usable: the API translates legacy fields into `inference_examples` when
+reading them. New deployments write only that map; repository snapshots are
+captured for new deployments.
 
 API callers can supply `example_model_name` and the JSON object
 `example_request` in `POST /api/deployments`.

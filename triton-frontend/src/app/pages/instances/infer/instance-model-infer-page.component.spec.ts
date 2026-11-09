@@ -93,8 +93,7 @@ describe("InstanceModelInferPageComponent", () => {
         name: "node-7",
         url: "http://localhost:8000",
         s3: { enabled: false },
-        example_model_name: "model-a",
-        example_request: payload,
+        inference_examples: { "model-a": payload },
       } as any),
     );
     const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
@@ -121,8 +120,7 @@ describe("InstanceModelInferPageComponent", () => {
         name: "node-7",
         url: "http://localhost:8000",
         s3: { enabled: true, prefix: "repo" },
-        example_model_name: "model-a",
-        example_request: { inputs: [], id: "database" },
+        inference_examples: { "model-a": { inputs: [], id: "database" } },
       } as any),
     );
     instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
@@ -142,8 +140,7 @@ describe("InstanceModelInferPageComponent", () => {
       of({
         name: "node-7",
         url: "http://localhost:8000",
-        example_model_name: "model-a",
-        example_request: { inputs: [], id: "database" },
+        inference_examples: { "model-a": { inputs: [], id: "database" } },
       } as any),
     );
     const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
@@ -157,8 +154,7 @@ describe("InstanceModelInferPageComponent", () => {
         name: "node-7",
         url: "http://localhost:8000",
         s3: { enabled: false },
-        example_model_name: "model-b",
-        example_request: { inputs: [], id: "other" },
+        inference_examples: { "model-b": { inputs: [], id: "other" } },
       } as any),
     );
     const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;

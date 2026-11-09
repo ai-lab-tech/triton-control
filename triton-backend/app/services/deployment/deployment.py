@@ -9,10 +9,12 @@ Service layer only; raises domain errors and contains no FastAPI route handlers.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from sqlmodel import Session
 
+from app.db.database import session_factory
 from app.exceptions import BadRequestError
 from app.repositories import instances
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
@@ -30,6 +32,31 @@ from app.services.deployment.records import (
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.registry_settings import apply_registry_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _apply_deployment_with_examples(
+    instance_id: int, request: CreateDeploymentRequest, namespace: str, deployment_name: str,
+    service_name: str, secret_name: str, image: str,
+) -> None:
+    """Capture optional repository metadata outside the request and continue on failure."""
+    if request.example_request is None:
+        try:
+            with session_factory() as session:
+                instance = instances.find_by_id(session, instance_id)
+                if instance is None:
+                    return
+                examples = collect_deployment_examples(request, instance)
+                if examples:
+                    instance.inference_examples = examples
+                    instances.save(session, instance)
+        except Exception:
+            # Optional metadata, including its persistence, must never cancel deployment.
+            logger.warning("Could not capture optional inference examples for instance %s", instance_id, exc_info=True)
+    k8s.apply_deployment_resources(
+        instance_id, request, namespace, deployment_name, service_name, secret_name, image,
+    )
 
 
 def create_deployment(
@@ -63,15 +90,11 @@ def create_deployment(
         namespace=ns, deployment_name=deploy, service_name=svc, secret_name=secret,
         image=image, triton_url=triton_url, metrics_url=metrics_url, initial_snapshot=k8s.pending_snapshot(),
     )
-    examples = collect_deployment_examples(request, instance)
-    if examples:
-        instance.inference_examples = examples
-        instances.save(session, instance)
     args = (instance.id or 0, request, ns, deploy, svc, secret, image)
     if schedule_task:
-        schedule_task(k8s.apply_deployment_resources, *args)
+        schedule_task(_apply_deployment_with_examples, *args)
     else:
-        k8s.apply_deployment_resources(*args)
+        _apply_deployment_with_examples(*args)
 
     applied_resources = [
         f"Secret/{secret}",

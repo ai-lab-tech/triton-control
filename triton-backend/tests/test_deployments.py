@@ -57,6 +57,7 @@ class DeploymentServiceTests(unittest.TestCase):
         )
 
     def test_example_is_persisted_in_database_without_s3_access(self):
+        # Arrange
         session, request, claims = self._profile_fixture("admin")
         request.example_model_name = "model"
         request.example_request = {"inputs": [{"name": "x", "data": [42]}]}
@@ -64,11 +65,15 @@ class DeploymentServiceTests(unittest.TestCase):
         with patch(
             "app.services.storage.s3_client.build_s3_client", side_effect=AssertionError("Unexpected S3 access"),
         ):
+            # Act
             response = deployments.create_deployment(request, session, claims, schedule)
         session.expire_all()
         row = session.get(TritonInstanceEntity, response.instance_id)
-        self.assertEqual(row.example_model_name, "model")
-        self.assertEqual(row.example_request, request.example_request)
+        # Assert
+        self.assertEqual(row.inference_examples, {"model": request.example_request})
+        self.assertIsNone(row.example_model_name)
+        self.assertIsNone(row.example_request)
+        self.collect_examples.assert_not_called()
         schedule.assert_called_once()
 
     def test_omitted_example_leaves_database_fields_empty(self):
@@ -78,19 +83,66 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIsNone(row.example_model_name)
         self.assertIsNone(row.example_request)
 
-    def test_repository_examples_are_saved_before_scheduling_and_remain_in_database(self):
+    def test_repository_examples_are_saved_in_background_before_applying_resources(self):
+        # Arrange
         session, request, claims = self._profile_fixture("admin")
         examples = {"model-a": {"inputs": [], "id": "first"}, "model-b": {"inputs": [], "id": "second"}}
         self.collect_examples.return_value = examples
-        scheduled_examples = []
-        def schedule(*args):
-            session.expire_all()
-            scheduled_examples.append(session.get(TritonInstanceEntity, args[1]).inference_examples)
+        schedule = Mock()
         response = deployments.create_deployment(request, session, claims, schedule)
-        self.assertEqual(scheduled_examples, [examples])
-        self.collect_examples.return_value = {}
+        self.collect_examples.assert_not_called()
+        session.close()
+        applied_examples = []
+
+        def apply(instance_id, *_args):
+            with Session(session.bind) as background_session:
+                applied_examples.append(background_session.get(TritonInstanceEntity, instance_id).inference_examples)
+
+        # Act
+        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
+                patch.object(k8s, "apply_deployment_resources", side_effect=apply):
+            task, *args = schedule.call_args.args
+            task(*args)
         session.expire_all()
+
+        # Assert
+        self.assertEqual(applied_examples, [examples])
         self.assertEqual(session.get(TritonInstanceEntity, response.instance_id).inference_examples, examples)
+
+    def test_optional_capture_failure_still_applies_kubernetes_resources(self):
+        # Arrange
+        session, request, claims = self._profile_fixture("admin")
+        schedule = Mock()
+        deployments.create_deployment(request, session, claims, schedule)
+        self.collect_examples.side_effect = OSError("Unreadable optional example")
+
+        # Act
+        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
+                patch.object(k8s, "apply_deployment_resources") as apply:
+            task, *args = schedule.call_args.args
+            task(*args)
+
+        # Assert
+        apply.assert_called_once_with(*args)
+
+    def test_optional_snapshot_persistence_failure_still_applies_kubernetes_resources(self):
+        # Arrange
+        session, request, claims = self._profile_fixture("admin")
+        schedule = Mock()
+        response = deployments.create_deployment(request, session, claims, schedule)
+        self.collect_examples.return_value = {"model": {"inputs": []}}
+
+        # Act
+        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
+                patch.object(deployments.instances, "save", side_effect=RuntimeError("Snapshot write failed")), \
+                patch.object(k8s, "apply_deployment_resources") as apply:
+            task, *args = schedule.call_args.args
+            task(*args)
+
+        # Assert
+        apply.assert_called_once_with(*args)
+        session.expire_all()
+        self.assertEqual(session.get(TritonInstanceEntity, response.instance_id).inference_examples, {})
 
     def test_CreateDeployment_AdminClaim_AppliesNamespaceAndK8sObjects(self) -> None:
         # Arrange
@@ -136,7 +188,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertFalse(upsert.call_args.kwargs["initial_snapshot"]["health_ready"])
         self.assertIn("Deployment is starting", upsert.call_args.kwargs["initial_snapshot"]["health_error"])
         self.assertEqual(len(scheduled), 1)
-        self.assertEqual(scheduled[0][0], k8s.apply_deployment_resources)
+        self.assertEqual(scheduled[0][0], deployments._apply_deployment_with_examples)
 
     def test_CreateDeploymentRequest_DeploymentName_NormalizesKubernetesName(self) -> None:
         # Act

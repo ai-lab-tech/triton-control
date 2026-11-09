@@ -26,13 +26,13 @@ class FixtureS3Client:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
 
-    def list_objects_v2(self, *, Bucket: str, Prefix: str) -> dict[str, Any]:
+    def list_objects_v2(self, *, Bucket: str, Prefix: str, MaxKeys: int = 1000) -> dict[str, Any]:
         assert Bucket == "compatibility-models"
         return {"Contents": [
             {"Key": path.relative_to(self.root).as_posix()}
             for path in sorted(self.root.rglob("*"))
             if path.is_file() and path.relative_to(self.root).as_posix().startswith(Prefix)
-        ]}
+        ][:MaxKeys]}
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, BinaryIO]:
         from botocore.exceptions import ClientError

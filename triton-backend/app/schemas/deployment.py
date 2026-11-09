@@ -21,6 +21,19 @@ from sqlmodel import Field, SQLModel
 
 from app.schemas.deployment_access import DeploymentAccessRequest
 
+MAX_EXAMPLE_BYTES = 256 * 1024
+
+
+def validate_example_payload(value: dict[str, Any]) -> dict[str, Any]:
+    """Keep stored JSON examples finite, serializable, and small enough for instance responses."""
+    try:
+        encoded = json.dumps(value, allow_nan=False).encode("utf-8")
+    except (TypeError, RecursionError) as exc:
+        raise ValueError("Example request must be a serializable JSON object") from exc
+    if len(encoded) > MAX_EXAMPLE_BYTES:
+        raise ValueError(f"Example request must not exceed {MAX_EXAMPLE_BYTES} bytes")
+    return value
+
 
 class CreateDeploymentRequest(DeploymentAccessRequest):
     """Request body for ``POST /api/deployments``."""
@@ -90,7 +103,7 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
     @classmethod
     def validate_example_json(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
         if value is not None:
-            json.dumps(value, allow_nan=False)
+            validate_example_payload(value)
         return value
 
     @field_validator("deployment_name")
