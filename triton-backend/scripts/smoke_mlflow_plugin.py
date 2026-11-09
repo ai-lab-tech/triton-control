@@ -43,6 +43,7 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
         assert applied["model_name"] == "classifier"
         assert applied["requirements_txt"].strip() == (repository / "requirements.txt").read_text().strip()
         assert applied["image"] == config["image"] and applied["model_control_mode"] == "explicit"
+        assert applied["inference_examples"] == {"classifier": json.loads((repository / "request.json").read_text())}
 
         with patch.dict(os.environ, {"TRITON_CONTROL_TOKEN": connection["other_token"]}):
             assert client.list_deployments() == []
@@ -71,7 +72,10 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
             raise AssertionError("A nonexistent S3 profile was accepted")
         assert client.delete_deployment(name)["status"] == "deleted"
         assert client.list_deployments() == []
-    print("Backend deployment lifecycle, requirements transfer, global profiles and deployment ownership checks passed")
+    print(
+        "Backend deployment lifecycle, requirements transfer, example capture, "
+        "global profiles and deployment ownership checks passed"
+    )
 
 
 def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | None = None) -> None:
@@ -111,6 +115,14 @@ def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | Non
 
     with tempfile.TemporaryDirectory(prefix="mlflow-plugin-smoke-") as folder:
         root = Path(folder)
+        if contract_file:
+            deadline = time.monotonic() + 30
+            while not contract_file.exists():
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Backend contract server did not start")
+                time.sleep(0.1)
+        fixture_connection = json.loads(contract_file.read_text()) if contract_file else None
+        artifact_root = Path(fixture_connection["artifact_root"]) if fixture_connection else root / "artifacts"
         mlflow.set_tracking_uri(f"sqlite:///{root / 'tracking.db'}")
         # Only the object store is a fixture. MLflow model resolution and plugin HTTP
         # requests run unmodified against S3 URIs and the backend API, respectively.
@@ -124,7 +136,7 @@ def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | Non
             def __init__(self, artifact_uri: str, **kwargs: Any) -> None:
                 parsed = urlsplit(artifact_uri)
                 assert parsed.netloc == "compatibility-models"
-                super().__init__(str(root / "artifacts" / parsed.path.lstrip("/")), **kwargs)
+                super().__init__(str(artifact_root / parsed.path.lstrip("/")), **kwargs)
 
         _artifact_repository_registry.register("s3", FixtureS3Repository)
         experiment = mlflow.create_experiment("compatibility", artifact_location="s3://compatibility-models/iris")
@@ -139,13 +151,8 @@ def verify(expected_plugin: str, expected_mlflow: str, contract_file: Path | Non
         for name in ("config.pbtxt", "requirements.txt", "request.json", "validation.json", "1/model.py"):
             assert (repository / name).is_file(), f"Missing generated artifact: {name}"
         assert (repository / "1/artifact").is_dir()
-        if contract_file:
-            deadline = time.monotonic() + 30
-            while not contract_file.exists():
-                if time.monotonic() >= deadline:
-                    raise TimeoutError("Backend contract server did not start")
-                time.sleep(0.1)
-            verify_deployment(info.model_uri, repository, json.loads(contract_file.read_text()))
+        if fixture_connection:
+            verify_deployment(info.model_uri, repository, fixture_connection)
 
     manager = KernelManager(kernel_name="triton-control")
     manager.start_kernel()

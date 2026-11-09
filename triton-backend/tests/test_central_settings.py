@@ -226,9 +226,10 @@ class CentralSettingsTests(unittest.TestCase):
         )
         scheduled = []
         # Act
-        response = deployment.create_deployment(
-            request, self.session, self.admin, lambda fn, *args: scheduled.append(args)
-        )
+        with patch.object(deployment, "collect_deployment_examples", return_value={}):
+            response = deployment.create_deployment(
+                request, self.session, self.admin, lambda fn, *args: scheduled.append(args)
+            )
         # Assert
         self.assertEqual(len(scheduled), 1)
         resolved = scheduled[0][1]

@@ -90,6 +90,15 @@ export class NewDeploymentPageComponent {
   repositorySyncMode: "direct" | "init" | "sidecar" = "direct";
   repositoryPollSecs = 15;
   modelName = "";
+  exampleModelName = "";
+  exampleRequest = "";
+  readonly exampleEditorOptions = {
+    language: "json",
+    theme: "vs-dark",
+    automaticLayout: true,
+    minimap: { enabled: false },
+    wordWrap: "on" as const,
+  };
 
   gpuCount: number | null = DEFAULT_GPU_COUNT;
   cpu = DEFAULT_CPU;
@@ -249,6 +258,26 @@ export class NewDeploymentPageComponent {
       return;
     }
 
+    let exampleRequest: Record<string, unknown> | undefined;
+    if (this.exampleRequest.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(this.exampleRequest);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Expected a JSON object.");
+        }
+        exampleRequest = parsed as Record<string, unknown>;
+        if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(this.exampleModelName.trim())) {
+          throw new Error("Enter the model name for the example request.");
+        }
+      } catch (error) {
+        this.setMessage(
+          `Invalid example request: ${error instanceof Error ? error.message : "Invalid JSON."}`,
+          "error",
+        );
+        return;
+      }
+    }
+
     this.deploying.set(true);
     this.setMessage("", "info");
 
@@ -269,6 +298,8 @@ export class NewDeploymentPageComponent {
       repository_poll_secs: this.repositoryPollSecs,
       repository_sync_mode: this.usesSyncedRepository() ? "sidecar" : this.repositorySyncMode,
       model_name: this.modelName.trim() || undefined,
+      example_model_name: exampleRequest ? this.exampleModelName.trim() : undefined,
+      example_request: exampleRequest,
       allow_metrics: true,
       requirements_txt: this.requirementsTxt().trim() || undefined,
       gpu_count: this.gpuCount ?? undefined,

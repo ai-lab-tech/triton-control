@@ -1,5 +1,6 @@
 """Regression coverage for the published-plugin deployment contract verifier."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -36,10 +37,12 @@ class MlflowPluginSmokeTests(unittest.TestCase):
         response.json.return_value = [{
             "model_uri": "s3://compatibility-models/classifier", "model_name": "classifier",
             "requirements_txt": "numpy", "image": "triton:contract", "model_control_mode": "explicit",
+            "inference_examples": {"classifier": {"inputs": []}},
         }]
         with tempfile.TemporaryDirectory() as folder:
             repository = Path(folder)
             (repository / "requirements.txt").write_text("numpy")
+            (repository / "request.json").write_text(json.dumps({"inputs": []}))
             with patch.dict("sys.modules", modules), patch("httpx.get", return_value=response):
                 # Act
                 verify_deployment("runs:/run/classifier", repository,

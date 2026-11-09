@@ -9,22 +9,54 @@ Service layer only; raises domain errors and contains no FastAPI route handlers.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from sqlmodel import Session
 
+from app.db.database import session_factory
 from app.exceptions import BadRequestError
+from app.repositories import instances
 from app.schemas import CreateDeploymentRequest, DeploymentDeleteResponse, DeploymentResponse
 from app.services.access import get_instance_or_404
 from app.services.deployment import kubernetes as k8s
 from app.services.deployment.access import validate_new_hostname
 from app.services.deployment.access_manifests import validate_policy
+from app.services.deployment.examples import collect_deployment_examples
 from app.services.deployment.policy import resolve_hostname, validate_endpoint_policy
 from app.services.deployment.profile_request import resolve_profile_request
-from app.services.deployment.records import delete_instance_record, upsert_deployed_instance
+from app.services.deployment.records import (
+    delete_instance_record,
+    upsert_deployed_instance,
+)
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.registry_settings import apply_registry_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _apply_deployment_with_examples(
+    instance_id: int, request: CreateDeploymentRequest, namespace: str, deployment_name: str,
+    service_name: str, secret_name: str, image: str,
+) -> None:
+    """Capture optional repository metadata outside the request and continue on failure."""
+    if request.example_request is None:
+        try:
+            with session_factory() as session:
+                instance = instances.find_by_id(session, instance_id)
+                if instance is None:
+                    return
+                examples = collect_deployment_examples(request, instance)
+                if examples:
+                    instance.inference_examples = examples
+                    instances.save(session, instance)
+        except Exception:
+            # Optional metadata, including its persistence, must never cancel deployment.
+            logger.warning("Could not capture optional inference examples for instance %s", instance_id, exc_info=True)
+    k8s.apply_deployment_resources(
+        instance_id, request, namespace, deployment_name, service_name, secret_name, image,
+    )
 
 
 def create_deployment(
@@ -60,9 +92,9 @@ def create_deployment(
     )
     args = (instance.id or 0, request, ns, deploy, svc, secret, image)
     if schedule_task:
-        schedule_task(k8s.apply_deployment_resources, *args)
+        schedule_task(_apply_deployment_with_examples, *args)
     else:
-        k8s.apply_deployment_resources(*args)
+        _apply_deployment_with_examples(*args)
 
     applied_resources = [
         f"Secret/{secret}",
