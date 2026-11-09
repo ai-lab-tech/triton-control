@@ -50,7 +50,7 @@ def _config_keys(client: Any, bucket: str, root: str, deadline: float) -> Iterat
 
 
 def _read_example(body: Any, budget: _CaptureBudget) -> bytes:
-    chunks = []
+    chunks: list[bytes] = []
     size = 0
     while True:
         if monotonic() >= budget.deadline:

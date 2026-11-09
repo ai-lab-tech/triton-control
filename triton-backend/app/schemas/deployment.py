@@ -22,10 +22,20 @@ from sqlmodel import Field, SQLModel
 from app.schemas.deployment_access import DeploymentAccessRequest
 
 MAX_EXAMPLE_BYTES = 256 * 1024
+MAX_EXAMPLE_DEPTH = 64
 
 
 def validate_example_payload(value: dict[str, Any]) -> dict[str, Any]:
     """Keep stored JSON examples finite, serializable, and small enough for instance responses."""
+    # JSON parser/encoder recursion limits vary across supported Python versions.
+    # Walk containers iteratively so this limit also handles cyclic Python inputs.
+    pending: list[tuple[Any, int]] = [(value, 1)]
+    while pending:
+        container, depth = pending.pop()
+        if depth > MAX_EXAMPLE_DEPTH:
+            raise ValueError(f"Example request must not exceed {MAX_EXAMPLE_DEPTH} nesting levels")
+        children = container.values() if isinstance(container, dict) else container
+        pending.extend((child, depth + 1) for child in children if isinstance(child, (dict, list, tuple)))
     try:
         encoded = json.dumps(value, allow_nan=False).encode("utf-8")
     except (TypeError, RecursionError) as exc:

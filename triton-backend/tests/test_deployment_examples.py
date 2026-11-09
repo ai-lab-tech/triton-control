@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.db.entities import TritonInstanceEntity
 from app.mappers.instance import entity_to_dto
 from app.schemas import CreateDeploymentRequest
-from app.schemas.deployment import MAX_EXAMPLE_BYTES
+from app.schemas.deployment import MAX_EXAMPLE_BYTES, MAX_EXAMPLE_DEPTH, validate_example_payload
 from app.services.deployment import examples
 from app.services.deployment.examples import collect_deployment_examples
 
@@ -102,6 +102,38 @@ class DeploymentExampleTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.request(example_model_name="model", example_request=payload)
 
+    def test_example_at_explicit_depth_limit_is_accepted(self):
+        # Arrange
+        nested: Any = 0
+        for _ in range(MAX_EXAMPLE_DEPTH - 1):
+            nested = [nested]
+        payload = {"inputs": nested}
+
+        # Act
+        result = validate_example_payload(payload)
+
+        # Assert
+        self.assertIs(result, payload)
+
+    def test_manual_example_beyond_explicit_depth_limit_is_rejected(self):
+        # Arrange
+        nested: Any = 0
+        for _ in range(MAX_EXAMPLE_DEPTH):
+            nested = [nested]
+
+        # Act / Assert
+        with self.assertRaises(ValidationError):
+            self.request(example_model_name="model", example_request={"inputs": nested})
+
+    def test_cyclic_python_example_is_rejected_without_recursive_traversal(self):
+        # Arrange
+        payload: dict[str, Any] = {}
+        payload["self"] = payload
+
+        # Act / Assert
+        with self.assertRaisesRegex(ValueError, "nesting levels"):
+            validate_example_payload(payload)
+
     @patch("app.services.deployment.examples.require_s3_client")
     def test_deeply_nested_optional_json_is_skipped_and_stream_closed(self, factory):
         # Arrange
@@ -113,7 +145,7 @@ class DeploymentExampleTests(unittest.TestCase):
         result = collect_deployment_examples(self.request(), self.instance())
 
         # Assert
-        self.assertEqual(result, {})
+        self.assertEqual(len(result), 0)
         self.assertTrue(body.closed)
 
     @patch("app.services.deployment.examples.require_s3_client")
