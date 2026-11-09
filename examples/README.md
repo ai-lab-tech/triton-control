@@ -12,6 +12,8 @@ For training workflows, follow the dedicated instructions:
   training through Argo Workflows and save the results to S3.
 - [MLflow Iris autodeploy](workflows/mlflow-iris-autodeploy/README.md): train,
   log the model to MLflow, and deploy it from the training script.
+- [MLflow Iris update and autodeploy](workflows/mlflow-iris-update-autodeploy/README.md):
+  train, log, retrain and log an update, then deploy the updated model.
 
 For uploads to an existing polling instance, follow
 [Local Model Upload with S3 Polling](s3_upload/local-model-upload-s3-polling/README.md).
@@ -95,6 +97,7 @@ workflows/
 | `s3_upload/local-model-upload-s3-polling` | Upload a model to an existing polling instance | `python` |
 | `workflows/sklearn-iris-training` | Run scikit-learn training through Argo with S3-backed source and result artifacts | Training workflow |
 | `workflows/mlflow-iris-autodeploy` | Train Iris, generate its Triton adapter, and deploy from one Python script | MLflow and Python workflow |
+| `workflows/mlflow-iris-update-autodeploy` | Train, log, retrain and update Iris using local plugin wheels, then deploy version 2 | MLflow update workflow |
 
 ## Runtime Notes
 
