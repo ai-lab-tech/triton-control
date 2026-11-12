@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from typing import Any, List, Literal, Optional
+from urllib.parse import urlsplit
 
-from packaging.requirements import InvalidRequirement, Requirement
+from packaging.requirements import Requirement
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
@@ -203,12 +205,35 @@ def _validate_requirements_txt(value: str) -> str:
 
 
 def _validate_requirement_line(line: str) -> str:
-    requirement = line.split(" #", 1)[0].strip()
     try:
-        Requirement(requirement)
-    except InvalidRequirement as exc:
+        requirement_arguments(line)
+    except ValueError as exc:
         return str(exc)
     return ""
+
+
+def requirement_arguments(line: str) -> list[str]:
+    """Validate one package requirement or a remote, package-specific wheel source."""
+    requirement = line.split(" #", 1)[0].strip()
+    if not requirement.startswith("-"):
+        Requirement(requirement)
+        return [requirement]
+    parts = shlex.split(requirement)
+    if len(parts) == 1:
+        if parts[0].startswith("--find-links="):
+            parts = ["--find-links", parts[0].split("=", 1)[1]]
+        elif parts[0].startswith("-f"):
+            parts = ["-f", parts[0][2:]]
+    if len(parts) != 2 or parts[0] not in {"--find-links", "-f"}:
+        raise ValueError("Only package requirements and HTTP(S) --find-links sources are supported")
+    location = urlsplit(parts[1])
+    if (
+        location.scheme not in {"http", "https"}
+        or not location.netloc
+        or any(character.isspace() for character in parts[1])
+    ):
+        raise ValueError("Wheel sources must be HTTP(S) URLs")
+    return ["--find-links", parts[1]]
 
 
 class DeploymentResponse(SQLModel):

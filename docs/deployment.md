@@ -5,6 +5,29 @@ Triton Control can run as a local Compose stack or as a Kubernetes deployment.
 For installation, start with [Kubernetes Ingress and TLS setup](ingress-tls.md)
 or the [Minikube development environment](local-kubernetes.md).
 
+## Model Python dependencies
+
+Deployment requirements can contain PEP 508 package lines and HTTP(S)
+`--find-links` wheel sources. For CPU Torch wheels, use an exact CPU build and
+the package-specific source together, for example:
+
+```text
+--find-links https://download.pytorch.org/whl/cpu/torch/
+torch==2.14.1+cpu
+```
+
+A plain `torch==2.14.1` pin does not select a CPU build. The MLflow Triton
+plugin generates the CPU pin/source for automatic CPU dependencies. Versions
+and wheel sources explicitly supplied by the user remain authoritative.
+Other pip options and local wheel-source paths are rejected by the API.
+
+The serving container creates `/tmp/triton-python-env` with system packages
+visible. Matching packages already in the image are reused; missing or
+incompatible versions are installed in this writable environment without
+changing the image. Its packages take precedence on the Python backend's
+`PYTHONPATH`. The image must provide `python3 -m venv` and pip. For starts with
+no dependency installation, build the model requirements into the serving image.
+
 ## Optional Email Delivery
 
 Email is not required. The safe default is `EMAIL_DELIVERY_MODE=disabled`, so
