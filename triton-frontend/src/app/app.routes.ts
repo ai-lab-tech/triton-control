@@ -55,6 +55,12 @@ export const APP_ROUTES: Routes = [
       { path: "instances/:id/s3", component: InstanceS3BrowserPageComponent },
       { path: "s3-profiles", component: S3ProfilesPageComponent },
       { path: "users", component: UsersPageComponent, canActivate: [adminGuard] },
+      {
+        path: "teams",
+        loadComponent: () =>
+          import("./pages/teams/teams-page.component").then((m) => m.TeamsPageComponent),
+        canActivate: [adminGuard],
+      },
       { path: "settings", component: SettingsPageComponent, canActivate: [adminGuard] },
       { path: "error-logs", component: ErrorLogsPageComponent, canActivate: [adminGuard] },
     ],

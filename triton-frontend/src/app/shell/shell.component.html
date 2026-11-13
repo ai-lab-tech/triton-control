@@ -110,6 +110,10 @@
                 <span class="material-icons">group</span>
                 <span>User Management</span>
               </button>
+              <button type="button" class="account-item" (click)="go('/teams')">
+                <span class="material-icons">groups</span>
+                <span>Engineering Teams</span>
+              </button>
             }
             @if (isLoggedIn() && canWriteInstances()) {
               <button type="button" class="account-item" (click)="go('/s3-profiles')">

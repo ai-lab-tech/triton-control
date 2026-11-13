@@ -1,0 +1,147 @@
+<div class="teams-page" [attr.aria-busy]="busy()">
+  <header>
+    <h1>Engineering teams</h1>
+    <p>
+      Organize engineering responsibility. Membership does not change roles, instance access or
+      workspace ownership.
+    </p>
+    <button mat-stroked-button (click)="refresh()" [disabled]="busy()">Refresh</button>
+  </header>
+  @if (error()) {
+    <p role="alert" class="error">{{ error() }}</p>
+  }
+  @if (busy()) {
+    <p role="status">Updating teams…</p>
+  }
+  <mat-card>
+    <mat-card-content>
+      <h2>Create team</h2>
+      <form (ngSubmit)="createTeam()" class="controls">
+        <mat-form-field appearance="outline">
+          <mat-label>Team name</mat-label>
+          <input
+            matInput
+            name="newName"
+            [(ngModel)]="newName"
+            maxlength="64"
+            required
+            [disabled]="busy()"
+          />
+          <mat-hint>Letters, numbers, hyphens or underscores, e.g. ml-engineering.</mat-hint>
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="busy() || !newName.trim()">
+          Create team
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+  <div class="team-layout">
+    <nav aria-label="Teams">
+      @for (team of teams(); track team.id) {
+        <button
+          mat-stroked-button
+          (click)="selectTeam(team)"
+          [disabled]="busy()"
+          [attr.aria-pressed]="selected()?.id === team.id"
+        >
+          {{ team.name }} · {{ team.is_active ? "Active" : "Inactive" }}
+        </button>
+      } @empty {
+        @if (!busy()) {
+          <p>No teams yet.</p>
+        }
+      }
+    </nav>
+    @if (selected(); as team) {
+      <mat-card>
+        <mat-card-content>
+          <h2>{{ team.name }}</h2>
+          <form (ngSubmit)="saveTeam()" class="controls">
+            <mat-form-field appearance="outline">
+              <mat-label>Team name</mat-label>
+              <input
+                matInput
+                name="name"
+                [(ngModel)]="draftName"
+                maxlength="64"
+                required
+                [disabled]="busy()"
+              />
+            </mat-form-field>
+            <mat-checkbox name="active" [(ngModel)]="draftActive" [disabled]="busy()"
+              >Active team</mat-checkbox
+            >
+            <button mat-flat-button type="submit" [disabled]="busy() || !draftName.trim()">
+              Save team
+            </button>
+          </form>
+          <p>
+            Deactivating a team suspends engineering eligibility and keeps its memberships and
+            history. Reactivation restores eligibility for active members and admins.
+          </p>
+          <h3>Members</h3>
+          <div class="controls">
+            <mat-form-field appearance="outline">
+              <mat-label>Add or restore member</mat-label>
+              <mat-select [(ngModel)]="selectedUserId" [disabled]="busy() || !team.is_active">
+                @for (user of availableUsers(); track user.id) {
+                  <mat-option [value]="user.id"
+                    >{{ user.name }} ({{ user.email }}) · {{ user.role }}</mat-option
+                  >
+                }
+              </mat-select>
+            </mat-form-field>
+            <button
+              mat-stroked-button
+              (click)="setMember(selectedUserId, true)"
+              [disabled]="busy() || !team.is_active || selectedUserId === null"
+            >
+              Add member
+            </button>
+          </div>
+          <p>
+            Users may belong to multiple teams. Only active members and admins in active teams are
+            eligible for engineering work; artifact access is checked separately.
+          </p>
+          <ul class="members">
+            @for (member of members(); track member.user_id) {
+              <li>
+                <span
+                  >{{ member.name }} ({{ member.email }}) · {{ member.role }}<br />
+                  {{ member.is_active ? "Member" : "Revoked" }} ·
+                  {{
+                    member.eligible ? "Eligible for engineering" : "Not eligible for engineering"
+                  }}
+                </span>
+                @if (member.is_active) {
+                  <button
+                    mat-button
+                    (click)="setMember(member.user_id, false)"
+                    [disabled]="busy()"
+                    [attr.aria-label]="'Revoke membership for ' + member.name"
+                  >
+                    Revoke
+                  </button>
+                }
+              </li>
+            } @empty {
+              <li>No memberships.</li>
+            }
+          </ul>
+          <h3>Recent history</h3>
+          <p>Latest 100 changes. Older changes remain retained.</p>
+          <ol>
+            @for (event of history(); track event.id) {
+              <li>
+                {{ eventLabel(event) }} — {{ userLabel(event.actor_user_id) }} ·
+                {{ event.created_at | date: "medium" }}
+              </li>
+            } @empty {
+              <li>No changes recorded.</li>
+            }
+          </ol>
+        </mat-card-content>
+      </mat-card>
+    }
+  </div>
+</div>

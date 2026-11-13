@@ -51,6 +51,7 @@ from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
+from app.api.team_api import router as team_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
@@ -196,6 +197,7 @@ app.include_router(registry_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
+app.include_router(team_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(error_log_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])

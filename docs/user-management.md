@@ -166,3 +166,71 @@ Assigned users can open that instance and use its available workflows.
 Admins can delete users from the Users page. Deleting a user removes that local
 Triton Control account record. For OIDC users, it does not delete the identity
 from the external OIDC provider.
+
+## Engineering Teams
+
+Admins can open **Engineering Teams** from the account menu (`/teams`) to create,
+rename, activate or deactivate teams and add or revoke memberships. Team names
+are unique, lowercase identifiers of up to 64 letters, digits, hyphens or
+underscores, starting with a letter or digit. Leading/trailing whitespace is
+removed and uppercase letters are normalized.
+
+A user may belong to multiple teams. Roles remain `admin`, `member` and `viewer`.
+Membership organizes engineering responsibility; it never assigns an instance,
+grants artifact access, changes a role or shares another user's workspace.
+Only active `member`/`admin` accounts with an active membership in an active team
+are eligible for future engineering task routing. Task submission and claiming
+are separate features; this page does not create tasks.
+
+Inactive accounts cannot be added. Deactivating a team keeps its memberships
+and history but suspends eligibility. Reactivation restores eligibility for
+otherwise eligible members; explicitly revoked memberships stay revoked until
+an admin adds them again. Membership changes are idempotent, including repeated
+revocation requests. Repeated no-op requests do not create duplicate history.
+
+The page shows current and revoked memberships plus the latest 100 changes.
+History records the actor, affected user, time and before/after team settings.
+There is no team/history delete endpoint. Account deletion removes that user's
+current membership rows but retains historical numeric actor/subject identities.
+Application history is retained in the database; it is not a claim of tamper-proof
+storage against a database administrator.
+
+### Team API
+
+All endpoints require a currently active administrator, including reads.
+
+| Method and path | Behavior |
+| --- | --- |
+| `GET /api/teams` | List active and inactive teams. |
+| `POST /api/teams` | Create `{name, is_active}`; returns 201. |
+| `PUT /api/teams/{id}` | Replace the team's name/active state; UUID identity stays stable. |
+| `GET /api/teams/{id}/members` | Current/revoked memberships and current eligibility. |
+| `PUT /api/teams/{id}/members/{user_id}` | Add or restore membership. |
+| `DELETE /api/teams/{id}/members/{user_id}` | Revoke membership while preserving its history. |
+| `GET /api/teams/{id}/events?limit=100` | Latest history; limit must be 1–100. |
+
+Invalid input returns 422, non-admin access 403, unknown teams/users 404, and
+duplicate names or additions to inactive teams/accounts 409.
+
+### Upgrade and Verification
+
+Startup adds `teams`, `user_teams` and `team_events` without modifying existing
+roles or assignments. Table creation uses a transaction-scoped PostgreSQL
+advisory lock so concurrent workers cannot race on check-and-create DDL.
+Database uniqueness enforces team names and membership pairs. Team changes and
+membership changes serialize on the team row and commit their history in the
+same transaction. No external services or Kubernetes workloads are added.
+
+Unit/API tests use Arrange–Act–Assert sections. PostgreSQL tests run in isolated,
+randomly named schemas and drop only their own schemas afterward:
+
+```bash
+cd triton-backend
+python -m unittest tests.test_teams -v
+TEAMS_TEST_DATABASE_URL=postgresql://teams_test:teams_test@localhost:5432/teams_test \
+  python -m unittest tests.test_teams_postgres -v
+```
+
+Use a dedicated test database whose user can create schemas. The CI
+`teams-postgres` job provisions one and exercises complete startup, uniqueness
+races, repeated membership requests and concurrent deactivation.
