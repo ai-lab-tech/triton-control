@@ -1,0 +1,70 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: mlflow-iris-update-autodeploy
+    app.kubernetes.io/part-of: triton-control-examples
+  name: mlflow-iris-update-autodeploy
+spec:
+  entrypoint: train
+  ttlStrategy:
+    secondsAfterCompletion: 86400
+    secondsAfterFailure: 86400
+  arguments:
+    parameters:
+    - name: s3-script-key
+      value: workflows/mlflow-iris-update-autodeploy/train.py
+    - name: deployment-name
+      value: iris-classifier-updated
+    - name: triton-image
+      value: nvcr.io/nvidia/tritonserver:26.06-py3
+  templates:
+  - name: train
+    inputs:
+      artifacts:
+      - name: training-script
+        path: /tmp/train.py
+        archive:
+          none: {}
+        s3:
+          key: '{{workflow.parameters.s3-script-key}}'
+    container:
+      image: python:3.12-slim
+      imagePullPolicy: IfNotPresent
+      command:
+      - sh
+      - -ec
+      args:
+      - |
+        export HOME=/tmp
+        python -m pip install --timeout 120 --retries 10 --no-cache-dir --index-url https://pypi.org/simple --only-binary=mlflow-triton,mlflow-triton-control --target /tmp/python-packages \
+          "mlflow-triton==0.4.5" \
+          "mlflow-triton-control==0.4.5" \
+          "mlflow==3.14.0" \
+          "numpy==2.2.6" "pandas==2.3.3" "scikit-learn==1.7.2" "cloudpickle==3.1.2"
+        export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"
+        export PATH="/tmp/python-packages/bin:$PATH"
+        python /tmp/train.py
+      env:
+      - name: MLFLOW_EXPERIMENT_NAME
+        value: triton-iris-autodeploy
+      - name: ARGO_WORKFLOW_NAME
+        value: '{{workflow.name}}'
+      - name: ARGO_WORKFLOW_UID
+        value: '{{workflow.uid}}'
+      - name: TRITON_DEPLOYMENT_NAME
+        value: '{{workflow.parameters.deployment-name}}'
+      - name: TRITON_SERVING_IMAGE
+        value: '{{workflow.parameters.triton-image}}'
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: '1'
+          memory: 1Gi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
