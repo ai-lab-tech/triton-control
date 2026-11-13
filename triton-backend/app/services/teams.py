@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
-from app.core.access_control import require_admin
+from app.core.access_control import is_admin, require_admin
 from app.core.identity import require_user_entity
 from app.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.mappers.teams import event_to_dto, member_to_dto, team_to_dto
@@ -16,7 +16,7 @@ from app.schemas.teams import TeamDTO, TeamEventDTO, TeamMemberDTO, TeamRequest
 def _admin_id(session: Session, claims: dict[str, Any]) -> int:
     require_admin(claims)
     actor = require_user_entity(session, claims)
-    if not actor.is_active or actor.role != "admin" or actor.id is None:
+    if not actor.is_active or not is_admin({"role": actor.role}) or actor.id is None:
         raise ForbiddenError("Active admin role required")
     return actor.id
 

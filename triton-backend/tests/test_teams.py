@@ -231,6 +231,37 @@ class TeamTests(TeamFixture, unittest.TestCase):
         self.assertEqual(events[0].subject_user_id, 2)
         self.assertEqual(events[0].action, "member_added")
 
+    def test_legacy_admin_role_can_manage_teams_without_changing_role(self):
+        # Arrange
+        actor = self.session.get(UserEntity, 1)
+        actor.role = "Admin"
+        self.session.commit()
+        claims = {**self.claims, "role": "Admin"}
+
+        # Act
+        team = teams.create_team(self.session, claims, TeamRequest(name="legacy-admin"))
+        result = teams.list_teams(self.session, claims)
+
+        # Assert
+        self.assertIn(team.id, [item.id for item in result])
+        self.assertEqual(actor.role, "Admin")
+
+    def test_eligibility_normalizes_legacy_roles_without_granting_viewer_access(self):
+        # Arrange
+        team = teams.create_team(self.session, self.claims, TeamRequest(name="legacy-roles"))
+        for user_id, role in [(1, "Admin"), (2, " Member "), (3, "Viewer")]:
+            user = self.session.get(UserEntity, user_id)
+            user.role = role
+            self.session.commit()
+            teams.set_member(self.session, self.claims, team.id, user_id, active=True)
+
+        # Act
+        eligible = repository.eligible_user_ids(self.session, team.id)
+
+        # Assert
+        self.assertEqual(eligible, [1, 2])
+        self.assertEqual(self.session.get(UserEntity, 3).role, "Viewer")
+
     def test_stale_admin_claims_do_not_bypass_current_account_role(self):
         # Arrange
         actor = users.find_by_id(self.session, 1)

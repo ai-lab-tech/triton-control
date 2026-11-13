@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
@@ -70,7 +71,7 @@ def eligible_user_ids(session: Session, team_id: UUID) -> list[int]:
             col(UserTeamEntity.is_active).is_(True),
             col(TeamEntity.is_active).is_(True),
             col(UserEntity.is_active).is_(True),
-            col(UserEntity.role).in_(["member", "admin"]),
+            func.lower(func.trim(col(UserEntity.role))).in_(["member", "admin"]),
         )
         .order_by(col(UserTeamEntity.user_id))
     )
