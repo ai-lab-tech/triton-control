@@ -769,10 +769,10 @@ def _requirements_install_command(requirements_txt: str | None) -> str:
     overlay_site = shlex.quote('import sysconfig; print(sysconfig.get_path("purelib"))')
     return (
         f'TRITON_IMAGE_SITE_PACKAGES="$(python3 -c {image_sites})" && \\\n'
-        f"              python3 -m venv --system-site-packages {environment} && \\\n"
+        f"              python3 -m venv --without-pip --system-site-packages {environment} && \\\n"
         f'              export PYTHONPATH="$({python} -c {overlay_site}):'
         '${TRITON_IMAGE_SITE_PACKAGES}:${PYTHONPATH:-}" && \\\n'
-        f"              {python} -m pip install --no-cache-dir {pip_args} && \\\n"
+        f"              python3 -m pip --python {python} install --no-cache-dir {pip_args} && \\\n"
         "              "
     )
 

@@ -25,7 +25,9 @@ The serving container creates `/tmp/triton-python-env` with system packages
 visible. Matching packages already in the image are reused; missing or
 incompatible versions are installed in this writable environment without
 changing the image. Its packages take precedence on the Python backend's
-`PYTHONPATH`. The image must provide `python3 -m venv` and pip. For starts with
+`PYTHONPATH`. The image must provide `python3 -m venv --without-pip` and pip 22.3 or newer
+with `--python` support. System pip installs into the writable environment;
+`ensurepip` and the OS `python3-venv` package are not required. For starts with
 no dependency installation, build the model requirements into the serving image.
 
 ## Optional Email Delivery
