@@ -20,18 +20,15 @@ def deploy_model(model_uri: str) -> dict:
         name=os.getenv("TRITON_DEPLOYMENT_NAME", "automatic-triton-versions"),
         model_uri=model_uri,
         config={
-            "s3_profile_name": os.getenv(
-                "TRITON_CONTROL_S3_PROFILE_NAME", "workflow-training"
-            ),
-            "image": os.getenv(
-                "TRITON_SERVING_IMAGE", "nvcr.io/nvidia/tritonserver:26.06-py3"
-            ),
+            "s3_profile_name": os.getenv("TRITON_CONTROL_S3_PROFILE_NAME", "workflow-training"),
+            "image": os.getenv("TRITON_SERVING_IMAGE", "nvcr.io/nvidia/tritonserver:26.06-py3"),
             "wait_timeout_seconds": 1800,
         },
     )
 
 
 def main() -> None:
+    model_name = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "automatic-triton-versions")
 
     # Train
     iris = load_iris(as_frame=True)
@@ -47,22 +44,19 @@ def main() -> None:
     fitted_pipeline = Pipeline(
         [
             ("scaler", StandardScaler()),
-            ("automatic-triton-versions", LogisticRegression(C=1.0, max_iter=250, random_state=42)),
+            ("classifier", LogisticRegression(C=1.0, max_iter=250, random_state=42)),
         ]
     )
     fitted_pipeline.fit(x_train, y_train)
     example_dataframe = x_test.iloc[:2].copy()
 
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "triton-iris-autodeploy"))
-    with mlflow.start_run(
-        run_name=os.getenv("ARGO_WORKFLOW_NAME", "mlflow-iris-auto-versioning-on-log")
-    ):
-
+    with mlflow.start_run(run_name=os.getenv("ARGO_WORKFLOW_NAME", "mlflow-iris-auto-versioning-on-log")):
         # Log and register model
         info = sklearn.log_model(
             fitted_pipeline,
-            name="automatic-triton-versions",
-            registered_model_name="automatic-triton-versions",
+            name=model_name,
+            registered_model_name=model_name,
             input_example=example_dataframe,
         )
         print(f"Registered model: {info.model_uri}", flush=True)

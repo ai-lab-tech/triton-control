@@ -63,3 +63,14 @@ python3 train.py
 The workspace supplies MLflow and Triton Control connection settings. Use an unused
 deployment name for each run. The default serving image is
 `nvcr.io/nvidia/tritonserver:26.06-py3`; the readiness timeout is 1800 seconds.
+
+## Isolated runs and repeat registration
+
+The `registered-model-name` workflow parameter (or `MLFLOW_REGISTERED_MODEL_NAME`
+in code-server) selects the model's registry history. Keep it unchanged to append
+versions to the same registered model; choose a new name for an isolated test.
+The logged model and generated Triton model use that name too. Deployment names
+must still be unique on every execution because this example creates deployments.
+
+The two examples use different default model names and therefore demonstrate
+separate version histories. Run the same example twice to verify version advancement.

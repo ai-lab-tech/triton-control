@@ -16,6 +16,8 @@ spec:
       value: workflows/mlflow-iris-auto-versioning-on-register/train.py
     - name: deployment-name
       value: automatic-triton-versions-register
+    - name: registered-model-name
+      value: automatic-triton-versions-register
     - name: triton-image
       value: nvcr.io/nvidia/tritonserver:26.06-py3
   templates:
@@ -46,6 +48,8 @@ spec:
         export PATH="/tmp/python-packages/bin:$PATH"
         python /tmp/train.py
       env:
+      - name: MLFLOW_REGISTERED_MODEL_NAME
+        value: '{{workflow.parameters.registered-model-name}}'
       - name: MLFLOW_EXPERIMENT_NAME
         value: triton-iris-autodeploy
       - name: ARGO_WORKFLOW_NAME

@@ -116,3 +116,18 @@ workflows/
 - vLLM examples use `nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3`.
 - Polling examples require the S3 Browser connection and Triton deployment
   repository prefix to point to the same S3 repository root.
+
+## Example regression tests
+
+The Iris automatic-versioning examples include Arrange–Act–Assert tests that train
+real scikit-learn pipelines while mocking MLflow and deployment network calls.
+Run in Python 3.12 with the examples' training dependencies installed:
+
+```bash
+python -m pip install numpy==2.2.6 pandas==2.3.3 scikit-learn==1.7.2
+python -m unittest discover -s examples/workflows/tests -v
+```
+
+Backend CI runs these tests separately so training dependencies are not required
+by the application backend. Live validation additionally requires MLflow, the
+pinned plugin wheels, an S3 profile, and a Triton deployment environment.
