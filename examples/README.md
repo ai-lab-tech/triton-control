@@ -12,8 +12,12 @@ For training workflows, follow the dedicated instructions:
   training through Argo Workflows and save the results to S3.
 - [MLflow Iris autodeploy](workflows/mlflow-iris-autodeploy/README.md): train,
   log the model to MLflow, and deploy it from the training script.
-- [MLflow Iris update and autodeploy](workflows/mlflow-iris-update-autodeploy/README.md):
-  train, log, retrain and log an update, then deploy the updated model.
+- [MLflow Iris automatic versioning on log](workflows/mlflow-iris-auto-versioning-on-log/README.md):
+  train Iris, automatically version Triton when logging and registering with
+  `log_model`, then deploy it.
+- [MLflow Iris automatic versioning on registration](workflows/mlflow-iris-auto-versioning-on-register/README.md):
+  train and log Iris, automatically version Triton during a separate
+  `register_model` call, then deploy it.
 
 For uploads to an existing polling instance, follow
 [Local Model Upload with S3 Polling](s3_upload/local-model-upload-s3-polling/README.md).
@@ -97,7 +101,8 @@ workflows/
 | `s3_upload/local-model-upload-s3-polling` | Upload a model to an existing polling instance | `python` |
 | `workflows/sklearn-iris-training` | Run scikit-learn training through Argo with S3-backed source and result artifacts | Training workflow |
 | `workflows/mlflow-iris-autodeploy` | Train Iris, generate its Triton adapter, and deploy from one Python script | MLflow and Python workflow |
-| `workflows/mlflow-iris-update-autodeploy` | Train, log, retrain and update Iris using plugin wheels from PyPI, then deploy version 2 | MLflow update workflow |
+| `workflows/mlflow-iris-auto-versioning-on-log` | Automatically version Triton via log_model registration and deploy Iris | MLflow versioning workflow |
+| `workflows/mlflow-iris-auto-versioning-on-register` | Automatically version Triton via separate register_model registration and deploy Iris | MLflow versioning workflow |
 
 ## Runtime Notes
 

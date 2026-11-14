@@ -2,9 +2,9 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   labels:
-    app.kubernetes.io/name: mlflow-iris-update-autodeploy
+    app.kubernetes.io/name: mlflow-iris-auto-versioning-on-register
     app.kubernetes.io/part-of: triton-control-examples
-  name: mlflow-iris-update-autodeploy
+  name: mlflow-iris-auto-versioning-on-register
 spec:
   entrypoint: train
   ttlStrategy:
@@ -13,9 +13,9 @@ spec:
   arguments:
     parameters:
     - name: s3-script-key
-      value: workflows/mlflow-iris-update-autodeploy/train.py
+      value: workflows/mlflow-iris-auto-versioning-on-register/train.py
     - name: deployment-name
-      value: iris-classifier-updated
+      value: automatic-triton-versions-register
     - name: triton-image
       value: nvcr.io/nvidia/tritonserver:26.06-py3
   templates:
@@ -38,8 +38,8 @@ spec:
       - |
         export HOME=/tmp
         python -m pip install --timeout 120 --retries 10 --no-cache-dir --index-url https://pypi.org/simple --only-binary=mlflow-triton,mlflow-triton-control --target /tmp/python-packages \
-          "mlflow-triton==0.4.5" \
-          "mlflow-triton-control==0.4.5" \
+          "mlflow-triton==0.4.6" \
+          "mlflow-triton-control==0.4.6" \
           "mlflow==3.14.0" \
           "numpy==2.2.6" "pandas==2.3.3" "scikit-learn==1.7.2" "cloudpickle==3.1.2"
         export PYTHONPATH="/tmp/python-packages${PYTHONPATH:+:$PYTHONPATH}"

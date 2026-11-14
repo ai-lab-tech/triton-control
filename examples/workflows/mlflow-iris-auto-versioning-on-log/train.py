@@ -1,4 +1,4 @@
-"""Train, log, retrain and update an Iris model before deployment."""
+"""Train Iris, automatically version Triton on logging, then deploy."""
 
 import os
 
@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 def deploy_model(model_uri: str) -> dict:
     client = get_deploy_client("triton-control")
     return client.create_deployment(
-        name=os.getenv("TRITON_DEPLOYMENT_NAME", "iris-classifier-updated"),
+        name=os.getenv("TRITON_DEPLOYMENT_NAME", "automatic-triton-versions"),
         model_uri=model_uri,
         config={
             "s3_profile_name": os.getenv(
@@ -47,7 +47,7 @@ def main() -> None:
     fitted_pipeline = Pipeline(
         [
             ("scaler", StandardScaler()),
-            ("classifier", LogisticRegression(C=1.0, max_iter=250, random_state=42)),
+            ("automatic-triton-versions", LogisticRegression(C=1.0, max_iter=250, random_state=42)),
         ]
     )
     fitted_pipeline.fit(x_train, y_train)
@@ -55,38 +55,22 @@ def main() -> None:
 
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "triton-iris-autodeploy"))
     with mlflow.start_run(
-        run_name=os.getenv("ARGO_WORKFLOW_NAME", "iris-update-autodeploy")
+        run_name=os.getenv("ARGO_WORKFLOW_NAME", "mlflow-iris-auto-versioning-on-log")
     ):
 
-        # Log first model
-        first = sklearn.log_model(
-            fitted_pipeline,
-            name="classifier",
-            input_example=example_dataframe,
-        )
-        print(f"Initial model (version 1): {first.model_uri}", flush=True)
-
-        mlflow.log_metric(
-            "accuracy_initial",
-            float(accuracy_score(y_test, fitted_pipeline.predict(x_test))),
-        )
-
-        # Retrain
-        fitted_pipeline.set_params(classifier__C=0.5)
-        fitted_pipeline.fit(x_train, y_train)
-        mlflow.log_metric(
-            "accuracy_updated", float(accuracy_score(y_test, fitted_pipeline.predict(x_test)))
-        )
-
-        # Log updated model
+        # Log and register model
         info = sklearn.log_model(
             fitted_pipeline,
-            name="classifier",
+            name="automatic-triton-versions",
+            registered_model_name="automatic-triton-versions",
             input_example=example_dataframe,
-            model_uri=first.model_uri,
         )
-        print(f"Updated model: {info.model_uri}", flush=True)
-        print(f"Triton version: {info.flavors['triton']['model_version']}", flush=True)
+        print(f"Registered model: {info.model_uri}", flush=True)
+
+        mlflow.log_metric(
+            "accuracy",
+            float(accuracy_score(y_test, fitted_pipeline.predict(x_test))),
+        )
 
         print(
             f"Predictions: {fitted_pipeline.predict(example_dataframe).tolist()}",
