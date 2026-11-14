@@ -22,16 +22,15 @@ describe("TeamsApiService", () => {
 
   afterEach(() => http.verify());
 
-  it("creates a team through the configured API base", () => {
+  it("resolves the installation group through the configured API base", () => {
     // Arrange
-    const input = { name: "engineering", is_active: true };
+    const url = "/control/api/teams/engineering";
     // Act
-    api.create(input).subscribe();
+    api.engineeringGroup().subscribe();
     // Assert
-    const request = http.expectOne("/control/api/teams");
-    expect(request.request.method).toBe("POST");
-    expect(request.request.body).toEqual(input);
-    request.flush({ id: "team", ...input });
+    const request = http.expectOne(url);
+    expect(request.request.method).toBe("PUT");
+    request.flush({ id: "team", name: "engineering", is_active: true });
   });
 
   it("uses idempotent membership routes for add and revoke", () => {
@@ -49,11 +48,10 @@ describe("TeamsApiService", () => {
     revoke.flush([]);
   });
 
-  it("loads retained history and members without mutating them", () => {
+  it("loads memberships without mutating them", () => {
     // Arrange
-    const requests = ["/control/api/teams/team/events", "/control/api/teams/team/members"];
+    const requests = ["/control/api/teams/team/members"];
     // Act
-    api.history("team").subscribe();
     api.members("team").subscribe();
     // Assert
     for (const url of requests) {

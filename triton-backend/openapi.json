@@ -1299,6 +1299,32 @@
         ]
       }
     },
+    "/api/teams/engineering": {
+      "put": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Initialize Engineering Group",
+        "operationId": "initialize_engineering_group_api_teams_engineering_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamDTO"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/teams/{team_id}": {
       "put": {
         "tags": [

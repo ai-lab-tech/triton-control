@@ -31,6 +31,15 @@ def create_team(
     return teams.create_team(session, claims, request)
 
 
+@router.put("/engineering", response_model=TeamDTO)
+@translate_app_errors
+def initialize_engineering_group(
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TeamDTO:
+    return teams.initialize_engineering_group(session, claims)
+
+
 @router.put("/{team_id}", response_model=TeamDTO)
 @translate_app_errors
 def update_team(

@@ -7,6 +7,7 @@ import { Action } from "@ngrx/store";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { InstancesService, UsersService } from "../../api/generated/index";
+import { TeamsApiService } from "../teams/teams-api.service";
 import { UsersPageComponent } from "./users-page.component";
 import { selectUsers, selectUsersInstances } from "../../state/users/users.selectors";
 import {
@@ -57,6 +58,14 @@ describe("UsersPageComponent", () => {
     await TestBed.configureTestingModule({
       imports: [UsersPageComponent],
       providers: [
+        {
+          provide: TeamsApiService,
+          useValue: {
+            engineeringGroup: () => of({ id: "engineering" }),
+            members: () => of([]),
+            setMember: () => of([]),
+          },
+        },
         provideMockStore(),
         provideMockActions(() => actionsSubject),
         { provide: HttpClient, useValue: {} },
@@ -68,6 +77,33 @@ describe("UsersPageComponent", () => {
 
     mockStore = TestBed.inject(MockStore);
     mockStore.overrideSelector(selectUsersInstances, []);
+  });
+
+  it("assigns installation engineering responsibility without changing the user's access role", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    await fixture.whenStable();
+    const api = TestBed.inject(TeamsApiService);
+    const user = {
+      id: 2,
+      name: "Engineer",
+      email: "eng@example.test",
+      role: "member",
+      isActive: true,
+      auth: "local" as const,
+      instances: [],
+    };
+    const assignment = spyOn(api, "setMember").and.returnValue(
+      of([{ user_id: 2, is_active: true } as any]),
+    );
+    const dispatch = spyOn(mockStore, "dispatch");
+    // Act
+    await fixture.componentInstance.setEngineer(user, true);
+    // Assert
+    expect(assignment).toHaveBeenCalledWith("engineering", 2, true);
+    expect(fixture.componentInstance.isEngineer(2)).toBeTrue();
+    expect(user.role).toBe("member");
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {

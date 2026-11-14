@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
@@ -115,3 +115,33 @@ def commit(session: Session) -> None:
     except IntegrityError as exc:
         session.rollback()
         raise ConflictError("Team name or membership conflicts with an existing record") from exc
+
+
+INSTALLATION_TEAM_ID = UUID("552af89b-09a5-48b6-9fc8-3f01afc8f0d8")
+
+
+def initialize_engineering_group(session: Session, actor_id: int) -> TeamEntity:
+    """Create the installation group once; preserve legacy teams and their audit trail."""
+    if session.get_bind().dialect.name == "postgresql":
+        session.execute(text("SELECT pg_advisory_xact_lock(741293817)"))
+    existing = session.get(TeamEntity, INSTALLATION_TEAM_ID)
+    if existing is not None:
+        return existing
+    sources = list_all(session)
+    name = "engineering"
+    if any(team.name == name for team in sources):
+        name = str(INSTALLATION_TEAM_ID)
+    group = TeamEntity(id=INSTALLATION_TEAM_ID, name=name, is_active=True)
+    session.add(group)
+    session.flush()
+    add_event(session, group.id, actor_id, "team_created", {"installation_group": True})
+    imported: set[int] = set()
+    for source in sources:
+        if not source.is_active:
+            continue
+        for membership_row, user in list_members(session, source.id):
+            if membership_row.is_active and user.id is not None and user.id not in imported:
+                set_membership(session, group.id, user.id, True)
+                add_event(session, group.id, actor_id, "member_added", {"source_team_id": str(source.id)}, user.id)
+                imported.add(user.id)
+    return group

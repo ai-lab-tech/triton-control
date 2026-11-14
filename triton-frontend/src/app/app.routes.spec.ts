@@ -8,8 +8,10 @@ describe("APP_ROUTES", () => {
     // Act
     const teams = shell?.children?.find((route) => route.path === "teams");
     // Assert
-    expect(teams?.canActivate).toContain(adminGuard);
-    expect(teams?.loadComponent).toBeDefined();
+    expect(teams?.redirectTo).toBe("users");
+    expect(shell?.children?.find((route) => route.path === "users")?.canActivate).toContain(
+      adminGuard,
+    );
   });
   it("RoutesConfiguration_LoginAndWildcardExist_DefinesExpectedPaths", () => {
     // Arrange

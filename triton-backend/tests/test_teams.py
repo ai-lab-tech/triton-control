@@ -262,6 +262,43 @@ class TeamTests(TeamFixture, unittest.TestCase):
         self.assertEqual(eligible, [1, 2])
         self.assertEqual(self.session.get(UserEntity, 3).role, "Viewer")
 
+    def test_installation_group_imports_active_members_once_and_preserves_history(self):
+        # Arrange
+        legacy = teams.create_team(self.session, self.claims, TeamRequest(name="legacy"))
+        teams.set_member(self.session, self.claims, legacy.id, 2, active=True)
+        teams.set_member(self.session, self.claims, legacy.id, 3, active=True)
+        teams.set_member(self.session, self.claims, legacy.id, 3, active=False)
+        history = teams.list_history(self.session, self.claims, legacy.id)
+
+        # Act
+        group = teams.initialize_engineering_group(self.session, self.claims)
+        imported = teams.list_members(self.session, self.claims, group.id)
+        teams.set_member(self.session, self.claims, group.id, 2, active=False)
+        repeated = teams.initialize_engineering_group(self.session, self.claims)
+
+        # Assert
+        self.assertEqual([member.user_id for member in imported], [2])
+        self.assertEqual(group.id, repeated.id)
+        self.assertFalse(teams.list_members(self.session, self.claims, group.id)[0].is_active)
+        self.assertEqual(teams.list_history(self.session, self.claims, legacy.id), history)
+        self.assertEqual(self.session.get(UserEntity, 2).role, "member")
+
+    def test_installation_group_does_not_import_paused_teams_and_cannot_be_paused(self):
+        # Arrange
+        legacy = teams.create_team(self.session, self.claims, TeamRequest(name="paused"))
+        teams.set_member(self.session, self.claims, legacy.id, 2, active=True)
+        teams.update_team(self.session, self.claims, legacy.id, TeamRequest(name="paused", is_active=False))
+
+        # Act
+        group = teams.initialize_engineering_group(self.session, self.claims)
+
+        # Assert
+        self.assertEqual(teams.list_members(self.session, self.claims, group.id), [])
+        with self.assertRaises(ConflictError):
+            teams.update_team(self.session, self.claims, group.id, TeamRequest(name=group.name, is_active=False))
+        with self.assertRaises(ForbiddenError):
+            teams.initialize_engineering_group(self.session, {"role": "member"})
+
     def test_stale_admin_claims_do_not_bypass_current_account_role(self):
         # Arrange
         actor = users.find_by_id(self.session, 1)
@@ -310,6 +347,17 @@ class TeamApiTests(TeamFixture, unittest.TestCase):
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 
+    def test_installation_endpoint_is_repeatable(self):
+        # Arrange
+        url = "/api/teams/engineering"
+        # Act
+        first = self.client.put(url)
+        second = self.client.put(url)
+        # Assert
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["id"], second.json()["id"])
+        self.assertEqual(len(repository.list_all(self.session)), 1)
+
     def test_http_contract_normalizes_creates_updates_and_revokes(self):
         # Arrange
         request = {"name": " ML-Engineering "}
@@ -330,6 +378,7 @@ class TeamApiTests(TeamFixture, unittest.TestCase):
         team = self.create()
         requests = [
             ("GET", "/api/teams", None),
+            ("PUT", "/api/teams/engineering", None),
             ("POST", "/api/teams", {"name": "new"}),
             ("PUT", f"/api/teams/{team.id}", {"name": "new"}),
             ("GET", f"/api/teams/{team.id}/members", None),

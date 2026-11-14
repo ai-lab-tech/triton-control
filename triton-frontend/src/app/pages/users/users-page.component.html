@@ -37,6 +37,17 @@
     @if (error()) {
       <p>{{ error() }}</p>
     }
+    <p class="page-subtitle">
+      ML engineers share responsibility for this installation. Access roles remain unchanged.
+    </p>
+    @if (engineeringError()) {
+      <p role="alert">
+        {{ engineeringError() }}
+        <button mat-button (click)="loadEngineeringGroup()" [disabled]="engineeringBusy()">
+          Retry
+        </button>
+      </p>
+    }
     <table mat-table [dataSource]="users()">
       <ng-container matColumnDef="name">
         <th mat-header-cell *matHeaderCellDef>Name</th>
@@ -61,6 +72,20 @@
               }
             </mat-select>
           </mat-form-field>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="engineering">
+        <th mat-header-cell *matHeaderCellDef>ML engineer</th>
+        <td mat-cell *matCellDef="let row">
+          <mat-checkbox
+            [checked]="isEngineer(row.id)"
+            [disabled]="
+              engineeringBusy() || !!engineeringError() || (!row.isActive && !isEngineer(row.id))
+            "
+            (change)="setEngineer(row, $event.checked); $event.source.checked = isEngineer(row.id)"
+            [aria-label]="'ML engineering responsibility for ' + row.name"
+          ></mat-checkbox>
         </td>
       </ng-container>
 

@@ -1,6 +1,10 @@
 import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
+import { MatCheckboxModule } from "@angular/material/checkbox";
+import { TeamsApiService, TeamMember } from "../teams/teams-api.service";
+import { mapApiErrorMessage } from "../../shared/api-error-message";
+
 import { FormsModule } from "@angular/forms";
 import { MatCardModule } from "@angular/material/card";
 import { MatButtonModule } from "@angular/material/button";
@@ -44,6 +48,7 @@ import {
   standalone: true,
   imports: [
     FormsModule,
+    MatCheckboxModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
@@ -74,12 +79,59 @@ export class UsersPageComponent {
     "name",
     "email",
     "role",
+    "engineering",
     "status",
     "auth",
     "instances",
     "addInstance",
     "actions",
   ];
+  private readonly engineeringApi = inject(TeamsApiService);
+  private engineeringGroupId = "";
+  readonly engineeringMembers = signal<TeamMember[]>([]);
+  readonly engineeringBusy = signal(true);
+  readonly engineeringError = signal("");
+
+  isEngineer(userId: number): boolean {
+    return this.engineeringMembers().some(
+      (member) => member.user_id === userId && member.is_active,
+    );
+  }
+
+  async loadEngineeringGroup(): Promise<void> {
+    this.engineeringBusy.set(true);
+    this.engineeringError.set("");
+    try {
+      const group = await firstValueFrom(this.engineeringApi.engineeringGroup());
+      this.engineeringGroupId = group.id;
+      this.engineeringMembers.set(await firstValueFrom(this.engineeringApi.members(group.id)));
+    } catch (error) {
+      this.engineeringError.set(
+        mapApiErrorMessage(error, "Could not load engineering responsibility."),
+      );
+    } finally {
+      this.engineeringBusy.set(false);
+    }
+  }
+
+  async setEngineer(user: UserRow, active: boolean): Promise<void> {
+    if (this.engineeringBusy() || !this.engineeringGroupId || this.engineeringError()) return;
+    this.engineeringBusy.set(true);
+    try {
+      this.engineeringMembers.set(
+        await firstValueFrom(
+          this.engineeringApi.setMember(this.engineeringGroupId, user.id, active),
+        ),
+      );
+    } catch (error) {
+      this.engineeringError.set(
+        mapApiErrorMessage(error, "Could not update engineering responsibility."),
+      );
+    } finally {
+      this.engineeringBusy.set(false);
+    }
+  }
+
   readonly roles = ["admin", "member", "viewer"];
 
   // Local per-row form state ([(ngModel)] per row)
@@ -120,6 +172,7 @@ export class UsersPageComponent {
 
     this.store.dispatch(usersPageOpened());
     void this.loadEmailLifecycleAvailability();
+    void this.loadEngineeringGroup();
   }
 
   get lifecycleActionDisabledReason(): string {

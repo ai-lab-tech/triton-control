@@ -167,37 +167,35 @@ Admins can delete users from the Users page. Deleting a user removes that local
 Triton Control account record. For OIDC users, it does not delete the identity
 from the external OIDC provider.
 
-## Engineering Teams
+## ML Engineering Responsibility
 
-Admins can open **Engineering Teams** from the account menu (`/teams`) to create,
-rename, activate or deactivate teams and add or revoke memberships. Team names
-are unique, lowercase identifiers of up to 64 letters, digits, hyphens or
-underscores, starting with a letter or digit. Leading/trailing whitespace is
-removed and uppercase letters are normalized.
+Each installation serves one use case and has one engineering group. In **User
+Management** (`/users`), admins use the **ML engineer** checkbox to assign or revoke
+responsibility. There is no team creation, naming or selection screen. Existing
+`/teams` bookmarks redirect to user management.
 
-A user may belong to multiple teams. Roles remain `admin`, `member` and `viewer`.
-Membership organizes engineering responsibility; it never assigns an instance,
-grants artifact access, changes a role or shares another user's workspace.
-Only active `member`/`admin` accounts with an active membership in an active team
-are eligible for future engineering task routing. Task submission and claiming
-are separate features; this page does not create tasks.
+Roles remain `admin`, `member` and `viewer`. Engineering membership never grants
+instance access, artifact access, workspace ownership or admin permissions. Only
+active member/admin accounts are eligible for future engineering task routing;
+a viewer can hold responsibility but is not eligible until their access role permits it.
+Task submission and claiming are separate features, not implemented here.
 
-Inactive accounts cannot be added. Deactivating a team keeps its memberships
-and history but suspends eligibility. Reactivation restores eligibility for
-otherwise eligible members; explicitly revoked memberships stay revoked until
-an admin adds them again. Membership changes are idempotent, including repeated
-revocation requests. Repeated no-op requests do not create duplicate history.
+On first use, the installation group is initialized once. Active memberships from
+active legacy teams are copied into it, including inactive accounts whose eligibility
+remains suspended. Revoked memberships and memberships in inactive teams are not
+reactivated. Original teams, memberships and audit history are preserved. Later
+initialization calls do not import again, so revocations stay revoked. Migration
+and membership changes retain audit events; roles and resource assignments are unchanged.
 
-The page shows current and revoked memberships plus the latest 100 changes.
-History records the actor, affected user, time and before/after team settings.
-There is no team/history delete endpoint. Account deletion removes that user's
-current membership rows but retains historical numeric actor/subject identities.
-Application history is retained in the database; it is not a claim of tamper-proof
-storage against a database administrator.
+Inactive users cannot be newly assigned. An admin can still revoke their existing
+responsibility. Changes are idempotent and retained in the audit history.
 
 ### Team API
 
 All endpoints require a currently active administrator, including reads.
+The UI uses `PUT /api/teams/engineering` to initialize/resolve the installation
+group, then its membership endpoints. Generic team endpoints remain for legacy
+compatibility; they are not exposed in the user interface.
 
 | Method and path | Behavior |
 | --- | --- |

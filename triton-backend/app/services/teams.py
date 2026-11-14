@@ -42,6 +42,8 @@ def update_team(
 ) -> TeamDTO:
     actor = _admin_id(session, claims)
     team = teams.get(session, team_id, lock=True)
+    if team_id == teams.INSTALLATION_TEAM_ID and (request.name != team.name or not request.is_active):
+        raise ConflictError("Manage installation engineering responsibility through user memberships")
     before = {"name": team.name, "is_active": team.is_active}
     after = request.model_dump()
     if before != after:
@@ -92,3 +94,10 @@ def list_history(
     _admin_id(session, claims)
     teams.get(session, team_id)
     return [event_to_dto(event) for event in teams.list_events(session, team_id, limit)]
+
+
+def initialize_engineering_group(session: Session, claims: dict[str, Any]) -> TeamDTO:
+    actor = _admin_id(session, claims)
+    group = teams.initialize_engineering_group(session, actor)
+    teams.commit(session)
+    return team_to_dto(group)
