@@ -473,3 +473,29 @@ class RegistryConfigEntity(SQLModel, table=True):
     __tablename__ = "registry_config"
     id: int = Field(default=1, primary_key=True)
     dockerconfigjson_enc: str = Field(default="", repr=False)
+
+
+class OperationEntity(SQLModel, table=True):
+    """Durable execution intent, separate from domain records."""
+
+    __tablename__ = "operations"
+    __table_args__ = (UniqueConstraint("actor_id", "kind", "target", "idempotency_key",
+                                       name="uq_operation_request"),)
+    id: str = Field(primary_key=True)
+    actor_id: int = Field(index=True)
+    kind: str = Field(max_length=80)
+    target: str = Field(max_length=256)
+    idempotency_key: str = Field(max_length=128)
+    payload_hash: str
+    payload: dict[str, Any] = Field(sa_column=Column(JSON))
+    state: str = Field(default="pending", index=True)
+    cancel_requested: bool = False
+    generation: int = 0
+    attempts: int = 0
+    worker: Optional[str] = None
+    lease_until: Optional[datetime] = None
+    available_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    message: str = ""
