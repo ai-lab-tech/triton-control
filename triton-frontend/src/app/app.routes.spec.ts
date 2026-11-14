@@ -1,6 +1,18 @@
 import { APP_ROUTES } from "./app.routes";
+import { adminGuard } from "./shared/auth/auth.guard";
 
 describe("APP_ROUTES", () => {
+  it("protects engineering team administration with the admin guard", () => {
+    // Arrange
+    const shell = APP_ROUTES.find((route) => route.path === "");
+    // Act
+    const teams = shell?.children?.find((route) => route.path === "teams");
+    // Assert
+    expect(teams?.redirectTo).toBe("users");
+    expect(shell?.children?.find((route) => route.path === "users")?.canActivate).toContain(
+      adminGuard,
+    );
+  });
   it("RoutesConfiguration_LoginAndWildcardExist_DefinesExpectedPaths", () => {
     // Arrange
     const paths = APP_ROUTES.map((route) => route.path);

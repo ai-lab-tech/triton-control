@@ -75,8 +75,6 @@ def session_factory() -> Session:
 
 def init_db() -> None:
     """Initialize database - create all tables."""
-    from sqlmodel import SQLModel
-
     from app.db.entities import (  # Import models to register them
         AccountLifecycleTokenEntity,
         CodeServerEntity,
@@ -92,12 +90,16 @@ def init_db() -> None:
         RecoveryRateLimitEntity,
         S3ProfileEntity,
         SecurityEventEntity,
+        TeamEntity,
+        TeamEventEntity,
         TritonInstanceEntity,
         UserEntity,
+        UserTeamEntity,
         WorkflowS3CredentialEntity,
     )
+    from app.db.schema import create_tables
 
-    SQLModel.metadata.create_all(engine)
+    create_tables(engine)
     with engine.begin() as conn:
         conn.execute(text(
             "ALTER TABLE triton_instances ADD COLUMN IF NOT EXISTS perf_deleting BOOLEAN NOT NULL DEFAULT FALSE"

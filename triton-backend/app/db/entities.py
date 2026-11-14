@@ -20,8 +20,9 @@ Defines the following database tables:
 
 from datetime import datetime
 from typing import Any, List, Optional
+from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -104,6 +105,43 @@ class UserEntity(SQLModel, table=True):
     assigned_instances: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     is_active: bool = Field(default=True)
     credential_version: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TeamEntity(SQLModel, table=True):
+    """Engineering responsibility, independent of application authorization."""
+
+    __tablename__ = "teams"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(sa_column=Column(String(64), nullable=False, unique=True))
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class UserTeamEntity(SQLModel, table=True):
+    """One current membership per pair; revocations are retained, not deleted."""
+
+    __tablename__ = "user_teams"
+
+    team_id: UUID = Field(foreign_key="teams.id", primary_key=True)
+    user_id: int = Field(sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True))
+    is_active: bool = True
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TeamEventEntity(SQLModel, table=True):
+    """Append-only administrative history, retained after account removal."""
+
+    __tablename__ = "team_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    team_id: UUID = Field(foreign_key="teams.id", index=True)
+    # Historical identities intentionally do not reference deletable user rows.
+    actor_user_id: int
+    subject_user_id: int | None = None
+    action: str
+    changes: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
