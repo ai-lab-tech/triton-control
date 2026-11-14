@@ -25,7 +25,7 @@ export const instanceDetailSupplementLoaded = createAction(
 
 export const instanceDetailLoadFailed = createAction(
   "[Instances Detail] Load Failed",
-  props<{ message: string }>(),
+  props<{ message: string; status?: number }>(),
 );
 
 export const instanceDetailRefreshRequested = createAction(
@@ -35,7 +35,7 @@ export const instanceDetailRefreshRequested = createAction(
 
 export const instanceDetailRefreshed = createAction(
   "[Instances Detail] Refreshed",
-  props<{ partial: Partial<Instance> }>(),
+  props<{ partial: Partial<Instance>; instance?: Instance }>(),
 );
 
 export const s3ConfigSaveRequested = createAction(
@@ -85,4 +85,9 @@ export const tritonConnectionSaveFailed = createAction(
 
 export const instanceDetailRefreshSilentlyFailed = createAction(
   "[Instances Detail] Refresh Silently Failed",
+);
+
+export const instanceDetailRefreshFailed = createAction(
+  "[Instances Detail] Refresh Failed",
+  props<{ message: string; status?: number }>(),
 );

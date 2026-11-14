@@ -226,10 +226,12 @@ def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) 
     if not instance:
         raise NotFoundError("Instance not found")
 
+    from app.services.deployment.operations import prepare_deletion
+    owned_cleanup = prepare_deletion(session, instance_id)
     prepare_instance_deletion(session, instance_id)
     instance_name = instance.name
     deployment_namespace = (instance.deployment_namespace or "").strip()
-    if instance.is_self_deployed and deployment_namespace:
+    if instance.is_self_deployed and deployment_namespace and not owned_cleanup:
         try:
             control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
             if control_ns and deployment_namespace == control_ns:

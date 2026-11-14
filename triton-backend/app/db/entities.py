@@ -499,3 +499,21 @@ class OperationEntity(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     message: str = ""
+
+
+class DeploymentIntentEntity(SQLModel, table=True):
+    """Frozen protected creation inputs and resource ownership; retained after deletion."""
+
+    __tablename__ = "deployment_intents"
+    operation_id: str = Field(primary_key=True, foreign_key="operations.id")
+    instance_id: int = Field(index=True, unique=True)
+    namespace: str
+    name: str
+    reservation: Optional[str] = Field(default=None, unique=True)
+    bundle_enc: str = Field(sa_column=Column(Text))
+    response: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    resource_uids: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
+    deadline_at: datetime
+    delete_requested: bool = False
+    cleaned: bool = False
+    examples_captured: bool = False

@@ -100,7 +100,8 @@ def complete(
 
 def cancel(session: Session, operation_id: str) -> OperationEntity:
     row = get(session, operation_id, lock=True)
-    if row.state not in TERMINAL:
+    if row.state not in {"succeeded", "cancelled"}:
+        row.state = "pending"
         row.cancel_requested = True
         row.updated_at = now(session)
         row.available_at = row.updated_at

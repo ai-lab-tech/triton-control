@@ -57,13 +57,20 @@ class OperationService:
             raise UnprocessableEntityError("Operation kind is not enabled")
         return self.adapters[kind]
 
-    def authorize(self, session: Session, actor: UserEntity | None, kind: str, target: str, action: Action) -> None:
+    def authorize(
+        self, session: Session, actor: UserEntity | None, kind: str, target: str, action: Action,
+        operation: OperationEntity | None = None,
+    ) -> None:
         if actor is None or actor.id is None or not actor.is_active:
             raise ForbiddenError("Active user required")
         session.refresh(actor)
-        if not actor.is_active or (action != "read" and actor.role not in {"admin", "member"}):
+        if not actor.is_active or (action != "read" and actor.role.strip().lower() not in {"admin", "member"}):
             raise ForbiddenError("Current user role does not permit this operation")
-        self.adapter(kind).authorize(session, actor, target, action)
+        specific = getattr(self.adapter(kind), "authorize_operation", None)
+        if specific and operation is not None:
+            specific(session, actor, operation, action)
+        else:
+            self.adapter(kind).authorize(session, actor, target, action)
 
     def submit(
         self, session: Session, claims: dict[str, Any], request: OperationRequest, key: str,
@@ -92,7 +99,7 @@ class OperationService:
         self, session: Session, claims: dict[str, Any], operation_id: str, action: Action,
     ) -> OperationEntity:
         row = repo.get(session, operation_id)
-        self.authorize(session, require_user_entity(session, claims), row.kind, row.target, action)
+        self.authorize(session, require_user_entity(session, claims), row.kind, row.target, action, row)
         return row
 
     def cancel(self, session: Session, claims: dict[str, Any], operation_id: str) -> OperationResponse:
@@ -100,7 +107,13 @@ class OperationService:
         return dto(repo.cancel(session, operation_id))
 
     def retry(self, session: Session, claims: dict[str, Any], operation_id: str) -> OperationResponse:
-        self.checked(session, claims, operation_id, "retry")
+        row = self.checked(session, claims, operation_id, "retry")
+        row = repo.get(session, operation_id, lock=True)
+        if row.state != "failed":
+            raise ConflictError("Only failed operations can be retried")
+        prepare = getattr(self.adapter(row.kind), "prepare_retry", None)
+        if prepare:
+            prepare(session, row)
         return dto(repo.retry(session, operation_id))
 
 
@@ -120,7 +133,7 @@ class ExecutionContext:
         with self.sessions() as session:
             current = repo.owned(session, self.row.id, self.row.worker or "", self.row.generation)
             self.service.authorize(session, users.find_by_id(session, current.actor_id),
-                                   current.kind, current.target, "execute")
+                                   current.kind, current.target, "execute", current)
             if current.cancel_requested != self.row.cancel_requested:
                 raise ConflictError("Cancellation requires a new reconciliation pass")
             repo.heartbeat(session, current.id, self.row.worker or "", self.row.generation, 30)

@@ -1,5 +1,17 @@
+@if (loadError() && !showNotFound()) {
+  <div class="empty" role="alert">
+    <div>{{ loadError() }}</div>
+    @if (instance()) {
+      <div>Last known state. Updates and actions are temporarily unavailable.</div>
+    }
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}
 @if (instance(); as instance) {
   <div class="instance-detail">
+    @if (instanceId(); as id) {
+      <app-deployment-operation [instanceId]="id" [connectionUnavailable]="!!loadError()" />
+    }
     <div class="detail-top">
       <nav class="page-breadcrumbs" aria-label="Breadcrumb">
         <a routerLink="/instances">Triton Instances</a>

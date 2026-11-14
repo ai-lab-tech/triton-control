@@ -19,6 +19,7 @@ from sqlmodel import Session
 from app.core.crypto import encrypt_secret, hash_secret
 from app.core.identity import require_user_entity
 from app.db.database import session_factory
+from app.db.entities import TritonInstanceEntity
 from app.exceptions import BadRequestError, ConflictError
 from app.repositories import dashboard_alerts, instances, users
 from app.repositories import perf_analyzer as perf_analyzer_repo
@@ -53,6 +54,7 @@ def upsert_deployed_instance(
     triton_url: str,
     metrics_url: str | None,
     initial_snapshot: dict[str, Any],
+    commit: bool = True,
 ) -> Any:
     user = require_user_entity(session, claims)
     s3 = _parse_s3_url(request.s3_url)
@@ -97,10 +99,18 @@ def upsert_deployed_instance(
         "s3_address_style": "path",
     }
     validate_deployment_available(session, deployment_name, triton_url)
-    row = instances.create(session, created_by_user_id=user.id, **values)
+    if commit:
+        row = instances.create(session, created_by_user_id=user.id, **values)
+    else:
+        row = TritonInstanceEntity(created_by_user_id=user.id, **values)
+        session.add(row)
+        session.flush()
     if deployment_name not in (user.assigned_instances or []):
         user.assigned_instances = [*user.assigned_instances, deployment_name]
-        users.save(session, user)
+        if commit:
+            users.save(session, user)
+        else:
+            session.add(user)
     return row
 
 

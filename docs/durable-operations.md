@@ -2,9 +2,9 @@
 
 The shared operation service stores execution intent before execution. It does
 not replace preparation tasks, deployment records, model lineage or approvals.
-There are deliberately no production adapters enabled in this foundation change:
-capture, build, validation and release stories register their own adapters.
-Existing deployment and Perf Analyzer endpoints keep their current behavior.
+Managed development deployment creation is the first consumer (`deployment.create.v1`).
+Capture, build, validation and release stories register their own adapters.
+Perf Analyzer keeps its existing reconciliation. There is no production executor in this adapter.
 
 ## HTTP contract
 
@@ -78,16 +78,14 @@ verified domain success, never merely a successful HTTP request to a provider.
 
 Before enabling an adapter, test it against its real provider, including lost
 acknowledgements, ownership collisions, concurrent stale attempts and cleanup.
-Kubernetes adapter tests require real Kubernetes; the foundation itself creates
-no workloads. Approval, installation-mode policy and team membership checks are
+Kubernetes adapter tests require real Kubernetes. Approval, installation-mode policy and team membership checks are
 mandatory domain policy where applicable, not inferred from operation state.
 
 ## Upgrade and verification
 
-Startup adds the `operations` table and unique request constraint through the
+Startup adds the `operations` and `deployment_intents` tables and unique constraints through the
 existing advisory-lock-serialized `create_tables` mechanism. Repeated and
-concurrent startup are safe for this additive table. Existing data and endpoints
-are unchanged. Actor IDs intentionally retain historical identity after account
+concurrent startup are safe for this additive table. Existing instance rows are retained. Actor IDs intentionally retain historical identity after account
 deletion; execution requires a currently existing active account. No automatic
 purge is supplied: removing rows also removes their idempotency guarantee.
 
@@ -105,21 +103,139 @@ lease expiry, old-worker rejection, crash recovery, uncertain writes,
 authorization revocation and cancellation races. The PostgreSQL CI job runs them
 alongside team migration tests. SQLite tests are not evidence for PostgreSQL locks.
 
-The API schema is exported to both checked-in OpenAPI files. No frontend screen
-or generated frontend client is needed until a consuming workflow is implemented.
+The API schema is exported to both checked-in OpenAPI files and the frontend client is regenerated.
 
-## Local verification record (2026-11-14)
+## Managed development deployments
 
-- All 18 PostgreSQL integration tests passed: 13 operation lifecycle/concurrency
-  tests, four team migration/concurrency tests, and one Perf Analyzer concurrency
-  test. PostgreSQL 16 ran in an isolated disposable container.
-- Full backend discovery completed: 805 tests, 782 passed and 23 skipped, no
-  failures or errors. Eighteen skips are the PostgreSQL tests already executed
-  separately; five chart checks require Helm, which is not installed locally.
-- Full backend mypy, Ruff, four import-layer contracts, Bandit and diff whitespace
-  checks previously passed; checked-in OpenAPI exports match.
-- The operation-specific HTTP test checks route schema and response contract
-  directly; no dedicated operation HTTP transport integration test is claimed.
-- No real Kubernetes adapter was added or tested in this foundation change.
-  Provider-specific fencing/recovery acceptance remains mandatory for each consumer.
+`POST /api/deployments` now returns **202 Accepted**. The existing response fields
+(including `instance_id`) remain; `operation_id`, `status_url`, `operation_state`
+and a `Location` header are added. `applied_resources` is empty until success.
+The endpoint commits the operation, instance, assignment and frozen intent in one
+transaction before any Kubernetes writes. PostgreSQL serializes target admission
+and assignment updates; a separate request for the same reserved identity gets 409.
 
+Use a persistent `Idempotency-Key`. The scope is actor + deployment kind + normalized
+name + key. A keyed HMAC of the canonical request includes secret input without
+putting it in public operation JSON. Replay rechecks account, instance and delegated
+token restrictions, and reuses the original rendered manifests, resolved S3 profile,
+registry credentials and generated auth names. Changed input under the same key
+returns 409. A replay for a deleted instance returns 409; create afresh with a new key.
+
+Legacy clients without a key receive a deterministic actor/target-scoped key derived
+from the same canonical request. This makes an identical repeat safe, including a
+lost response; changing input for an existing name is still a conflict. New clients
+should supply their own key. The browser stores only the key, request fingerprint
+and name in session storage, scoped to the signed-in user. It recovers the instance
+through `GET /api/deployments/requests/{key}?deployment_name=...`. The instance page
+polls `GET /api/deployments/{id}/operation`, shows queued/running/failed/completed or
+cancellation requested, and offers retry/cancel. Legacy instances return null status.
+
+Frozen manifests and credential values use authenticated Fernet encryption in the
+internal `deployment_intents.bundle_enc` column. Configure a stable, strong
+`OPERATION_SECRET_ENCRYPTION_KEY`; the existing stable `SESSION_SECRET` is the
+fallback. Every replica must use the same key. Keep it with database backups;
+changing/loss of this key prevents recovery and changes request fingerprints.
+There is no plaintext fallback and no key rotation/re-encryption command in this
+change. The operation status contains neither inputs nor credentials. Existing
+instance credential storage is unchanged by this mechanism.
+
+The reconciler uses create-only requests, stable resource names, an operation label,
+a ConfigMap ownership anchor and Kubernetes owner references. It reads before
+creating and verifies frozen content, ownership and recorded UIDs. Deletes use UID
+and resourceVersion preconditions. A conflicting or modified resource fails safely;
+it is never adopted merely because the name matches. Partial writes and lost
+acknowledgements are observed on the next pass. Domain updates are fenced by the
+current leased operation row, locked during bounded provider calls. Ownership
+checks and the anchor protect against late writes beyond database fencing.
+
+Creation succeeds only when Kubernetes reports the current Deployment generation,
+all desired replicas updated, ready and available. The pod readiness probe is the
+existing configured Triton serving probe. This is creation readiness at that point,
+not a promise that an individual MLflow model is loaded or the service stays healthy.
+Live health remains on the instance. The default readiness deadline is 1800 seconds
+(`TRITON_DEPLOY_OPERATION_TIMEOUT_SECONDS`, minimum 60). Readiness timeout and
+invalid provider input fail with safe messages; uncertain provider outcomes retry
+with backoff. Explicit retry retains the same resource identities and resets the
+deadline. Optional inference-example capture remains best effort.
+
+Current active account, role, instance assignment, account credential version,
+source profile existence and endpoint policy are checked again during execution.
+`TRITON_CONTROL_MODE` defaults to `development`; other values block new creation and
+retry execution. Requested cleanup is still permitted after a mode cutover. Revoked
+account/instance access blocks the original actor's execution, including cleanup;
+an administrator must restore authorized access or perform reviewed manual cleanup.
+No operation grants additional resource privileges. Scoped MLflow/workspace tokens
+retain their existing API restrictions and use the MLflow status endpoint.
+
+Cancellation deletes only the frozen, owned resource set and ownership anchor,
+waits for their pods to disappear, and leaves the namespace and external TLS Secrets
+intact. Ownership conflicts during cleanup remain observable and retryable pending
+cancellation. No cleanup bypass is granted for a foreign or replaced resource.
+
+Deletion of a new managed instance first requests cleanup and returns **409** with
+“cleanup requested”. Repeat the same DELETE after cleanup; only then is the instance
+removed and its identity reservation released. This also serializes deletion with
+an in-flight worker. Old workers cannot recreate a deliberately deleted instance.
+Operation/instance IDs and safe history remain for diagnosis. Post-creation manual
+resource replacement or access reconfiguration can require manual inspection if
+it changes resource ownership; the creation record is not a general update reconciler.
+
+Pre-upgrade pending instances have no frozen input. They are **not** automatically
+replayed or assigned fabricated operations. Inspect and explicitly remove/recreate
+those instances. Deploy application replicas with a consistent version; drain the
+old BackgroundTasks workers before switching to the durable admission endpoint.
+
+## Optional MLflow client compatibility
+
+Reviewed `mlflow-plugin/packages/mlflow-triton-control/src/mlflow_triton_control/deployment_client.py`:
+it uses `raise_for_status()`, consumes `instance_id`, and polls the existing MLflow
+model-readiness endpoint. It accepts 202 without modification. Keyless retries
+therefore work, but this client does not display the operation or offer operation
+retry/cancel. A failed creation remains visible through instance status until the
+client's readiness timeout. Its synchronous DELETE caller must retry the explicit
+cleanup-pending 409; it must not treat this response as completed deletion. The
+published-client compatibility runner now exercises this migration behavior.
+
+## Verification
+
+Backend tests cover atomic admission/rollback, secret-safe status, current permissions,
+canonical replay, conflicting inputs and target reservations, same-actor assignment
+races, concurrent workers, lease loss, crash recovery, uncertain writes, readiness
+failure/retry and owned cleanup. UI tests cover stable retry keys, reload recovery,
+status polling, cancellation and retry. An HTTP contract test exercises the existing
+keyless client's response/readiness/deletion behavior through the real routes.
+
+```sh
+python -m unittest tests.test_deployment_operations tests.test_deployment_client_contract -v
+OPERATIONS_TEST_DATABASE_URL=postgresql://user:password@localhost/database \
+  python -m unittest tests.test_operations_postgres tests.test_deployment_operations_postgres -v
+DEPLOYMENT_TEST_KUBERNETES=1 \
+KUBERNETES_KUBECONFIG_PATH=/path/to/kubeconfig \
+OPERATIONS_TEST_DATABASE_URL=postgresql://user:password@localhost/database \
+  python -m unittest tests.test_deployment_operations_kubernetes -v
+```
+
+Kubernetes tests create and remove unique `tc-operation-test-*` namespaces and
+isolated database schemas. They check actual UIDs, object counts, lost acknowledgements,
+foreign objects, stale-worker rejection, timeout/retry, deletion and cleanup. A small
+HTTP probe fixture verifies real controller readiness; it does not qualify Triton
+inference, GPU runtime, S3 connectivity or a production image. CI runs these tests
+with PostgreSQL and kind. Local verification uses PostgreSQL 16 and MicroK8s.
+
+### Local verification record (2026-11-14)
+
+- Full backend coverage run: 835 tests passed, no skips; 81.7% line/branch coverage.
+  This includes PostgreSQL operation/team/Perf Analyzer tests, the real Kubernetes
+  deployment tests, the HTTP client contract fixture and all five Helm chart checks.
+- An additional PostgreSQL test passed for deletion racing an in-flight deployment
+  write, including cleanup and prevention of recreation. A targeted recovery test
+  also verifies lease renewal during slow reads of already-created resources.
+- Backend mypy (232 files), Ruff, Bandit, all four import-layer contracts, OpenAPI
+  parity and Helm lint passed.
+- Frontend build, lint and 481 browser tests passed, including request-key replay,
+  reload recovery and operation status/actions.
+- The compatibility HTTP fixture was tested locally; installing and exercising the
+  published MLflow distribution remains the existing dedicated CI compatibility job.
+- npm audit still reports advisories in existing dependencies; none concern the added
+  `@noble/hashes` dependency. Dependency upgrades are outside this deployment change.
+- Disposable PostgreSQL and unique Kubernetes test namespaces were removed after testing.

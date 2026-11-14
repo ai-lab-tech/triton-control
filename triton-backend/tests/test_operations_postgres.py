@@ -9,7 +9,7 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlmodel import Session, create_engine
 
-from app.db.entities import OperationEntity
+from app.db.entities import DeploymentIntentEntity, OperationEntity
 from app.db.schema import create_tables
 from app.repositories import operations as repo
 from tests import test_operations as shared
@@ -57,6 +57,7 @@ class OperationPostgresTests(shared.OperationTests):
         self.assertEqual(sum(row is not None for row in claims), 1)
 
     def test_concurrent_repeatable_schema(self):
+        DeploymentIntentEntity.__table__.drop(self.engine)
         OperationEntity.__table__.drop(self.engine)
         with ThreadPoolExecutor(max_workers=3) as pool:
             list(pool.map(lambda _: create_tables(self.engine), range(3)))
