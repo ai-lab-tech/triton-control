@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap, ParamMap } from "@angular/router";
-import { BehaviorSubject, of, throwError } from "rxjs";
+import { BehaviorSubject, of, Subject, throwError } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { InstancesService } from "../../../api/generated/index";
 import { InstanceModelInferPageComponent } from "./instance-model-infer-page.component";
@@ -52,6 +52,9 @@ describe("InstanceModelInferPageComponent", () => {
     instancesApiMock.getInstanceModelConfigApiInstancesInstanceIdModelsModelNameVersionsVersionConfigGet.and.returnValue(
       of({ max_batch_size: 8 } as any),
     );
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      throwError(() => ({ status: 404 })),
+    );
 
     await TestBed.configureTestingModule({
       imports: [InstanceModelInferPageComponent],
@@ -81,6 +84,170 @@ describe("InstanceModelInferPageComponent", () => {
 
   afterEach(() => {
     mockStore?.resetSelectors();
+  });
+
+  it("uses the database example without requiring an S3 request file", async () => {
+    const payload = { inputs: [{ name: "x", datatype: "INT64", shape: [1], data: [42] }] };
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: false },
+        inference_examples: { "model-a": payload },
+      } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    const dispatch = spyOn(mockStore, "dispatch");
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual(payload);
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).not.toHaveBeenCalled();
+    await component.sendInference();
+    expect(dispatch).toHaveBeenCalledWith(
+      inferRequestStarted({
+        payload,
+        instanceId: "7",
+        modelName: "model-a",
+        version: "1",
+      }),
+    );
+  });
+
+  it("prefers the database example over a repository example", async () => {
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: true, prefix: "repo" },
+        inference_examples: { "model-a": { inputs: [], id: "database" } },
+      } as any),
+    );
+    instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
+      of({ content: '{"inputs":[],"id":"repository"}' } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent).id).toBe("database");
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("preserves saved editor input over the database example", async () => {
+    localStorage.setItem("triton-infer-body:7:model-a:1", '{"inputs":[],"id":"saved"}');
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        inference_examples: { "model-a": { inputs: [], id: "database" } },
+      } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent).id).toBe("saved");
+  });
+
+  it("does not use a database example belonging to a different model", async () => {
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        s3: { enabled: false },
+        inference_examples: { "model-b": { inputs: [], id: "other" } },
+      } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual({ inputs: [] });
+  });
+
+  it("loads repository snapshots from the database and sends the request unchanged", async () => {
+    const payload = { inputs: [{ name: "x", datatype: "INT64", shape: [1], data: [42] }] };
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        inference_examples: { "model-a": payload },
+      } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    const dispatch = spyOn(mockStore, "dispatch");
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual(payload);
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).not.toHaveBeenCalled();
+    await component.sendInference();
+    expect(dispatch).toHaveBeenCalledWith(
+      inferRequestStarted({
+        payload,
+        instanceId: "7",
+        modelName: "model-a",
+        version: "1",
+      }),
+    );
+    expect(localStorage.getItem("triton-infer-body:7:model-a:1")).toBeNull();
+  });
+
+  it("loads the correct database snapshot when the model route changes", async () => {
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        inference_examples: {
+          "model-a": { inputs: [], id: "a" },
+          "model-b": { inputs: [], id: "b" },
+        },
+      } as any),
+    );
+    const fixture = TestBed.createComponent(InstanceModelInferPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(JSON.parse(fixture.componentInstance.editorContent).id).toBe("a");
+    routeParamMap$.next(convertToParamMap({ id: "7", modelName: "model-b", version: "1" }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(JSON.parse(fixture.componentInstance.editorContent).id).toBe("b");
+  });
+
+  it("does not read S3 when no database example exists", async () => {
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent)).toEqual({ inputs: [] });
+    expect(
+      instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("preserves saved user input over database snapshots", async () => {
+    localStorage.setItem("triton-infer-body:7:model-a:1", '{"inputs":[],"id":"saved"}');
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(
+      of({
+        name: "node-7",
+        url: "http://localhost:8000",
+        inference_examples: { "model-a": { inputs: [], id: "snapshot" } },
+      } as any),
+    );
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    await component.ngOnInit();
+    expect(JSON.parse(component.editorContent).id).toBe("saved");
+  });
+
+  it("does not replace edits made while instance data is loading", async () => {
+    const response = new Subject<any>();
+    instancesApiMock.getInstanceApiInstancesInstanceIdGet.and.returnValue(response);
+    const component = TestBed.createComponent(InstanceModelInferPageComponent).componentInstance;
+    const loading = component.ngOnInit();
+    component.editorContent = '{"inputs":[],"id":"edited"}';
+    response.next({
+      name: "node-7",
+      url: "http://localhost:8000",
+      inference_examples: { "model-a": { inputs: [], id: "snapshot" } },
+    });
+    response.complete();
+    await loading;
+    expect(JSON.parse(component.editorContent).id).toBe("edited");
   });
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {

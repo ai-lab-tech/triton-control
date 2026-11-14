@@ -1,7 +1,8 @@
 """Disposable backend API fixture for the published MLflow plugin compatibility job.
 
 Uses real routes, authentication, schemas, global profiles and deployment ownership.
-Only Kubernetes writes and Triton readiness probes are replaced; no cluster is used.
+S3 uses a shared local directory; Kubernetes writes and Triton readiness probes
+are replaced. No cluster or external object store is used.
 """
 
 from __future__ import annotations
@@ -15,7 +16,33 @@ import sys
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Any, BinaryIO
 from unittest.mock import patch
+
+
+class FixtureS3Client:
+    """Read-only S3 interface over the same files used by the published client."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve()
+
+    def list_objects_v2(self, *, Bucket: str, Prefix: str, MaxKeys: int = 1000) -> dict[str, Any]:
+        assert Bucket == "compatibility-models"
+        return {"Contents": [
+            {"Key": path.relative_to(self.root).as_posix()}
+            for path in sorted(self.root.rglob("*"))
+            if path.is_file() and path.relative_to(self.root).as_posix().startswith(Prefix)
+        ][:MaxKeys]}
+
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, BinaryIO]:
+        from botocore.exceptions import ClientError
+
+        assert Bucket == "compatibility-models"
+        path = (self.root / Key).resolve()
+        path.relative_to(self.root)
+        if not path.is_file():
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"Body": path.open("rb")}
 
 
 def main() -> None:
@@ -37,9 +64,9 @@ def main() -> None:
         from app.core.crypto import encrypt_secret
         from app.core.user_auth import issue_access_token
         from app.db.database import engine
-        from app.db.entities import S3ProfileEntity, UserEntity
+        from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
         from app.schemas.deployment import CreateDeploymentRequest
-        from app.services.deployment import deployment, kubernetes, mlflow
+        from app.services.deployment import deployment, examples, kubernetes, mlflow
 
         stack.callback(engine.dispose)
         SQLModel.metadata.create_all(engine)
@@ -81,7 +108,9 @@ def main() -> None:
                 )
             session.commit()
 
-        applied: list[dict[str, str | None]] = []
+        artifact_root = Path(temporary) / "artifacts"
+        artifact_root.mkdir()
+        applied: list[dict[str, Any]] = []
 
         def record_apply(_instance_id: int, request: CreateDeploymentRequest, *_args: str) -> None:
             applied.append(
@@ -96,6 +125,10 @@ def main() -> None:
                     )
                 }
             )
+            with Session(engine) as session:
+                row = session.get(TritonInstanceEntity, _instance_id)
+                assert row is not None
+                applied[-1]["inference_examples"] = row.inference_examples
 
         class ReadyTriton:
             def __init__(self, *_args: object, **_kwargs: object) -> None:
@@ -111,6 +144,7 @@ def main() -> None:
         stack.enter_context(patch.object(kubernetes, "delete_namespace", return_value="Fixture namespace removed"))
         stack.enter_context(patch.object(deployment, "is_running_in_cluster", return_value=False))
         stack.enter_context(patch.object(mlflow, "TritonService", ReadyTriton))
+        stack.enter_context(patch.object(examples, "require_s3_client", return_value=FixtureS3Client(artifact_root)))
 
         app = FastAPI()
         app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(32))
@@ -118,7 +152,7 @@ def main() -> None:
         app.include_router(s3_profile_api.router)
 
         @app.get("/contract/applied")
-        def applied_requests() -> list[dict[str, str | None]]:
+        def applied_requests() -> list[dict[str, Any]]:
             return applied
 
         listener = stack.enter_context(socket.socket())
@@ -128,6 +162,7 @@ def main() -> None:
             "url": f"http://127.0.0.1:{listener.getsockname()[1]}",
             "token": tokens[0],
             "other_token": tokens[1],
+            "artifact_root": str(artifact_root),
         }
         args.connection_file.write_text(json.dumps(connection), encoding="utf-8")
         args.connection_file.chmod(0o600)

@@ -27,6 +27,7 @@ import yaml  # type: ignore[import-untyped]
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.schemas import CreateDeploymentRequest
+from app.schemas.deployment import requirement_arguments
 from app.services.deployment.access import (
     create_auth_middleware,
     validate_controller,
@@ -758,12 +759,20 @@ def _requirements_install_command(requirements_txt: str | None) -> str:
     requirements = _requirements_lines(requirements_txt)
     if not requirements:
         return ""
-    pip_args = " ".join(shlex.quote(requirement) for requirement in requirements)
-    # In-container pip target used in the generated Kubernetes command, not host temp-file handling.
-    target = "/tmp/triton-python-packages"  # nosec B108
+    pip_args = shlex.join([argument for line in requirements for argument in requirement_arguments(line)])
+    # Keep image packages visible while installing missing or incompatible
+    # versions in a writable overlay. A pip --target install downloads even
+    # requirements already satisfied by the image.
+    environment = "/tmp/triton-python-env"  # nosec B108 - in-container writable overlay
+    python = f"{environment}/bin/python"
+    image_sites = shlex.quote('import site; print(":".join(site.getsitepackages()))')
+    overlay_site = shlex.quote('import sysconfig; print(sysconfig.get_path("purelib"))')
     return (
-        f"python3 -m pip install --no-cache-dir --target {target} {pip_args} && \\\n"
-        f"              export PYTHONPATH={target}:${{PYTHONPATH:-}} && \\\n"
+        f'TRITON_IMAGE_SITE_PACKAGES="$(python3 -c {image_sites})" && \\\n'
+        f"              python3 -m venv --system-site-packages {environment} && \\\n"
+        f'              export PYTHONPATH="$({python} -c {overlay_site}):'
+        '${TRITON_IMAGE_SITE_PACKAGES}:${PYTHONPATH:-}" && \\\n'
+        f"              {python} -m pip install --no-cache-dir {pip_args} && \\\n"
         "              "
     )
 

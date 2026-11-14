@@ -31,5 +31,8 @@ def s3_entity_to_dto(entity: TritonInstanceEntity) -> InstanceS3ConfigDTO:
 def entity_to_dto(entity: TritonInstanceEntity) -> TritonInstanceDTO:
     """Convert a Triton instance entity to an outgoing DTO."""
     dto = TritonInstanceDTO.model_validate(entity, from_attributes=True)
+    # Translate legacy storage at the API boundary; new deployments store only the map.
+    if dto.example_model_name and dto.example_request is not None:
+        dto.inference_examples = {dto.example_model_name: dto.example_request, **dto.inference_examples}
     dto.s3 = s3_entity_to_dto(entity)
     return dto
