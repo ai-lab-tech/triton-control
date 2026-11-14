@@ -1,0 +1,184 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "buildQualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "title": "Enabled",
+                  "type": "boolean"
+                },
+                "executor_image": {
+                  "pattern": "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
+                  "title": "Executor Image",
+                  "type": "string"
+                },
+                "release": {
+                  "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                  "title": "Release",
+                  "type": "string"
+                },
+                "namespace": {
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                  "title": "Namespace",
+                  "type": "string"
+                },
+                "platform": {
+                  "default": "linux/amd64",
+                  "enum": [
+                    "linux/amd64",
+                    "linux/arm64"
+                  ],
+                  "title": "Platform",
+                  "type": "string"
+                },
+                "s3_profile_name": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "title": "S3 Profile Name",
+                  "type": "string"
+                },
+                "staging_prefix": {
+                  "pattern": "^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*/$",
+                  "title": "Staging Prefix",
+                  "type": "string"
+                },
+                "allowed_repositories": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "title": "Allowed Repositories",
+                  "type": "array"
+                },
+                "base_pull_secret": {
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                  "title": "Base Pull Secret",
+                  "type": "string"
+                },
+                "push_secret": {
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                  "title": "Push Secret",
+                  "type": "string"
+                },
+                "runtime_pull_secret": {
+                  "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                  "title": "Runtime Pull Secret",
+                  "type": "string"
+                },
+                "provisioning_revision": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "title": "Provisioning Revision",
+                  "type": "string"
+                },
+                "max_context_bytes": {
+                  "default": 10485760,
+                  "maximum": 1073741824,
+                  "minimum": 1024,
+                  "title": "Max Context Bytes",
+                  "type": "integer"
+                },
+                "cpu_millis": {
+                  "default": 1000,
+                  "maximum": 64000,
+                  "minimum": 100,
+                  "title": "Cpu Millis",
+                  "type": "integer"
+                },
+                "memory_mib": {
+                  "default": 1024,
+                  "maximum": 131072,
+                  "minimum": 128,
+                  "title": "Memory Mib",
+                  "type": "integer"
+                },
+                "timeout_seconds": {
+                  "default": 300,
+                  "maximum": 7200,
+                  "minimum": 10,
+                  "title": "Timeout Seconds",
+                  "type": "integer"
+                },
+                "egress_cidrs": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "title": "Egress Cidrs",
+                  "type": "array"
+                },
+                "egress_ports": {
+                  "default": [
+                    443
+                  ],
+                  "items": {
+                    "type": "integer"
+                  },
+                  "title": "Egress Ports",
+                  "type": "array"
+                },
+                "capabilities": {
+                  "default": [
+                    "CHOWN",
+                    "FOWNER"
+                  ],
+                  "items": {
+                    "enum": [
+                      "CHOWN",
+                      "DAC_OVERRIDE",
+                      "FOWNER",
+                      "SETGID",
+                      "SETUID"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Capabilities",
+                  "type": "array"
+                },
+                "run_as_user": {
+                  "const": 0,
+                  "default": 0,
+                  "title": "Run As User",
+                  "type": "integer"
+                },
+                "seccomp_profile": {
+                  "const": "RuntimeDefault",
+                  "default": "RuntimeDefault",
+                  "title": "Seccomp Profile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "executor_image",
+                "release",
+                "namespace",
+                "s3_profile_name",
+                "staging_prefix",
+                "allowed_repositories",
+                "base_pull_secret",
+                "push_secret",
+                "runtime_pull_secret",
+                "provisioning_revision",
+                "egress_cidrs"
+              ],
+              "title": "BuildPolicy",
+              "type": "object"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

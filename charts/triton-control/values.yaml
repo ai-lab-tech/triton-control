@@ -440,3 +440,9 @@ perfAnalyzer:
     limits:
       cpu: "2"
       memory: 2Gi
+
+# S06-A qualification only. No executor runs until explicitly invoked by an operator.
+# Configure a complete BuildPolicy object from docs/build-provisioning.md.
+# No floating executor image or automatic build enablement is shipped.
+buildQualification:
+  policy: null
