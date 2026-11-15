@@ -949,13 +949,14 @@ class DeploymentServiceTests(unittest.TestCase):
 
         # Act / Assert
         with patch(
-            "app.services.deployment.deployment.create_deployment",
+            "app.services.deployment.operations.submit",
             side_effect=BadRequestError("bad deployment request"),
         ):
             with self.assertRaises(HTTPException) as raised:
                 create_deployment_api(
                     request,
-                    background_tasks=SimpleNamespace(add_task=lambda *_args: None),
+                    response=SimpleNamespace(headers={}),
+                    idempotency_key="test",
                     session=SimpleNamespace(),
                     claims={"role": "viewer"},
                 )
@@ -967,13 +968,14 @@ class DeploymentServiceTests(unittest.TestCase):
 
         # Act / Assert
         with patch(
-            "app.services.deployment.deployment.create_deployment",
+            "app.services.deployment.operations.submit",
             side_effect=ConflictError("Deployment name 'triton-minio' already exists"),
         ):
             with self.assertRaises(HTTPException) as raised:
                 create_deployment_api(
                     request,
-                    background_tasks=SimpleNamespace(add_task=lambda *_args: None),
+                    response=SimpleNamespace(headers={}),
+                    idempotency_key="test",
                     session=SimpleNamespace(),
                     claims={"role": "viewer"},
                 )
@@ -1011,7 +1013,7 @@ class DeploymentServiceTests(unittest.TestCase):
         deleted_instances = []
 
         # Act
-        with patch("app.services.deployment.deployment.get_instance_or_404", return_value=instance), patch(
+        with patch("app.services.deployment.operations.prepare_deletion", return_value=False), patch("app.services.deployment.deployment.get_instance_or_404", return_value=instance), patch(
             "app.services.deployment.kubernetes.delete_namespace",
             return_value="Namespace 'triton-minio' was already deleted.",
         ), patch("app.services.deployment.records.dashboard_alerts.delete_for_instance") as delete_alerts, patch(

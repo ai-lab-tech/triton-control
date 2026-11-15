@@ -17,9 +17,7 @@ from app.schemas import CreateDeploymentRequest
 _MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 
-def resolve_profile_request(
-    request: CreateDeploymentRequest, session: Session, claims: dict[str, Any]
-) -> CreateDeploymentRequest:
+def validate_deployment_token(request: CreateDeploymentRequest, claims: dict[str, Any]) -> None:
     if claims.get("token_use") in {"workspace_deployment", "workflow_deployment"} and request.s3_profile_id is None:
         raise BadRequestError("Managed deployment credentials require an S3 profile")
     if claims.get("token_use") == "mlflow_workflow":
@@ -28,6 +26,12 @@ def resolve_profile_request(
             or request.deployment_name != claims.get("allowed_deployment_name")
         ):
             raise BadRequestError("Workflow token is not valid for this deployment or S3 profile")
+
+
+def resolve_profile_request(
+    request: CreateDeploymentRequest, session: Session, claims: dict[str, Any]
+) -> CreateDeploymentRequest:
+    validate_deployment_token(request, claims)
     if request.s3_profile_id is None:
         raise BadRequestError("Select an admin-configured S3 profile")
 

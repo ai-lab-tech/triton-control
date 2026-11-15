@@ -809,3 +809,12 @@ hostnames but still permits internal deployments and removing existing exposure.
 Existing endpoints keep their domain when credentials or protocol are edited.
 Changing the short hostname uses the current base domain.
 Triton Control's own hostname is configured under `ingress.hosts`.
+
+## Recoverable managed creation
+
+Managed development deployment creation returns `202` with an operation reference.
+The instance page shows progress and offers retry/cancel; acceptance is distinct from
+serving readiness. Keep the operation encryption key stable across restarts. Deleting
+a managed instance first requests owned-resource cleanup and returns `409`; retry
+deletion when cleanup completes. See [Durable operations](durable-operations.md) for
+upgrade instructions, configuration, client compatibility and recovery behavior.

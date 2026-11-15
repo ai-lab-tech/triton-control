@@ -17,6 +17,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 import { displayFailure, displaySuccess } from "../shared/shared.actions";
 import {
   instanceDetailLoadFailed,
+  instanceDetailRefreshFailed,
   instanceDetailLoaded,
   instanceDetailPageOpened,
   instanceDetailRefreshRequested,
@@ -73,6 +74,7 @@ export class InstancesDetailEffects {
             of(
               instanceDetailLoadFailed({
                 message: mapApiErrorMessage(error, "Failed to load instance."),
+                status: error?.status,
               }),
             ),
           ),
@@ -89,9 +91,17 @@ export class InstancesDetailEffects {
           map((dto) =>
             instanceDetailRefreshed({
               partial: this.dtoToConnectionPartial(dto as TritonInstanceDTO),
+              instance: dtoToInstance(dto as TritonInstanceDTO),
             }),
           ),
-          catchError(() => of(instanceDetailRefreshSilentlyFailed())),
+          catchError((error) =>
+            of(
+              instanceDetailRefreshFailed({
+                message: mapApiErrorMessage(error, "Failed to refresh instance."),
+                status: error?.status,
+              }),
+            ),
+          ),
         ),
       ),
     ),

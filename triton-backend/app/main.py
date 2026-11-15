@@ -47,6 +47,7 @@ from app.api.instance_api import router as instance_router
 from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
+from app.api.operation_api import router as operation_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
@@ -57,9 +58,13 @@ from app.api.workflows_api import router as workflows_router
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
+from app.repositories.deployment_intents import KIND as DEPLOYMENT_OPERATION_KIND
 from app.services import error_logs
+from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
 from app.services.mlflow import migration as mlflow_migration
+from app.services.operations import service as operation_service
+from app.services.operations import worker as operation_worker
 from app.services.perf_analyzer.jobs import reconciler as perf_job_reconciler
 from app.services.triton.client import TritonService
 from app.services.triton.health import instance_health_refresher
@@ -180,6 +185,9 @@ async def on_startup() -> None:
     init_db()
     instance_health_refresher.start()
     perf_job_reconciler.start()
+    if DEPLOYMENT_OPERATION_KIND not in operation_service.adapters:
+        operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
+    operation_worker.start()
     mlflow_migration.start()
 
 
@@ -188,6 +196,7 @@ async def on_shutdown() -> None:
     """Stop background workers."""
     await instance_health_refresher.stop()
     await asyncio.to_thread(perf_job_reconciler.stop)
+    await asyncio.to_thread(operation_worker.stop)
     await mlflow_migration.stop()
     await TritonService.close_all_clients()
 
@@ -197,6 +206,7 @@ app.include_router(registry_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
+app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(error_log_router, dependencies=[Depends(get_claims)])

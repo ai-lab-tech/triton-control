@@ -3,13 +3,14 @@ import { provideHttpClientTesting, HttpTestingController } from "@angular/common
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter, Router } from "@angular/router";
-import { of } from "rxjs";
+import { of, throwError } from "rxjs";
 
 import { BASE_PATH, DeploymentsService } from "../../api/generated/index";
 import { NewDeploymentPageComponent } from "./new-deployment-page.component";
 
 describe("NewDeploymentPageComponent", () => {
   beforeEach(async () => {
+    sessionStorage.clear();
     await TestBed.configureTestingModule({
       imports: [NewDeploymentPageComponent],
       schemas: [NO_ERRORS_SCHEMA],
@@ -56,6 +57,32 @@ describe("NewDeploymentPageComponent", () => {
     return fixture;
   }
 
+  it("retains the request key after a lost response and recovers the instance after reload", async () => {
+    const component = createComponent([{ id: 1 }]).componentInstance;
+    component.deploymentName = "retry-example";
+    const api = TestBed.inject(DeploymentsService) as jasmine.SpyObj<DeploymentsService>;
+    api.createDeploymentApiDeploymentsPost.and.returnValue(
+      throwError(() => new Error("lost response")),
+    );
+    await component.deploy();
+    const firstKey = api.createDeploymentApiDeploymentsPost.calls.mostRecent().args[1];
+    await component.deploy();
+    expect(api.createDeploymentApiDeploymentsPost.calls.mostRecent().args[1]).toBe(firstKey);
+    component.repositoryPollSecs = 42;
+    await component.deploy();
+    const changedKey = api.createDeploymentApiDeploymentsPost.calls.mostRecent().args[1];
+    expect(changedKey).not.toBe(firstKey);
+    const reloaded = createComponent().componentInstance;
+    TestBed.inject(HttpTestingController)
+      .expectOne(
+        `http://localhost:8000/api/deployments/requests/${changedKey}?deployment_name=retry-example`,
+      )
+      .flush({ instance_id: 42 });
+    await Promise.resolve();
+    expect(reloaded.previousInstance()).toBe(42);
+    expect(sessionStorage.getItem("deployment-request:")).not.toContain("another-image");
+  });
+
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
     // Arrange
     const fixture = createComponent();
@@ -85,6 +112,7 @@ describe("NewDeploymentPageComponent", () => {
         example_model_name: "classifier",
         example_request: { inputs: [] },
       }),
+      jasmine.any(String),
     );
   });
 
@@ -275,6 +303,7 @@ describe("NewDeploymentPageComponent", () => {
         allow_metrics: true,
         requirements_txt: "numpy",
       }),
+      jasmine.any(String),
     );
     expect(router.navigateByUrl).toHaveBeenCalledWith("/instances/7", {
       state: { openLogsOnce: true },
@@ -315,6 +344,7 @@ describe("NewDeploymentPageComponent", () => {
         memory: "10Gi",
         memory_limit: "10Gi",
       }),
+      jasmine.any(String),
     );
   });
 
@@ -345,6 +375,7 @@ describe("NewDeploymentPageComponent", () => {
         s3_profile_id: 1,
         repository_prefix: "team/model-repository",
       }),
+      jasmine.any(String),
     );
   });
 
@@ -390,6 +421,7 @@ describe("NewDeploymentPageComponent", () => {
         s3_profile_id: 12,
         repository_prefix: "serving/opt-125m",
       }),
+      jasmine.any(String),
     );
   });
 });

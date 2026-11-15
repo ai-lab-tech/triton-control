@@ -326,3 +326,5 @@ Replace `<workspace-pod>` with your code-server pod name. The test runs inside
 the workspace using its injected credentials. It lists experiments and workflows,
 checks that missing or incorrect credentials are rejected, and exits nonzero on
 failure. It creates no resources and prints no tokens.
+
+See [Durable operations](durable-operations.md) for the shared background-operation adapter contract and recovery tests.

@@ -123,10 +123,12 @@ def delete_deployment_instance(session: Session, claims: dict[str, Any], instanc
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.is_self_deployed:
         raise BadRequestError("Instance is not managed by Kubernetes deployment")
+    from app.services.deployment.operations import prepare_deletion
+    owned_cleanup = prepare_deletion(session, instance_id)
     prepare_instance_deletion(session, instance_id)
     namespace = (instance.deployment_namespace or "").strip()
     message = "No Kubernetes namespace was recorded for this instance."
-    if namespace:
+    if namespace and not owned_cleanup:
         try:
             control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
             if control_ns and namespace == control_ns:

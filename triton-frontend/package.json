@@ -35,6 +35,7 @@
     "@ngrx/effects": "^21.1.0",
     "@ngrx/signals": "^21.1.0",
     "@ngrx/store": "^21.1.0",
+    "@noble/hashes": "2.0.1",
     "monaco-editor": "^0.55.1",
     "ngx-monaco-editor-v2": "^21.1.4",
     "rxjs": "^7.8.1",

@@ -6,6 +6,11 @@
     </div>
   </div>
 
+  @if (previousInstance(); as id) {
+    <p>
+      Previous deployment request: <a [routerLink]="['/instances', id]">View creation status</a>
+    </p>
+  }
   <mat-card class="card deployment-card">
     <div class="section">
       <div>

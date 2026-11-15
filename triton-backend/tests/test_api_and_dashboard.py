@@ -791,7 +791,8 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("unable to get local issuer certificate", exc.exception.detail)
 
     @patch("app.services.triton.instances.prepare_instance_deletion", return_value=None)
-    async def test_DeleteInstance_AdminDeletesAndMemberForbidden(self, _prepare_perf):
+    @patch("app.services.deployment.operations.prepare_deletion", return_value=False)
+    async def test_DeleteInstance_AdminDeletesAndMemberForbidden(self, _prepare_deployment, _prepare_perf):
         # Arrange
         session, instance = await self._instance_session()
         user = UserEntity(

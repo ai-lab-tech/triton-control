@@ -98,16 +98,18 @@ test.describe.serial("code-server plugin workflows", () => {
       name: "Triton Control: Build Repository from Hugging Face",
       exact: true,
     });
-    await expect(async () => {
-      await workbench.locator("body").press("Escape");
-      await row(hfSource).click();
-      await row(hfSource).click({ button: "right" });
-      await expect(action).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 30_000 });
-    await action.hover();
-    await page.keyboard.press("Enter");
     const widget = workbench.locator(".quick-input-widget");
-    await expect(widget).toContainText("HF Builder: Serving runtime");
+    const runtimePrompt = widget.filter({ hasText: "HF Builder: Serving runtime" });
+    // Restoration may dismiss the menu after it becomes visible. Retry the entire
+    // selection, but preserve a wizard that opened after a delayed command response.
+    await expect(async () => {
+      if (await runtimePrompt.isVisible()) return;
+      await workbench.locator("body").press("Escape");
+      await row(hfSource).click({ timeout: 2000 });
+      await row(hfSource).click({ button: "right", timeout: 2000 });
+      await action.click({ timeout: 2000 });
+      await expect(runtimePrompt).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30_000 });
     await widget.getByText("Transformers / Python", { exact: true }).click();
     await expect(widget).toContainText("HF Builder: Serving device");
     await widget.getByText("cpu", { exact: true }).click();
@@ -410,9 +412,23 @@ test.describe.serial("code-server plugin workflows", () => {
         )
         .toBe(deploymentName);
     } finally {
+      // Managed deletion first asks the durable worker to remove owned resources.
+      // Only the documented cleanup conflict is retryable; other errors fail immediately.
+      const deadline = Date.now() + 60_000;
+      while (true) {
+        const deletion = await context.request.delete(`/api/deployments/${deployment.instance_id}`);
+        if (deletion.status() === 200) break;
+        expect(deletion.status(), await deletion.text()).toBe(409);
+        expect((await deletion.json()).detail).toContain("cleanup requested");
+        expect(Date.now(), "Timed out waiting for owned deployment cleanup").toBeLessThan(deadline);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
       expect(
-        (await context.request.delete(`/api/deployments/${deployment.instance_id}`)).ok(),
-      ).toBeTruthy();
+        kubectl("get", "deployment", deploymentName, "--ignore-not-found", "-o", "name").trim(),
+      ).toBe("");
+      expect((await context.request.get(`/api/instances/${deployment.instance_id}`)).status()).toBe(
+        404,
+      );
     }
   });
 

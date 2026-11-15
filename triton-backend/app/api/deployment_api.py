@@ -10,7 +10,7 @@ translated at the HTTP boundary via ``@translate_app_errors``.
 
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
@@ -24,9 +24,11 @@ from app.schemas import (
 )
 from app.schemas.deployment_access import DeploymentAccessRequest, DeploymentAccessResponse
 from app.schemas.deployment_policy import DeploymentPolicyResponse, DeploymentPolicyUpdate
+from app.schemas.operations import OperationResponse
 from app.services.deployment import access as access_service
 from app.services.deployment import deployment as deployment_service
 from app.services.deployment import mlflow as mlflow_service
+from app.services.deployment import operations as deployment_operations
 from app.services.deployment import policy as policy_service
 
 router = APIRouter(prefix="/api/deployments", tags=["deployments"])
@@ -80,16 +82,38 @@ def delete_mlflow_deployment(
     return mlflow_service.delete(session, claims, name)
 
 
-@router.post("", response_model=DeploymentResponse)
+@router.post("", response_model=DeploymentResponse, status_code=202)
 @translate_app_errors
 def create_deployment(
     request: CreateDeploymentRequest,
-    background_tasks: BackgroundTasks,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, min_length=1, max_length=128),
     session: Session = Depends(get_session),
     claims: dict[str, Any] = Depends(get_claims),
 ) -> DeploymentResponse:
-    """Deploy Triton on Kubernetes for the provided S3 model repository."""
-    return deployment_service.create_deployment(request, session, claims, background_tasks.add_task)
+    """Durably accept creation; readiness is reported by the linked operation."""
+    result = deployment_operations.submit(request, session, claims, idempotency_key)
+    response.headers["Location"] = result.status_url or ""
+    return result
+
+
+@router.get("/requests/{key}", response_model=DeploymentResponse | None)
+@translate_app_errors
+def find_deployment_request(
+    key: str, deployment_name: str = Query(min_length=1),
+    session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims),
+) -> DeploymentResponse | None:
+    return deployment_operations.find_request(session, claims, key, deployment_name)
+
+
+@router.get("/{instance_id}/operation", response_model=OperationResponse | None)
+@translate_app_errors
+def deployment_operation(
+    instance_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> OperationResponse | None:
+    return deployment_operations.status(session, claims, instance_id)
 
 
 @router.delete("/{instance_id}", response_model=DeploymentDeleteResponse)
