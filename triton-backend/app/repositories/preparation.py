@@ -3,10 +3,18 @@
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app.db.entities import PreparationAttemptEntity, PreparationTaskEntity, PreparationTaskEventEntity, UserEntity
+from app.db.entities import (
+    PreparationAttemptEntity,
+    PreparationTaskEntity,
+    PreparationTaskEventEntity,
+    TeamEntity,
+    UserEntity,
+    UserTeamEntity,
+)
 from app.exceptions import ConflictError, NotFoundError
 
 
@@ -122,3 +130,30 @@ def persist(session: Session, *, commit: bool = True) -> None:
     except IntegrityError as exc:
         session.rollback()
         raise ConflictError("Preparation revision or attempt already exists") from exc
+
+
+def eligible_members(
+    session: Session, team_ids: set[UUID] | None = None, *, actor_id: int | None = None
+) -> dict[UUID, set[int]]:
+    """Read eligibility in one query, scoped either to an actor or a queue page."""
+    if team_ids is not None and not team_ids:
+        return {}
+    statement = (
+        select(UserTeamEntity.team_id, UserTeamEntity.user_id)
+        .join(TeamEntity, col(TeamEntity.id) == col(UserTeamEntity.team_id))
+        .join(UserEntity, col(UserEntity.id) == col(UserTeamEntity.user_id))
+        .where(
+            col(TeamEntity.is_active).is_(True),
+            col(UserTeamEntity.is_active).is_(True),
+            col(UserEntity.is_active).is_(True),
+            func.lower(func.trim(col(UserEntity.role))).in_(["member", "admin"]),
+        )
+    )
+    if team_ids is not None:
+        statement = statement.where(col(UserTeamEntity.team_id).in_(team_ids))
+    if actor_id is not None:
+        statement = statement.where(UserTeamEntity.user_id == actor_id)
+    result: dict[UUID, set[int]] = {}
+    for team_id, user_id in session.exec(statement):
+        result.setdefault(team_id, set()).add(user_id)
+    return result

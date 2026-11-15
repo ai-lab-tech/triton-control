@@ -44,6 +44,7 @@ class PreparationPostgresTests(fixtures.PreparationTests):
         self.admin_engine.dispose()
 
     def test_simultaneous_claims_have_exactly_one_winner_and_one_claim_event(self):
+        # Arrange
         task = self.create(["test_data"])
         barrier = Barrier(2)
 
@@ -57,8 +58,10 @@ class PreparationPostgresTests(fixtures.PreparationTests):
                     session.rollback()
                     return "conflict"
 
+        # Act
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(claim, [2, 3]))
+        # Assert
         self.assertEqual(results.count("conflict"), 1)
         winner = next(result for result in results if result != "conflict")
         current = preparation.get_task(self.session, self.admin, task.id)
@@ -78,6 +81,7 @@ class PreparationPostgresTests(fixtures.PreparationTests):
         self.assertEqual(preparation.get_task(self.session, self.admin, task.id).assignee_user_id, 2)
 
     def test_revocation_race_has_no_unauthorized_follow_up_and_keeps_truthful_history(self):
+        # Arrange
         task = self.create()
         barrier = Barrier(2)
 
@@ -94,8 +98,10 @@ class PreparationPostgresTests(fixtures.PreparationTests):
                     session.rollback()
                     return "denied"
 
+        # Act
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(change, [True, False]))
+        # Assert
         self.assertIn("revoked", results)
         self.assertTrue("claimed" in results or "denied" in results)
         with Session(self.engine) as session:

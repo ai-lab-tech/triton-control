@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlmodel import Session
 
 from app.core.identity import require_user_entity
+from app.db.entities import PreparationTaskEntity
 from app.exceptions import ConflictError, ForbiddenError
 from app.mappers.preparation import attempt_to_dto, event_to_dto, task_to_dto
 from app.repositories import preparation as repository
@@ -42,13 +43,7 @@ def _actor(session: Session, claims: dict[str, Any]) -> tuple[int, bool, str]:
     return mapped.id, role == "admin", role
 
 
-def _eligible_teams(session: Session, actor_id: int) -> list[UUID]:
-    return [team.id for team in teams.list_all(session) if actor_id in teams.eligible_user_ids(session, team.id)]
-
-
-def _blocked(session: Session, task_id: UUID) -> list[str]:
-    task = repository.get(session, task_id)
-    eligible = teams.eligible_user_ids(session, task.assigned_team_id)
+def _blocked(task: PreparationTaskEntity, eligible: set[int]) -> list[str]:
     reasons = ["missing_input:" + name for name in task.missing_inputs]
     if not eligible:
         reasons.append("no_eligible_engineers")
@@ -60,8 +55,9 @@ def _blocked(session: Session, task_id: UUID) -> list[str]:
 
 
 def _dto(session: Session, task_id: UUID) -> TaskDTO:
-    reasons = _blocked(session, task_id)
-    return task_to_dto(repository.get(session, task_id), reasons)
+    task = repository.get(session, task_id)
+    eligible = set(teams.eligible_user_ids(session, task.assigned_team_id))
+    return task_to_dto(task, _blocked(task, eligible))
 
 
 def _access(session: Session, claims: dict[str, Any], task_id: UUID, *, lock: bool = False) -> tuple[int, bool, bool]:
@@ -80,8 +76,10 @@ def _access(session: Session, claims: dict[str, Any], task_id: UUID, *, lock: bo
 
 def list_tasks(session: Session, claims: dict[str, Any], limit: int = 100, offset: int = 0) -> list[TaskDTO]:
     actor, admin, _ = _actor(session, claims)
-    rows = repository.queue(session, actor, _eligible_teams(session, actor), admin=admin, limit=limit, offset=offset)
-    return [_dto(session, row.id) for row in rows]
+    team_ids = [] if admin else list(repository.eligible_members(session, actor_id=actor))
+    rows = repository.queue(session, actor, team_ids, admin=admin, limit=limit, offset=offset)
+    eligible = repository.eligible_members(session, {row.assigned_team_id for row in rows})
+    return [task_to_dto(row, _blocked(row, eligible.get(row.assigned_team_id, set()))) for row in rows]
 
 
 def get_task(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskDTO:

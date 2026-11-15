@@ -90,47 +90,111 @@ class PreparationTests(PreparationFixture, unittest.TestCase):
         history = preparation.list_events(self.session, self.engineer, task.id)
         self.assertEqual([(e.action, e.revision) for e in history], [("created", 1)])
 
-    def test_missing_inputs_do_not_prevent_claim_or_resolution(self):
+    def test_missing_inputs_do_not_prevent_claim(self):
+        # Arrange
+        task = self.create(["test_data"])
+        # Act
+        result = self.claim(task)
+        # Assert
+        self.assertEqual(result.state, "claimed")
+        self.assertIn("missing_input:test_data", result.blocked_reasons)
+
+    def test_resolving_missing_inputs_retains_claim(self):
+        # Arrange
         task = self.claim(self.create(["test_data"]))
-        self.assertEqual(task.state, "claimed")
-        self.assertIn("missing_input:test_data", task.blocked_reasons)
-        result = preparation.resolve_inputs(
-            self.session,
-            self.engineer,
-            task.id,
-            ResolveInputsRequest(expected_revision=2, resolved_inputs=["test_data"], reason="Dataset captured"),
-        )
+        request = ResolveInputsRequest(expected_revision=2, resolved_inputs=["test_data"], reason="Dataset captured")
+        # Act
+        result = preparation.resolve_inputs(self.session, self.engineer, task.id, request)
+        # Assert
         self.assertEqual(result.blocked_reasons, [])
         self.assertEqual(result.state, "claimed")
 
-    def test_information_request_and_resolution_retain_claim_and_history(self):
+    def test_information_request_retains_claim_and_records_reason(self):
+        # Arrange
         task = self.claim(self.create())
-        task = preparation.request_information(
+        request = InformationRequest(expected_revision=2, missing_inputs=["test_data"], reason="Need examples")
+        # Act
+        result = preparation.request_information(self.session, self.engineer, task.id, request)
+        history = preparation.list_events(self.session, self.engineer, task.id)
+        # Assert
+        self.assertEqual((result.state, result.assignee_user_id), ("awaiting_information", 2))
+        self.assertEqual([e.action for e in history], ["information_requested", "claimed", "created"])
+        self.assertEqual(history[0].changes["reason"], "Need examples")
+
+    def test_information_resolution_returns_to_claimed_and_retains_history(self):
+        # Arrange
+        task = self.claim(self.create())
+        preparation.request_information(
             self.session,
             self.engineer,
             task.id,
             InformationRequest(expected_revision=2, missing_inputs=["test_data"], reason="Need examples"),
         )
-        self.assertEqual((task.state, task.assignee_user_id), ("awaiting_information", 2))
-        task = preparation.resolve_inputs(
-            self.session,
-            self.engineer,
-            task.id,
-            ResolveInputsRequest(expected_revision=3, resolved_inputs=["test_data"], reason="Captured inputs"),
-        )
-        self.assertEqual((task.state, task.revision), ("claimed", 4))
+        request = ResolveInputsRequest(expected_revision=3, resolved_inputs=["test_data"], reason="Captured inputs")
+        # Act
+        result = preparation.resolve_inputs(self.session, self.engineer, task.id, request)
         history = preparation.list_events(self.session, self.engineer, task.id)
+        # Assert
+        self.assertEqual((result.state, result.revision), ("claimed", 4))
         self.assertEqual(
             [e.action for e in history], ["inputs_resolved", "information_requested", "claimed", "created"]
         )
-        self.assertEqual(history[1].changes["reason"], "Need examples")
 
-    def test_release_claim_allows_another_engineer_to_take_over(self):
+    def test_release_claim_returns_task_to_queue(self):
+        # Arrange
         task = self.claim(self.create())
-        task = preparation.release_claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=2))
-        self.assertEqual((task.state, task.assignee_user_id), ("queued", None))
-        task = preparation.claim(self.session, self.claims(3), task.id, TaskRevision(expected_revision=3))
-        self.assertEqual((task.assignee_user_id, task.revision), (3, 4))
+        # Act
+        result = preparation.release_claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=2))
+        # Assert
+        self.assertEqual((result.state, result.assignee_user_id), ("queued", None))
+
+    def test_released_task_can_be_claimed_by_another_engineer(self):
+        # Arrange
+        task = self.claim(self.create())
+        preparation.release_claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=2))
+        # Act
+        result = preparation.claim(self.session, self.claims(3), task.id, TaskRevision(expected_revision=3))
+        # Assert
+        self.assertEqual((result.assignee_user_id, result.revision), (3, 4))
+
+    def test_queue_query_count_does_not_grow_with_page_size(self):
+        # Arrange
+        for _ in range(100):
+            self.create(["test_data"])
+        statements = []
+
+        def count_queries(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", count_queries)
+        try:
+            # Act
+            small = preparation.list_tasks(self.session, self.engineer, limit=1)
+            small_count = len(statements)
+            statements.clear()
+            large = preparation.list_tasks(self.session, self.engineer, limit=100)
+            large_count = len(statements)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", count_queries)
+        # Assert
+        self.assertEqual((len(small), len(large)), (1, 100))
+        self.assertEqual(large_count, small_count)
+        self.assertLessEqual(large_count, 6)
+        self.assertTrue(all(row.blocked_reasons == ["missing_input:test_data"] for row in large))
+
+    def test_admin_queue_reports_revoked_assignee_and_empty_team(self):
+        # Arrange
+        task = self.claim(self.create(["test_data"]))
+        for user_id in (2, 3):
+            teams.set_member(self.session, self.admin, self.team.id, user_id, active=False)
+        # Act
+        rows = preparation.list_tasks(self.session, self.admin)
+        # Assert
+        self.assertEqual([row.id for row in rows], [task.id])
+        self.assertEqual(
+            rows[0].blocked_reasons,
+            ["missing_input:test_data", "no_eligible_engineers", "assignee_ineligible"],
+        )
 
     def test_stale_revision_and_double_claim_do_not_add_events(self):
         task = self.claim(self.create())
