@@ -105,7 +105,7 @@ def validate_layout(
             safe_path(filename, limits)
         for version in versions:
             prefix = f"{name}/{version}/"
-            directory_model = backend == "tensorflow" and any(
+            directory_model = platform == "tensorflow_savedmodel" and any(
                 path.startswith(prefix + str(filename) + "/") for path in paths
             )
             if filename and prefix + filename not in paths and not directory_model:

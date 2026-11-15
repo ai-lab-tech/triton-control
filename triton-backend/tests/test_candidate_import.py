@@ -243,16 +243,76 @@ class CandidateImportTests(CandidateFixture, unittest.TestCase):
                 self.do_import()
         self.assertEqual(self.counts(), (0, 0))
 
-    def test_malformed_proto_unknown_schema_and_unsafe_versions_are_rejected(self):
+    def test_malformed_proto_is_rejected(self):
+        # Arrange
         (self.source / "iris/config.pbtxt").write_bytes(b'backend: "onnxruntime" unknown_field: true')
+        # Act
         with self.assertRaises(UnprocessableEntityError):
             self.do_import()
-        (self.source / "iris/config.pbtxt").write_bytes(CONFIG)
+        # Assert
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_unknown_schema_is_rejected(self):
+        # Arrange
+        req = request().model_copy(update={"triton_version": "unknown"})
+        # Act
         with self.assertRaises(UnprocessableEntityError):
-            self.do_import(request().model_copy(update={"triton_version": "unknown"}))
+            self.do_import(req)
+        # Assert
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_noncanonical_version_is_rejected(self):
+        # Arrange
         (self.source / "iris/1").rename(self.source / "iris/01")
+        # Act
         with self.assertRaises(BadRequestError):
             self.do_import()
+        # Assert
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_graphdef_directory_is_rejected_before_publication(self):
+        for filename in ("model.graphdef", "custom.graphdef"):
+            with self.subTest(filename=filename):
+                # Arrange
+                (self.source / "iris/config.pbtxt").write_text(
+                    'name: "iris" platform: "tensorflow_graphdef"'
+                    + (f' default_model_filename: "{filename}"' if filename != "model.graphdef" else "")
+                )
+                (self.source / "iris/1/model.onnx").unlink(missing_ok=True)
+                artifact = self.source / "iris/1" / filename
+                artifact.mkdir()
+                (artifact / "README.txt").write_text("Not a GraphDef file")
+                # Act
+                with self.assertRaisesRegex(BadRequestError, "missing its declared model artifact"):
+                    self.do_import()
+                # Assert
+                self.assertEqual(self.counts(), (0, 0))
+                self.assertFalse(self.store.root.exists())
+                shutil.rmtree(artifact)
+
+    def test_graphdef_file_is_accepted(self):
+        # Arrange
+        (self.source / "iris/config.pbtxt").write_text('name: "iris" platform: "tensorflow_graphdef"')
+        (self.source / "iris/1/model.onnx").rename(self.source / "iris/1/model.graphdef")
+        # Act
+        result = self.do_import()
+        # Assert
+        self.assertEqual(result.models[0].backend, "tensorflow")
+        self.assertIn("iris/1/model.graphdef", [entry.path for entry in result.inventory.files])
+        self.assertEqual(self.counts(), (1, 1))
+
+    def test_savedmodel_directory_is_accepted(self):
+        # Arrange
+        (self.source / "iris/config.pbtxt").write_text('name: "iris" platform: "tensorflow_savedmodel"')
+        artifact = self.source / "iris/1/model.savedmodel"
+        artifact.mkdir()
+        (self.source / "iris/1/model.onnx").rename(artifact / "saved_model.pb")
+        # Act
+        result = self.do_import()
+        # Assert
+        self.assertEqual(result.models[0].backend, "tensorflow")
+        self.assertIn("iris/1/model.savedmodel/saved_model.pb", [entry.path for entry in result.inventory.files])
+        self.assertEqual(self.counts(), (1, 1))
 
     def test_missing_config_version_and_empty_input_are_rejected(self):
         (self.source / "iris/config.pbtxt").unlink()
@@ -351,17 +411,37 @@ class CandidateImportTests(CandidateFixture, unittest.TestCase):
             self.do_import(source=RevokingSource(self.source))
         self.assertEqual(self.counts(), (0, 0))
 
-    def test_task_import_requires_current_assignment_revision_and_retains_missing_inputs(self):
+    def test_task_import_requires_current_assignment(self):
+        # Arrange
+        task = preparation.create_task(self.session, self.admin, TaskCreate(title="Prepare"))
+        req = request(task_id=task.id, expected_task_revision=1)
+        # Act
+        with self.assertRaises(ForbiddenError):
+            self.do_import(req)
+        # Assert
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_task_import_rejects_stale_revision(self):
+        # Arrange
+        task = preparation.create_task(self.session, self.admin, TaskCreate(title="Prepare"))
+        preparation.claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=1))
+        req = request(task_id=task.id, expected_task_revision=1)
+        # Act
+        with self.assertRaises(ConflictError):
+            self.do_import(req)
+        # Assert
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_task_import_retains_missing_inputs_and_claim(self):
+        # Arrange
         task = preparation.create_task(
             self.session, self.admin, TaskCreate(title="Prepare", missing_inputs=["test_data"])
         )
-        req = request(task_id=task.id, expected_task_revision=1, missing_evaluation_inputs=())
-        with self.assertRaises(ForbiddenError):
-            self.do_import(req)
-        task = preparation.claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=1))
-        with self.assertRaises(ConflictError):
-            self.do_import(req)
-        result = self.do_import(req.model_copy(update={"expected_task_revision": 2}))
+        preparation.claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=1))
+        req = request(task_id=task.id, expected_task_revision=2, missing_evaluation_inputs=())
+        # Act
+        result = self.do_import(req)
+        # Assert
         self.assertEqual(result.task_id, task.id)
         self.assertIn("test_data", result.missing_evaluation_inputs)
         self.assertEqual(preparation.get_task(self.session, self.engineer, task.id).state, "claimed")
