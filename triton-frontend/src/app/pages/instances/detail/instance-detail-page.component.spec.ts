@@ -145,7 +145,6 @@ describe("InstanceDetailPageComponent", () => {
       { label: "Running (Ready)", count: 1 },
       { label: "Running (Not Ready)", count: 1 },
     ]);
-    expect(fixture.componentInstance.historicalPodCount()).toBe(2);
     expect(summary).toEqual([
       { label: "Failed (Not Ready)", count: 2 },
       { label: "Running (Ready)", count: 1 },

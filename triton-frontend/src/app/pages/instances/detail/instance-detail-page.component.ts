@@ -152,11 +152,6 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
   );
-  readonly historicalPodCount = computed(() =>
-    this.podStateSummary()
-      .filter((state) => /^(Failed|Succeeded)(?:\s|$)/.test(state.label))
-      .reduce((total, state) => total + state.count, 0),
-  );
   readonly podStateSummary = computed(() => {
     const counts = new Map<string, number>();
     for (const status of this.instance()?.podStatuses ?? []) {

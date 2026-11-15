@@ -1287,32 +1287,3 @@
     gap: 4px;
   }
 }
-
-.pod-state-chip[data-failed="true"] {
-  color: #9a3412;
-  background: #fff7ed;
-  border-color: #fed7aa;
-}
-
-.pod-state-details {
-  margin-top: 0.5rem;
-  font-size: 0.76rem;
-  color: #475569;
-
-  summary {
-    cursor: pointer;
-    width: fit-content;
-  }
-
-  ul {
-    margin: 0.5rem 0 0;
-    padding-left: 1rem;
-    max-height: 12rem;
-    overflow-y: auto;
-    overflow-wrap: anywhere;
-  }
-
-  li + li {
-    margin-top: 0.35rem;
-  }
-}

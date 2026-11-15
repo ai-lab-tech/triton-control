@@ -68,28 +68,14 @@
                       [attr.data-ready]="
                         state.label.includes('Ready') && !state.label.includes('Not Ready')
                       "
-                      [attr.data-failed]="state.label.startsWith('Failed')"
                     >
-                      {{ state.count }} {{ state.label }}
+                      {{ state.count }} {{ state.count === 1 ? "pod" : "pods" }} · {{ state.label }}
                     </span>
                   }
                 </div>
                 @if (!currentPodStates().length) {
                   <span class="pod-state-empty">No active pods reported.</span>
                 }
-                @if (historicalPodCount()) {
-                  <div class="pod-state-empty">
-                    {{ historicalPodCount() }} failed/completed pods in history
-                  </div>
-                }
-                <details class="pod-state-details">
-                  <summary>Inspect all pod states (including history)</summary>
-                  <ul>
-                    @for (podStatus of instance.podStatuses; track $index) {
-                      <li>{{ podStatus }}</li>
-                    }
-                  </ul>
-                </details>
               } @else {
                 <span class="pod-state-empty">No pod status available yet.</span>
               }
