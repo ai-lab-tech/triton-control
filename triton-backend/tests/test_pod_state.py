@@ -146,7 +146,7 @@ class PodStateTests(unittest.TestCase):
 class LivePodStateTests(unittest.TestCase):
     def test_owned_state_matches_live_controller_uids(self):
         # Arrange: use a deployment in a disposable test environment.
-        from kubernetes import client
+        from kubernetes import client  # type: ignore[import-untyped]
 
         from app.services.kubernetes_client import api_client
 
