@@ -98,16 +98,18 @@ test.describe.serial("code-server plugin workflows", () => {
       name: "Triton Control: Build Repository from Hugging Face",
       exact: true,
     });
-    await expect(async () => {
-      await workbench.locator("body").press("Escape");
-      await row(hfSource).click();
-      await row(hfSource).click({ button: "right" });
-      await expect(action).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 30_000 });
-    await action.hover();
-    await page.keyboard.press("Enter");
     const widget = workbench.locator(".quick-input-widget");
-    await expect(widget).toContainText("HF Builder: Serving runtime");
+    const runtimePrompt = widget.filter({ hasText: "HF Builder: Serving runtime" });
+    // Restoration may dismiss the menu after it becomes visible. Retry the entire
+    // selection, but preserve a wizard that opened after a delayed command response.
+    await expect(async () => {
+      if (await runtimePrompt.isVisible()) return;
+      await workbench.locator("body").press("Escape");
+      await row(hfSource).click({ timeout: 2000 });
+      await row(hfSource).click({ button: "right", timeout: 2000 });
+      await action.click({ timeout: 2000 });
+      await expect(runtimePrompt).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30_000 });
     await widget.getByText("Transformers / Python", { exact: true }).click();
     await expect(widget).toContainText("HF Builder: Serving device");
     await widget.getByText("cpu", { exact: true }).click();
