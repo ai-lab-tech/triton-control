@@ -98,6 +98,7 @@ class ServingDependencyInstallTests(unittest.TestCase):
                 timeout=60,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertFalse((runtime / "bin/pip").exists(), "Installer must work without environment-local pip")
             self.assertIn(f"selected={requested_version}", result.stdout)
             self.assertEqual(
                 (image_site / "fixture_dependency.py").read_text(),
@@ -107,11 +108,19 @@ class ServingDependencyInstallTests(unittest.TestCase):
             return result.stdout, len(installed)
 
     def test_matching_image_package_is_reused_without_installing_a_copy(self):
-        output, installed = self._run_install("2.0", "2.0")
+        # Arrange
+        installed_version, requested_version = "2.0", "2.0"
+        # Act
+        output, installed = self._run_install(installed_version, requested_version)
+        # Assert
         self.assertIn("Requirement already satisfied", output)
         self.assertEqual(installed, 0)
 
     def test_different_version_is_installed_in_overlay_without_changing_image(self):
-        output, installed = self._run_install("1.0", "2.0")
+        # Arrange
+        installed_version, requested_version = "1.0", "2.0"
+        # Act
+        output, installed = self._run_install(installed_version, requested_version)
+        # Assert
         self.assertIn("Successfully installed fixture-dependency-2.0", output)
         self.assertEqual(installed, 1)

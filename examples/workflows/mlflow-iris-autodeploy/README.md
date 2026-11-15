@@ -38,8 +38,8 @@ Follow the steps below to upload the script and run the training and deployment.
    `workflows/mlflow-iris-autodeploy/train.py`. Set the workflow's `s3-script-key`
    to that full S3 key, including any profile prefix.
 
-The workflow installs `mlflow-triton-control==0.4.4` directly from PyPI. Its matching
-`mlflow-triton` core package is installed automatically.
+The workflow installs the published `mlflow-triton==0.4.6` and
+`mlflow-triton-control==0.4.6` wheels directly from PyPI.
 
 ## Run through Argo
 

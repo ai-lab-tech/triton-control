@@ -822,10 +822,10 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(len(container["args"]), 1)
         start_script = container["args"][0]
         self.assertIn(
-            "/tmp/triton-python-env/bin/python -m pip install --no-cache-dir numpy 'pandas>=2'",
+            "python3 -m pip --python /tmp/triton-python-env/bin/python install --no-cache-dir numpy 'pandas>=2'",
             start_script,
         )
-        self.assertIn("python3 -m venv --system-site-packages /tmp/triton-python-env", start_script)
+        self.assertIn("python3 -m venv --without-pip --system-site-packages /tmp/triton-python-env", start_script)
         self.assertIn("${TRITON_IMAGE_SITE_PACKAGES}:${PYTHONPATH:-}", start_script)
         self.assertNotIn("--target", start_script)
         self.assertNotIn("/.local", start_script)

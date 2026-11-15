@@ -1,0 +1,58 @@
+{{- with .Values.buildQualification.policy }}
+{{- if .enabled }}
+{{- fail "S06-A only provisions qualification; keep policy.enabled=false until a qualified build service is installed" }}
+{{- end }}
+{{- if not (regexMatch "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$" (required "executor_image must be pinned" .executor_image)) }}
+{{- fail "executor_image must be a registry image pinned by sha256 digest" }}
+{{- end }}
+{{- if or (eq .base_pull_secret .push_secret) (eq .push_secret .runtime_pull_secret) (eq .base_pull_secret .runtime_pull_secret) }}
+{{- fail "Use distinct base pull, build push and runtime pull credential references" }}
+{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ required "build namespace required" .namespace | quote }}
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triton-build-policy
+  namespace: {{ .namespace | quote }}
+data:
+  policy.json: {{ toJson . | quote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: builder-isolation
+  namespace: {{ .namespace | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      app: builder-qualification
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        {{- range .egress_cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range .egress_ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+{{- end }}
