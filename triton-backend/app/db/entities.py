@@ -519,6 +519,17 @@ class DeploymentIntentEntity(SQLModel, table=True):
     examples_captured: bool = False
 
 
+class ServingCandidateEntity(SQLModel, table=True):
+    """Immutable candidate envelope and inventories; publication has no update path."""
+
+    __tablename__ = "serving_candidates"
+    installation_id: str = Field(primary_key=True)
+    record_id: str = Field(primary_key=True)
+    digest: str
+    payload: str = Field(sa_column=Column(Text, nullable=False))
+    inventories: str = Field(sa_column=Column(Text, nullable=False))
+
+
 class BuildQualificationEntity(SQLModel, table=True):
     """Local qualification attempts, including failures; secrets stay in Kubernetes."""
 
