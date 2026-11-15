@@ -40,7 +40,9 @@ and [verification instructions](https://github.com/osscontainertools/kaniko#veri
 
 Supply a complete JSON `BuildPolicy` to the CLI. `buildQualification.policy` in
 Helm accepts the same fields and provisions a dedicated namespace, policy
-ConfigMap and egress/ingress NetworkPolicy. Leave it null to provision nothing.
+ConfigMap and egress/ingress NetworkPolicy. This namespace is persistent: build
+Jobs reuse it, and Job TTL cleanup removes completed Jobs rather than the namespace.
+Leave it null to provision nothing.
 S06-A Helm templates reject `enabled: true` because the build service is not yet
 installed. Review the rendered manifests before installing them.
 
@@ -49,7 +51,7 @@ Required fields:
 | Field | Provisioning requirement |
 | --- | --- |
 | `executor_image`, `release`, `platform` | Exact measured image, signed release and tested architecture |
-| `namespace` | Dedicated build namespace; fixture requires a fresh, absent namespace |
+| `namespace` | Persistent dedicated build namespace; may already be provisioned by Helm |
 | `s3_profile_name`, `staging_prefix` | Existing S3 profile with a dedicated context prefix ending in `/` |
 | `allowed_repositories` | Exact registry/repository names, without tags, wildcards or prefix matching |
 | `base_pull_secret` | Read-only access to the approved base repositories |
@@ -104,8 +106,11 @@ unused Kubernetes Service IP with port 5002 and repository `allowed`, for exampl
 `10.96.250.250:5002/allowed`. Reserve an unused address in the cluster's Service
 CIDR. Base pull uses the same IP on port 5001; the blocked-network probe targets
 port 5000 on the registry pod. Egress must permit 5001/5002 and the configured S3
-port, but never 5000. Use a fresh namespace for each run; the fixture refuses to
-adopt an existing namespace, including a namespace already provisioned by Helm.
+port, but never 5000. The fixture automatically creates a temporary namespace named
+`builder-qualification-<random-id>` for each run. It never adopts or deletes the
+configured installation namespace, so Helm can provision that namespace first.
+The report records both namespace names; the policy hash still binds the original
+installation policy. A namespace collision fails without deleting existing resources.
 
 The fixture uses random temporary credentials, an authenticated private base,
 registry-side repository/method restrictions, and a separate runtime reader.
@@ -116,7 +121,7 @@ checks a deadline failure, and probes a forbidden network destination.
 This is a fixed qualification context, not the general user-context packager
 planned for S06-B. Both the application allowlist and registry ACL are required.
 
-Only objects in the newly created namespace and this run's random S3 prefix are
+Only objects in the automatically created test namespace and this run's random S3 prefix are
 removed. Qualification attempts are appended to `build_qualifications`; the JSON
 report remains at `--evidence`. Use a retained evidence volume. A nonzero exit or
 any false/missing check means the executor is **not qualified** for that policy.
@@ -140,6 +145,10 @@ Credential rotation, registry ACL, CA, cluster/CNI or staging changes must incre
 registry does not approve different production registry credentials or ACLs.
 Provision the target site's real bindings and qualify them before S06-B enables
 builds. Generic build execution and approval workflows are outside this package.
+The disposable fixture tests the builder contract in isolation; it does not
+validate the persistent namespace's installed secrets or effective network policy.
+Installation validation against those real bindings remains part of the build
+service integration; an isolated fixture report alone must not enable that service.
 
 ## Tests
 

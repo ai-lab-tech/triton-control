@@ -39,8 +39,17 @@ def command(*args: str, data: str | None = None, env: dict[str, str] | None = No
 
 class Fixture:
     def __init__(self, policy: BuildPolicy, staging: dict[str, Any]) -> None:
-        self.policy, self.staging = policy, staging
+        # The installation namespace is persistent (and may already be managed by
+        # Helm). Only run disposable probes in a namespace owned by this fixture.
+        self.run_id = secrets.token_hex(6)
+        namespace = f"builder-qualification-{self.run_id}"
+        if namespace == policy.namespace:
+            namespace += "-test"
+        self.policy = policy.model_copy(update={"namespace": namespace})
+        self.staging = staging
         self.report: dict[str, Any] = {
+            "installation_namespace": policy.namespace,
+            "fixture_namespace": namespace,
             "checks": dict.fromkeys(sorted(REQUIRED_CHECKS), False),
             "failures": [],
             "transport": "isolated HTTP registry fixture; production requires trusted TLS",
@@ -172,7 +181,6 @@ class Fixture:
             self.report["signer_identity"] = identity
             self.report["checks"]["provenance"] = bool(json.loads(verified))
             phase = "provisioning"
-            self.run_id = secrets.token_hex(6)
             # Create, never adopt an existing namespace.
             command("kubectl", "create", "namespace", self.policy.namespace)
             self.created = True

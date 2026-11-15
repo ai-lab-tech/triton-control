@@ -445,4 +445,5 @@ perfAnalyzer:
 # Configure a complete BuildPolicy object from docs/build-provisioning.md.
 # No floating executor image or automatic build enablement is shipped.
 buildQualification:
+  # policy.namespace is persistent; disposable qualification uses its own temporary namespace.
   policy: null

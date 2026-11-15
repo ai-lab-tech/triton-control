@@ -3,6 +3,7 @@
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -14,6 +15,7 @@ from app.repositories import build_qualifications
 from app.schemas.build_policy import BuildPolicy
 from app.services.builds.manifests import job
 from app.services.builds.qualification import REQUIRED_CHECKS, all_checks_passed, require_qualified
+from scripts.builder_fixture import Fixture
 
 
 def policy(**changes):
@@ -98,6 +100,51 @@ class BuildPolicyTests(unittest.TestCase):
         self.assertFalse(pod["containers"][0]["securityContext"]["allowPrivilegeEscalation"])
         with self.assertRaises(ValueError):
             job(configured, "bad", "s3://bucket/builds/context.tar.gz", "registry.example/outside:v1", "scoped")
+
+
+class FixtureNamespaceTests(unittest.TestCase):
+    def test_run_only_creates_and_deletes_disposable_namespace(self):
+        configured = policy()
+        original_hash = configured.fingerprint()
+        fixture = Fixture(configured, {})
+
+        with (
+            patch("scripts.builder_fixture.command", return_value="[{}]") as command,
+            patch.object(fixture, "apply") as apply,
+            patch.object(fixture, "execute") as execute,
+        ):
+            report = fixture.run()
+
+        namespace = report["fixture_namespace"]
+        self.assertNotEqual(namespace, configured.namespace)
+        self.assertEqual(report["installation_namespace"], configured.namespace)
+        self.assertEqual(configured.fingerprint(), original_hash)
+        self.assertEqual(fixture.policy.namespace, namespace)
+        command.assert_any_call("kubectl", "create", "namespace", namespace)
+        command.assert_any_call("kubectl", "delete", "namespace", namespace, "--wait=true", "--timeout=90s")
+        self.assertEqual(apply.call_args.args[0]["metadata"]["name"], namespace)
+        execute.assert_called_once()
+        self.assertTrue(report["checks"]["cleanup"])
+
+    def test_namespace_collision_never_adopts_or_deletes_existing_resources(self):
+        fixture = Fixture(policy(), {})
+        with (
+            patch("scripts.builder_fixture.command", side_effect=["[{}]", RuntimeError("AlreadyExists")]) as command,
+            patch.object(fixture, "apply") as apply,
+            patch.object(fixture, "execute") as execute,
+        ):
+            report = fixture.run()
+
+        self.assertEqual(command.call_count, 2)
+        apply.assert_not_called()
+        execute.assert_not_called()
+        self.assertFalse(all_checks_passed(report["checks"]))
+
+    def test_generated_name_cannot_equal_installation_namespace(self):
+        with patch("scripts.builder_fixture.secrets.token_hex", return_value="fixed"):
+            configured = policy(namespace="builder-qualification-fixed")
+            fixture = Fixture(configured, {})
+        self.assertNotEqual(fixture.policy.namespace, configured.namespace)
 
 
 class QualificationGateTests(unittest.TestCase):
