@@ -71,3 +71,5 @@ For example, `../weights` passes the structural inventory schema but must be
 rejected by consumers. A structurally valid candidate with a broken attempt chain
 must also be rejected. Implementations in other languages must apply these rules
 in addition to JSON Schema; schema validation is never publication approval.
+
+See [Prepared repository import](candidate-import.md) for S05-B capture providers, structural validation, retained bytes and scoped registration using these identities.
