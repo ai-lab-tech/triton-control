@@ -1,0 +1,135 @@
+"""Preparation HTTP boundary; handoff submission belongs to S03-A."""
+
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session
+
+from app.api.errors import translate_app_errors
+from app.core.security import get_claims
+from app.db.database import get_session
+from app.schemas.preparation import (
+    AttemptDTO,
+    InformationRequest,
+    ReasonRequest,
+    ReassignRequest,
+    ResolveInputsRequest,
+    TaskDTO,
+    TaskEventDTO,
+    TaskRevision,
+)
+from app.services import preparation
+
+router = APIRouter(prefix="/api/preparation-tasks", tags=["preparation"])
+
+
+@router.get("", response_model=list[TaskDTO])
+@translate_app_errors
+def list_tasks(
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=1000000),
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> list[TaskDTO]:
+    return preparation.list_tasks(session, claims, limit, offset)
+
+
+@router.get("/{task_id}", response_model=TaskDTO)
+@translate_app_errors
+def get_task(
+    task_id: UUID,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.get_task(session, claims, task_id)
+
+
+@router.get("/{task_id}/events", response_model=list[TaskEventDTO])
+@translate_app_errors
+def list_events(
+    task_id: UUID,
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=1000000),
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> list[TaskEventDTO]:
+    return preparation.list_events(session, claims, task_id, limit, offset)
+
+
+@router.get("/{task_id}/attempts", response_model=list[AttemptDTO])
+@translate_app_errors
+def list_attempts(
+    task_id: UUID,
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=1000000),
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> list[AttemptDTO]:
+    return preparation.list_attempts(session, claims, task_id, limit, offset)
+
+
+@router.post("/{task_id}/claim", response_model=TaskDTO)
+@translate_app_errors
+def claim(
+    task_id: UUID,
+    request: TaskRevision,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.claim(session, claims, task_id, request)
+
+
+@router.post("/{task_id}/release-claim", response_model=TaskDTO)
+@translate_app_errors
+def release_claim(
+    task_id: UUID,
+    request: TaskRevision,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.release_claim(session, claims, task_id, request)
+
+
+@router.post("/{task_id}/request-information", response_model=TaskDTO)
+@translate_app_errors
+def request_information(
+    task_id: UUID,
+    request: InformationRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.request_information(session, claims, task_id, request)
+
+
+@router.post("/{task_id}/resolve-inputs", response_model=TaskDTO)
+@translate_app_errors
+def resolve_inputs(
+    task_id: UUID,
+    request: ResolveInputsRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.resolve_inputs(session, claims, task_id, request)
+
+
+@router.post("/{task_id}/cancel", response_model=TaskDTO)
+@translate_app_errors
+def cancel(
+    task_id: UUID,
+    request: ReasonRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.cancel(session, claims, task_id, request)
+
+
+@router.post("/{task_id}/reassign", response_model=TaskDTO)
+@translate_app_errors
+def reassign(
+    task_id: UUID,
+    request: ReassignRequest,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> TaskDTO:
+    return preparation.reassign(session, claims, task_id, request)
