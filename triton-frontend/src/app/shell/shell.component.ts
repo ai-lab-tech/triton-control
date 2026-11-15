@@ -70,7 +70,7 @@ export class ShellComponent {
       { label: "Dashboard", icon: "grid_view", path: "/dashboard" },
       { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
-        label: "Development",
+        label: "Workspaces",
         icon: "terminal",
         path: "/development",
         disabledReason: kubernetesActionDisabledReason,
