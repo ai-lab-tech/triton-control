@@ -1,4 +1,4 @@
-<div class="development">
+<div class="workspaces">
   @if (!initialLoaded()) {
     <div class="view-loading">
       <span class="material-icons spin">progress_activity</span>
@@ -246,7 +246,7 @@
       </mat-card>
     </div>
   } @else if (selectedWorkspace(); as workspace) {
-    <!-- IDE VIEW: Development frame for the selected workspace -->
+    <!-- IDE VIEW: Workspace frame for the selected workspace -->
     <section class="workspace-shell">
       <div class="workspace-toolbar">
         <div class="workspace-heading">
@@ -268,8 +268,8 @@
             <button
               mat-stroked-button
               type="button"
-              aria-label="Open Development workspace in a new tab"
-              title="Open Development workspace in a new tab"
+              aria-label="Open workspace in a new tab"
+              title="Open workspace in a new tab"
               (click)="openInNewTab(workspace)"
             >
               <span class="material-icons">open_in_new</span>
@@ -290,8 +290,8 @@
             mat-stroked-button
             type="button"
             class="danger"
-            aria-label="Delete Development workspace"
-            title="Delete Development workspace"
+            aria-label="Delete workspace"
+            title="Delete workspace"
             (click)="delete(workspace)"
             [disabled]="deletingId() === workspace.id"
           >
@@ -312,7 +312,7 @@
             }
             <iframe
               #codeServerFrame
-              title="Development"
+              title="Workspace"
               [src]="embeddedWorkspaceUrl()"
               (load)="onFrameLoaded()"
               allow="clipboard-read; clipboard-write; fullscreen"
@@ -323,7 +323,7 @@
               <span class="material-icons">terminal</span>
               <div class="placeholder-title">Workspace is starting</div>
               <div class="placeholder-copy">
-                The Development workspace is not ready yet. It will open automatically once the pod
+                The workspace is not ready yet. It will open automatically once the pod
                 is ready.
               </div>
             </div>

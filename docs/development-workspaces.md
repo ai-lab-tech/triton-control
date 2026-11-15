@@ -1,13 +1,13 @@
-# Development Workspaces
+# Workspaces
 
-The **Development** sidebar entry provides each user with a private,
+The **Workspaces** sidebar entry (at `/workspaces`) provides each user with a private,
 browser-based development workspace for Triton model repositories. The
 workspace UI is powered by code-server and is embedded directly in Triton
 Control.
 
 ## Prerequisites
 
-Development workspaces are available only when Kubernetes support is enabled.
+Workspaces are available only when Kubernetes support is enabled.
 The sidebar entry is disabled when Triton Control cannot perform Kubernetes
 actions.
 
@@ -26,7 +26,7 @@ The Kubernetes cluster must provide:
 
 ## Create a Workspace
 
-Open **Development** in the sidebar and configure the workspace:
+Open **Workspaces** in the sidebar and configure the workspace:
 
 | Field | Required | Default | Purpose |
 | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Open **Development** in the sidebar and configure the workspace:
 | GPU count | No | unset | Adds an `nvidia.com/gpu` resource limit when greater than zero. |
 | Registry credentials | Centrally managed | unset | Uses the administrator's **Settings → Registry** configuration for new workspaces. |
 
-In this field, **Development** refers to the code-server runtime. Enable
+This option refers to the code-server runtime. Enable
 **Use preinstalled code-server** only if `code-server` is available
 on the image's `PATH`. Triton Control overrides the image startup command and
 starts that binary with `--bind-addr 0.0.0.0:8080`; the image does not need to
@@ -91,7 +91,7 @@ managed StatefulSet, Service, Secrets, ConfigMap, and any legacy ingress.
 
 !!! warning "Persistent volume retention"
 
-    Deleting a Development workspace does not delete its Kubernetes PVC.
+    Deleting a workspace does not delete its Kubernetes PVC.
     Remove retained workspace claims separately when their data is no longer
     needed.
 

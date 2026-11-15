@@ -5,9 +5,9 @@ import { of, throwError } from "rxjs";
 
 import { BASE_PATH, CodeServerDTO, DevelopmentService } from "../../api/generated/index";
 import { AuthService } from "../../shared/auth/auth.service";
-import { DevelopmentPageComponent } from "./development-page.component";
+import { WorkspacesPageComponent } from "./workspaces-page.component";
 
-describe("DevelopmentPageComponent", () => {
+describe("WorkspacesPageComponent", () => {
   const creatingWorkspace: CodeServerDTO = {
     id: 3,
     name: "workspace",
@@ -55,10 +55,10 @@ describe("DevelopmentPageComponent", () => {
     authService.refreshSession.and.resolveTo();
     authService.getAccessToken.and.returnValue("token-1");
     router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
-    Object.defineProperty(router, "url", { value: "/development", configurable: true });
+    Object.defineProperty(router, "url", { value: "/workspaces", configurable: true });
 
     await TestBed.configureTestingModule({
-      imports: [DevelopmentPageComponent],
+      imports: [WorkspacesPageComponent],
       providers: [
         { provide: DevelopmentService, useValue: codeServersApi },
         { provide: AuthService, useValue: authService },
@@ -70,7 +70,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
 
     // Act
     const component = fixture.componentInstance;
@@ -82,7 +82,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("OpenInNewTab_ReadyWorkspace_OpensProxiedUrlInNewTab", () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     const openSpy = spyOn(window, "open").and.returnValue(null);
 
@@ -95,7 +95,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("OpenInNewTab_WorkspaceNotReady_DoesNotOpen", () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     const openSpy = spyOn(window, "open").and.returnValue(null);
 
@@ -108,7 +108,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_SelectedThemeProvided_SendsThemeAndStartsPolling", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.theme = "Monokai";
     component.cpu = "2";
@@ -141,7 +141,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("CanCreate_DecimalMemoryGi_ReturnsFalse", () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.memoryGi = 1.5;
 
@@ -155,7 +155,7 @@ describe("DevelopmentPageComponent", () => {
   it("Load_ReadyWorkspaceReturned_SelectsAndEmbedsWorkspace", async () => {
     // Arrange
     codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([readyWorkspace]) as any);
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -174,20 +174,20 @@ describe("DevelopmentPageComponent", () => {
     codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet.and.returnValue(
       throwError(() => ({ error: { detail: "backend failed" } })) as any,
     );
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act
     await component.refresh(creatingWorkspace);
 
     // Assert
-    expect(component.message()).toBe("Failed to refresh Development workspace.");
+    expect(component.message()).toBe("Failed to refresh workspace.");
     expect(component.messageTone()).toBe("error");
   });
 
   it("Delete_SelectedWorkspaceDeleted_ClearsSelectionAndFrame", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.workspaces.set([readyWorkspace]);
     component.selectWorkspace(readyWorkspace);
@@ -204,7 +204,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_InvalidForm_DoesNotCallApi", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.name = "";
 
@@ -218,7 +218,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_ImageHasCodeServerEnabled_SendsTrueFlag", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.imageHasCodeServer = true;
 
@@ -235,7 +235,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_HfBuilderDisabled_SendsFalseFlag", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.installHfBuilder = false;
 
@@ -250,7 +250,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_MlflowEnabled_UsesConfiguredDefaults", async () => {
     // Arrange
-    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+    const component = TestBed.createComponent(WorkspacesPageComponent).componentInstance;
 
     // Act
     await component.create();
@@ -268,7 +268,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_MlflowDisabled_SendsFalseFlag", async () => {
     // Arrange
-    const component = TestBed.createComponent(DevelopmentPageComponent).componentInstance;
+    const component = TestBed.createComponent(WorkspacesPageComponent).componentInstance;
     component.installMlflow = false;
 
     // Act
@@ -287,7 +287,7 @@ describe("DevelopmentPageComponent", () => {
     codeServersApi.createCodeServerApiDevelopmentPost.and.returnValue(
       throwError(() => new Error("Canceled")) as any,
     );
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -301,7 +301,7 @@ describe("DevelopmentPageComponent", () => {
   it("Create_RefreshSessionFails_StillCallsCreateApi", async () => {
     // Arrange
     authService.refreshSession.and.rejectWith(new Error("Not authenticated"));
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -313,7 +313,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("Create_GpuCountAsNumber_SendsParsedGpuCount", async () => {
     // Arrange
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.gpuCount = 1;
 
@@ -330,7 +330,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("CodeServerMessage_DeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
-    TestBed.createComponent(DevelopmentPageComponent);
+    TestBed.createComponent(WorkspacesPageComponent);
 
     // Act
     window.dispatchEvent(
@@ -357,7 +357,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("CodeServerMessage_NullOriginDeploymentCreated_NavigatesToInstanceLogs", async () => {
     // Arrange
-    TestBed.createComponent(DevelopmentPageComponent);
+    TestBed.createComponent(WorkspacesPageComponent);
 
     // Act
     window.dispatchEvent(
@@ -384,7 +384,7 @@ describe("DevelopmentPageComponent", () => {
     codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 46 }) as any,
     );
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act
@@ -398,7 +398,7 @@ describe("DevelopmentPageComponent", () => {
 
   it("CodeServerMessage_ReplayedDeploymentCreated_DoesNotNavigateAgain", async () => {
     // Arrange
-    TestBed.createComponent(DevelopmentPageComponent);
+    TestBed.createComponent(WorkspacesPageComponent);
     const message = new MessageEvent("message", {
       data: {
         source: "triton-control-deploy",
@@ -426,7 +426,7 @@ describe("DevelopmentPageComponent", () => {
     codeServersApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet.and.returnValue(
       of({ instance_id: 44 }) as any,
     );
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
     component.workspaces.set([readyWorkspace]);
     component.selectWorkspace(readyWorkspace);
@@ -444,7 +444,7 @@ describe("DevelopmentPageComponent", () => {
   it("Load_ReadyWorkspaceReturned_RefreshesBeforeEmbeddingWorkspace", async () => {
     // Arrange
     codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([readyWorkspace]) as any);
-    const fixture = TestBed.createComponent(DevelopmentPageComponent);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
 
     // Act

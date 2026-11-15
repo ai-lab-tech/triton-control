@@ -72,7 +72,7 @@ export class ShellComponent {
       {
         label: "Workspaces",
         icon: "terminal",
-        path: "/development",
+        path: "/workspaces",
         disabledReason: kubernetesActionDisabledReason,
       },
       {

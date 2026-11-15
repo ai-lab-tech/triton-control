@@ -1,8 +1,8 @@
 # Local Project Development
 
 This page covers development of Triton Control itself. For the user-facing
-**Development** feature backed by code-server on Kubernetes, see
-[Development Workspaces](development-workspaces.md).
+**Workspaces** feature backed by code-server on Kubernetes, see
+[Workspaces](development-workspaces.md).
 
 Use local Python for the backend and npm for the frontend.
 

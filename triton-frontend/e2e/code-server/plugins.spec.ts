@@ -268,8 +268,8 @@ test.describe.serial("code-server plugin workflows", () => {
     s3("put", `${prefix}/remote-${phase}.txt`, "original smoke content");
     page = await context.newPage();
     // Angular rehydrates authentication from the real backend session cookie.
-    await page.goto("/development");
-    workbench = page.frameLocator('iframe[title="Development"]');
+    await page.goto("/workspaces");
+    workbench = page.frameLocator('iframe[title="Workspace"]');
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
     await expect(page.locator(".frame-loading")).toBeHidden({ timeout: 30_000 });
     await expect(
@@ -438,7 +438,7 @@ test.describe.serial("code-server plugin workflows", () => {
 
   test("HF wizard uses the published builder and passes serving metadata to deployment", async () => {
     // Arrange
-    await page.goto("/development");
+    await page.goto("/workspaces");
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
     await expect(page.locator(".frame-loading")).toBeHidden({ timeout: 30_000 });
 
@@ -499,7 +499,7 @@ test.describe.serial("code-server plugin workflows", () => {
         { timeout: 540_000, intervals: [3000] },
       )
       .toBe("ready");
-    await page.goto("/development");
+    await page.goto("/workspaces");
     expect(readFile(`/workspace/${repository}/${model}/1/model.py`)).toContain("TritonPythonModel");
     expect(readFile(`/workspace/remote-${phase}.txt`)).toBe("edited smoke content");
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });

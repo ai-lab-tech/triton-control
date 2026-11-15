@@ -28,7 +28,7 @@ import { AuthService } from "../../shared/auth/auth.service";
 type CodeServer = CodeServerDTO;
 
 @Component({
-  selector: "app-development-page",
+  selector: "app-workspaces-page",
   standalone: true,
   imports: [
     FormsModule,
@@ -42,16 +42,16 @@ type CodeServer = CodeServerDTO;
     MatCheckboxModule,
     MatTooltipModule,
   ],
-  styleUrl: "./development-page.component.scss",
-  templateUrl: "./development-page.component.html",
+  styleUrl: "./workspaces-page.component.scss",
+  templateUrl: "./workspaces-page.component.html",
 })
-export class DevelopmentPageComponent implements OnDestroy {
+export class WorkspacesPageComponent implements OnDestroy {
   private static readonly statusPollIntervalMs = 3000;
   private static readonly deploymentNavigationPollIntervalMs = 1500;
   private static readonly handledDeploymentNavigationKey =
     "triton-control-handled-deployment-navigation-instance-ids";
 
-  private readonly developmentApi = inject(DevelopmentService);
+  private readonly workspaceApi = inject(DevelopmentService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly chrome = inject(ChromeService);
   private readonly auth = inject(AuthService);
@@ -137,7 +137,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     if (!Number.isInteger(instanceId) || instanceId <= 0) {
       return;
     }
-    if (!this.router.url.startsWith("/development")) {
+    if (!this.router.url.startsWith("/workspaces")) {
       return;
     }
     if (this.hasHandledDeploymentNavigation(instanceId)) {
@@ -149,7 +149,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   }
 
   private async pollDeploymentNavigationTarget(): Promise<void> {
-    if (this.deploymentNavigationPollInFlight || !this.router.url.startsWith("/development")) {
+    if (this.deploymentNavigationPollInFlight || !this.router.url.startsWith("/workspaces")) {
       return;
     }
     this.deploymentNavigationPollInFlight = true;
@@ -176,7 +176,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   private async consumeDeploymentNavigationTarget(): Promise<number | null> {
     try {
       const payload = await firstValueFrom(
-        this.developmentApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet(),
+        this.workspaceApi.consumeCodeServerDeploymentNavigationApiDevelopmentDeploymentNavigationGet(),
       );
       const instanceId = Number(payload.instance_id);
       return Number.isInteger(instanceId) && instanceId > 0 ? instanceId : null;
@@ -198,7 +198,7 @@ export class DevelopmentPageComponent implements OnDestroy {
       const ids = this.readHandledDeploymentNavigationIds().filter((id) => id !== instanceId);
       ids.push(instanceId);
       window.sessionStorage.setItem(
-        DevelopmentPageComponent.handledDeploymentNavigationKey,
+        WorkspacesPageComponent.handledDeploymentNavigationKey,
         JSON.stringify(ids.slice(-25)),
       );
     } catch {
@@ -208,7 +208,7 @@ export class DevelopmentPageComponent implements OnDestroy {
 
   private readHandledDeploymentNavigationIds(): number[] {
     const raw = window.sessionStorage.getItem(
-      DevelopmentPageComponent.handledDeploymentNavigationKey,
+      WorkspacesPageComponent.handledDeploymentNavigationKey,
     );
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     if (!Array.isArray(parsed)) {
@@ -223,13 +223,13 @@ export class DevelopmentPageComponent implements OnDestroy {
     this.loading.set(true);
     try {
       const workspaces = (await firstValueFrom(
-        this.developmentApi.listCodeServersApiDevelopmentGet(),
+        this.workspaceApi.listCodeServersApiDevelopmentGet(),
       )) as CodeServer[];
       this.workspaces.set(workspaces);
       await this.ensureSelectedWorkspace({ refreshReadyWorkspace: true });
       this.updateStatusPolling();
     } catch (error) {
-      this.setMessage(mapApiErrorMessage(error, "Failed to load Development workspaces."), "error");
+      this.setMessage(mapApiErrorMessage(error, "Failed to load workspaces."), "error");
     } finally {
       this.loading.set(false);
       this.initialLoaded.set(true);
@@ -267,15 +267,15 @@ export class DevelopmentPageComponent implements OnDestroy {
         install_mlflow: this.installMlflow,
       };
       const workspace = await firstValueFrom(
-        this.developmentApi.createCodeServerApiDevelopmentPost(payload),
+        this.workspaceApi.createCodeServerApiDevelopmentPost(payload),
       );
       this.upsertWorkspace(workspace);
       this.selectWorkspace(workspace);
       this.updateStatusPolling();
       await this.pollPendingWorkspaces();
-      this.setMessage("Development workspace created.", "success");
+      this.setMessage("Workspace created.", "success");
     } catch (error) {
-      console.error("Development workspace create failed", error);
+      console.error("Workspace create failed", error);
       if (this.isCanceledError(error)) {
         this.setMessage(
           "Request was canceled in the browser. Please retry and check Network tab for POST /api/development.",
@@ -288,7 +288,7 @@ export class DevelopmentPageComponent implements OnDestroy {
         return;
       }
       this.setMessage(
-        mapApiErrorMessage(error, "Failed to create Development workspace."),
+        mapApiErrorMessage(error, "Failed to create workspace."),
         "error",
       );
     } finally {
@@ -323,7 +323,7 @@ export class DevelopmentPageComponent implements OnDestroy {
   async refresh(workspace: CodeServer): Promise<void> {
     try {
       const updated = await firstValueFrom(
-        this.developmentApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
+        this.workspaceApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
       );
       this.upsertWorkspace(updated);
       if (this.selectedWorkspaceId() === updated.id) {
@@ -333,7 +333,7 @@ export class DevelopmentPageComponent implements OnDestroy {
       this.updateStatusPolling();
     } catch (error) {
       this.setMessage(
-        mapApiErrorMessage(error, "Failed to refresh Development workspace."),
+        mapApiErrorMessage(error, "Failed to refresh workspace."),
         "error",
       );
     }
@@ -349,7 +349,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     this.deletingId.set(workspace.id);
     try {
       await firstValueFrom(
-        this.developmentApi.deleteCodeServerApiDevelopmentCodeServerIdDelete(workspace.id),
+        this.workspaceApi.deleteCodeServerApiDevelopmentCodeServerIdDelete(workspace.id),
       );
       this.workspaces.update((items) => items.filter((item) => item.id !== workspace.id));
       if (this.selectedWorkspaceId() === workspace.id) {
@@ -358,10 +358,10 @@ export class DevelopmentPageComponent implements OnDestroy {
         await this.ensureSelectedWorkspace();
       }
       this.updateStatusPolling();
-      this.setMessage("Development workspace deleted.", "success");
+      this.setMessage("Workspace deleted.", "success");
     } catch (error) {
       this.setMessage(
-        mapApiErrorMessage(error, "Failed to delete Development workspace."),
+        mapApiErrorMessage(error, "Failed to delete workspace."),
         "error",
       );
     } finally {
@@ -455,8 +455,8 @@ export class DevelopmentPageComponent implements OnDestroy {
 
   onFrameLoaded(): void {
     const elapsed = Date.now() - this.frameLoadStartedAt;
-    const remainingMin = DevelopmentPageComponent.minFrameLoaderMs - elapsed;
-    const delay = Math.max(remainingMin, DevelopmentPageComponent.postLoadGraceMs);
+    const remainingMin = WorkspacesPageComponent.minFrameLoaderMs - elapsed;
+    const delay = Math.max(remainingMin, WorkspacesPageComponent.postLoadGraceMs);
     if (this.frameLoaderHideTimer !== null) {
       clearTimeout(this.frameLoaderHideTimer);
       this.frameLoaderHideTimer = null;
@@ -524,7 +524,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     }
     this.statusPollId = setInterval(() => {
       void this.pollPendingWorkspaces();
-    }, DevelopmentPageComponent.statusPollIntervalMs);
+    }, WorkspacesPageComponent.statusPollIntervalMs);
   }
 
   private stopStatusPolling(): void {
@@ -541,7 +541,7 @@ export class DevelopmentPageComponent implements OnDestroy {
     }
     this.deploymentNavigationPollId = setInterval(() => {
       void this.pollDeploymentNavigationTarget();
-    }, DevelopmentPageComponent.deploymentNavigationPollIntervalMs);
+    }, WorkspacesPageComponent.deploymentNavigationPollIntervalMs);
   }
 
   private stopDeploymentNavigationPolling(): void {
@@ -580,7 +580,7 @@ export class DevelopmentPageComponent implements OnDestroy {
       const updates = await Promise.all(
         pending.map((workspace) =>
           firstValueFrom(
-            this.developmentApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
+            this.workspaceApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
           ),
         ),
       );

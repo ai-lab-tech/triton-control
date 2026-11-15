@@ -3,7 +3,7 @@ import { adminGuard, authGuard } from "./shared/auth/auth.guard";
 import { ShellComponent } from "./shell/shell.component";
 import { DashboardPageComponent } from "./pages/dashboard/dashboard-page.component";
 import { InstancesPageComponent } from "./pages/instances/instances-page.component";
-import { DevelopmentPageComponent } from "./pages/development/development-page.component";
+import { WorkspacesPageComponent } from "./pages/workspaces/workspaces-page.component";
 import { NewDeploymentPageComponent } from "./pages/deployments/new-deployment-page.component";
 import { InstanceDetailPageComponent } from "./pages/instances/detail/instance-detail-page.component";
 import { InstanceModelInferPageComponent } from "./pages/instances/infer/instance-model-infer-page.component";
@@ -39,7 +39,8 @@ export const APP_ROUTES: Routes = [
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
       { path: "instances", component: InstancesPageComponent },
-      { path: "development", component: DevelopmentPageComponent },
+      { path: "workspaces", component: WorkspacesPageComponent },
+      { path: "development", redirectTo: "workspaces", pathMatch: "full" },
       { path: "deployments/new", component: NewDeploymentPageComponent },
       { path: "workflows", component: WorkflowsPageComponent },
       { path: "mlflow", component: MlflowPageComponent },
