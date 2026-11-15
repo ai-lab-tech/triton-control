@@ -177,10 +177,17 @@ class DirectorySource(ArtifactSource):
 
         def walk(fd: int, prefix: str, *, copy: bool) -> dict[str, tuple[int, ...]]:
             signatures: dict[str, tuple[int, ...]] = {}
+            names: list[str] = []
             with os.scandir(fd) as iterator:
-                names = sorted(entry.name for entry in iterator)
+                for entry in iterator:
+                    # Bound enumeration itself, before buffering or sorting names.
+                    # This also applies to the final source-consistency scan.
+                    budget.node()
+                    names.append(entry.name)
+            names.sort()
+            budget.check()
             for name in names:
-                budget.node()
+                budget.check()
                 relative = safe_path(prefix + name, limits)
                 before = os.stat(name, dir_fd=fd, follow_symlinks=False)
                 signatures[relative] = _signature(before)

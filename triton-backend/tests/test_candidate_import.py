@@ -6,7 +6,9 @@ import os
 import shutil
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from pydantic import ValidationError
@@ -525,3 +527,62 @@ class CandidateImportTests(CandidateFixture, unittest.TestCase):
         result = self.do_import()
         self.assertEqual([m.name for m in result.models], ["iris", "second"])
         self.assertEqual(result.models[1].backend, "python")
+
+
+class DirectoryEnumerationTests(unittest.TestCase):
+    def test_path_budget_stops_enumeration_before_buffering_all_names(self):
+        consumed = 0
+        closed = False
+
+        @contextmanager
+        def scan(_):
+            nonlocal closed
+
+            def entries():
+                nonlocal consumed
+                for index in range(10000):
+                    consumed += 1
+                    yield SimpleNamespace(name=f"file-{index}")
+
+            try:
+                yield entries()
+            finally:
+                closed = True
+
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as staging:
+            with patch("app.services.candidates.artifacts.os.scandir", scan):
+                with self.assertRaisesRegex(BadRequestError, "Too many artifact paths"):
+                    DirectorySource(Path(root)).capture(Path(staging), CaptureLimits(max_files=2))
+        self.assertEqual(consumed, 7)  # Existing path budget: three nodes per allowed file, plus the rejected node.
+        self.assertTrue(closed)
+
+    def test_deadline_stops_enumeration_before_buffering_all_names(self):
+        clock = [0.0]
+        consumed = 0
+        closed = False
+
+        @contextmanager
+        def scan(_):
+            nonlocal closed
+
+            def entries():
+                nonlocal consumed
+                for index in range(10000):
+                    consumed += 1
+                    clock[0] = 1.0 if index == 0 else 3.0
+                    yield SimpleNamespace(name=f"file-{index}")
+
+            try:
+                yield entries()
+            finally:
+                closed = True
+
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as staging:
+            with (
+                patch("app.services.candidates.artifacts.os.scandir", scan),
+                patch("app.services.candidates.artifacts.time.monotonic", side_effect=lambda: clock[0]),
+            ):
+                with self.assertRaisesRegex(ConflictError, "deadline exceeded"):
+                    DirectorySource(Path(root)).capture(Path(staging), CaptureLimits(deadline_seconds=2))
+        self.assertEqual(consumed, 2)
+        self.assertTrue(closed)

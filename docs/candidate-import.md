@@ -186,7 +186,9 @@ missing/corrupt bytes block verified reads instead of rewriting identity.
 Default per-capture limits: 10,000 files, 10 GiB total/per file, depth 32, 1 MiB model
 configs and a 120-second deadline checked between files/chunks. Manifests are capped
 at 64 MiB; S3 clients additionally use connection/read timeouts. Temporary capture
-directories are removed on success/failure. Provider parameters/limits come from
+directories are removed on success/failure. Local directory enumeration checks the
+path-count budget and deadline before buffering names for sorting, including the
+final source-consistency scan. Provider parameters/limits come from
 trusted application setup, not unvalidated model metadata.
 
 ## Upgrade and verification
