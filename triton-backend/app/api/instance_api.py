@@ -20,6 +20,8 @@ from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTritonInstanceRequest
+from app.schemas.pods import InstancePodsResponse
+from app.services.deployment import pods as pod_service
 from app.services.triton import instances as instance_service
 
 router = APIRouter(prefix="/api/instances", tags=["instances"])
@@ -95,3 +97,13 @@ def get_instance_by_name(
 ) -> TritonInstanceDTO:
     """Get a single Triton instance by its unique name."""
     return instance_service.get_instance_by_name(session, claims, name)
+
+
+@router.get("/{instance_id}/pods", response_model=InstancePodsResponse)
+@translate_app_errors
+def get_instance_pods(
+    instance_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> InstancePodsResponse:
+    return pod_service.get_pods(session, claims, instance_id)
