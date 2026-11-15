@@ -52,7 +52,12 @@ export class WorkloadPanelComponent implements OnChanges {
   @Input() initialPodUid = "";
   @Input() selectionRevision = 0;
   @Input() initialContainer = "";
-  @Output() viewContainerLogs = new EventEmitter<{ uid: string; container: string }>();
+  @Input() initialPrevious = false;
+  @Output() viewContainerLogs = new EventEmitter<{
+    uid: string;
+    container: string;
+    previous?: boolean;
+  }>();
   @ViewChild("logViewport") logViewport?: ElementRef<HTMLElement>;
   @ViewChild("workspace") workspace?: ElementRef<HTMLElement>;
   readonly podSearch = signal("");
@@ -122,7 +127,7 @@ export class WorkloadPanelComponent implements OnChanges {
         groups: this.podGroups().filter((g) => !this.isHistoricalPod(g.pods[0])),
       },
       {
-        title: "Pod history",
+        title: "Previous pods",
         history: true,
         groups: this.podGroups().filter((g) => this.isHistoricalPod(g.pods[0])),
       },
@@ -138,7 +143,7 @@ export class WorkloadPanelComponent implements OnChanges {
       pods: this.visiblePods().filter((p) => !this.isHistoricalPod(p)),
     },
     {
-      title: "Pod history",
+      title: "Previous pods",
       history: true,
       pods: this.visiblePods().filter((p) => this.isHistoricalPod(p)),
     },
@@ -247,6 +252,7 @@ export class WorkloadPanelComponent implements OnChanges {
       this.logsLoading.set(false);
       this.selectedUid.set(this.initialPodUid);
       this.selectedContainer.set(this.initialContainer);
+      this.previous.set(this.initialPrevious);
       this.pendingRead.set(false);
       this.selectionInitialized = false;
     } else if ((changes["initialPodUid"] || changes["selectionRevision"]) && this.initialPodUid) {
@@ -254,6 +260,7 @@ export class WorkloadPanelComponent implements OnChanges {
         this.initialPodUid,
         this.initialContainer ||
           this.preferredContainer(this.state()?.pods.find((p) => p.uid === this.initialPodUid)),
+        this.initialPrevious,
       );
     }
     if (this.active && this.instanceId) void this.refresh();
@@ -323,10 +330,10 @@ export class WorkloadPanelComponent implements OnChanges {
     );
   }
 
-  selectContainer(uid: string, container: string): void {
+  selectContainer(uid: string, container: string, previous = false): void {
     this.selectedUid.set(uid);
     this.selectedContainer.set(container);
-    this.previous.set(false);
+    this.previous.set(previous);
     this.selectionInitialized = true;
     this.filter = "";
     this.clearLogs();

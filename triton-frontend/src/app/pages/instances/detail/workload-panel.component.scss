@@ -1100,3 +1100,16 @@ summary:focus-visible {
   font-size: 12px;
   margin: 0 0 12px;
 }
+
+.restart-details {
+  padding: 12px;
+  margin: 12px 0;
+  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 4px;
+
+  small {
+    display: block;
+    margin-top: 8px;
+  }
+}

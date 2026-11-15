@@ -76,6 +76,41 @@ describe("WorkloadPanelComponent", () => {
     fixture.detectChanges();
   }
 
+  it("opens the previous run for the exact restarted container", async () => {
+    // Arrange
+    const restarted = {
+      ...pod,
+      containers: [{ ...pod.containers[0], last_termination_reason: "Error" }],
+    };
+    await refresh({ ...snapshot, pods: [restarted] });
+    const emit = spyOn(component.viewContainerLogs, "emit");
+
+    // Act
+    fixture.nativeElement.querySelector(".previous-run-logs").click();
+
+    // Assert
+    expect(emit).toHaveBeenCalledOnceWith({ uid: pod.uid, container: "download", previous: true });
+    expect(fixture.nativeElement.textContent).toContain("Last termination: Error");
+    expect(component.podSections()[1].count).toBe(0);
+  });
+
+  it("applies previous-run navigation and resets it on normal container selection", () => {
+    // Arrange
+    fixture.componentRef.setInput("initialPodUid", pod.uid);
+    fixture.componentRef.setInput("initialContainer", "download");
+    fixture.componentRef.setInput("initialPrevious", true);
+    fixture.componentRef.setInput("selectionRevision", 1);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    expect(component.previous()).toBeTrue();
+    expect(component.selectedContainer()).toBe("download");
+    component.selectContainer(pod.uid, "triton");
+    expect(component.previous()).toBeFalse();
+  });
+
   it("keeps pending pods current and collapses terminal pod history", async () => {
     // Arrange
     const pending = { ...pod, uid: "pending", phase: "Pending" };

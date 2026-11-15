@@ -133,9 +133,11 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly selectedDetailTabIndex = signal(0);
   readonly selectedPodUid = signal("");
   readonly selectedLogContainer = signal("");
+  readonly selectedPreviousRun = signal(false);
   readonly podLogSelectionRevision = signal(0);
 
-  openPodLogs(uid: string, container = ""): void {
+  openPodLogs(uid: string, container = "", previous = false): void {
+    this.selectedPreviousRun.set(previous);
     this.selectedLogContainer.set(container);
     this.selectedPodUid.set(uid);
     this.podLogSelectionRevision.update((value) => value + 1);

@@ -137,7 +137,7 @@
               [instanceId]="instance.id"
               [active]="selectedDetailTabIndex() === 0"
               (viewLogs)="openPodLogs($event)"
-              (viewContainerLogs)="openPodLogs($event.uid, $event.container)"
+              (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
             />
             <div class="panel-card endpoint-summary">
               <div class="panel-title">Endpoint</div>
@@ -640,6 +640,7 @@
               [active]="selectedDetailTabIndex() === 4"
               [initialPodUid]="selectedPodUid()"
               [initialContainer]="selectedLogContainer()"
+              [initialPrevious]="selectedPreviousRun()"
               [selectionRevision]="podLogSelectionRevision()"
             />
             <details class="apply-messages">

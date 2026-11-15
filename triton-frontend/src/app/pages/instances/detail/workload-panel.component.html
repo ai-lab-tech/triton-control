@@ -129,7 +129,7 @@
                         }
                         <dl class="pod-facts">
                           <div>
-                            <dt>Restarts</dt>
+                            <dt>Container restarts (total)</dt>
                             <dd [class.has-restarts]="pod.restarts > 0">{{ pod.restarts }}</dd>
                           </div>
                           <div>
@@ -184,8 +184,40 @@
                                 ) {
                                   <p>Exit {{ container.exit_code }}</p>
                                 }
-                                @if (container.last_termination_reason) {
-                                  <p>Previous: {{ container.last_termination_reason }}</p>
+                                @if (
+                                  container.restart_count > 0 || container.last_termination_reason
+                                ) {
+                                  <div class="restart-details">
+                                    <strong
+                                      >Container restarts: {{ container.restart_count }}</strong
+                                    >
+                                    <p>Restarts within this pod; no new pod was created.</p>
+                                    <p>
+                                      Last termination:
+                                      {{ container.last_termination_reason || "Not reported" }}
+                                    </p>
+                                    <p>
+                                      Only the last termination is available here, not a record of
+                                      every restart.
+                                    </p>
+                                    @if (container.restart_count > 0) {
+                                      <button
+                                        mat-stroked-button
+                                        type="button"
+                                        class="previous-run-logs"
+                                        (click)="
+                                          viewContainerLogs.emit({
+                                            uid: pod.uid,
+                                            container: container.name,
+                                            previous: true,
+                                          })
+                                        "
+                                      >
+                                        <mat-icon>history</mat-icon>Previous run logs
+                                      </button>
+                                      <small>Logs may be unavailable if no longer retained.</small>
+                                    }
+                                  </div>
                                 }
                                 <small>Image: {{ container.image }} {{ container.image_id }}</small>
                                 <button
