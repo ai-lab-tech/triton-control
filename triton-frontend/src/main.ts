@@ -1,4 +1,5 @@
 import "zone.js";
+import { FullscreenOverlayContainer, OverlayContainer } from "@angular/cdk/overlay";
 import "@angular/compiler";
 import { ErrorHandler, provideZoneChangeDetection } from "@angular/core";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
@@ -40,6 +41,7 @@ const runtimeBasePath = configuredBasePath || window.location.origin;
 
 bootstrapApplication(AppComponent, {
   providers: [
+    { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
     provideZoneChangeDetection(),
     provideAnimationsAsync(),
     importProvidersFrom(MatSnackBarModule),

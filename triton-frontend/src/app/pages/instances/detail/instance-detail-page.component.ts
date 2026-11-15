@@ -4,7 +4,7 @@ import { MatSelectModule } from "@angular/material/select";
 import { BASE_PATH } from "../../../api/generated";
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
-import { EMPTY, Subject, firstValueFrom, interval, switchMap, timer } from "rxjs";
+import { firstValueFrom, interval } from "rxjs";
 
 import { DatePipe, NgTemplateOutlet } from "@angular/common";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
@@ -21,6 +21,8 @@ import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatTabChangeEvent } from "@angular/material/tabs";
 import { Store } from "@ngrx/store";
 import { Actions, ofType } from "@ngrx/effects";
+
+import { WorkloadPanelComponent } from "./workload-panel.component";
 
 import { DeploymentAccessComponent } from "./deployment-access.component";
 
@@ -59,6 +61,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   imports: [
     S3ProfileLabelComponent,
     DeploymentAccessComponent,
+    WorkloadPanelComponent,
     MatSelectModule,
     DatePipe,
     NgTemplateOutlet,
@@ -106,10 +109,6 @@ export class InstanceDetailPageComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly actions$ = inject(Actions);
   private readonly pollingIntervalMs = environment.instancePollingIntervalMs ?? 10000;
-  private readonly deploymentLogPollingIntervalMs =
-    environment.deploymentLogPollingIntervalMs ?? 5000;
-  private readonly logsTabActive$ = new Subject<boolean>();
-  private deploymentLogsRequestPending = false;
 
   s3Prefix = "";
   tritonEndpoint = "";
@@ -127,10 +126,17 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly modelActionLoading = signal<Record<string, boolean>>({});
   readonly modelActionMessage = signal<Record<string, string>>({});
   readonly modelActionError = signal<Record<string, string>>({});
-  readonly deploymentLogs = signal("");
-  readonly deploymentLogsLoading = signal(false);
-  readonly deploymentLogsError = signal("");
   readonly selectedDetailTabIndex = signal(0);
+  readonly selectedPodUid = signal("");
+  readonly selectedLogContainer = signal("");
+  readonly podLogSelectionRevision = signal(0);
+
+  openPodLogs(uid: string, container = ""): void {
+    this.selectedLogContainer.set(container);
+    this.selectedPodUid.set(uid);
+    this.podLogSelectionRevision.update((value) => value + 1);
+    this.selectedDetailTabIndex.set(4);
+  }
   readonly endpointAccess = signal<DeploymentAccessResponse | null>(null);
   readonly deploymentDeleting = signal(false);
   readonly deploymentDeleteError = signal("");
@@ -215,15 +221,6 @@ export class InstanceDetailPageComponent implements OnInit {
         this.tritonVerifySsl = false;
         this.tritonCaCertificate = "";
       });
-
-    this.logsTabActive$
-      .pipe(
-        switchMap((active) => (active ? timer(0, this.deploymentLogPollingIntervalMs) : EMPTY)),
-        takeUntilDestroyed(),
-      )
-      .subscribe((tick) => {
-        void this.loadDeploymentLogs({ showLoading: tick === 0 });
-      });
   }
 
   ngOnInit(): void {
@@ -236,7 +233,6 @@ export class InstanceDetailPageComponent implements OnInit {
     this.store.dispatch(instanceDetailPageOpened({ instanceId: id }));
     if (this.openLogsOnce) {
       this.selectedDetailTabIndex.set(4);
-      this.logsTabActive$.next(true);
       this.openLogsOnce = false;
     }
     this.startRuntimePolling(id);
@@ -350,38 +346,6 @@ export class InstanceDetailPageComponent implements OnInit {
 
   onDetailTabChanged(event: MatTabChangeEvent): void {
     this.selectedDetailTabIndex.set(event.index);
-    this.logsTabActive$.next(event.tab.textLabel === "Logs");
-  }
-
-  async loadDeploymentLogs(options: { showLoading?: boolean } = {}): Promise<void> {
-    const showLoading = options.showLoading ?? true;
-    const instance = this.instance();
-    if (!instance?.isSelfDeployed || this.deploymentLogsRequestPending) {
-      return;
-    }
-
-    this.deploymentLogsRequestPending = true;
-    if (showLoading) {
-      this.deploymentLogsLoading.set(true);
-      this.deploymentLogsError.set("");
-    }
-    try {
-      const response = await firstValueFrom(
-        this.deploymentsApi.getDeploymentLogsApiDeploymentsInstanceIdLogsGet(instance.id),
-      );
-      this.deploymentLogs.set(response.logs || "");
-      if (!showLoading) {
-        this.deploymentLogsError.set("");
-      }
-    } catch (error) {
-      this.deploymentLogsError.set(mapApiErrorMessage(error, "Failed to load deployment logs."));
-      this.deploymentLogs.set("");
-    } finally {
-      this.deploymentLogsRequestPending = false;
-      if (showLoading) {
-        this.deploymentLogsLoading.set(false);
-      }
-    }
   }
 
   async deleteDeployment(): Promise<void> {

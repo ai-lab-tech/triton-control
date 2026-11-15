@@ -118,6 +118,12 @@
     >
       <mat-tab label="Overview">
         <div class="tab-panel">
+          <app-workload-panel
+            [instanceId]="instance.id"
+            [active]="selectedDetailTabIndex() === 0"
+            (viewLogs)="openPodLogs($event)"
+            (viewContainerLogs)="openPodLogs($event.uid, $event.container)"
+          />
           <div class="panel-card access-card">
             <div class="panel-title">Users &amp; permissions</div>
             <div class="access-summary">
@@ -606,32 +612,27 @@
       @if (instance.isSelfDeployed) {
         <mat-tab label="Logs">
           <div class="tab-panel logs-panel">
-            <div class="panel-card logs-card">
-              <div class="logs-head">
-                <div>
-                  <div class="panel-title">Deployment logs</div>
-                  <div class="panel-hint">
-                    Kubernetes deployment events and recent Triton pod output.
-                  </div>
-                </div>
-                <button
-                  mat-stroked-button
-                  type="button"
-                  class="summary-action-btn"
-                  (click)="loadDeploymentLogs()"
-                  [disabled]="deploymentLogsLoading()"
-                >
-                  <span class="material-icons">sync</span>
-                  {{ deploymentLogsLoading() ? "Loading..." : "Refresh" }}
-                </button>
-              </div>
-              @if (deploymentLogsError()) {
-                <div class="panel-hint health-error">{{ deploymentLogsError() }}</div>
-              }
+            <app-workload-panel
+              [instanceId]="instance.id"
+              view="logs"
+              [active]="selectedDetailTabIndex() === 4"
+              [initialPodUid]="selectedPodUid()"
+              [initialContainer]="selectedLogContainer()"
+              [selectionRevision]="podLogSelectionRevision()"
+            />
+            <details class="apply-messages">
+              <summary>
+                <mat-icon>history</mat-icon
+                ><span>Deployment messages<small>Resource creation and initial setup</small></span
+                ><mat-icon class="expand-icon">expand_more</mat-icon>
+              </summary>
+              <p class="panel-hint">
+                Recorded resource-creation messages, separate from runtime container logs.
+              </p>
               <pre class="json-block deployment-log-block">{{
-                deploymentLogs() || instance.deploymentLog || "No deployment logs available."
+                instance.deploymentLog || "No apply messages recorded."
               }}</pre>
-            </div>
+            </details>
           </div>
         </mat-tab>
       }

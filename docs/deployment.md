@@ -809,3 +809,10 @@ hostnames but still permits internal deployments and removing existing exposure.
 Existing endpoints keep their domain when credentials or protocol are edited.
 Changing the short hostname uses the current base domain.
 Triton Control's own hostname is configured under `ingress.hosts`.
+
+## Pod visibility permissions
+
+The pod/log workspace requires ReplicaSet `get` and `list` permissions in addition
+to the existing Deployment, Pod and Pod log reads. Upgrade the Helm RBAC templates
+alongside the application image. No database migration is required. See
+[Pod state and container logs](pod-visibility.md) for contracts and upgrade notes.

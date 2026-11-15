@@ -30,6 +30,32 @@ permissions:
   contents: read
 
 jobs:
+  pod-contracts-kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: helm/kind-action@v1.12.0
+        with:
+          install_only: true
+          version: v0.33.0
+      - name: Create isolated Kubernetes test cluster
+        run: kind create cluster --name pods-contract --image kindest/node:v1.37.0 --kubeconfig "$RUNNER_TEMP/pods-kubeconfig" --wait 60s
+      - name: Install backend
+        working-directory: triton-backend
+        run: pip install -e ".[dev]"
+      - name: Verify real workload ownership, rollout and container logs
+        working-directory: triton-backend
+        env:
+          PODS_TEST_KUBECONFIG: ${{ runner.temp }}/pods-kubeconfig
+        run: python -m unittest tests.test_pods_kubernetes -v
+      - name: Remove test cluster
+        if: always()
+        run: kind delete cluster --name pods-contract
+
   teams-postgres:
     runs-on: ubuntu-latest
     services:

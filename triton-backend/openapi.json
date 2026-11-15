@@ -2206,6 +2206,188 @@
         }
       }
     },
+    "/api/instances/{instance_id}/pods": {
+      "get": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Instance Pods",
+        "operationId": "instance_pods_api_instances__instance_id__pods_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstancePods"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/pod-logs": {
+      "get": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Instance Pod Logs",
+        "operationId": "instance_pod_logs_api_instances__instance_id__pod_logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "pod_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pod Uid"
+            }
+          },
+          {
+            "name": "container",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-zA-Z0-9_.-]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Container"
+            }
+          },
+          {
+            "name": "previous",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Previous"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Lines"
+            }
+          },
+          {
+            "name": "byte_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1048576,
+              "minimum": 1024,
+              "default": 262144,
+              "title": "Byte Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PodLogs"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/development": {
       "get": {
         "tags": [
@@ -4665,6 +4847,110 @@
         ],
         "title": "CompleteLifecycleRequest"
       },
+      "ContainerState": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "regular",
+              "init",
+              "sidecar"
+            ],
+            "title": "Kind"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": false
+          },
+          "restart_count": {
+            "type": "integer",
+            "title": "Restart Count",
+            "default": 0
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "default": "unknown"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "last_termination_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Termination Reason"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "ContainerState"
+      },
       "CreateCodeServerRequest": {
         "properties": {
           "name": {
@@ -5692,6 +5978,94 @@
         "title": "DeploymentResponse",
         "description": "Response after Kubernetes resources are applied."
       },
+      "DeploymentState": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "observed_generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Generation"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "desired": {
+            "type": "integer",
+            "title": "Desired"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "ready": {
+            "type": "integer",
+            "title": "Ready"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/PodCondition"
+            },
+            "type": "array",
+            "title": "Conditions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "name",
+          "generation",
+          "stale",
+          "desired",
+          "updated",
+          "ready",
+          "available"
+        ],
+        "title": "DeploymentState"
+      },
       "EmailOperationResponse": {
         "properties": {
           "accepted": {
@@ -6133,6 +6507,75 @@
           "logs"
         ],
         "title": "InstanceLogsResponse"
+      },
+      "InstancePods": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "managed": {
+            "type": "boolean",
+            "title": "Managed"
+          },
+          "endpoint_live": {
+            "type": "boolean",
+            "title": "Endpoint Live"
+          },
+          "endpoint_ready": {
+            "type": "boolean",
+            "title": "Endpoint Ready"
+          },
+          "endpoint_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Checked At"
+          },
+          "deployment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pods": {
+            "items": {
+              "$ref": "#/components/schemas/PodState"
+            },
+            "type": "array",
+            "title": "Pods"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "managed",
+          "endpoint_live",
+          "endpoint_ready"
+        ],
+        "title": "InstancePods"
       },
       "InstanceS3ConfigDTO": {
         "properties": {
@@ -6850,6 +7293,254 @@
         ],
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
+      },
+      "PodCondition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "status"
+        ],
+        "title": "PodCondition"
+      },
+      "PodLogStream": {
+        "properties": {
+          "pod_uid": {
+            "type": "string",
+            "title": "Pod Uid"
+          },
+          "pod_name": {
+            "type": "string",
+            "title": "Pod Name"
+          },
+          "container": {
+            "type": "string",
+            "title": "Container"
+          },
+          "previous": {
+            "type": "boolean",
+            "title": "Previous"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "pod_uid",
+          "pod_name",
+          "container",
+          "previous"
+        ],
+        "title": "PodLogStream"
+      },
+      "PodLogs": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/PodLogStream"
+            },
+            "type": "array",
+            "title": "Streams"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "min_refresh_seconds": {
+            "type": "integer",
+            "title": "Min Refresh Seconds",
+            "default": 5
+          },
+          "ordering": {
+            "type": "string",
+            "const": "per-container; no global clock ordering",
+            "title": "Ordering",
+            "default": "per-container; no global clock ordering"
+          }
+        },
+        "type": "object",
+        "title": "PodLogs"
+      },
+      "PodState": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "terminating": {
+            "type": "boolean",
+            "title": "Terminating"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "current_revision": {
+            "type": "boolean",
+            "title": "Current Revision",
+            "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/PodCondition"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "containers": {
+            "items": {
+              "$ref": "#/components/schemas/ContainerState"
+            },
+            "type": "array",
+            "title": "Containers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "name",
+          "phase",
+          "ready",
+          "restarts",
+          "terminating"
+        ],
+        "title": "PodState"
       },
       "RegistryUpdate": {
         "properties": {

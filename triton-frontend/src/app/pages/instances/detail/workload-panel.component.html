@@ -1,0 +1,475 @@
+<section aria-label="Kubernetes workload">
+  @if (error()) {
+    <p role="alert">{{ error() }}</p>
+  }
+  @if (loading() && !state()) {
+    <p role="status">Loading pod state…</p>
+  }
+  @if (state(); as snapshot) {
+    @if (!snapshot.managed) {
+      <p>External endpoint — pod state and Kubernetes logs are unavailable.</p>
+      <p>
+        Endpoint live: {{ snapshot.endpoint_live ? "Yes" : "No" }} · Ready:
+        {{ snapshot.endpoint_ready ? "Yes" : "No" }}
+      </p>
+      <p>Last checked: {{ snapshot.endpoint_checked_at | date: "medium" }}</p>
+    } @else if (view === "pods") {
+      <div class="toolbar">
+        <h3>Pods &amp; containers</h3>
+        <button mat-stroked-button (click)="refresh()" [disabled]="loading()">Refresh</button>
+      </div>
+      @if (snapshot.deployment; as deployment) {
+        <p>
+          Desired: <strong>{{ deployment.desired }}</strong> · Updated:
+          <strong>{{ deployment.updated }}</strong> · Ready:
+          <strong>{{ deployment.ready }}</strong> · Available:
+          <strong>{{ deployment.available }}</strong>
+        </p>
+        <p>
+          Release: {{ deployment.release || "Not recorded" }} · Revision:
+          {{ deployment.revision || "Unknown" }}
+        </p>
+        @if (deployment.stale) {
+          <p role="status">
+            Waiting for Kubernetes to observe the current configuration. Generation
+            {{ deployment.generation }}, observed {{ deployment.observed_generation ?? "unknown" }}.
+          </p>
+        }
+        @for (condition of deployment.conditions; track condition.type) {
+          <p>
+            {{ condition.type }}: {{ condition.status }} — {{ condition.reason }}
+            {{ condition.message }}
+          </p>
+        }
+      }
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Pod</th>
+              <th>State / reason</th>
+              <th>Ready</th>
+              <th>Restarts</th>
+              <th>Node</th>
+              <th>Age</th>
+              <th>Release / revision</th>
+              <th>Logs</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (pod of snapshot.pods; track pod.uid) {
+              <tr>
+                <td>
+                  <strong>{{ pod.name }}</strong
+                  ><small>{{ pod.uid }}</small>
+                </td>
+                <td>
+                  {{ pod.terminating ? "Terminating" : pod.phase
+                  }}<small>{{ pod.reason }} {{ pod.message }}</small>
+                </td>
+                <td>{{ pod.ready ? "Yes" : "No" }}</td>
+                <td>{{ pod.restarts }}</td>
+                <td>{{ pod.node || "Not scheduled" }}</td>
+                <td [title]="pod.created_at || ''">{{ age(pod.created_at) }}</td>
+                <td>
+                  {{ pod.release || "Not recorded"
+                  }}<small
+                    >Revision {{ pod.revision || "unknown" }}
+                    {{
+                      pod.revision ? (pod.current_revision ? "(current)" : "(older)") : ""
+                    }}</small
+                  >
+                </td>
+                <td>
+                  <button mat-stroked-button (click)="viewLogs.emit(pod.uid)">View logs</button>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="8">
+                  <details>
+                    <summary>Containers &amp; conditions</summary>
+                    @for (container of pod.containers; track container.name) {
+                      <p>
+                        <strong>{{ container.name }}</strong> ({{ container.kind }}) —
+                        {{ container.state }} · Ready: {{ container.ready ? "Yes" : "No" }} ·
+                        Restarts: {{ container.restart_count }} {{ container.reason }}
+                        {{ container.message }}
+                        @if (container.exit_code !== null && container.exit_code !== undefined) {
+                          · Exit {{ container.exit_code }}
+                        }
+                        @if (container.last_termination_reason) {
+                          · Previous: {{ container.last_termination_reason }}
+                        }
+                        <small>Image: {{ container.image }} {{ container.image_id }}</small>
+                        <button
+                          mat-button
+                          (click)="
+                            viewContainerLogs.emit({ uid: pod.uid, container: container.name })
+                          "
+                        >
+                          Container logs
+                        </button>
+                      </p>
+                    }
+                    @for (condition of pod.conditions; track condition.type) {
+                      <p>
+                        {{ condition.type }}: {{ condition.status }} — {{ condition.reason }}
+                        {{ condition.message }}
+                      </p>
+                    }
+                  </details>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="8">No owned pods currently exist.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="log-workspace" #workspace>
+        <header class="logs-heading">
+          <div class="heading-title">
+            <span class="heading-icon"><mat-icon>terminal</mat-icon></span>
+            <div>
+              <h3>Container logs</h3>
+              <p>Select a container to inspect its runtime output.</p>
+            </div>
+          </div>
+          <button mat-stroked-button (click)="download()" [disabled]="!logs()">
+            <mat-icon>download</mat-icon>Download logs
+          </button>
+        </header>
+        <div class="workbench">
+          <nav class="resource-browser" aria-label="Pods and containers">
+            <div class="resource-title">
+              <strong
+                >Pods <span>{{ snapshot.pods.length }}</span></strong
+              ><button
+                mat-icon-button
+                aria-label="Refresh pod list"
+                [disabled]="loading()"
+                (click)="refresh()"
+              >
+                <mat-icon>refresh</mat-icon>
+              </button>
+            </div>
+            <label class="resource-search"
+              ><mat-icon>search</mat-icon
+              ><input
+                aria-label="Find pod or container"
+                placeholder="Find pod or container"
+                [ngModel]="podSearch()"
+                (ngModelChange)="podSearch.set($event)"
+            /></label>
+            <div class="resource-list">
+              <button
+                class="all-resources"
+                [class.active-resource]="!selectedUid()"
+                [attr.aria-pressed]="!selectedUid()"
+                (click)="selectContainer('', '')"
+              >
+                <mat-icon>view_stream</mat-icon>All containers<span>Grouped view</span>
+              </button>
+              @for (pod of visiblePods(); track pod.uid) {
+                <details class="pod-resource" open>
+                  <summary>
+                    <span class="status-dot" [class.ready]="pod.ready" aria-hidden="true"></span
+                    ><span class="pod-resource-name" [title]="pod.name"
+                      >{{ pod.name
+                      }}<small
+                        >{{ pod.terminating ? "Terminating" : pod.ready ? "Ready" : "Not ready" }} ·
+                        {{ pod.restarts }} restarts</small
+                      ></span
+                    >
+                  </summary>
+                  @for (container of pod.containers; track container.name) {
+                    <button
+                      class="container-resource"
+                      [class.active-resource]="
+                        selectedUid() === pod.uid && selectedContainer() === container.name
+                      "
+                      [attr.aria-pressed]="
+                        selectedUid() === pod.uid && selectedContainer() === container.name
+                      "
+                      (click)="selectContainer(pod.uid, container.name)"
+                    >
+                      <mat-icon>{{ container.kind === "init" ? "build" : "memory" }}</mat-icon
+                      ><span
+                        ><strong>{{ container.name }}</strong
+                        ><small
+                          >{{
+                            container.kind === "init"
+                              ? "Init"
+                              : container.kind === "sidecar"
+                                ? "Sidecar"
+                                : "Application"
+                          }}
+                          · {{ container.reason || container.state }}</small
+                        ><small
+                          >{{ container.ready ? "Ready" : "Not ready" }} ·
+                          {{ container.restart_count }} restarts</small
+                        ></span
+                      >
+                    </button>
+                  }
+                </details>
+              } @empty {
+                <p class="resource-empty">
+                  {{
+                    snapshot.pods.length
+                      ? "No matching pods or containers."
+                      : "No owned pods available."
+                  }}
+                </p>
+              }
+            </div>
+          </nav>
+          <div class="log-detail">
+            <header class="selection-heading">
+              <div>
+                <h4>{{ selectedContainer() || "All containers" }}</h4>
+                <p>
+                  {{
+                    selectedPod()?.name ||
+                      (selectedUid()
+                        ? "Selected pod no longer available"
+                        : "All owned pods · grouped output")
+                  }}
+                </p>
+              </div>
+              @if (selectedContainerState(); as container) {
+                <span class="container-status" [class.is-ready]="container.ready"
+                  >{{ container.reason || container.state }} ·
+                  {{ container.restart_count }} restarts</span
+                >
+              }
+              <button
+                mat-icon-button
+                aria-label="Toggle fullscreen log workspace"
+                matTooltip="Fullscreen · Esc to exit"
+                (click)="expand()"
+              >
+                <mat-icon>fullscreen</mat-icon>
+              </button>
+            </header>
+            <details class="log-options">
+              <summary>
+                Log options
+                <span
+                  >{{ previous() ? "Previous run" : "Current run" }} ·
+                  {{ sinceMinutes ? "Last " + sinceMinutes + " minutes" : "Latest available" }} ·
+                  {{ lines }} lines / container</span
+                ><mat-icon>tune</mat-icon>
+              </summary>
+              <div class="log-filters">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                  ><mat-label>Run</mat-label>
+                  <mat-select
+                    [ngModel]="previous()"
+                    (ngModelChange)="previous.set($event); clearLogs()"
+                    ><mat-option [value]="false">Current</mat-option
+                    ><mat-option [value]="true">Previous</mat-option></mat-select
+                  >
+                </mat-form-field>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                  ><mat-label>Time range</mat-label>
+                  <mat-select [(ngModel)]="sinceMinutes" (ngModelChange)="clearLogs()"
+                    ><mat-option [value]="0">Latest available</mat-option
+                    ><mat-option [value]="15">Last 15 minutes</mat-option
+                    ><mat-option [value]="60">Last hour</mat-option></mat-select
+                  >
+                </mat-form-field>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                  ><mat-label>Line limit</mat-label>
+                  <mat-select [(ngModel)]="lines" (ngModelChange)="clearLogs()"
+                    ><mat-option [value]="200">200 lines</mat-option
+                    ><mat-option [value]="1000">1,000 lines</mat-option
+                    ><mat-option [value]="2000">2,000 lines</mat-option></mat-select
+                  >
+                </mat-form-field>
+              </div>
+              <p class="options-help">
+                Previous run reads output from the last terminated container instance, when
+                Kubernetes still retains it.
+              </p>
+            </details>
+            @if (unavailable()) {
+              <p class="notice" role="alert">
+                <mat-icon>warning_amber</mat-icon>The selected pod or container was removed or
+                replaced. Select a current container to read its logs.
+              </p>
+            }
+            @if (logError()) {
+              <p class="notice" role="alert"><mat-icon>error_outline</mat-icon>{{ logError() }}</p>
+            }
+            <div class="log-console" [attr.aria-busy]="logsLoading()">
+              <div class="console-toolbar">
+                <label class="log-search"
+                  ><mat-icon>search</mat-icon
+                  ><input
+                    aria-label="Filter loaded lines"
+                    placeholder="Filter loaded lines…"
+                    [(ngModel)]="filter"
+                  />
+                  @if (filter) {
+                    <button mat-icon-button aria-label="Clear filter" (click)="filter = ''">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  }
+                </label>
+                <div class="console-actions">
+                  <button
+                    mat-icon-button
+                    aria-label="Go to newest loaded entry"
+                    matTooltip="Go to newest loaded entry"
+                    (click)="newest()"
+                  >
+                    <mat-icon>vertical_align_bottom</mat-icon>
+                  </button>
+                  <button
+                    mat-button
+                    [attr.aria-pressed]="wrapLines"
+                    (click)="wrapLines = !wrapLines"
+                    [class.selected]="wrapLines"
+                  >
+                    <mat-icon>wrap_text</mat-icon>Wrap
+                  </button>
+                  <mat-slide-toggle
+                    [checked]="autoRefresh()"
+                    (change)="setAutoRefresh($event.checked)"
+                    >Auto-refresh (10 s)</mat-slide-toggle
+                  >
+                  <button
+                    mat-button
+                    aria-label="Refresh logs now"
+                    (click)="readLogs()"
+                    [disabled]="!canRead()"
+                  >
+                    <mat-icon [class.refreshing]="logsLoading()">refresh</mat-icon>Refresh now
+                  </button>
+                </div>
+              </div>
+              <div class="console-status" role="status">
+                <span
+                  >{{
+                    logsLoading()
+                      ? "Fetching logs…"
+                      : logs()
+                        ? loadedLineCount() + " lines loaded"
+                        : pendingRead()
+                          ? "Selection queued · waiting for refresh limit…"
+                          : "Ready to fetch logs"
+                  }}
+                  @if (filter && logs()) {
+                    · {{ matchingLineCount() }} matching
+                  }
+                </span>
+                <span>{{
+                  lastLoaded()
+                    ? "Updated " + (lastLoaded() | date: "HH:mm:ss")
+                    : "No snapshot loaded"
+                }}</span>
+              </div>
+              @if (logs()?.truncated) {
+                <p class="console-notice" role="status">
+                  Display limit reached (256 KiB / 16 containers). Select a specific pod or
+                  container to narrow the results.
+                </p>
+              }
+              <div
+                class="log-viewport"
+                #logViewport
+                [class.wrap-lines]="wrapLines"
+                tabindex="0"
+                aria-label="Container log output"
+              >
+                @for (
+                  stream of logs()?.streams ?? [];
+                  track stream.pod_uid + "/" + stream.container
+                ) {
+                  <details
+                    class="log-stream"
+                    [open]="!collapsedStreams.has(stream.pod_uid + '/' + stream.container)"
+                    (toggle)="rememberStream($event, stream.pod_uid + '/' + stream.container)"
+                  >
+                    <summary class="stream-heading">
+                      <mat-icon>description</mat-icon><strong>{{ stream.container }}</strong
+                      ><span class="run-badge">{{ stream.previous ? "Previous" : "Current" }}</span
+                      ><span class="stream-pod" [title]="stream.pod_name">{{
+                        stream.pod_name
+                      }}</span>
+                      <mat-icon class="stream-chevron">expand_more</mat-icon>
+                    </summary>
+                    <div class="stream-uid">Pod UID: {{ stream.pod_uid }}</div>
+                    @if (stream.error) {
+                      <p class="stream-error" role="alert">
+                        <mat-icon>error_outline</mat-icon>{{ stream.error }}
+                      </p>
+                    }
+                    @if (stream.truncated) {
+                      <p class="console-notice">This container's output was truncated.</p>
+                    }
+                    @if (filtered(stream.text || "")) {
+                      <pre>{{ filtered(stream.text || "") }}</pre>
+                    } @else if (!stream.error) {
+                      <div class="empty-stream">
+                        <mat-icon>{{ filter ? "search_off" : "notes" }}</mat-icon>
+                        <div>
+                          <strong>{{
+                            filter ? "No lines match your filter" : "No output in this time range"
+                          }}</strong>
+                          <p>
+                            {{
+                              filter
+                                ? "Try a different search or clear the filter."
+                                : "The container has not written any logs in the selected window."
+                            }}
+                          </p>
+                        </div>
+                        @if (filter) {
+                          <button mat-button (click)="filter = ''">Clear filter</button>
+                        } @else if (sinceMinutes) {
+                          <button mat-button (click)="sinceMinutes = 0; clearLogs()">
+                            Show latest available
+                          </button>
+                        }
+                      </div>
+                    }
+                  </details>
+                } @empty {
+                  <div class="console-empty">
+                    <mat-icon>terminal</mat-icon
+                    ><strong>{{
+                      logsLoading() ? "Loading container output" : "No logs loaded"
+                    }}</strong>
+                    <p>
+                      {{
+                        removed()
+                          ? "Choose an existing pod to continue."
+                          : "Refresh to load output for the selected containers."
+                      }}
+                    </p>
+                    <button mat-stroked-button [disabled]="!canRead()" (click)="readLogs()">
+                      Load logs
+                    </button>
+                  </div>
+                }
+              </div>
+              <footer class="console-footer">
+                <span><mat-icon>subject</mat-icon>Grouped by pod and container</span
+                ><span>Timestamps preserved · No global ordering</span>
+              </footer>
+            </div>
+          </div>
+        </div>
+        <p class="retention-note">
+          <mat-icon>info_outline</mat-icon>Kubernetes retains limited logs. Download the loaded
+          snapshot before a pod is removed.
+        </p>
+      </div>
+    }
+  }
+</section>

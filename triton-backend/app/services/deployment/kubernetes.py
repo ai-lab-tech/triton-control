@@ -267,80 +267,12 @@ def delete_deployment_resources(
 
 
 def read_deployment_logs(namespace: str, deployment_name: str | None = None) -> str:
-    from kubernetes import client
-    from kubernetes.client.rest import ApiException
+    """Compatibility text view, using the same verified identities as structured logs."""
+    from app.services.deployment.pod_provider import read_legacy_logs
 
-    v1 = client.CoreV1Api(_client())
-    try:
-        chunks = []
-        deployment_name_value = (deployment_name or "").strip()
-        selector = (
-            f"app=triton,deployment={deployment_name_value}"
-            if deployment_name_value
-            else "app=triton"
-        )
-        for pod in v1.list_namespaced_pod(namespace=namespace, label_selector=selector).items:
-            name = getattr(getattr(pod, "metadata", None), "name", "")
-            if name:
-                status = getattr(pod, "status", None)
-                phase = getattr(status, "phase", "") or ""
-                reason = getattr(status, "reason", "") or ""
-                message = getattr(status, "message", "") or ""
-                if phase in {"Failed", "Succeeded"}:
-                    detail = "\n".join(part for part in [f"{phase}: {reason}".strip(), message] if part)
-                    chunks.append(f"--- pod/{name} status ---\n{detail or phase}")
-                containers = getattr(getattr(pod, "spec", None), "containers", None) or []
-                container_names = [
-                    getattr(container, "name", "")
-                    for container in containers
-                    if getattr(container, "name", "")
-                ] or [None]
-                for container_name in container_names:
-                    label = f"pod/{name}"
-                    if container_name:
-                        label = f"{label} container/{container_name}"
-                    if container_name == "triton":
-                        try:
-                            previous = _read_previous_pod_log(
-                                v1, namespace=namespace, name=name, container=container_name
-                            )
-                            if previous:
-                                chunks.append(f"--- {label} previous ---\n{previous}")
-                        except ApiException as exc:
-                            chunks.append(f"--- {label} previous unavailable ---\n{_api_error(exc)}")
-                    try:
-                        log = v1.read_namespaced_pod_log(
-                            name=name,
-                            namespace=namespace,
-                            container=container_name,
-                            tail_lines=300,
-                        )
-                        chunks.append(f"--- {label} ---\n{log}")
-                    except ApiException as exc:
-                        chunks.append(f"--- {label} unavailable ---\n{_api_error(exc)}")
-        return "\n\n".join(chunks).strip()
-    except ApiException as exc:
-        raise BadGatewayError(_api_error(exc)) from exc
-
-
-def _read_previous_pod_log(v1: Any, *, namespace: str, name: str, container: str) -> str:
-    from kubernetes.client.rest import ApiException
-
-    try:
-        return (
-            v1.read_namespaced_pod_log(
-                name=name,
-                namespace=namespace,
-                container=container,
-                previous=True,
-                tail_lines=300,
-            )
-            or ""
-        )
-    except ApiException as exc:
-        if exc.status in {400, 404}:
-            return ""
-        raise
+    if not deployment_name:
+        raise BadGatewayError("Deployment identity is required for pod logs")
+    return read_legacy_logs(namespace, deployment_name)
 
 
 def _client() -> Any:

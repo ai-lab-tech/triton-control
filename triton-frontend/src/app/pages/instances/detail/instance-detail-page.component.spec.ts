@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { fakeAsync, TestBed, tick } from "@angular/core/testing";
-import { MatTabChangeEvent } from "@angular/material/tabs";
 import { ActivatedRoute } from "@angular/router";
-import { of, throwError, EMPTY, Subject } from "rxjs";
+import { of, throwError, EMPTY } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { AuthStore } from "../../../shared/auth/auth.store";
@@ -123,106 +122,17 @@ describe("InstanceDetailPageComponent", () => {
     expect(component).toBeTruthy();
   });
 
-  it("OnDetailTabChanged_LogsTabSelected_PollsDeploymentLogsEveryFiveSeconds", fakeAsync(() => {
-    // Arrange
-    mockStore.overrideSelector(selectDetailInstance, {
-      ...MOCK_INSTANCE,
-      isSelfDeployed: true,
-      deploymentNamespace: "triton-minio",
-      deploymentLog: "",
-    } as any);
-    mockStore.refreshState();
-    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(
-      of({ logs: "pod output" } as any),
-    );
+  it("opens runtime logs for the exact selected pod UID", () => {
     const fixture = TestBed.createComponent(InstanceDetailPageComponent);
-    const component = fixture.componentInstance;
-
-    // Act
-    component.onDetailTabChanged({ tab: { textLabel: "Logs" } } as MatTabChangeEvent);
-    tick();
-
-    // Assert
+    fixture.componentInstance.openPodLogs("pod-uid-123");
+    expect(fixture.componentInstance.selectedPodUid()).toBe("pod-uid-123");
+    expect(fixture.componentInstance.selectedDetailTabIndex()).toBe(4);
     expect(
       deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(1);
+    ).not.toHaveBeenCalled();
+  });
 
-    tick(5000);
-    expect(
-      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(2);
-
-    component.onDetailTabChanged({ tab: { textLabel: "Overview" } } as MatTabChangeEvent);
-    tick(5000);
-    expect(
-      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(2);
-  }));
-
-  it("LoadDeploymentLogs_SlowBackgroundRefresh_PreventsOverlappingRequestsAndResumesAfterError", fakeAsync(() => {
-    mockStore.overrideSelector(selectDetailInstance, {
-      ...MOCK_INSTANCE,
-      isSelfDeployed: true,
-    } as any);
-    mockStore.refreshState();
-    const response = new Subject<any>();
-    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(response);
-    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
-    const component = fixture.componentInstance;
-
-    void component.loadDeploymentLogs({ showLoading: false });
-    tick(5000);
-    void component.loadDeploymentLogs({ showLoading: false });
-    void component.loadDeploymentLogs();
-    expect(
-      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(1);
-
-    response.error(new Error("Pod restarting"));
-    tick();
-    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(
-      of({ logs: "latest restart output" } as any),
-    );
-    void component.loadDeploymentLogs({ showLoading: false });
-    tick();
-    expect(
-      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(2);
-    expect(component.deploymentLogs()).toBe("latest restart output");
-    expect(component.deploymentLogsError()).toBe("");
-
-    void component.loadDeploymentLogs({ showLoading: false });
-    tick();
-    expect(
-      deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(3);
-  }));
-
-  it("LoadDeploymentLogs_ErrorClearsStaleInstanceDeploymentLog", fakeAsync(() => {
-    // Arrange
-    mockStore.overrideSelector(selectDetailInstance, {
-      ...MOCK_INSTANCE,
-      isSelfDeployed: true,
-      deploymentNamespace: "triton-minio",
-      deploymentLog: "stale old log",
-    } as any);
-    mockStore.refreshState();
-    deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet.and.returnValue(
-      throwError(() => new Error("boom")),
-    );
-    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
-    const component = fixture.componentInstance;
-
-    // Act
-    component.loadDeploymentLogs();
-    tick();
-
-    // Assert
-    expect(component.deploymentLogs()).toBe("");
-    expect(component.deploymentLogsError()).toContain("Failed to load deployment logs.");
-  }));
-
-  it("NgOnInit_OpenLogsOnceNavigation_SelectsLogsAndStartsPolling", fakeAsync(() => {
+  it("NgOnInit_OpenLogsOnceNavigation_SelectsRuntimeLogs", fakeAsync(() => {
     // Arrange
     window.history.replaceState({ openLogsOnce: true }, "", window.location.href);
     mockStore.overrideSelector(selectDetailInstance, {
@@ -247,7 +157,7 @@ describe("InstanceDetailPageComponent", () => {
     expect(window.history.state.openLogsOnce).toBeUndefined();
     expect(
       deploymentsApiMock.getDeploymentLogsApiDeploymentsInstanceIdLogsGet,
-    ).toHaveBeenCalledTimes(1);
+    ).not.toHaveBeenCalled();
 
     window.history.replaceState({}, "", window.location.href);
   }));

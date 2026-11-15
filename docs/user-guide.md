@@ -642,3 +642,10 @@ Some actions depend on Triton capabilities and instance configuration:
 
 If an action fails, check the UI error message first. It usually contains the
 backend or Triton error returned for that operation.
+
+## Pod status and container logs
+
+Managed Kubernetes instances expose owned pod/container state in Overview and a
+container log workspace in Logs. Auto-refresh is opt-in; manual refresh and downloads
+operate on bounded snapshots. See [Pod state and container logs](pod-visibility.md)
+for navigation, permissions, retention and diagnostics.
