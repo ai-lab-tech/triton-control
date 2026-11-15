@@ -70,3 +70,5 @@ Project:
 - `Dockerfile`: combined frontend/backend/Nginx image.
 - `compose.yaml`: Docker Compose stack.
 - `podman-compose.yaml`: Podman Compose stack.
+
+- [Builder qualification and provisioning](build-provisioning.md): pinned executor policy, isolated qualification and evidence.

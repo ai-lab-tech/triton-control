@@ -40,3 +40,13 @@ triton-admin-angular-material/tls/*.pem
 
 
 .DS_Store
+
+# Generated local test results and qualification evidence
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+**/coverage.xml
+**/junit.xml
+**/test-results/
+**/playwright-report/
+/docs/evidence/builder-qualification/
