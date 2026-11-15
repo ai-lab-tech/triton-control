@@ -273,7 +273,8 @@
                     [open]="
                       !section.history ||
                       !!podSearch() ||
-                      selectedPod()?.phase === 'Failed' || selectedPod()?.phase === 'Succeeded'
+                      selectedPod()?.phase === 'Failed' ||
+                      selectedPod()?.phase === 'Succeeded'
                     "
                   >
                     <summary>{{ section.title }} · {{ section.pods.length }}</summary>
