@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { downloadWithRetry } from "./download-with-retry.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,29 +30,8 @@ if (!existsSync(spec)) {
 mkdirSync(jarDir, { recursive: true });
 
 if (!existsSync(jar)) {
-  let downloaded = false;
-  const errors = [];
-  for (const jarUrl of jarUrls) {
-    try {
-      const res = await fetch(jarUrl);
-      if (!res.ok) {
-        errors.push(`${jarUrl} -> ${res.status} ${res.statusText}`);
-        continue;
-      }
-      const buf = Buffer.from(await res.arrayBuffer());
-      writeFileSync(jar, buf);
-      downloaded = true;
-      break;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`${jarUrl} -> ${msg}`);
-    }
-  }
-  if (!downloaded) {
-    throw new Error(
-      `Failed to download swagger-codegen-cli.jar from all sources:\n${errors.join("\n")}`,
-    );
-  }
+  const buffer = await downloadWithRetry(jarUrls);
+  writeFileSync(jar, buffer);
 }
 
 rmSync(out, { recursive: true, force: true });

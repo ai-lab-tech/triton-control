@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -142,6 +142,65 @@ class TeamEventEntity(SQLModel, table=True):
     subject_user_id: int | None = None
     action: str
     changes: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationTaskEntity(SQLModel, table=True):
+    """Engineering work item; execution states belong to separate attempts."""
+
+    __tablename__ = "preparation_tasks"
+    __table_args__ = (
+        CheckConstraint("revision > 0", name="ck_preparation_revision"),
+        CheckConstraint(
+            "state IN ('queued', 'claimed', 'awaiting_information', 'cancelled')",
+            name="ck_preparation_state",
+        ),
+        CheckConstraint("state != 'claimed' OR assignee_user_id IS NOT NULL", name="ck_preparation_claim"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    title: str = Field(sa_column=Column(String(200), nullable=False))
+    assigned_team_id: UUID = Field(foreign_key="teams.id", index=True)
+    # Historical identities survive user deletion; eligibility is checked on every use.
+    submitter_user_id: int = Field(index=True)
+    assignee_user_id: int | None = Field(default=None, index=True)
+    source_snapshot_id: UUID | None = None
+    state: str = Field(default="queued", index=True)
+    revision: int = 1
+    missing_inputs: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationTaskEventEntity(SQLModel, table=True):
+    """Append-only task history, written atomically with each revision."""
+
+    __tablename__ = "preparation_task_events"
+    __table_args__ = (UniqueConstraint("task_id", "revision", name="uq_preparation_event_revision"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    task_id: UUID = Field(foreign_key="preparation_tasks.id", index=True)
+    revision: int
+    actor_user_id: int
+    action: str
+    changes: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationAttemptEntity(SQLModel, table=True):
+    """Immutable references to actual engineering attempts, never task status."""
+
+    __tablename__ = "preparation_attempts"
+    __table_args__ = (
+        UniqueConstraint("task_id", "installation_id", "record_id", name="uq_preparation_attempt_origin"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    task_id: UUID = Field(foreign_key="preparation_tasks.id", index=True)
+    installation_id: str = Field(sa_column=Column(String(256), nullable=False))
+    record_id: str = Field(sa_column=Column(String(256), nullable=False))
+    actor_user_id: int
+    attempt: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

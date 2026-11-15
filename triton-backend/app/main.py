@@ -49,6 +49,7 @@ from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
 from app.api.operation_api import router as operation_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
+from app.api.preparation_api import router as preparation_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
@@ -208,6 +209,7 @@ app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
+app.include_router(preparation_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(error_log_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])

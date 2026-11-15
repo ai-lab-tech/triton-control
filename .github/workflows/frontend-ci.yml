@@ -72,6 +72,9 @@ jobs:
             p/typescript
             p/owasp-top-ten
 
+      - name: Test API generator download retries
+        run: node --test scripts/download-with-retry.test.mjs
+
       - name: Generate API client
         run: npm run generate:api
 
