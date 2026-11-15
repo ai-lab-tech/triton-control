@@ -1,0 +1,193 @@
+{
+  "$defs": {
+    "EngineeringAttempt": {
+      "additionalProperties": false,
+      "properties": {
+        "input_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Inventory",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "packaging",
+            "conversion",
+            "optimization",
+            "validation"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "output_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Inventory",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "origin",
+        "operation",
+        "input_inventory",
+        "output_inventory"
+      ],
+      "title": "EngineeringAttempt",
+      "type": "object"
+    },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "record_id"
+      ],
+      "title": "Origin",
+      "type": "object"
+    },
+    "PluginReference": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "mlflow",
+            "hf",
+            "generator"
+          ],
+          "title": "Provider",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "installation_id",
+        "record_id"
+      ],
+      "title": "PluginReference",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventory",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "manual",
+            "git",
+            "hf",
+            "mlflow"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        }
+      },
+      "required": [
+        "origin",
+        "kind",
+        "inventory"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/EngineeringAttempt"
+      },
+      "minItems": 1,
+      "title": "Attempts",
+      "type": "array"
+    },
+    "derived_from_snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "output_inventory": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Output Inventory",
+      "type": "string"
+    },
+    "plugin_references": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PluginReference"
+      },
+      "title": "Plugin References",
+      "type": "array"
+    },
+    "previous_serving_candidate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Origin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "origin",
+    "derived_from_snapshot",
+    "attempts",
+    "output_inventory"
+  ],
+  "title": "ServingCandidateV1",
+  "type": "object"
+}
