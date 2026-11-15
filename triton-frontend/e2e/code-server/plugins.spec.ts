@@ -100,18 +100,23 @@ test.describe.serial("code-server plugin workflows", () => {
     });
     const widget = workbench.locator(".quick-input-widget");
     const runtimePrompt = widget.filter({ hasText: "HF Builder: Serving runtime" });
-    // Restoration may dismiss the menu after it becomes visible. Retry the entire
-    // selection, but preserve a wizard that opened after a delayed command response.
+    const devicePrompt = widget.filter({ hasText: "HF Builder: Serving device" });
+    // Restoration may dismiss a picker between visibility and selection. Retry
+    // through the next prompt, preserving a wizard that already advanced.
     await expect(async () => {
-      if (await runtimePrompt.isVisible()) return;
-      await workbench.locator("body").press("Escape");
-      await row(hfSource).click({ timeout: 2000 });
-      await row(hfSource).click({ button: "right", timeout: 2000 });
-      await action.click({ timeout: 2000 });
-      await expect(runtimePrompt).toBeVisible({ timeout: 2000 });
+      if (await devicePrompt.isVisible()) return;
+      if (!(await runtimePrompt.isVisible())) {
+        await workbench.locator("body").press("Escape");
+        await row(hfSource).click({ timeout: 2000 });
+        await row(hfSource).click({ button: "right", timeout: 2000 });
+        await action.click({ timeout: 2000 });
+        await expect(runtimePrompt).toBeVisible({ timeout: 2000 });
+      }
+      await runtimePrompt
+        .getByText("Transformers / Python", { exact: true })
+        .click({ timeout: 2000 });
+      await expect(devicePrompt).toBeVisible({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
-    await widget.getByText("Transformers / Python", { exact: true }).click();
-    await expect(widget).toContainText("HF Builder: Serving device");
     await widget.getByText("cpu", { exact: true }).click();
     await input(workspaceImage, "HF Builder: Target serving image");
     await input(hfModel, "HF Builder: Triton model name");

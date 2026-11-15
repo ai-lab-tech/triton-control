@@ -287,10 +287,7 @@ export class WorkspacesPageComponent implements OnDestroy {
         this.setMessage(`Create failed before API request: ${error.message.trim()}`, "error");
         return;
       }
-      this.setMessage(
-        mapApiErrorMessage(error, "Failed to create workspace."),
-        "error",
-      );
+      this.setMessage(mapApiErrorMessage(error, "Failed to create workspace."), "error");
     } finally {
       this.saving.set(false);
     }
@@ -332,10 +329,7 @@ export class WorkspacesPageComponent implements OnDestroy {
       }
       this.updateStatusPolling();
     } catch (error) {
-      this.setMessage(
-        mapApiErrorMessage(error, "Failed to refresh workspace."),
-        "error",
-      );
+      this.setMessage(mapApiErrorMessage(error, "Failed to refresh workspace."), "error");
     }
   }
 
@@ -360,10 +354,7 @@ export class WorkspacesPageComponent implements OnDestroy {
       this.updateStatusPolling();
       this.setMessage("Workspace deleted.", "success");
     } catch (error) {
-      this.setMessage(
-        mapApiErrorMessage(error, "Failed to delete workspace."),
-        "error",
-      );
+      this.setMessage(mapApiErrorMessage(error, "Failed to delete workspace."), "error");
     } finally {
       this.deletingId.set(null);
     }
