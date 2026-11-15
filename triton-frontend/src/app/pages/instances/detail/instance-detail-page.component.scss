@@ -582,7 +582,7 @@
 }
 
 .deployment-log-block {
-  min-height: 340px;
+  min-height: 0;
   max-height: 560px;
   white-space: pre-wrap;
 }
@@ -1072,6 +1072,40 @@
 }
 .endpoint-summary button {
   justify-self: start;
+}
+
+.apply-messages {
+  border: 1px solid var(--mist-200);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 20px;
+  min-width: 0;
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0;
+    cursor: pointer;
+    list-style: none;
+    color: var(--ink-700);
+    font-weight: 600;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  small {
+    display: block;
+    color: var(--ink-500);
+    font-size: 12px;
+    font-weight: 400;
+    margin-top: 3px;
+  }
+  .expand-icon {
+    margin-left: auto;
+  }
+  &[open] .expand-icon {
+    transform: rotate(180deg);
+  }
 }
 
 // Endpoint cards share a clear hierarchy and comfortable action targets.

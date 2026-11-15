@@ -40,9 +40,17 @@ class DeploymentServiceTests(unittest.TestCase):
         self.addCleanup(engine.dispose)
         self.addCleanup(session.close)
         session.add(UserEntity(id=1, email="owner@example.test", name="Owner", role=role))
-        session.add(S3ProfileEntity(id=1, owner_user_id=1, name="profile", endpoint="http://minio:9000",
-                                    bucket="triton-models", access_key="minioadmin",
-                                    secret_key_enc="super-secret-value"))
+        session.add(
+            S3ProfileEntity(
+                id=1,
+                owner_user_id=1,
+                name="profile",
+                endpoint="http://minio:9000",
+                bucket="triton-models",
+                access_key="minioadmin",
+                secret_key_enc="super-secret-value",
+            )
+        )
         session.commit()
         request = CreateDeploymentRequest(deployment_name="triton-minio", image="custom/triton:dev", s3_profile_id=1)
         return session, request, {"email": "owner@example.test", "role": role, "user_id": 1}
@@ -63,7 +71,8 @@ class DeploymentServiceTests(unittest.TestCase):
         request.example_request = {"inputs": [{"name": "x", "data": [42]}]}
         schedule = Mock()
         with patch(
-            "app.services.storage.s3_client.build_s3_client", side_effect=AssertionError("Unexpected S3 access"),
+            "app.services.storage.s3_client.build_s3_client",
+            side_effect=AssertionError("Unexpected S3 access"),
         ):
             # Act
             response = deployments.create_deployment(request, session, claims, schedule)
@@ -99,8 +108,10 @@ class DeploymentServiceTests(unittest.TestCase):
                 applied_examples.append(background_session.get(TritonInstanceEntity, instance_id).inference_examples)
 
         # Act
-        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
-                patch.object(k8s, "apply_deployment_resources", side_effect=apply):
+        with (
+            patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)),
+            patch.object(k8s, "apply_deployment_resources", side_effect=apply),
+        ):
             task, *args = schedule.call_args.args
             task(*args)
         session.expire_all()
@@ -117,8 +128,10 @@ class DeploymentServiceTests(unittest.TestCase):
         self.collect_examples.side_effect = OSError("Unreadable optional example")
 
         # Act
-        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
-                patch.object(k8s, "apply_deployment_resources") as apply:
+        with (
+            patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)),
+            patch.object(k8s, "apply_deployment_resources") as apply,
+        ):
             task, *args = schedule.call_args.args
             task(*args)
 
@@ -133,9 +146,11 @@ class DeploymentServiceTests(unittest.TestCase):
         self.collect_examples.return_value = {"model": {"inputs": []}}
 
         # Act
-        with patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)), \
-                patch.object(deployments.instances, "save", side_effect=RuntimeError("Snapshot write failed")), \
-                patch.object(k8s, "apply_deployment_resources") as apply:
+        with (
+            patch.object(deployments, "session_factory", side_effect=lambda: Session(session.bind)),
+            patch.object(deployments.instances, "save", side_effect=RuntimeError("Snapshot write failed")),
+            patch.object(k8s, "apply_deployment_resources") as apply,
+        ):
             task, *args = schedule.call_args.args
             task(*args)
 
@@ -296,7 +311,8 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://bucket",
             s3_access_key="ak",
             s3_secret_key="secret",
-            ingress_host="triton.example.local", ingress_scheme="http",
+            ingress_host="triton.example.local",
+            ingress_scheme="http",
         )
 
         # Assert
@@ -334,12 +350,16 @@ class DeploymentServiceTests(unittest.TestCase):
         created: dict[str, Any] = {}
 
         # Act
-        with patch("app.services.deployment.records.require_user_entity", return_value=user), patch(
-            "app.services.deployment.records.instances.find_by_name", return_value=None
-        ), patch("app.services.deployment.records.instances.find_by_url", return_value=None), patch(
-            "app.services.deployment.records.instances.create",
-            side_effect=lambda _session, **kwargs: created.update(kwargs) or SimpleNamespace(id=7, **kwargs),
-        ), patch("app.services.deployment.records.users.save"):
+        with (
+            patch("app.services.deployment.records.require_user_entity", return_value=user),
+            patch("app.services.deployment.records.instances.find_by_name", return_value=None),
+            patch("app.services.deployment.records.instances.find_by_url", return_value=None),
+            patch(
+                "app.services.deployment.records.instances.create",
+                side_effect=lambda _session, **kwargs: created.update(kwargs) or SimpleNamespace(id=7, **kwargs),
+            ),
+            patch("app.services.deployment.records.users.save"),
+        ):
             records.upsert_deployed_instance(
                 request,
                 SimpleNamespace(),
@@ -368,12 +388,15 @@ class DeploymentServiceTests(unittest.TestCase):
         user = SimpleNamespace(id=11, assigned_instances=[])
 
         # Act / Assert
-        with patch("app.services.deployment.records.require_user_entity", return_value=user), patch(
-            "app.services.deployment.records.instances.find_by_name",
-            return_value=SimpleNamespace(id=3, name="triton-minio"),
-        ), patch("app.services.deployment.records.instances.find_by_url", return_value=None), patch(
-            "app.services.deployment.records.instances.create"
-        ) as create_instance:
+        with (
+            patch("app.services.deployment.records.require_user_entity", return_value=user),
+            patch(
+                "app.services.deployment.records.instances.find_by_name",
+                return_value=SimpleNamespace(id=3, name="triton-minio"),
+            ),
+            patch("app.services.deployment.records.instances.find_by_url", return_value=None),
+            patch("app.services.deployment.records.instances.create") as create_instance,
+        ):
             with self.assertRaises(ConflictError) as raised:
                 records.upsert_deployed_instance(
                     request,
@@ -394,19 +417,21 @@ class DeploymentServiceTests(unittest.TestCase):
 
     def test_UpsertDeployedInstance_HttpsS3WithoutCaCertificate_StoresEmptyS3Ca(self) -> None:
         # Arrange
-        request = self._request().model_copy(
-            update={"s3_url": "s3://https://s3.amazonaws.com/triton-models"}
-        )
+        request = self._request().model_copy(update={"s3_url": "s3://https://s3.amazonaws.com/triton-models"})
         user = SimpleNamespace(id=11, assigned_instances=[])
         created: dict[str, Any] = {}
 
         # Act
-        with patch("app.services.deployment.records.require_user_entity", return_value=user), patch(
-            "app.services.deployment.records.instances.find_by_name", return_value=None
-        ), patch("app.services.deployment.records.instances.find_by_url", return_value=None), patch(
-            "app.services.deployment.records.instances.create",
-            side_effect=lambda _session, **kwargs: created.update(kwargs) or SimpleNamespace(id=7, **kwargs),
-        ), patch("app.services.deployment.records.users.save"):
+        with (
+            patch("app.services.deployment.records.require_user_entity", return_value=user),
+            patch("app.services.deployment.records.instances.find_by_name", return_value=None),
+            patch("app.services.deployment.records.instances.find_by_url", return_value=None),
+            patch(
+                "app.services.deployment.records.instances.create",
+                side_effect=lambda _session, **kwargs: created.update(kwargs) or SimpleNamespace(id=7, **kwargs),
+            ),
+            patch("app.services.deployment.records.users.save"),
+        ):
             records.upsert_deployed_instance(
                 request,
                 SimpleNamespace(),
@@ -431,19 +456,20 @@ class DeploymentServiceTests(unittest.TestCase):
         applied: list[dict[str, Any]] = []
 
         # Act
-        with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
-            "app.services.deployment.kubernetes._ensure_namespace"
-        ) as ensure_namespace, patch(
-            "kubernetes.utils.create_from_dict",
-            side_effect=lambda _api_client, data, **_kwargs: applied.append(data),
-        ), patch(
-            "app.services.deployment.kubernetes._deployment_urls",
-            return_value={"http": "http://lb:8000", "metrics": "http://lb:8002/metrics"},
-        ), patch(
-            "app.services.deployment.kubernetes.record_deployment_failure"
-        ), patch(
-            "app.services.deployment.kubernetes.update_instance_after_apply"
-        ) as update_instance:
+        with (
+            patch("app.services.deployment.kubernetes._client", return_value=object()),
+            patch("app.services.deployment.kubernetes._ensure_namespace") as ensure_namespace,
+            patch(
+                "kubernetes.utils.create_from_dict",
+                side_effect=lambda _api_client, data, **_kwargs: applied.append(data),
+            ),
+            patch(
+                "app.services.deployment.kubernetes._deployment_urls",
+                return_value={"http": "http://lb:8000", "metrics": "http://lb:8002/metrics"},
+            ),
+            patch("app.services.deployment.kubernetes.record_deployment_failure"),
+            patch("app.services.deployment.kubernetes.update_instance_after_apply") as update_instance,
+        ):
             k8s.apply_deployment_resources(
                 7,
                 self._request(),
@@ -469,10 +495,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("--model-repository=s3://http://minio:9000/triton-models", start_script)
         self.assertNotIn(
             "s3-model-sync",
-            [
-                container["name"]
-                for container in applied[1]["spec"]["template"]["spec"].get("initContainers", [])
-            ],
+            [container["name"] for container in applied[1]["spec"]["template"]["spec"].get("initContainers", [])],
         )
         self.assertIn("--model-control-mode=explicit", start_script)
         self.assertIn("--allow-metrics=true", start_script)
@@ -555,7 +578,7 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertIn("${escaped_dir}/", sync["args"][0])
         self.assertIn("config.pbtxt", sync["args"][0])
         self.assertIn("engine_dir|gpt_model_path|encoder_model_path|tokenizer_dir", sync["args"][0])
-        self.assertIn('#\\1${escaped_dir}/\\2\\3#', sync["args"][0])
+        self.assertIn("#\\1${escaped_dir}/\\2\\3#", sync["args"][0])
 
     def test_Manifests_IngressHostProvided_AddsHostRule(self) -> None:
         # Arrange
@@ -588,7 +611,8 @@ class DeploymentServiceTests(unittest.TestCase):
             s3_url="s3://http://minio:9000/triton-models",
             s3_access_key="minioadmin",
             s3_secret_key="super-secret-value",
-            ingress_host="triton.example.local", ingress_scheme="http",
+            ingress_host="triton.example.local",
+            ingress_scheme="http",
         )
 
         # Act
@@ -767,9 +791,7 @@ class DeploymentServiceTests(unittest.TestCase):
             {"TRITON_DEPLOY_S3_SYNC_IMAGE": "registry.example/s3-sync:prod"},
         ):
             self.assertEqual(k8s._repository_sync_image(request), "registry.example/s3-sync:prod")
-            overridden = request.model_copy(
-                update={"repository_sync_image": "registry.example/s3-sync:request"}
-            )
+            overridden = request.model_copy(update={"repository_sync_image": "registry.example/s3-sync:request"})
             self.assertEqual(
                 k8s._repository_sync_image(overridden),
                 "registry.example/s3-sync:request",
@@ -793,9 +815,7 @@ class DeploymentServiceTests(unittest.TestCase):
                 "triton-image",
             )
 
-        volumes = {
-            volume["name"]: volume for volume in manifests[1]["spec"]["template"]["spec"]["volumes"]
-        }
+        volumes = {volume["name"]: volume for volume in manifests[1]["spec"]["template"]["spec"]["volumes"]}
         self.assertEqual(volumes["model-repository"]["emptyDir"], {"sizeLimit": "20Gi"})
         self.assertEqual(volumes["s3-sync-staging"]["emptyDir"], {"sizeLimit": "20Gi"})
 
@@ -926,10 +946,14 @@ class DeploymentServiceTests(unittest.TestCase):
         exc = ApiException(status=500, reason="cluster unavailable")
 
         # Act
-        with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
-            "app.services.deployment.kubernetes._ensure_namespace",
-            side_effect=exc,
-        ), patch("app.services.deployment.kubernetes.record_deployment_failure") as record_failure:
+        with (
+            patch("app.services.deployment.kubernetes._client", return_value=object()),
+            patch(
+                "app.services.deployment.kubernetes._ensure_namespace",
+                side_effect=exc,
+            ),
+            patch("app.services.deployment.kubernetes.record_deployment_failure") as record_failure,
+        ):
             k8s.apply_deployment_resources(
                 7,
                 self._request(),
@@ -1000,7 +1024,9 @@ class DeploymentServiceTests(unittest.TestCase):
     @patch("app.services.deployment.deployment.prepare_instance_deletion")
     @patch("app.services.deployment.records.prepare_instance_deletion")
     def test_DeleteDeploymentInstance_NamespaceAlreadyDeleted_CleansDatabaseRows(
-        self, _record_perf, _deployment_perf,
+        self,
+        _record_perf,
+        _deployment_perf,
     ) -> None:
         # Arrange
         instance = SimpleNamespace(
@@ -1013,18 +1039,21 @@ class DeploymentServiceTests(unittest.TestCase):
         deleted_instances = []
 
         # Act
-        with patch("app.services.deployment.operations.prepare_deletion", return_value=False), patch("app.services.deployment.deployment.get_instance_or_404", return_value=instance), patch(
-            "app.services.deployment.kubernetes.delete_namespace",
-            return_value="Namespace 'triton-minio' was already deleted.",
-        ), patch("app.services.deployment.records.dashboard_alerts.delete_for_instance") as delete_alerts, patch(
-            "app.services.deployment.records.perf_analyzer_repo.delete_runs_for_instance"
-        ) as delete_perf_runs, patch(
-            "app.services.deployment.records.users.list_all", return_value=[user]
-        ), patch(
-            "app.services.deployment.records.users.save"
-        ) as save_user, patch(
-            "app.services.deployment.records.instances.delete",
-            side_effect=lambda _session, row: deleted_instances.append(row),
+        with (
+            patch("app.services.deployment.operations.prepare_deletion", return_value=False),
+            patch("app.services.deployment.deployment.get_instance_or_404", return_value=instance),
+            patch(
+                "app.services.deployment.kubernetes.delete_namespace",
+                return_value="Namespace 'triton-minio' was already deleted.",
+            ),
+            patch("app.services.deployment.records.dashboard_alerts.delete_for_instance") as delete_alerts,
+            patch("app.services.deployment.records.perf_analyzer_repo.delete_runs_for_instance") as delete_perf_runs,
+            patch("app.services.deployment.records.users.list_all", return_value=[user]),
+            patch("app.services.deployment.records.users.save") as save_user,
+            patch(
+                "app.services.deployment.records.instances.delete",
+                side_effect=lambda _session, row: deleted_instances.append(row),
+            ),
         ):
             response = deployments.delete_deployment_instance(SimpleNamespace(), {"role": "viewer"}, 2)
 
@@ -1036,86 +1065,10 @@ class DeploymentServiceTests(unittest.TestCase):
         self.assertEqual(deleted_instances, [instance])
         self.assertEqual(response.status, "deleted")
 
-    def test_ReadDeploymentLogs_FailedPodDoesNotHideRunningPodLogs(self) -> None:
-        # Arrange
-        failed_pod = SimpleNamespace(
-            metadata=SimpleNamespace(name="opt125m-failed"),
-            status=SimpleNamespace(
-                phase="Failed",
-                reason="UnexpectedAdmissionError",
-                message="Pod was rejected: no healthy GPU devices present",
-            ),
-            spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
-        )
-        running_pod = SimpleNamespace(
-            metadata=SimpleNamespace(name="opt125m-running"),
-            status=SimpleNamespace(phase="Running"),
-            spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
-        )
-        core_api = SimpleNamespace(
-            list_namespaced_pod=lambda namespace, label_selector: SimpleNamespace(
-                items=[failed_pod, running_pod],
-            ),
-            read_namespaced_pod_log=lambda name, namespace, container, tail_lines, previous=False: (
-                "running triton log" if not previous else ""
-            ),
-        )
-
-        # Act
-        with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
-            "kubernetes.client.CoreV1Api",
-            return_value=core_api,
-        ):
-            logs = k8s.read_deployment_logs("opt125m", "opt125m")
-
-        # Assert
-        self.assertIn("UnexpectedAdmissionError", logs)
-        self.assertIn("Pod was rejected", logs)
-        self.assertIn("running triton log", logs)
-
-    def test_ReadDeploymentLogs_RestartsKeepAvailableLogsInOrder(self) -> None:
-        cases = [
-            ("Running", "model load failed", "restarted successfully"),
-            ("Running", "model load failed", ApiException(status=400, reason="Container waiting")),
-            ("Running", ApiException(status=500, reason="Previous logs unavailable"), "latest output"),
-            ("Running", ApiException(status=400, reason="No previous container"), "first start"),
-            ("Running", ApiException(status=404, reason="Previous container removed"), "latest output"),
-            ("Failed", "previous failure", "fatal model error"),
-            ("Succeeded", "previous run", "final output"),
-        ]
-        for phase, previous, current in cases:
-            with self.subTest(phase=phase, previous=previous, current=current):
-                pod = SimpleNamespace(
-                    metadata=SimpleNamespace(name="triton-pod"),
-                    status=SimpleNamespace(phase=phase),
-                    spec=SimpleNamespace(containers=[SimpleNamespace(name="triton")]),
-                )
-                read_log = Mock(side_effect=[previous, current])
-                core_api = SimpleNamespace(
-                    list_namespaced_pod=Mock(return_value=SimpleNamespace(items=[pod])),
-                    read_namespaced_pod_log=read_log,
-                )
-                with patch("app.services.deployment.kubernetes._client", return_value=object()), patch(
-                    "kubernetes.client.CoreV1Api", return_value=core_api,
-                ):
-                    logs = k8s.read_deployment_logs("namespace", "deployment")
-
-                core_api.list_namespaced_pod.assert_called_once_with(
-                    namespace="namespace", label_selector="app=triton,deployment=deployment",
-                )
-                self.assertEqual(read_log.call_count, 2)
-                self.assertTrue(read_log.call_args_list[0].kwargs["previous"])
-                self.assertNotIn("previous", read_log.call_args_list[1].kwargs)
-                if isinstance(previous, str):
-                    self.assertIn(previous, logs)
-                elif previous.status == 500:
-                    self.assertIn("previous unavailable", logs)
-                else:
-                    self.assertNotIn("previous", logs)
-                if isinstance(current, str):
-                    self.assertTrue(logs.endswith(current))
-                else:
-                    self.assertIn("Container waiting", logs)
+    def test_ReadDeploymentLogs_UsesVerifiedProviderAndKeepsTextContract(self) -> None:
+        with patch("app.services.deployment.pod_provider.read_legacy_logs", return_value="runtime output") as read:
+            self.assertEqual(k8s.read_deployment_logs("ns", "serving"), "runtime output")
+        read.assert_called_once_with("ns", "serving")
 
     def test_ResolveServiceUrls_IngressStatus_ReturnsExternalAddress(self) -> None:
         # Arrange

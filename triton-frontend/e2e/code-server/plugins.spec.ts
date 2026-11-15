@@ -161,13 +161,17 @@ test.describe.serial("code-server plugin workflows", () => {
   }
 
   async function openFile(path: string): Promise<void> {
-    // Restoring Explorer after a restart can dismiss Quick Open as well.
+    // An S3 editor may be restored as the active editor after restart. Absolute
+    // Quick Open paths then resolve against that editor's filesystem provider.
+    // Search relative to the workspace instead and verify the local file below.
+    const workspacePath = path.replace(/^\/workspace\//, "");
     await expect(async () => {
+      await workbench.locator("body").press("Escape");
       await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
       await workbench.locator("body").press("Control+p");
       const quick = workbench.locator(".quick-input-widget input");
       await expect(quick).toBeVisible({ timeout: 2000 });
-      await quick.fill(path);
+      await quick.fill(workspacePath);
       await workbench
         .locator(".quick-input-list .monaco-list-row")
         .filter({ hasText: basename(path) })
