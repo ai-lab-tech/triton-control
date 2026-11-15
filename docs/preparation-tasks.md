@@ -151,3 +151,6 @@ Kubernetes runtime verification belongs to the corresponding workload stories.
 
 The PostgreSQL results above are from a separate invocation with the explicit test
 URLs, so those tests were exercised despite being skipped by default discovery.
+
+Explicit scientist submission and recipient notifications are documented in
+[Scientist handoffs](scientist-handoffs.md).

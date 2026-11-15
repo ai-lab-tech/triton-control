@@ -83,6 +83,8 @@ def init_db() -> None:
         DeploymentPolicyEntity,
         EmailConfigEntity,
         ErrorEventEntity,
+        HandoffEntity,
+        HandoffNotificationEntity,
         MlflowEntity,
         ModelPerfJobEntity,
         OidcConfigEntity,

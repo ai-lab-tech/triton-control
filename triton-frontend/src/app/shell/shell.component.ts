@@ -1,3 +1,4 @@
+import { HandoffNotificationsComponent } from "../pages/handoffs/handoff-notifications.component";
 import { Component, computed, effect, inject, signal } from "@angular/core";
 
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
@@ -35,6 +36,7 @@ type NavItem = {
   selector: "app-shell",
   standalone: true,
   imports: [
+    HandoffNotificationsComponent,
     RouterOutlet,
     RouterLink,
     RouterLinkActive,
@@ -68,6 +70,9 @@ export class ShellComponent {
     const kubernetesActionDisabledReason = this.kubernetesActionDisabledReason();
     const items: NavItem[] = [
       { label: "Dashboard", icon: "grid_view", path: "/dashboard" },
+      ...(this.canWriteInstances()
+        ? [{ label: "Submit model", icon: "assignment_add", path: "/preparation/handoffs/new" }]
+        : []),
       { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
         label: "Development",

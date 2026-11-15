@@ -603,3 +603,24 @@ class BuildQualificationEntity(SQLModel, table=True):
     evidence_path: str
     evidence_sha256: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class HandoffEntity(SQLModel, table=True):
+    """Immutable, deduplicated submission receipt; JSON contains no credentials."""
+    __tablename__ = "preparation_handoffs"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    identity_digest: str = Field(unique=True, index=True)
+    request_digest: str
+    task_id: UUID = Field(foreign_key="preparation_tasks.id", unique=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class HandoffNotificationEntity(SQLModel, table=True):
+    __tablename__ = "handoff_notifications"
+    __table_args__ = (UniqueConstraint("handoff_id", "user_id"),)
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    handoff_id: UUID = Field(foreign_key="preparation_handoffs.id", index=True)
+    user_id: int = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    read_at: datetime | None = None

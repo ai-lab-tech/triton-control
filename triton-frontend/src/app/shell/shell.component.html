@@ -170,6 +170,7 @@
         <span class="spacer"></span>
 
         @if (isLoggedIn()) {
+          <app-handoff-notifications />
           <div class="user-chip">
             <span class="avatar">{{ initials() }}</span>
             <span class="user-name">{{ userName() }}</span>
