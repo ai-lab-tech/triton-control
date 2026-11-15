@@ -1,4 +1,4 @@
-<section aria-label="Kubernetes workload">
+<section aria-label="Kubernetes workload" [class.pods-panel]="view === 'pods'">
   @if (error()) {
     <p role="alert">{{ error() }}</p>
   }
@@ -14,120 +14,213 @@
       </p>
       <p>Last checked: {{ snapshot.endpoint_checked_at | date: "medium" }}</p>
     } @else if (view === "pods") {
-      <div class="toolbar">
-        <h3>Pods &amp; containers</h3>
-        <button mat-stroked-button (click)="refresh()" [disabled]="loading()">Refresh</button>
-      </div>
+      <header class="logs-heading">
+        <div class="heading-title">
+          <span class="heading-icon"><mat-icon>dns</mat-icon></span>
+          <div>
+            <h3>Pods &amp; containers</h3>
+            <p>Workload health, rollout progress and container diagnostics.</p>
+          </div>
+        </div>
+        <button mat-stroked-button type="button" (click)="refresh()" [disabled]="loading()">
+          <mat-icon>refresh</mat-icon>{{ loading() ? "Refreshing…" : "Refresh" }}
+        </button>
+      </header>
       @if (snapshot.deployment; as deployment) {
-        <p>
-          Desired: <strong>{{ deployment.desired }}</strong> · Updated:
-          <strong>{{ deployment.updated }}</strong> · Ready:
-          <strong>{{ deployment.ready }}</strong> · Available:
-          <strong>{{ deployment.available }}</strong>
-        </p>
-        <p>
-          Release: {{ deployment.release || "Not recorded" }} · Revision:
-          {{ deployment.revision || "Unknown" }}
-        </p>
+        <div class="rollout-metrics" aria-label="Deployment replica counts">
+          <div>
+            <span>Desired:</span><strong>{{ deployment.desired }}</strong>
+          </div>
+          <div>
+            <span>Updated:</span><strong>{{ deployment.updated }}</strong>
+          </div>
+          <div>
+            <span>Ready:</span><strong>{{ deployment.ready }}</strong>
+          </div>
+          <div>
+            <span>Available:</span><strong>{{ deployment.available }}</strong>
+          </div>
+        </div>
+        <div class="rollout-meta">
+          <span
+            >Release <strong>{{ deployment.release || "Not recorded" }}</strong></span
+          >
+          <span
+            >Revision <strong>{{ deployment.revision || "Unknown" }}</strong></span
+          >
+        </div>
         @if (deployment.stale) {
-          <p role="status">
+          <p class="observation-notice" role="status">
             Waiting for Kubernetes to observe the current configuration. Generation
             {{ deployment.generation }}, observed {{ deployment.observed_generation ?? "unknown" }}.
           </p>
         }
-        @for (condition of deployment.conditions; track condition.type) {
-          <p>
-            {{ condition.type }}: {{ condition.status }} — {{ condition.reason }}
-            {{ condition.message }}
-          </p>
+        @if (deployment.conditions.length) {
+          <details class="rollout-details">
+            <summary>
+              Rollout conditions <span>{{ deployment.conditions.length }}</span>
+            </summary>
+            @for (condition of deployment.conditions; track condition.type) {
+              <p>
+                <strong>{{ condition.type }}: {{ condition.status }}</strong> —
+                {{ condition.reason }} {{ condition.message }}
+              </p>
+            }
+          </details>
         }
       }
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Pod</th>
-              <th>State / reason</th>
-              <th>Ready</th>
-              <th>Restarts</th>
-              <th>Node</th>
-              <th>Age</th>
-              <th>Release / revision</th>
-              <th>Logs</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (pod of snapshot.pods; track pod.uid) {
-              <tr>
-                <td>
-                  <strong>{{ pod.name }}</strong
-                  ><small>{{ pod.uid }}</small>
-                </td>
-                <td>
-                  {{ pod.terminating ? "Terminating" : pod.phase
-                  }}<small>{{ pod.reason }} {{ pod.message }}</small>
-                </td>
-                <td>{{ pod.ready ? "Yes" : "No" }}</td>
-                <td>{{ pod.restarts }}</td>
-                <td>{{ pod.node || "Not scheduled" }}</td>
-                <td [title]="pod.created_at || ''">{{ age(pod.created_at) }}</td>
-                <td>
-                  {{ pod.release || "Not recorded"
-                  }}<small
-                    >Revision {{ pod.revision || "unknown" }}
-                    {{
-                      pod.revision ? (pod.current_revision ? "(current)" : "(older)") : ""
-                    }}</small
-                  >
-                </td>
-                <td>
-                  <button mat-stroked-button (click)="viewLogs.emit(pod.uid)">View logs</button>
-                </td>
-              </tr>
-              <tr>
-                <td colspan="8">
-                  <details>
-                    <summary>Containers &amp; conditions</summary>
-                    @for (container of pod.containers; track container.name) {
-                      <p>
-                        <strong>{{ container.name }}</strong> ({{ container.kind }}) —
-                        {{ container.state }} · Ready: {{ container.ready ? "Yes" : "No" }} ·
-                        Restarts: {{ container.restart_count }} {{ container.reason }}
-                        {{ container.message }}
-                        @if (container.exit_code !== null && container.exit_code !== undefined) {
-                          · Exit {{ container.exit_code }}
-                        }
-                        @if (container.last_termination_reason) {
-                          · Previous: {{ container.last_termination_reason }}
-                        }
-                        <small>Image: {{ container.image }} {{ container.image_id }}</small>
-                        <button
-                          mat-button
-                          (click)="
-                            viewContainerLogs.emit({ uid: pod.uid, container: container.name })
-                          "
-                        >
-                          Container logs
-                        </button>
-                      </p>
+      @if (snapshot.deployment && snapshot.deployment.ready < snapshot.deployment.desired) {
+        <p class="observation-notice" role="status">
+          The workload has fewer ready replicas than requested. Inspect current pods and pod history
+          for diagnostics.
+        </p>
+      }
+      @for (section of podSections(); track section.title) {
+        @if (!section.history || section.count) {
+          <details class="pod-section" [open]="!section.history">
+            <summary>{{ section.title }} · {{ section.count }}</summary>
+            @if (section.history) {
+              <p class="history-description">
+                Failed and completed pod instances retained by Kubernetes. These are not restarts of
+                the current pod.
+              </p>
+            }
+            <div class="pod-list">
+              @for (group of section.groups; track group.key) {
+                <div [class.failure-group]="group.pods.length > 1">
+                  @if (group.pods.length > 1) {
+                    <div class="failure-group-heading">
+                      <mat-icon>error_outline</mat-icon>
+                      <strong>{{ group.reason }}</strong>
+                      <span>{{ group.pods.length }} failed pods</span>
+                    </div>
+                    @if (group.message) {
+                      <p class="failure-group-message">{{ group.message }}</p>
                     }
-                    @for (condition of pod.conditions; track condition.type) {
-                      <p>
-                        {{ condition.type }}: {{ condition.status }} — {{ condition.reason }}
-                        {{ condition.message }}
-                      </p>
+                  }
+                  <details class="pod-group-details" [open]="group.pods.length === 1">
+                    <summary [hidden]="group.pods.length === 1">
+                      Inspect {{ group.pods.length }} affected pods &amp; logs
+                    </summary>
+                    @for (pod of group.pods; track pod.uid) {
+                      <article class="pod-card" [attr.aria-label]="pod.name">
+                        <div class="pod-heading">
+                          <div class="pod-identity">
+                            <strong>{{ pod.name }}</strong>
+                            <small>UID {{ pod.uid }}</small>
+                          </div>
+                          <span
+                            class="pod-status"
+                            [class.is-ready]="pod.ready"
+                            [class.is-pending]="!pod.ready"
+                          >
+                            <mat-icon>{{ pod.ready ? "check_circle" : "info" }}</mat-icon>
+                            {{ pod.terminating ? "Terminating" : pod.phase }} ·
+                            {{ pod.ready ? "Ready" : "Not ready" }}
+                          </span>
+                          <button mat-flat-button type="button" (click)="viewLogs.emit(pod.uid)">
+                            <mat-icon>terminal</mat-icon>View logs
+                          </button>
+                        </div>
+                        @if (group.pods.length === 1 && (pod.reason || pod.message)) {
+                          <p class="pod-diagnostic">
+                            <strong>{{ pod.reason }}</strong> {{ pod.message }}
+                          </p>
+                        }
+                        <dl class="pod-facts">
+                          <div>
+                            <dt>Restarts</dt>
+                            <dd [class.has-restarts]="pod.restarts > 0">{{ pod.restarts }}</dd>
+                          </div>
+                          <div>
+                            <dt>Node</dt>
+                            <dd>{{ pod.node || "Not scheduled" }}</dd>
+                          </div>
+                          <div>
+                            <dt>Age</dt>
+                            <dd [title]="pod.created_at || ''">{{ age(pod.created_at) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Release</dt>
+                            <dd>{{ pod.release || "Not recorded" }}</dd>
+                          </div>
+                          <div>
+                            <dt>Revision</dt>
+                            <dd>
+                              {{ pod.revision || "Unknown" }}
+                              {{
+                                pod.revision ? (pod.current_revision ? "(current)" : "(older)") : ""
+                              }}
+                            </dd>
+                          </div>
+                        </dl>
+                        <details class="container-details">
+                          <summary>
+                            Containers &amp; conditions
+                            <span
+                              >{{ pod.containers.length }}
+                              {{ pod.containers.length === 1 ? "container" : "containers" }}</span
+                            >
+                          </summary>
+                          <div class="container-grid">
+                            @for (container of pod.containers; track container.name) {
+                              <div class="container-card">
+                                <div class="container-title">
+                                  <strong>{{ container.name }}</strong
+                                  ><span>{{ container.kind }}</span>
+                                </div>
+                                <p>
+                                  {{ container.state }} · Ready:
+                                  {{ container.ready ? "Yes" : "No" }} · Restarts:
+                                  {{ container.restart_count }}
+                                </p>
+                                @if (container.reason || container.message) {
+                                  <p>
+                                    <strong>{{ container.reason }}</strong> {{ container.message }}
+                                  </p>
+                                }
+                                @if (
+                                  container.exit_code !== null && container.exit_code !== undefined
+                                ) {
+                                  <p>Exit {{ container.exit_code }}</p>
+                                }
+                                @if (container.last_termination_reason) {
+                                  <p>Previous: {{ container.last_termination_reason }}</p>
+                                }
+                                <small>Image: {{ container.image }} {{ container.image_id }}</small>
+                                <button
+                                  mat-stroked-button
+                                  type="button"
+                                  (click)="
+                                    viewContainerLogs.emit({
+                                      uid: pod.uid,
+                                      container: container.name,
+                                    })
+                                  "
+                                >
+                                  <mat-icon>terminal</mat-icon>Container logs
+                                </button>
+                              </div>
+                            }
+                          </div>
+                          @for (condition of pod.conditions; track condition.type) {
+                            <p>
+                              <strong>{{ condition.type }}: {{ condition.status }}</strong> —
+                              {{ condition.reason }} {{ condition.message }}
+                            </p>
+                          }
+                        </details>
+                      </article>
                     }
                   </details>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="8">No owned pods currently exist.</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                </div>
+              } @empty {
+                <p class="pods-empty" role="status">No active pods currently exist.</p>
+              }
+            </div>
+          </details>
+        }
+      }
     } @else {
       <div class="log-workspace" #workspace>
         <header class="logs-heading">
@@ -173,57 +266,76 @@
               >
                 <mat-icon>view_stream</mat-icon>All containers<span>Grouped view</span>
               </button>
-              @for (pod of visiblePods(); track pod.uid) {
-                <details class="pod-resource" open>
-                  <summary>
-                    <span class="status-dot" [class.ready]="pod.ready" aria-hidden="true"></span
-                    ><span class="pod-resource-name" [title]="pod.name"
-                      >{{ pod.name
-                      }}<small
-                        >{{ pod.terminating ? "Terminating" : pod.ready ? "Ready" : "Not ready" }} ·
-                        {{ pod.restarts }} restarts</small
-                      ></span
-                    >
-                  </summary>
-                  @for (container of pod.containers; track container.name) {
-                    <button
-                      class="container-resource"
-                      [class.active-resource]="
-                        selectedUid() === pod.uid && selectedContainer() === container.name
-                      "
-                      [attr.aria-pressed]="
-                        selectedUid() === pod.uid && selectedContainer() === container.name
-                      "
-                      (click)="selectContainer(pod.uid, container.name)"
-                    >
-                      <mat-icon>{{ container.kind === "init" ? "build" : "memory" }}</mat-icon
-                      ><span
-                        ><strong>{{ container.name }}</strong
-                        ><small
-                          >{{
-                            container.kind === "init"
-                              ? "Init"
-                              : container.kind === "sidecar"
-                                ? "Sidecar"
-                                : "Application"
-                          }}
-                          · {{ container.reason || container.state }}</small
-                        ><small
-                          >{{ container.ready ? "Ready" : "Not ready" }} ·
-                          {{ container.restart_count }} restarts</small
-                        ></span
-                      >
-                    </button>
-                  }
-                </details>
-              } @empty {
-                <p class="resource-empty">
-                  {{
-                    snapshot.pods.length
-                      ? "No matching pods or containers."
-                      : "No owned pods available."
-                  }}
-                </p>
+              @for (section of logPodSections(); track section.title) {
+                @if (!section.history || section.pods.length) {
+                  <details
+                    class="pod-section"
+                    [open]="
+                      !section.history ||
+                      !!podSearch() ||
+                      selectedPod()?.phase === 'Failed' || selectedPod()?.phase === 'Succeeded'
+                    "
+                  >
+                    <summary>{{ section.title }} · {{ section.pods.length }}</summary>
+                    @for (pod of section.pods; track pod.uid) {
+                      <details class="pod-resource" open>
+                        <summary>
+                          <span
+                            class="status-dot"
+                            [class.ready]="pod.ready && !pod.terminating"
+                            aria-hidden="true"
+                          ></span
+                          ><span class="pod-resource-name" [title]="pod.name"
+                            >{{ pod.name
+                            }}<small
+                              >{{ pod.terminating ? "Terminating" : pod.phase }} ·
+                              {{ pod.ready && !pod.terminating ? "Ready" : "Not ready" }} ·
+                              {{ pod.restarts }} restarts</small
+                            ></span
+                          >
+                        </summary>
+                        @for (container of pod.containers; track container.name) {
+                          <button
+                            class="container-resource"
+                            [class.active-resource]="
+                              selectedUid() === pod.uid && selectedContainer() === container.name
+                            "
+                            [attr.aria-pressed]="
+                              selectedUid() === pod.uid && selectedContainer() === container.name
+                            "
+                            (click)="selectContainer(pod.uid, container.name)"
+                          >
+                            <mat-icon>{{ container.kind === "init" ? "build" : "memory" }}</mat-icon
+                            ><span
+                              ><strong>{{ container.name }}</strong
+                              ><small
+                                >{{
+                                  container.kind === "init"
+                                    ? "Init"
+                                    : container.kind === "sidecar"
+                                      ? "Sidecar"
+                                      : "Application"
+                                }}
+                                · {{ container.reason || container.state }}</small
+                              ><small
+                                >{{ container.ready ? "Ready" : "Not ready" }} ·
+                                {{ container.restart_count }} restarts</small
+                              ></span
+                            >
+                          </button>
+                        }
+                      </details>
+                    } @empty {
+                      <p class="resource-empty">
+                        {{
+                          snapshot.pods.length
+                            ? "No matching pods or containers."
+                            : "No owned pods available."
+                        }}
+                      </p>
+                    }
+                  </details>
+                }
               }
             </div>
           </nav>
@@ -231,6 +343,11 @@
             <header class="selection-heading">
               <div>
                 <h4>{{ selectedContainer() || "All containers" }}</h4>
+                @if (selectedPod()?.phase === "Failed" || selectedPod()?.phase === "Succeeded") {
+                  <span class="history-description"
+                    >Historical pod · {{ selectedPod()?.phase }}</span
+                  >
+                }
                 <p>
                   {{
                     selectedPod()?.name ||
@@ -242,7 +359,8 @@
               </div>
               @if (selectedContainerState(); as container) {
                 <span class="container-status" [class.is-ready]="container.ready"
-                  >{{ container.reason || container.state }} ·
+                  >{{ container.ready ? "Ready" : "Not ready" }} ·
+                  {{ container.reason || container.state }} ·
                   {{ container.restart_count }} restarts</span
                 >
               }

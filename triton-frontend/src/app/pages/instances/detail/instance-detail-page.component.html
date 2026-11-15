@@ -59,25 +59,41 @@
           </div>
           <div class="summary-row summary-row-state">
             <span class="summary-label">Current state</span>
-            <span class="summary-value summary-value-state">
+            <div class="summary-value summary-value-state">
               @if (instance.podStatuses.length) {
-                <span class="pod-state-list">
-                  @for (podStatus of instance.podStatuses; track podStatus) {
+                <div class="pod-state-list">
+                  @for (state of currentPodStates(); track state.label) {
                     <span
                       class="pod-state-chip"
                       [attr.data-ready]="
-                        podStatus.includes('Ready') && !podStatus.includes('Not Ready')
+                        state.label.includes('Ready') && !state.label.includes('Not Ready')
                       "
+                      [attr.data-failed]="state.label.startsWith('Failed')"
                     >
-                      <span class="material-icons">circle</span>
-                      {{ podStatus }}
+                      {{ state.count }} {{ state.label }}
                     </span>
                   }
-                </span>
+                </div>
+                @if (!currentPodStates().length) {
+                  <span class="pod-state-empty">No active pods reported.</span>
+                }
+                @if (historicalPodCount()) {
+                  <div class="pod-state-empty">
+                    {{ historicalPodCount() }} failed/completed pods in history
+                  </div>
+                }
+                <details class="pod-state-details">
+                  <summary>Inspect all pod states (including history)</summary>
+                  <ul>
+                    @for (podStatus of instance.podStatuses; track $index) {
+                      <li>{{ podStatus }}</li>
+                    }
+                  </ul>
+                </details>
               } @else {
                 <span class="pod-state-empty">No pod status available yet.</span>
               }
-            </span>
+            </div>
           </div>
         }
         <p class="page-subtitle">{{ instance.version }} · {{ instance.region }}</p>
@@ -129,150 +145,158 @@
       (selectedTabChange)="onDetailTabChanged($event)"
     >
       <mat-tab label="Overview">
-        <div class="tab-panel">
-          <app-workload-panel
-            [instanceId]="instance.id"
-            [active]="selectedDetailTabIndex() === 0"
-            (viewLogs)="openPodLogs($event)"
-            (viewContainerLogs)="openPodLogs($event.uid, $event.container)"
-          />
-          <div class="panel-card access-card">
-            <div class="panel-title">Users &amp; permissions</div>
-            <div class="access-summary">
-              <span class="access-count">{{ instance.assignedUsers.length }}</span>
-              <span class="access-text">{{
-                instance.assignedUsers.length === 1 ? "person has access" : "people have access"
-              }}</span>
-            </div>
-            <div class="chip-row">
-              @for (user of instance.assignedUsers; track user) {
-                <span class="user-chip" data-tone="ok">
-                  <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
-                  <span class="user-name">{{ user.name }}</span>
-                  <span class="permission-chip">{{ user.role }}</span>
-                </span>
-              }
-              @if (!instance.assignedUsers.length) {
-                <span class="empty-chip">No access assigned</span>
-              }
-            </div>
-            <div class="panel-hint">
-              People shown here can access this instance with the listed permission.
-            </div>
-          </div>
-          @if (instance.isSelfDeployed) {
-            <div class="panel-card deployment-card">
-              <div class="panel-title">Deployment</div>
-              <div class="kv">
-                <span class="kv-label">{{
-                  instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
-                }}</span>
-                <span class="kv-value">{{
-                  instance.deploymentBackend || "No backend in config.pbtxt"
-                }}</span>
-              </div>
-              <div class="kv">
-                <span class="kv-label">Image</span>
-                <span class="kv-value">
-                  @if (instance.deploymentImage) {
-                    <code class="network-url">{{ instance.deploymentImage }}</code>
-                  } @else {
-                    <span>Unavailable</span>
+        <div class="tab-panel overview-panel">
+          <div class="overview-primary">
+            <app-workload-panel
+              [instanceId]="instance.id"
+              [active]="selectedDetailTabIndex() === 0"
+              (viewLogs)="openPodLogs($event)"
+              (viewContainerLogs)="openPodLogs($event.uid, $event.container)"
+            />
+            <div class="panel-card endpoint-summary">
+              <div class="panel-title">Endpoint</div>
+              @if (endpointAccess(); as endpoint) {
+                <code class="network-url">{{ endpoint.url }}</code>
+                <div class="chip-row">
+                  <span class="chip">{{
+                    endpoint.access_mode === "ingress" ? "External access" : "Cluster only"
+                  }}</span>
+                  @if (endpoint.basic_auth_enabled) {
+                    <span class="chip">Basic authentication</span>
                   }
-                </span>
-              </div>
-              <div class="kv">
-                <span class="kv-label">Repository</span>
-                <span class="kv-value">
-                  @if (instance.deploymentRepository) {
-                    <code class="network-url">{{ instance.deploymentRepository }}</code>
-                  } @else {
-                    <span>Unavailable</span>
-                  }
-                </span>
-              </div>
-              <div class="kv">
-                <span class="kv-label">Namespace</span>
-                <span class="kv-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
-              </div>
-              <div class="kv">
-                <span class="kv-label">Deployment</span>
-                <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
-              </div>
-              <div class="kv">
-                <span class="kv-label">Service</span>
-                <span class="kv-value">{{ instance.deploymentServiceName || "Unavailable" }}</span>
-              </div>
-            </div>
-          }
-          <div class="panel-card endpoint-summary">
-            <div class="panel-title">Endpoint</div>
-            @if (endpointAccess(); as endpoint) {
-              <code class="network-url">{{ endpoint.url }}</code>
-              <div class="chip-row">
-                <span class="chip">{{
-                  endpoint.access_mode === "ingress" ? "External access" : "Cluster only"
-                }}</span>
-                @if (endpoint.basic_auth_enabled) {
-                  <span class="chip">Basic authentication</span>
-                }
-              </div>
-            } @else {
-              <p class="panel-hint">
-                {{
-                  instance.isSelfDeployed
-                    ? "View endpoint configuration and authentication."
-                    : instance.url
-                }}
-              </p>
-            }
-            <button mat-stroked-button type="button" (click)="selectedDetailTabIndex.set(2)">
-              {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
-            </button>
-          </div>
-          <div class="panel-card">
-            <div class="panel-title">Triton /v2 Metadata</div>
-            <div class="endpoint-row">
-              <span class="endpoint-method">GET</span>
-              <code>{{ instance.url }}/v2</code>
-              <button
-                mat-stroked-button
-                type="button"
-                class="metadata-toggle"
-                (click)="toggleMetadataView()"
-              >
-                <span class="material-icons">{{
-                  showRawMetadata() ? "notes" : "data_object"
-                }}</span>
-                {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
+                </div>
+              } @else {
+                <p class="panel-hint">
+                  {{
+                    instance.isSelfDeployed
+                      ? "View endpoint configuration and authentication."
+                      : instance.url
+                  }}
+                </p>
+              }
+              <button mat-stroked-button type="button" (click)="selectedDetailTabIndex.set(2)">
+                {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
               </button>
             </div>
-            @if (!showRawMetadata()) {
-              <div class="metadata-summary">
-                <div class="metadata-item">
-                  <div class="metadata-label">Server name</div>
-                  <div class="metadata-value">{{ metadataSummary().serverName }}</div>
+          </div>
+          <div class="overview-secondary">
+            @if (instance.isSelfDeployed) {
+              <div class="panel-card deployment-card">
+                <div class="panel-title">Deployment</div>
+                <div class="kv">
+                  <span class="kv-label">{{
+                    instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
+                  }}</span>
+                  <span class="kv-value">{{
+                    instance.deploymentBackend || "No backend in config.pbtxt"
+                  }}</span>
                 </div>
-                <div class="metadata-item">
-                  <div class="metadata-label">Version</div>
-                  <div class="metadata-value">{{ metadataSummary().version }}</div>
+                <div class="kv">
+                  <span class="kv-label">Image</span>
+                  <span class="kv-value">
+                    @if (instance.deploymentImage) {
+                      <code class="network-url">{{ instance.deploymentImage }}</code>
+                    } @else {
+                      <span>Unavailable</span>
+                    }
+                  </span>
                 </div>
-                <div class="metadata-item metadata-item-wide">
-                  <div class="metadata-label">Extensions</div>
-                  @if (metadataSummary().extensions.length) {
-                    <div class="metadata-extension-list">
-                      @for (extension of metadataSummary().extensions; track extension) {
-                        <span class="metadata-extension-chip">{{ extension }}</span>
-                      }
-                    </div>
-                  } @else {
-                    <div class="metadata-value">Unavailable</div>
-                  }
+                <div class="kv">
+                  <span class="kv-label">Repository</span>
+                  <span class="kv-value">
+                    @if (instance.deploymentRepository) {
+                      <code class="network-url">{{ instance.deploymentRepository }}</code>
+                    } @else {
+                      <span>Unavailable</span>
+                    }
+                  </span>
+                </div>
+                <div class="kv">
+                  <span class="kv-label">Namespace</span>
+                  <span class="kv-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
+                </div>
+                <div class="kv">
+                  <span class="kv-label">Deployment</span>
+                  <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
+                </div>
+                <div class="kv">
+                  <span class="kv-label">Service</span>
+                  <span class="kv-value">{{
+                    instance.deploymentServiceName || "Unavailable"
+                  }}</span>
                 </div>
               </div>
-            } @else {
-              <pre class="json-block">{{ metadataJson() }}</pre>
             }
+            <div class="panel-card access-card">
+              <div class="panel-title">Users &amp; permissions</div>
+              <div class="access-summary">
+                <span class="access-count">{{ instance.assignedUsers.length }}</span>
+                <span class="access-text">{{
+                  instance.assignedUsers.length === 1 ? "person has access" : "people have access"
+                }}</span>
+              </div>
+              <div class="chip-row">
+                @for (user of instance.assignedUsers; track user) {
+                  <span class="user-chip" data-tone="ok">
+                    <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
+                    <span class="user-name">{{ user.name }}</span>
+                    <span class="permission-chip">{{ user.role }}</span>
+                  </span>
+                }
+                @if (!instance.assignedUsers.length) {
+                  <span class="empty-chip">No access assigned</span>
+                }
+              </div>
+              <div class="panel-hint">
+                People shown here can access this instance with the listed permission.
+              </div>
+            </div>
+          </div>
+          <div class="overview-metadata">
+            <div class="panel-card">
+              <div class="panel-title">Triton /v2 Metadata</div>
+              <div class="endpoint-row">
+                <span class="endpoint-method">GET</span>
+                <code>{{ instance.url }}/v2</code>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="metadata-toggle"
+                  (click)="toggleMetadataView()"
+                >
+                  <span class="material-icons">{{
+                    showRawMetadata() ? "notes" : "data_object"
+                  }}</span>
+                  {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
+                </button>
+              </div>
+              @if (!showRawMetadata()) {
+                <div class="metadata-summary">
+                  <div class="metadata-item">
+                    <div class="metadata-label">Server name</div>
+                    <div class="metadata-value">{{ metadataSummary().serverName }}</div>
+                  </div>
+                  <div class="metadata-item">
+                    <div class="metadata-label">Version</div>
+                    <div class="metadata-value">{{ metadataSummary().version }}</div>
+                  </div>
+                  <div class="metadata-item metadata-item-wide">
+                    <div class="metadata-label">Extensions</div>
+                    @if (metadataSummary().extensions.length) {
+                      <div class="metadata-extension-list">
+                        @for (extension of metadataSummary().extensions; track extension) {
+                          <span class="metadata-extension-chip">{{ extension }}</span>
+                        }
+                      </div>
+                    } @else {
+                      <div class="metadata-value">Unavailable</div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <pre class="json-block">{{ metadataJson() }}</pre>
+              }
+            </div>
           </div>
         </div>
       </mat-tab>
