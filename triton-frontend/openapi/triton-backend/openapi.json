@@ -3122,6 +3122,53 @@
         }
       }
     },
+    "/api/instances/{instance_id}/pods": {
+      "get": {
+        "tags": [
+          "instances"
+        ],
+        "summary": "Get Instance Pods",
+        "operationId": "get_instance_pods_api_instances__instance_id__pods_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstancePodsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/instances/{instance_id}/models": {
       "get": {
         "tags": [
@@ -4665,6 +4712,149 @@
         ],
         "title": "CompleteLifecycleRequest"
       },
+      "Condition": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "status"
+        ],
+        "title": "Condition"
+      },
+      "ContainerState": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "regular",
+              "init"
+            ],
+            "title": "Kind"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": false
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts",
+            "default": 0
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "running",
+              "terminated",
+              "unknown"
+            ],
+            "title": "State",
+            "default": "unknown"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "last_termination_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Termination Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "image"
+        ],
+        "title": "ContainerState"
+      },
       "CreateCodeServerRequest": {
         "properties": {
           "name": {
@@ -5692,6 +5882,67 @@
         "title": "DeploymentResponse",
         "description": "Response after Kubernetes resources are applied."
       },
+      "DeploymentState": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "observed_generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Generation"
+          },
+          "awaiting_observation": {
+            "type": "boolean",
+            "title": "Awaiting Observation"
+          },
+          "desired": {
+            "type": "integer",
+            "title": "Desired"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "ready": {
+            "type": "integer",
+            "title": "Ready"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "type": "array",
+            "title": "Conditions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "generation",
+          "awaiting_observation",
+          "desired",
+          "updated",
+          "ready",
+          "available"
+        ],
+        "title": "DeploymentState"
+      },
       "EmailOperationResponse": {
         "properties": {
           "accepted": {
@@ -6133,6 +6384,46 @@
           "logs"
         ],
         "title": "InstanceLogsResponse"
+      },
+      "InstancePodsResponse": {
+        "properties": {
+          "kubernetes_available": {
+            "type": "boolean",
+            "title": "Kubernetes Available"
+          },
+          "health_live": {
+            "type": "boolean",
+            "title": "Health Live"
+          },
+          "health_ready": {
+            "type": "boolean",
+            "title": "Health Ready"
+          },
+          "deployment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pods": {
+            "items": {
+              "$ref": "#/components/schemas/PodState"
+            },
+            "type": "array",
+            "title": "Pods"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kubernetes_available",
+          "health_live",
+          "health_ready"
+        ],
+        "title": "InstancePodsResponse"
       },
       "InstanceS3ConfigDTO": {
         "properties": {
@@ -6850,6 +7141,127 @@
         ],
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
+      },
+      "PodState": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "deletion_timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion Timestamp"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "containers": {
+            "items": {
+              "$ref": "#/components/schemas/ContainerState"
+            },
+            "type": "array",
+            "title": "Containers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "name",
+          "phase",
+          "ready"
+        ],
+        "title": "PodState"
       },
       "RegistryUpdate": {
         "properties": {
