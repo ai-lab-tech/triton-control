@@ -410,9 +410,23 @@ test.describe.serial("code-server plugin workflows", () => {
         )
         .toBe(deploymentName);
     } finally {
+      // Managed deletion first asks the durable worker to remove owned resources.
+      // Only the documented cleanup conflict is retryable; other errors fail immediately.
+      const deadline = Date.now() + 60_000;
+      while (true) {
+        const deletion = await context.request.delete(`/api/deployments/${deployment.instance_id}`);
+        if (deletion.status() === 200) break;
+        expect(deletion.status(), await deletion.text()).toBe(409);
+        expect((await deletion.json()).detail).toContain("cleanup requested");
+        expect(Date.now(), "Timed out waiting for owned deployment cleanup").toBeLessThan(deadline);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
       expect(
-        (await context.request.delete(`/api/deployments/${deployment.instance_id}`)).ok(),
-      ).toBeTruthy();
+        kubectl("get", "deployment", deploymentName, "--ignore-not-found", "-o", "name").trim(),
+      ).toBe("");
+      expect((await context.request.get(`/api/instances/${deployment.instance_id}`)).status()).toBe(
+        404,
+      );
     }
   });
 
