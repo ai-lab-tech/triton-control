@@ -2,12 +2,12 @@
 
 import base64
 import hashlib
-import hmac
 import json
 import os
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes, hmac
 
 from app.exceptions import BadRequestError
 
@@ -33,4 +33,8 @@ def decode(value: str) -> dict[str, Any]:
 
 def fingerprint(value: dict[str, Any]) -> str:
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return hmac.new(key(), canonical.encode(), hashlib.sha256).hexdigest()
+    # A keyed request fingerprint, not a password-verification hash. Keep the
+    # HMAC bytes compatible with persisted idempotency records.
+    digest = hmac.HMAC(key(), hashes.SHA256())
+    digest.update(canonical.encode())
+    return digest.finalize().hex()
