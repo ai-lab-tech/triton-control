@@ -52,7 +52,12 @@ export class WorkloadPanelComponent implements OnChanges {
   @Input() initialPodUid = "";
   @Input() selectionRevision = 0;
   @Input() initialContainer = "";
-  @Output() viewContainerLogs = new EventEmitter<{ uid: string; container: string }>();
+  @Input() initialPrevious = false;
+  @Output() viewContainerLogs = new EventEmitter<{
+    uid: string;
+    container: string;
+    previous?: boolean;
+  }>();
   @ViewChild("logViewport") logViewport?: ElementRef<HTMLElement>;
   @ViewChild("workspace") workspace?: ElementRef<HTMLElement>;
   readonly podSearch = signal("");
@@ -63,8 +68,19 @@ export class WorkloadPanelComponent implements OnChanges {
   readonly selectedContainerState = computed(() =>
     this.selectedPod()?.containers.find((c) => c.name === this.selectedContainer()),
   );
+  readonly orderedPods = computed(() => {
+    const priority = (pod: Pod) =>
+      pod.terminating
+        ? 3
+        : pod.ready
+          ? 0
+          : pod.phase === "Failed" || pod.phase === "Succeeded"
+            ? 2
+            : 1;
+    return [...(this.state()?.pods ?? [])].sort((a, b) => priority(a) - priority(b));
+  });
   readonly visiblePods = computed(() =>
-    (this.state()?.pods ?? []).filter((p) =>
+    this.orderedPods().filter((p) =>
       (p.name + " " + p.containers.map((c) => c.name).join(" "))
         .toLowerCase()
         .includes(this.podSearch().toLowerCase()),
@@ -80,6 +96,58 @@ export class WorkloadPanelComponent implements OnChanges {
   private readonly destroyRef = inject(DestroyRef);
   private readonly base = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
   readonly state = signal<InstancePods | null>(null);
+  readonly podGroups = computed(() => {
+    const groups = new Map<string, { key: string; reason: string; message: string; pods: Pod[] }>();
+    for (const pod of this.state()?.pods ?? []) {
+      // Only identical terminal failures are combined; live/starting pods stay individually visible.
+      const key =
+        pod.phase === "Failed" && !pod.terminating
+          ? JSON.stringify(["failure", pod.reason ?? "", pod.message ?? ""])
+          : JSON.stringify(["pod", pod.uid]);
+      const group = groups.get(key);
+      if (group) group.pods.push(pod);
+      else
+        groups.set(key, {
+          key,
+          reason: pod.reason || "Pod failed",
+          message: pod.message || "",
+          pods: [pod],
+        });
+    }
+    return [...groups.values()];
+  });
+  private isHistoricalPod(pod: Pod): boolean {
+    return pod.phase === "Failed" || pod.phase === "Succeeded";
+  }
+  readonly podSections = computed(() =>
+    [
+      {
+        title: "Current pods",
+        history: false,
+        groups: this.podGroups().filter((g) => !this.isHistoricalPod(g.pods[0])),
+      },
+      {
+        title: "Previous pods",
+        history: true,
+        groups: this.podGroups().filter((g) => this.isHistoricalPod(g.pods[0])),
+      },
+    ].map((section) => ({
+      ...section,
+      count: section.groups.reduce((total, group) => total + group.pods.length, 0),
+    })),
+  );
+  readonly logPodSections = computed(() => [
+    {
+      title: "Current pods",
+      history: false,
+      pods: this.visiblePods().filter((p) => !this.isHistoricalPod(p)),
+    },
+    {
+      title: "Previous pods",
+      history: true,
+      pods: this.visiblePods().filter((p) => this.isHistoricalPod(p)),
+    },
+  ]);
   readonly logs = signal<PodLogs | null>(null);
   readonly error = signal("");
   readonly logError = signal("");
@@ -184,6 +252,7 @@ export class WorkloadPanelComponent implements OnChanges {
       this.logsLoading.set(false);
       this.selectedUid.set(this.initialPodUid);
       this.selectedContainer.set(this.initialContainer);
+      this.previous.set(this.initialPrevious);
       this.pendingRead.set(false);
       this.selectionInitialized = false;
     } else if ((changes["initialPodUid"] || changes["selectionRevision"]) && this.initialPodUid) {
@@ -191,6 +260,7 @@ export class WorkloadPanelComponent implements OnChanges {
         this.initialPodUid,
         this.initialContainer ||
           this.preferredContainer(this.state()?.pods.find((p) => p.uid === this.initialPodUid)),
+        this.initialPrevious,
       );
     }
     if (this.active && this.instanceId) void this.refresh();
@@ -213,7 +283,9 @@ export class WorkloadPanelComponent implements OnChanges {
       if (!this.selectionInitialized) {
         const pod = this.selectedUid()
           ? state.pods.find((p) => p.uid === this.selectedUid())
-          : (state.pods?.find((p) => p.current_revision && !p.terminating) ?? state.pods?.[0]);
+          : (this.orderedPods().find((p) => p.ready && !p.terminating) ??
+            this.orderedPods().find((p) => p.current_revision && !p.terminating) ??
+            this.orderedPods()[0]);
         if (pod) {
           this.selectedUid.set(pod.uid);
           this.selectedContainer.set(this.initialContainer || this.preferredContainer(pod));
@@ -258,10 +330,10 @@ export class WorkloadPanelComponent implements OnChanges {
     );
   }
 
-  selectContainer(uid: string, container: string): void {
+  selectContainer(uid: string, container: string, previous = false): void {
     this.selectedUid.set(uid);
     this.selectedContainer.set(container);
-    this.previous.set(false);
+    this.previous.set(previous);
     this.selectionInitialized = true;
     this.filter = "";
     this.clearLogs();

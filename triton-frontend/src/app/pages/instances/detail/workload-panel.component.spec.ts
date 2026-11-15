@@ -76,6 +76,166 @@ describe("WorkloadPanelComponent", () => {
     fixture.detectChanges();
   }
 
+  it("opens the previous run for the exact restarted container", async () => {
+    // Arrange
+    const restarted = {
+      ...pod,
+      containers: [{ ...pod.containers[0], last_termination_reason: "Error" }],
+    };
+    await refresh({ ...snapshot, pods: [restarted] });
+    const emit = spyOn(component.viewContainerLogs, "emit");
+
+    // Act
+    fixture.nativeElement.querySelector(".previous-run-logs").click();
+
+    // Assert
+    expect(emit).toHaveBeenCalledOnceWith({ uid: pod.uid, container: "download", previous: true });
+    expect(fixture.nativeElement.textContent).toContain("Last termination: Error");
+    expect(component.podSections()[1].count).toBe(0);
+  });
+
+  it("applies previous-run navigation and resets it on normal container selection", () => {
+    // Arrange
+    fixture.componentRef.setInput("initialPodUid", pod.uid);
+    fixture.componentRef.setInput("initialContainer", "download");
+    fixture.componentRef.setInput("initialPrevious", true);
+    fixture.componentRef.setInput("selectionRevision", 1);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    expect(component.previous()).toBeTrue();
+    expect(component.selectedContainer()).toBe("download");
+    component.selectContainer(pod.uid, "triton");
+    expect(component.previous()).toBeFalse();
+  });
+
+  it("keeps pending pods current and collapses terminal pod history", async () => {
+    // Arrange
+    const pending = { ...pod, uid: "pending", phase: "Pending" };
+    const failed = { ...pod, uid: "failed", phase: "Failed" };
+    const completed = { ...pod, uid: "completed", phase: "Succeeded" };
+
+    // Act
+    await refresh({ ...snapshot, pods: [failed, pending, completed] });
+
+    // Assert
+    const sections = component.podSections();
+    expect(sections.map((section) => section.count)).toEqual([1, 2]);
+    expect(sections[0].groups[0].pods[0].uid).toBe("pending");
+    const details = fixture.nativeElement.querySelectorAll(".pod-section");
+    expect(details[0].open).toBeTrue();
+    expect(details[1].open).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain("fewer ready replicas than requested");
+  });
+
+  it("expands historical logs only when a historical pod is selected", async () => {
+    // Arrange
+    fixture.componentRef.setInput("view", "logs");
+    const failed = { ...pod, uid: "failed", phase: "Failed" };
+    const ready = { ...pod, uid: "ready", ready: true };
+    await refresh({ ...snapshot, pods: [failed, ready] });
+    const history = () =>
+      fixture.nativeElement.querySelectorAll(".resource-list > .pod-section")[1];
+    expect(history().open).toBeFalse();
+
+    // Act
+    component.selectedUid.set("failed");
+    fixture.detectChanges();
+
+    // Assert
+    expect(history().open).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain("Historical pod");
+    expect(component.logPodSections()[0].pods.map((item) => item.uid)).toEqual(["ready"]);
+  });
+
+  it("puts ready pods first and selects their logs by default", async () => {
+    // Arrange
+    const failed = { ...pod, uid: "failed", phase: "Failed" };
+    const ready = { ...pod, uid: "ready", ready: true };
+    const terminating = { ...ready, uid: "terminating", terminating: true };
+    const pods = [failed, terminating, pod, ready];
+
+    // Act
+    await refresh({ ...snapshot, pods });
+
+    // Assert
+    expect(component.visiblePods().map((item) => item.uid)).toEqual([
+      "ready",
+      "uid-a",
+      "failed",
+      "terminating",
+    ]);
+    expect(component.selectedUid()).toBe("ready");
+    expect(pods.map((item) => item.uid)).toEqual(["failed", "terminating", "uid-a", "ready"]);
+  });
+
+  it("preserves an explicitly requested failed pod when a ready pod exists", async () => {
+    // Arrange
+    component.selectedUid.set("failed");
+    const failed = { ...pod, uid: "failed", phase: "Failed" };
+    const ready = { ...pod, uid: "ready", ready: true };
+
+    // Act
+    await refresh({ ...snapshot, pods: [failed, ready] });
+
+    // Assert
+    expect(component.selectedUid()).toBe("failed");
+  });
+
+  it("summarizes identical failures once while retaining each pod log action", async () => {
+    // Arrange
+    const failed = {
+      ...pod,
+      phase: "Failed",
+      reason: "UnexpectedAdmissionError",
+      message: "No healthy GPU devices",
+    };
+    // Act
+    await refresh({ ...snapshot, pods: [failed, { ...failed, uid: "uid-b", name: "pod-b" }] });
+    // Assert
+    expect(component.podGroups().length).toBe(1);
+    const group: HTMLElement = fixture.nativeElement.querySelector(".failure-group");
+    expect(group.textContent).toContain("2 failed pods");
+    expect(group.querySelectorAll(".failure-group-message").length).toBe(1);
+    expect(group.querySelector<HTMLDetailsElement>(".pod-group-details")?.open).toBeFalse();
+    expect(group.querySelectorAll(".pod-card").length).toBe(2);
+  });
+
+  it("opens logs for the exact pod inside an expanded failure group", async () => {
+    // Arrange
+    const failed = { ...pod, phase: "Failed", reason: "Error", message: "GPU unavailable" };
+    await refresh({ ...snapshot, pods: [failed, { ...failed, uid: "uid-b", name: "pod-b" }] });
+    const emit = spyOn(component.viewLogs, "emit");
+    const details: HTMLDetailsElement = fixture.nativeElement.querySelector(".pod-group-details");
+    // Act
+    details.querySelector("summary")!.click();
+    const card = details.querySelector('[aria-label="pod-b"]')!;
+    (card.querySelector(".pod-heading button") as HTMLButtonElement).click();
+    // Assert
+    expect(details.open).toBeTrue();
+    expect(emit).toHaveBeenCalledOnceWith("uid-b");
+  });
+
+  it("keeps different failures and running pods separate", async () => {
+    // Arrange
+    const failed = { ...pod, phase: "Failed", reason: "Error", message: "GPU unavailable" };
+    // Act
+    await refresh({
+      ...snapshot,
+      pods: [
+        failed,
+        { ...failed, uid: "uid-b", message: "Different failure" },
+        { ...failed, uid: "uid-c", phase: "Running" },
+      ],
+    });
+    // Assert
+    expect(component.podGroups().length).toBe(3);
+    expect(fixture.nativeElement.querySelector(".failure-group")).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll(".pod-card").length).toBe(3);
+  });
+
   it("shows init failure, counts and stale observation and emits the exact UID", async () => {
     await refresh();
     const text = fixture.nativeElement.textContent;

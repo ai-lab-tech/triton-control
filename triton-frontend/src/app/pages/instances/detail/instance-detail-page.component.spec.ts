@@ -124,6 +124,55 @@ describe("InstanceDetailPageComponent", () => {
     expect(component).toBeTruthy();
   });
 
+  it("summarizes repeated pod states without losing readiness information", () => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      podStatuses: [
+        "pod-a: Failed (Not Ready)",
+        "pod-b: Running (Ready)",
+        "pod-c: Failed (Not Ready)",
+        "pod-d: Running (Not Ready)",
+      ],
+    } as any);
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+
+    // Act
+    const summary = fixture.componentInstance.podStateSummary();
+
+    // Assert
+    expect(fixture.componentInstance.currentPodStates()).toEqual([
+      { label: "Running (Ready)", count: 1 },
+      { label: "Running (Not Ready)", count: 1 },
+    ]);
+    expect(summary).toEqual([
+      { label: "Failed (Not Ready)", count: 2 },
+      { label: "Running (Ready)", count: 1 },
+      { label: "Running (Not Ready)", count: 1 },
+    ]);
+  });
+
+  it("preserves unfamiliar pod states and handles missing status data", () => {
+    // Arrange
+    const selector = mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      podStatuses: ["Unknown", "pod-a: Pending: scheduling"],
+    } as any);
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+
+    // Act
+    const summary = fixture.componentInstance.podStateSummary();
+    selector.setResult(MOCK_INSTANCE as any);
+    mockStore.refreshState();
+
+    // Assert
+    expect(summary).toEqual([
+      { label: "Unknown", count: 1 },
+      { label: "Pending: scheduling", count: 1 },
+    ]);
+    expect(fixture.componentInstance.podStateSummary()).toEqual([]);
+  });
+
   it("opens runtime logs for the exact selected pod UID", () => {
     const fixture = TestBed.createComponent(InstanceDetailPageComponent);
     fixture.componentInstance.openPodLogs("pod-uid-123");
