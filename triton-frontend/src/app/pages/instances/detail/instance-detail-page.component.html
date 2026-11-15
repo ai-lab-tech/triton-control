@@ -395,11 +395,11 @@
                   <button
                     mat-stroked-button
                     type="button"
-                    class="network-copy-btn"
+                    class="network-copy-btn connection-edit-btn"
                     (click)="openTritonDialog()"
                   >
-                    <span class="material-icons">tune</span>
-                    Edit
+                    <span class="material-icons" aria-hidden="true">tune</span>
+                    Edit connection
                   </button>
                 }
               </div>
@@ -420,7 +420,7 @@
                     class="network-copy-btn"
                     (click)="copyBaseUrl(instance.url)"
                   >
-                    <span class="material-icons">content_copy</span>
+                    <span class="material-icons" aria-hidden="true">content_copy</span>
                     Copy
                   </button>
                 </span>
@@ -474,7 +474,7 @@
                 </div>
               }
               @if (copyBaseUrlMessage) {
-                <div class="panel-hint">{{ copyBaseUrlMessage }}</div>
+                <div class="panel-hint" role="status">{{ copyBaseUrlMessage }}</div>
               }
               @if (instance.healthError) {
                 <div class="panel-hint health-error">{{ instance.healthError }}</div>

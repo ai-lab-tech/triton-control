@@ -24,66 +24,7 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
     MatSelectModule,
   ],
   templateUrl: "./deployment-access.component.html",
-  styles: [
-    `
-      :host {
-        display: block;
-      }
-      h2 {
-        font-size: 1.2rem;
-        margin: 0;
-      }
-      h3 {
-        font-size: 1rem;
-        margin: 0 0 0.5rem;
-      }
-      .hint {
-        margin: 0.5rem 0 0;
-        opacity: 0.75;
-      }
-      .endpoint-header,
-      .endpoint-url {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        flex-wrap: wrap;
-      }
-      .endpoint-url {
-        margin: 1.25rem 0;
-        padding: 1rem;
-        border-radius: 8px;
-        background: var(--mat-sys-surface, #fff);
-      }
-      .endpoint-url code {
-        flex: 1;
-        min-width: 0;
-      }
-      .authentication {
-        padding: 1rem 0;
-      }
-      button {
-        flex-shrink: 0;
-      }
-      .fields {
-        display: grid;
-        gap: 0.75rem;
-        border: 0;
-        padding: 1rem 0;
-        max-width: 640px;
-      }
-      .actions {
-        display: flex;
-        gap: 0.5rem;
-      }
-      .error {
-        color: var(--mat-sys-error, #b3261e);
-      }
-      code {
-        overflow-wrap: anywhere;
-      }
-    `,
-  ],
+  styleUrl: "./deployment-access.component.scss",
 })
 export class DeploymentAccessComponent implements OnInit {
   readonly instanceId = input.required<string>();

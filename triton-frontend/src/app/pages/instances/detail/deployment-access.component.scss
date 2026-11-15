@@ -1,0 +1,153 @@
+:host {
+  display: block;
+  color: var(--ink-900, #0f172a);
+}
+.endpoint-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.hint {
+  margin: 10px 0 0;
+  color: #475569;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.endpoint-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.endpoint-url {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid #dbe4ed;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.endpoint-url code {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.authentication {
+  padding: 20px 0 0;
+  border-top: 1px solid #e2e8f0;
+}
+.authentication p {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+button[mat-stroked-button] {
+  background: #fff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+button.endpoint-primary {
+  background: #0f766e;
+  color: #fff;
+  box-shadow: 0 2px 4px #0f766e20;
+}
+button.endpoint-primary:hover:not(:disabled) {
+  background: #115e59;
+}
+button[mat-stroked-button]:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+button:focus-visible {
+  outline: 3px solid #0d9488;
+  outline-offset: 3px;
+}
+button:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.material-icons {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+.fields {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 24px 0 0;
+  padding: 24px 0 0;
+  min-width: 0;
+}
+.fields legend {
+  padding: 0 8px 0 0;
+  font-weight: 650;
+}
+.fields p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.error {
+  color: #b91c1c;
+}
+code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .endpoint-header > div {
+    width: 100%;
+  }
+  .endpoint-url {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .endpoint-header > button,
+  .actions button {
+    flex: 1;
+  }
+}
