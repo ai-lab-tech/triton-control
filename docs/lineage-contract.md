@@ -44,3 +44,30 @@ preserve one winner, and rollback/retry preserves transaction semantics. All nin
 lineage unit/integration tests passed. Run the opt-in integration suite with
 `LINEAGE_TEST_DATABASE_URL` set to a disposable PostgreSQL database; each test uses
 and removes its own random schema. No Kubernetes workload is needed for this contract.
+
+## Required semantic validation for all consumers
+
+The JSON Schemas describe structural wire formats. Schema validation alone is
+insufficient: every consumer must enforce the following rules before accepting
+or hashing a document. Python reference: `app/schemas/lineage.py` and
+`app/services/lineage.py`.
+
+- Paths must be nonempty NFC relative POSIX paths. Reject empty, `.` and `..`
+  components, backslashes, colons and characters below U+0020. Reject duplicate
+  inventory paths; sizes must be nonnegative integers.
+- Attempt origins must be unique. The first input inventory must match the
+  snapshot inventory; subsequent inputs must match the preceding output. The
+  candidate output must match the final attempt. Reject self-predecessors.
+- Publication must authorize the caller, require every referenced inventory by
+  its canonical digest, require an existing predecessor when specified, and reject
+  conflicting content under an existing origin. These are contextual checks that
+  JSON Schema cannot perform.
+- Canonical hashing must include model defaults and nulls, sort inventory entries
+  by UTF-8 path bytes, preserve attempt order, and use the JSON encoding above.
+- Capture must reject symlinks, hard links and special files and use frozen inputs.
+  A valid document does not prove file authenticity or truthful provenance.
+
+For example, `../weights` passes the structural inventory schema but must be
+rejected by consumers. A structurally valid candidate with a broken attempt chain
+must also be rejected. Implementations in other languages must apply these rules
+in addition to JSON Schema; schema validation is never publication approval.

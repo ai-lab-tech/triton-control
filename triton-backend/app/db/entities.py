@@ -484,3 +484,19 @@ class ServingCandidateEntity(SQLModel, table=True):
     digest: str
     payload: str = Field(sa_column=Column(Text, nullable=False))
     inventories: str = Field(sa_column=Column(Text, nullable=False))
+
+
+class BuildQualificationEntity(SQLModel, table=True):
+    """Local qualification attempts, including failures; secrets stay in Kubernetes."""
+
+    __tablename__ = "build_qualifications"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    policy_hash: str = Field(index=True)
+    fixture_revision: str
+    executor_image: str
+    platform: str
+    passed: bool = False
+    checks: dict[str, bool] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    evidence_path: str
+    evidence_sha256: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
