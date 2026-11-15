@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     paths:
       - "triton-backend/**"
+      - "contracts/candidate-import/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -17,6 +18,7 @@ on:
     branches: ["main"]
     paths:
       - "triton-backend/**"
+      - "contracts/candidate-import/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -94,6 +96,83 @@ jobs:
         env:
           BUILD_QUALIFICATION_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: python -m unittest tests.test_build_qualification -v
+
+  candidate-import-postgres-s3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: candidate_test
+          POSTGRES_PASSWORD: candidate_test
+          POSTGRES_DB: candidate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U candidate_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend
+        working-directory: triton-backend
+        run: pip install -e ".[dev]"
+      - name: Check shared importer schemas
+        working-directory: triton-backend
+        run: |
+          python scripts/export_candidate_import_schema.py
+          git diff --exit-code -- ../contracts/candidate-import
+      # Build the exact source revision used for local MinIO verification. This
+      # avoids relying on mutable or retired vendor container tags in CI.
+      - uses: actions/checkout@v4
+        with:
+          repository: minio/minio
+          ref: 07c3a429bfed433e49018cb0f78a52145d4bedeb
+          path: .ci-minio
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.6"
+          cache-dependency-path: .ci-minio/go.sum
+      - name: Build test S3 server
+        working-directory: .ci-minio
+        run: go build -o "$RUNNER_TEMP/minio" .
+      - name: Start isolated S3 server
+        env:
+          MINIO_ROOT_USER: candidate_test
+          MINIO_ROOT_PASSWORD: candidate_test_password
+        run: |
+          "$RUNNER_TEMP/minio" server "$RUNNER_TEMP/candidate-s3-data" --address 127.0.0.1:9000 > "$RUNNER_TEMP/candidate-s3.log" 2>&1 &
+          python - <<'PY'
+          import time
+          from urllib.request import urlopen
+          for attempt in range(60):
+              try:
+                  with urlopen("http://127.0.0.1:9000/minio/health/ready", timeout=2) as response:
+                      if response.status == 200:
+                          break
+              except OSError:
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("Test S3 server did not become ready")
+          PY
+      - name: Verify import, concurrency, retention and recovery
+        working-directory: triton-backend
+        env:
+          CANDIDATE_IMPORT_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
+          LINEAGE_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
+          CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+        run: |
+          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_lineage tests.test_lineage_postgres -v
+      - name: Upload S3 diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-import-s3-diagnostics
+          path: ${{ runner.temp }}/candidate-s3.log
 
   workspace-connections-smoke:
     runs-on: ubuntu-latest

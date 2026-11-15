@@ -330,3 +330,5 @@ failure. It creates no resources and prints no tokens.
 See [Durable operations](durable-operations.md) for the shared background-operation adapter contract and recovery tests.
 
 See [Preparation tasks](preparation-tasks.md) for the engineering queue, revision-checked claims, retained history and PostgreSQL concurrency tests.
+
+See [Prepared repository import](candidate-import.md) for the neutral importer, artifact stores and PostgreSQL/S3 recovery tests.

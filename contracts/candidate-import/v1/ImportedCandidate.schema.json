@@ -1,0 +1,385 @@
+{
+  "$defs": {
+    "ArtifactLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "directory",
+            "s3"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "reference": {
+          "additionalProperties": true,
+          "title": "Reference",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "reference"
+      ],
+      "title": "ArtifactLocation",
+      "type": "object"
+    },
+    "EngineeringAttempt": {
+      "additionalProperties": false,
+      "properties": {
+        "input_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Inventory",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "packaging",
+            "conversion",
+            "optimization",
+            "validation"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "output_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Inventory",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "origin",
+        "operation",
+        "input_inventory",
+        "output_inventory"
+      ],
+      "title": "EngineeringAttempt",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "digest"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "InventoryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FileEntry"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "InventoryV1",
+      "type": "object"
+    },
+    "ModelInventory": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "title": "Backend",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "backend",
+        "versions"
+      ],
+      "title": "ModelInventory",
+      "type": "object"
+    },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "record_id"
+      ],
+      "title": "Origin",
+      "type": "object"
+    },
+    "PluginReference": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "mlflow",
+            "hf",
+            "generator"
+          ],
+          "title": "Provider",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "installation_id",
+        "record_id"
+      ],
+      "title": "PluginReference",
+      "type": "object"
+    },
+    "ServingCandidateV1": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/EngineeringAttempt"
+          },
+          "minItems": 1,
+          "title": "Attempts",
+          "type": "array"
+        },
+        "derived_from_snapshot": {
+          "$ref": "#/$defs/Snapshot"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "output_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Inventory",
+          "type": "string"
+        },
+        "plugin_references": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginReference"
+          },
+          "title": "Plugin References",
+          "type": "array"
+        },
+        "previous_serving_candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "origin",
+        "derived_from_snapshot",
+        "attempts",
+        "output_inventory"
+      ],
+      "title": "ServingCandidateV1",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventory",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "manual",
+            "git",
+            "hf",
+            "mlflow"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        }
+      },
+      "required": [
+        "origin",
+        "kind",
+        "inventory"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "$ref": "#/$defs/ArtifactLocation"
+    },
+    "candidate": {
+      "$ref": "#/$defs/ServingCandidateV1"
+    },
+    "candidate_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidate Digest",
+      "type": "string"
+    },
+    "completeness": {
+      "enum": [
+        "evaluation_inputs_missing",
+        "evaluation_inputs_declared"
+      ],
+      "title": "Completeness",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "inventory": {
+      "$ref": "#/$defs/InventoryV1"
+    },
+    "metadata_inventory": {
+      "$ref": "#/$defs/InventoryV1"
+    },
+    "missing_evaluation_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Evaluation Inputs",
+      "type": "array"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelInventory"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "owner_user_id": {
+      "title": "Owner User Id",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_receipt": {
+      "additionalProperties": true,
+      "title": "Source Receipt",
+      "type": "object"
+    },
+    "task_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Task Id"
+    }
+  },
+  "required": [
+    "candidate",
+    "candidate_digest",
+    "inventory",
+    "metadata_inventory",
+    "models",
+    "missing_evaluation_inputs",
+    "completeness",
+    "artifacts",
+    "source_receipt",
+    "owner_user_id",
+    "task_id",
+    "created_at"
+  ],
+  "title": "ImportedCandidate",
+  "type": "object"
+}
