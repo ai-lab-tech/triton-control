@@ -199,7 +199,8 @@ class DeploymentAdapter:
             # Cleanup of previously admitted work remains available after mode cutover.
             intent = intents.for_instance(session, instance.id or 0)
             row = operations.get(session, intent.operation_id) if intent else None
-            if not (row and row.cancel_requested):
+            cleanup = action == "cancel" or (action == "execute" and row is not None and row.cancel_requested)
+            if not cleanup:
                 development_only()
 
     def authorize_operation(

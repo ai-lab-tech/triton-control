@@ -211,6 +211,37 @@ class DeploymentOperationTests(unittest.TestCase):
         self.step(other.operation_id)
         self.assertEqual(self.step(other.operation_id).state, "cancelled")
 
+    def test_production_cutover_allows_authorized_cancellation_and_cleanup(self):
+        # Arrange: admit and partially execute in development.
+        result = self.submit()
+        self.step(result.operation_id)
+        writes = self.provider.writes
+        with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "production"}):
+            # Act: request cancellation only after the mode changes.
+            with Session(self.engine) as session:
+                cancelled = self.service.cancel(session, self.claims, result.operation_id)
+            self.step(result.operation_id)
+            self.step(result.operation_id)
+            outcome = self.step(result.operation_id)
+            # Assert: cleanup finishes without creating additional resources.
+            self.assertTrue(cancelled.cancel_requested)
+            self.assertEqual(outcome.state, "cancelled")
+            self.assertEqual(self.provider.writes, writes)
+            self.assertTrue(self.provider.deletes)
+            with self.assertRaises(ForbiddenError):
+                self.submit(request=self.request.model_copy(update={"deployment_name": "new"}))
+            with Session(self.engine) as session, self.assertRaises(ForbiddenError):
+                self.service.retry(session, self.claims, result.operation_id)
+
+    def test_production_cancellation_still_requires_instance_access(self):
+        # Arrange
+        result = self.submit()
+        with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "production"}), Session(self.engine) as session:
+            # Act / Assert
+            with self.assertRaises(ForbiddenError):
+                self.service.cancel(session, {"email": "ben@test.invalid"}, result.operation_id)
+            self.assertFalse(repo.get(session, result.operation_id).cancel_requested)
+
     def test_current_permissions_and_production_mode_prevent_writes(self):
         result = self.submit()
         with Session(self.engine) as session:
