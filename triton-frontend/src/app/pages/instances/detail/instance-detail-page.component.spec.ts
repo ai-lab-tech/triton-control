@@ -16,6 +16,8 @@ import { InstanceDetailPageComponent } from "./instance-detail-page.component";
 import {
   selectDetailInstance,
   selectDetailLoading,
+  selectDetailError,
+  selectDetailErrorStatus,
 } from "../../../state/instances-detail/instances-detail.selectors";
 import {
   instanceDetailPageOpened,
@@ -739,5 +741,20 @@ describe("InstanceDetailPageComponent", () => {
     expect(
       instancesApiMock.loadInstanceModelApiInstancesInstanceIdModelsModelNameLoadPost,
     ).not.toHaveBeenCalled();
+  });
+  it("distinguishes an initial backend outage from a missing instance", () => {
+    mockStore.overrideSelector(selectDetailInstance, null);
+    mockStore.overrideSelector(selectDetailLoading, false);
+    mockStore.overrideSelector(selectDetailError, "Connection to the backend is unavailable.");
+    const status = mockStore.overrideSelector(selectDetailErrorStatus, 502);
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+    const component = fixture.componentInstance;
+    component.loadRequested.set(true);
+    expect(component.showNotFound()).toBeFalse();
+    expect(component.canWriteInstances()).toBeFalse();
+    status.setResult(404);
+    mockStore.refreshState();
+    expect(component.showNotFound()).toBeTrue();
+    fixture.destroy();
   });
 });

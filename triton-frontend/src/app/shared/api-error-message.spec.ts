@@ -50,9 +50,9 @@ describe("mapApiErrorMessage", () => {
   });
 
   it("HttpError_ErrorIsStringBody_ReturnsBodyString", () => {
-    const error = new HttpErrorResponse({ status: 503, error: "Service Unavailable" });
+    const error = new HttpErrorResponse({ status: 400, error: "Invalid request" });
     const result = mapApiErrorMessage(error, "fallback");
-    expect(result).toBe("Service Unavailable");
+    expect(result).toBe("Invalid request");
   });
 
   it("HttpError_NoBodyButHasMessage_ReturnsMessage", () => {
@@ -70,4 +70,12 @@ describe("mapApiErrorMessage", () => {
     const result = mapApiErrorMessage("some string error", "default");
     expect(result).toBe("default");
   });
+  for (const status of [0, 502, 503, 504]) {
+    it(`shows an English connection error for status ${status}`, () => {
+      const error = new HttpErrorResponse({ status, error: "<html>Gateway error</html>" });
+      expect(mapApiErrorMessage(error, "fallback")).toBe(
+        "Connection to the backend is unavailable. Please try again.",
+      );
+    });
+  }
 });

@@ -1,4 +1,5 @@
 """Versioned, I/O-free workload and bounded log response contracts."""
+
 from datetime import datetime
 from typing import Literal
 

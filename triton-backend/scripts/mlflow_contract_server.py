@@ -15,9 +15,10 @@ import socket
 import sys
 import tempfile
 from contextlib import ExitStack
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class FixtureS3Client:
@@ -54,6 +55,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="mlflow-contract-") as temporary, ExitStack() as stack:
         os.environ["DATABASE_URL"] = f"sqlite:///{Path(temporary) / 'backend.db'}"
         os.environ["JWT_SECRET"] = secrets.token_urlsafe(32)
+        os.environ["OPERATION_SECRET_ENCRYPTION_KEY"] = secrets.token_urlsafe(32)
 
         import uvicorn
         from fastapi import FastAPI
@@ -67,6 +69,11 @@ def main() -> None:
         from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
         from app.schemas.deployment import CreateDeploymentRequest
         from app.services.deployment import deployment, examples, kubernetes, mlflow
+        from app.services.deployment import operations as durable
+        from app.repositories import deployment_intents, operations
+        from app.schemas.operations import ReconcileResult
+        from app.services.operations import OperationService, OperationWorker
+        from app.core.operation_secrets import decode
 
         stack.callback(engine.dispose)
         SQLModel.metadata.create_all(engine)
@@ -129,22 +136,52 @@ def main() -> None:
                 row = session.get(TritonInstanceEntity, _instance_id)
                 assert row is not None
                 applied[-1]["inference_examples"] = row.inference_examples
+                applied[-1]["url"] = row.url
 
         class ReadyTriton:
-            def __init__(self, *_args: object, **_kwargs: object) -> None:
-                pass
+            def __init__(self, url: str, *_args: object, **_kwargs: object) -> None:
+                self.url = url
 
             async def is_ready(self) -> bool:
-                return True
+                return any(item["url"] == self.url for item in applied)
 
             async def get_repository_index(self) -> list[dict[str, str]]:
                 return [{"name": "classifier", "state": "READY"}]
 
-        stack.enter_context(patch.object(kubernetes, "apply_deployment_resources", side_effect=record_apply))
+        operation_service = OperationService()
+        operation_service.register(deployment_intents.KIND, durable.adapter)
+        stack.enter_context(patch.object(durable, "service", operation_service))
+        stack.enter_context(patch.object(durable, "DeploymentProvider", return_value=MagicMock()))
+        stack.enter_context(patch.object(durable, "in_cluster_namespace", return_value="fixture"))
+        stack.enter_context(patch.object(operations, "now", lambda _: datetime.now(timezone.utc).replace(tzinfo=None)))
+        original_reconcile = durable.adapter.reconcile
+
+        def reconcile(operation: Any, context: Any) -> ReconcileResult:
+            outcome = original_reconcile(operation, context)
+            if outcome.state == "succeeded":
+                with Session(engine) as session:
+                    intent = deployment_intents.get(session, operation.id)
+                    assert intent is not None
+                    request = CreateDeploymentRequest.model_construct(**decode(intent.bundle_enc)["request"])
+                    record_apply(intent.instance_id, request)
+            return outcome
+
+        def advance(_provider: Any, operation: Any, intent: Any, *_args: Any) -> ReconcileResult:
+            if operation.cancel_requested:
+                intent.cleaned = True
+                return ReconcileResult(state="cancelled")
+            return ReconcileResult(state="succeeded")
+
+        stack.enter_context(patch.object(durable.adapter, "advance", side_effect=advance))
+        stack.enter_context(patch.object(durable.adapter, "reconcile", side_effect=reconcile))
         stack.enter_context(patch.object(kubernetes, "delete_namespace", return_value="Fixture namespace removed"))
         stack.enter_context(patch.object(deployment, "is_running_in_cluster", return_value=False))
         stack.enter_context(patch.object(mlflow, "TritonService", ReadyTriton))
         stack.enter_context(patch.object(examples, "require_s3_client", return_value=FixtureS3Client(artifact_root)))
+
+        worker = OperationWorker(operation_service, lambda: Session(engine))
+        worker.start()
+        stack.callback(worker.stop)
 
         app = FastAPI()
         app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(32))

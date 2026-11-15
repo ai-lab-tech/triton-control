@@ -32,6 +32,17 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
         },
     ):
         client = get_deploy_client("triton-control")
+
+        def delete_after_cleanup(deployment_name: str) -> Any:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    return client.delete_deployment(deployment_name)
+                except MlflowException as error:
+                    if "409" not in str(error) or "cleanup requested" not in str(error) or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(1)
+
         deployed = client.create_deployment(name, model_uri=model_uri, config=config)
         assert deployed["name"] == name and deployed["status"] == "ready", deployed
         assert client.get_deployment(name)["model_name"] == "classifier"
@@ -60,7 +71,7 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
         )
         assert shared["name"] == shared_name and shared["status"] == "ready", shared
         assert client.get_deployment(shared_name)["model_name"] == "classifier"
-        assert client.delete_deployment(shared_name)["status"] == "deleted"
+        assert delete_after_cleanup(shared_name)["status"] == "deleted"
 
         try:
             client.create_deployment(
@@ -70,7 +81,7 @@ def verify_deployment(model_uri: str, repository: Path, connection: dict[str, st
             assert "404" in str(error), str(error)
         else:
             raise AssertionError("A nonexistent S3 profile was accepted")
-        assert client.delete_deployment(name)["status"] == "deleted"
+        assert delete_after_cleanup(name)["status"] == "deleted"
         assert client.list_deployments() == []
     print(
         "Backend deployment lifecycle, requirements transfer, example capture, "

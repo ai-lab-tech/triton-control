@@ -1,4 +1,5 @@
 """Authorize instance access before reading workload state or container logs."""
+
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
@@ -45,8 +46,10 @@ def _target(instance: Any) -> tuple[str, str]:
 def get_pods(session: Session, claims: dict[str, Any], instance_id: int) -> InstancePods:
     instance = get_instance_or_404(session, instance_id, claims)
     result = InstancePods(
-        managed=_managed(instance), endpoint_live=instance.health_live,
-        endpoint_ready=instance.health_ready, endpoint_checked_at=instance.health_last_checked_at,
+        managed=_managed(instance),
+        endpoint_live=instance.health_live,
+        endpoint_ready=instance.health_ready,
+        endpoint_checked_at=instance.health_last_checked_at,
     )
     if not _managed(instance):
         result.message = "External endpoint: Kubernetes pod state is unavailable"
@@ -56,8 +59,18 @@ def get_pods(session: Session, claims: dict[str, Any], instance_id: int) -> Inst
     return result
 
 
-def get_logs(session: Session, claims: dict[str, Any], instance_id: int, *, pod_uid: str | None,
-             container: str | None, previous: bool, since: datetime | None, lines: int, byte_limit: int) -> PodLogs:
+def get_logs(
+    session: Session,
+    claims: dict[str, Any],
+    instance_id: int,
+    *,
+    pod_uid: str | None,
+    container: str | None,
+    previous: bool,
+    since: datetime | None,
+    lines: int,
+    byte_limit: int,
+) -> PodLogs:
     instance = get_instance_or_404(session, instance_id, claims)
     namespace, name = _target(instance)
     if since and (since.tzinfo is None or since > datetime.now(timezone.utc)):
@@ -92,7 +105,15 @@ def get_logs(session: Session, claims: dict[str, Any], instance_id: int, *, pod_
                 else:
                     try:
                         entry.text, entry.truncated = provider.logs(
-                            namespace, name, deployment.uid, pod, state.name, previous, since, lines, remaining,
+                            namespace,
+                            name,
+                            deployment.uid,
+                            pod,
+                            state.name,
+                            previous,
+                            since,
+                            lines,
+                            remaining,
                         )
                         remaining -= len(entry.text.encode("utf-8"))
                     except NotFoundError as exc:

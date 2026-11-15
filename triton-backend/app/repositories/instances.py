@@ -16,7 +16,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.db.entities import TritonInstanceEntity
+from app.db.entities import DeploymentIntentEntity, TritonInstanceEntity
 
 
 def find_by_id(session: Session, instance_id: int) -> TritonInstanceEntity | None:
@@ -72,5 +72,14 @@ def create(session: Session, **values: Any) -> TritonInstanceEntity:
 
 
 def delete(session: Session, instance: TritonInstanceEntity) -> None:
+    intent = session.exec(select(DeploymentIntentEntity).where(
+        DeploymentIntentEntity.instance_id == instance.id,
+    )).first()
+    if intent:
+        if not intent.cleaned:
+            from app.exceptions import ConflictError
+            raise ConflictError("Owned deployment cleanup must finish before instance deletion")
+        intent.reservation = None
+        session.add(intent)
     session.delete(instance)
     session.commit()

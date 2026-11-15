@@ -1,3 +1,4 @@
+import { DeploymentOperationComponent } from "../../../shared/deployment-operation.component";
 import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { HttpClient } from "@angular/common/http";
 import { MatSelectModule } from "@angular/material/select";
@@ -50,6 +51,8 @@ import {
 import {
   selectDetailInstance,
   selectDetailLoading,
+  selectDetailError,
+  selectDetailErrorStatus,
   selectDetailS3Saving,
   selectDetailTritonSaving,
 } from "../../../state/instances-detail/instances-detail.selectors";
@@ -59,6 +62,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    DeploymentOperationComponent,
     S3ProfileLabelComponent,
     DeploymentAccessComponent,
     WorkloadPanelComponent,
@@ -146,6 +150,8 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id"));
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
   readonly loading = toSignal(this.store.select(selectDetailLoading), { initialValue: false });
+  readonly loadError = toSignal(this.store.select(selectDetailError), { initialValue: null });
+  readonly loadErrorStatus = toSignal(this.store.select(selectDetailErrorStatus));
   readonly loadRequested = signal(false);
   readonly hasValidInstanceId = computed(() => {
     const id = (this.instanceId() ?? "").trim();
@@ -156,14 +162,13 @@ export class InstanceDetailPageComponent implements OnInit {
       this.hasValidInstanceId() && !this.instance() && (!this.loadRequested() || this.loading()),
   );
   readonly showNotFound = computed(
-    () =>
-      !this.hasValidInstanceId() || (this.loadRequested() && !this.loading() && !this.instance()),
+    () => !this.hasValidInstanceId() || this.loadErrorStatus() === 404,
   );
   readonly s3Saving = toSignal(this.store.select(selectDetailS3Saving), { initialValue: false });
   readonly tritonSaving = toSignal(this.store.select(selectDetailTritonSaving), {
     initialValue: false,
   });
-  readonly canWriteInstances = this.auth.canWriteInstances;
+  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && !this.loadError());
 
   readonly metadataJson = computed(() => {
     const metadata = this.instance()?.serverMetadata;

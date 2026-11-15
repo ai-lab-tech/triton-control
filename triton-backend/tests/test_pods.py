@@ -1,4 +1,5 @@
 """Ownership, rollout evidence, bounded log reads and HTTP authorization contracts."""
+
 import copy
 import unittest
 from types import SimpleNamespace
@@ -22,22 +23,48 @@ def owner(kind, uid, name="owner"):
 
 
 def fixtures():
-    dep = {"metadata": {"name": "serving", "uid": "dep-1", "generation": 3,
-                        "annotations": {provider.REVISION_KEY: "2"}},
-           "spec": {"replicas": 3, "template": {"metadata": {"annotations": {provider.RELEASE_KEY: "r2"}}}},
-           "status": {"observedGeneration": 3, "updatedReplicas": 2, "readyReplicas": 1, "availableReplicas": 1}}
-    rs = {"metadata": {"uid": "rs-1", "name": "owner", "ownerReferences": [owner("Deployment", "dep-1")],
-                       "annotations": {provider.REVISION_KEY: "2"}}}
-    pod = {"metadata": {"name": "pod-a", "uid": "pod-1", "creationTimestamp": "2026-01-01T00:00:00Z",
-                        "ownerReferences": [owner("ReplicaSet", "rs-1")],
-                        "annotations": {provider.RELEASE_KEY: "r2"}},
-           "spec": {"containers": [{"name": "triton", "image": "triton:test"}],
-                    "initContainers": [{"name": "download", "image": "sync:test"},
-                                       {"name": "sync", "image": "sync:test", "restartPolicy": "Always"}]},
-           "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "False"}],
-                      "containerStatuses": [{"name": "triton", "ready": False, "restartCount": 2,
-                                             "state": {"waiting": {"reason": "CrashLoopBackOff", "message": "crashed"}},
-                                             "lastState": {"terminated": {"reason": "OOMKilled"}}}]}}
+    dep = {
+        "metadata": {"name": "serving", "uid": "dep-1", "generation": 3, "annotations": {provider.REVISION_KEY: "2"}},
+        "spec": {"replicas": 3, "template": {"metadata": {"annotations": {provider.RELEASE_KEY: "r2"}}}},
+        "status": {"observedGeneration": 3, "updatedReplicas": 2, "readyReplicas": 1, "availableReplicas": 1},
+    }
+    rs = {
+        "metadata": {
+            "uid": "rs-1",
+            "name": "owner",
+            "ownerReferences": [owner("Deployment", "dep-1")],
+            "annotations": {provider.REVISION_KEY: "2"},
+        }
+    }
+    pod = {
+        "metadata": {
+            "name": "pod-a",
+            "uid": "pod-1",
+            "creationTimestamp": "2026-01-01T00:00:00Z",
+            "ownerReferences": [owner("ReplicaSet", "rs-1")],
+            "annotations": {provider.RELEASE_KEY: "r2"},
+        },
+        "spec": {
+            "containers": [{"name": "triton", "image": "triton:test"}],
+            "initContainers": [
+                {"name": "download", "image": "sync:test"},
+                {"name": "sync", "image": "sync:test", "restartPolicy": "Always"},
+            ],
+        },
+        "status": {
+            "phase": "Running",
+            "conditions": [{"type": "Ready", "status": "False"}],
+            "containerStatuses": [
+                {
+                    "name": "triton",
+                    "ready": False,
+                    "restartCount": 2,
+                    "state": {"waiting": {"reason": "CrashLoopBackOff", "message": "crashed"}},
+                    "lastState": {"terminated": {"reason": "OOMKilled"}},
+                }
+            ],
+        },
+    }
     return dep, rs, pod
 
 
@@ -67,14 +94,24 @@ class PodTests(unittest.TestCase):
         self.assertEqual(items[0].release, "r2")
         self.assertTrue(items[0].current_revision)
 
-    def test_rejects_unrelated_uids_despite_identical_labels(self):
+    def test_rejects_unrelated_pod_uids_despite_identical_labels(self):
+        # Arrange
         stranger = copy.deepcopy(self.pod)
         stranger["metadata"]["uid"] = "stranger"
         stranger["metadata"]["ownerReferences"][0]["uid"] = "unrelated"
         self.core.list_namespaced_pod.return_value = {"items": [stranger, self.pod]}
-        self.assertEqual([p.uid for p in self.reader.snapshot("ns", "serving")[1]], ["pod-1"])
+        # Act
+        _, items = self.reader.snapshot("ns", "serving")
+        # Assert
+        self.assertEqual([p.uid for p in items], ["pod-1"])
+
+    def test_rejects_replicaset_owned_by_old_deployment(self):
+        # Arrange
         self.rs["metadata"]["ownerReferences"][0]["uid"] = "old-deployment"
-        self.assertEqual(self.reader.snapshot("ns", "serving")[1], [])
+        # Act
+        _, items = self.reader.snapshot("ns", "serving")
+        # Assert
+        self.assertEqual(items, [])
 
     def test_controller_reference_required(self):
         self.rs["metadata"]["ownerReferences"][0]["controller"] = False
@@ -96,18 +133,46 @@ class PodTests(unittest.TestCase):
         self.assertFalse(p.current_revision)
         self.assertIsNone(p.release)
 
-    def test_gpu_shortage_image_pull_and_init_failure(self):
+    def test_gpu_shortage_exposes_scheduling_reason(self):
+        # Arrange
         self.pod["status"].pop("containerStatuses")
-        self.pod["status"]["conditions"] = [{"type": "PodScheduled", "status": "False",
-                                              "reason": "Unschedulable", "message": "Insufficient nvidia.com/gpu"}]
-        self.assertIn("nvidia.com/gpu", self.reader.snapshot("ns", "serving")[1][0].message)
+        self.pod["status"]["conditions"] = [
+            {
+                "type": "PodScheduled",
+                "status": "False",
+                "reason": "Unschedulable",
+                "message": "Insufficient nvidia.com/gpu",
+            }
+        ]
+        # Act
+        _, items = self.reader.snapshot("ns", "serving")
+        # Assert
+        self.assertEqual(items[0].reason, "Unschedulable")
+        self.assertIn("nvidia.com/gpu", items[0].message)
+
+    def test_init_image_pull_failure_exposes_reason(self):
         for reason in ["ImagePullBackOff", "ErrImagePull"]:
-            self.pod["status"]["initContainerStatuses"] = [{"name": "download",
-                "state": {"waiting": {"reason": reason}}}]
-            self.assertEqual(self.reader.snapshot("ns", "serving")[1][0].reason, reason)
-        self.pod["status"]["initContainerStatuses"] = [{"name": "download",
-            "state": {"terminated": {"reason": "Error", "exitCode": 1}}}]
-        self.assertEqual(self.reader.snapshot("ns", "serving")[1][0].reason, "Error")
+            with self.subTest(reason=reason):
+                # Arrange
+                self.pod["status"].pop("containerStatuses", None)
+                self.pod["status"]["initContainerStatuses"] = [
+                    {"name": "download", "state": {"waiting": {"reason": reason}}}
+                ]
+                # Act
+                _, items = self.reader.snapshot("ns", "serving")
+                # Assert
+                self.assertEqual(items[0].reason, reason)
+
+    def test_init_nonzero_exit_exposes_failure(self):
+        # Arrange
+        self.pod["status"].pop("containerStatuses")
+        self.pod["status"]["initContainerStatuses"] = [
+            {"name": "download", "state": {"terminated": {"reason": "Error", "exitCode": 1}}}
+        ]
+        # Act
+        _, items = self.reader.snapshot("ns", "serving")
+        # Assert
+        self.assertEqual(items[0].reason, "Error")
 
     def test_deployment_changed_during_observation(self):
         newer = copy.deepcopy(self.dep)
@@ -117,7 +182,9 @@ class PodTests(unittest.TestCase):
 
     def test_paginated_resource_list(self):
         self.core.list_namespaced_pod.side_effect = [
-            {"items": [], "metadata": {"continue": "next"}}, {"items": [self.pod]}]
+            {"items": [], "metadata": {"continue": "next"}},
+            {"items": [self.pod]},
+        ]
         self.assertEqual(len(self.reader.snapshot("ns", "serving")[1]), 1)
         self.assertEqual(self.core.list_namespaced_pod.call_args.kwargs["_continue"], "next")
 
@@ -158,9 +225,15 @@ class PodTests(unittest.TestCase):
 class PodApiTests(unittest.TestCase):
     def setUp(self):
         pods._log_reads.clear()
-        instance = SimpleNamespace(is_self_deployed=True, deployment_runtime="kubernetes",
-                                   deployment_namespace="ns", deployment_name="serving",
-                                   health_live=True, health_ready=False, health_last_checked_at=None)
+        instance = SimpleNamespace(
+            is_self_deployed=True,
+            deployment_runtime="kubernetes",
+            deployment_namespace="ns",
+            deployment_name="serving",
+            health_live=True,
+            health_ready=False,
+            health_last_checked_at=None,
+        )
         self.instance = instance
         self.access = patch.object(pods, "get_instance_or_404", return_value=instance).start()
         self.addCleanup(patch.stopall)
@@ -217,8 +290,11 @@ class PodApiTests(unittest.TestCase):
         self.provider.logs.assert_not_called()
 
     def test_all_containers_partial_failure_and_previous(self):
-        self.provider.logs.side_effect = [("2026-01-01T00:00:00Z init", False), ApiException(status=400),
-                                         ("2026-01-01T00:00:01Z runtime", False)]
+        self.provider.logs.side_effect = [
+            ("2026-01-01T00:00:00Z init", False),
+            ApiException(status=400),
+            ("2026-01-01T00:00:01Z runtime", False),
+        ]
         r = self.http.get("/api/instances/1/pod-logs?previous=true")
         self.assertEqual(r.status_code, 200)
         streams = r.json()["streams"]
@@ -233,8 +309,14 @@ class PodApiTests(unittest.TestCase):
         self.assertEqual(self.http.get("/api/instances/1/pod-logs").status_code, 429)
 
     def test_line_byte_since_bounds(self):
-        for query in ["lines=2001", "lines=0", "byte_limit=1048577", "byte_limit=0",
-                      "since=2026-01-01T00:00:00", "since=2999-01-01T00:00:00Z"]:
+        for query in [
+            "lines=2001",
+            "lines=0",
+            "byte_limit=1048577",
+            "byte_limit=0",
+            "since=2026-01-01T00:00:00",
+            "since=2999-01-01T00:00:00Z",
+        ]:
             self.assertEqual(self.http.get("/api/instances/1/pod-logs?" + query).status_code, 422, query)
         self.provider.logs.assert_not_called()
 

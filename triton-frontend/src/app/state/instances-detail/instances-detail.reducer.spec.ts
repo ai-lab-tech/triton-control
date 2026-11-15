@@ -5,6 +5,7 @@ import {
   instanceDetailLoaded,
   instanceDetailLoadFailed,
   instanceDetailRefreshed,
+  instanceDetailRefreshFailed,
   s3ConfigSaveRequested,
   s3ConfigDisableRequested,
   s3ConfigSaveSucceeded,
@@ -168,5 +169,38 @@ describe("instancesDetailReducer", () => {
       s3ConfigDisableSucceeded({ s3: EMPTY_S3 }),
     );
     expect(state.instance).toBeNull();
+  });
+  it("keeps cached data on an outage and clears the error after recovery", () => {
+    const failed = instancesDetailReducer(
+      { ...initialInstancesDetailState, instance: MOCK_INSTANCE },
+      instanceDetailRefreshFailed({ message: "Backend unavailable", status: 502 }),
+    );
+    expect(failed.instance).toBe(MOCK_INSTANCE);
+    expect(failed.errorStatus).toBe(502);
+    const recovered = instancesDetailReducer(
+      failed,
+      instanceDetailRefreshed({ partial: { models: 3 } }),
+    );
+    expect(recovered.error).toBeNull();
+    expect(recovered.errorStatus).toBeNull();
+    expect(recovered.instance!.models).toBe(3);
+  });
+
+  it("recovers from an initial outage and distinguishes a real 404", () => {
+    const failed = instancesDetailReducer(
+      initialInstancesDetailState,
+      instanceDetailLoadFailed({ message: "Backend unavailable", status: 503 }),
+    );
+    const recovered = instancesDetailReducer(
+      failed,
+      instanceDetailRefreshed({ partial: {}, instance: MOCK_INSTANCE }),
+    );
+    expect(recovered.instance).toBe(MOCK_INSTANCE);
+    const missing = instancesDetailReducer(
+      recovered,
+      instanceDetailRefreshFailed({ message: "Not found", status: 404 }),
+    );
+    expect(missing.instance).toBeNull();
+    expect(missing.errorStatus).toBe(404);
   });
 });

@@ -1,0 +1,71 @@
+{
+  "$defs": {
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "record_id"
+      ],
+      "title": "Origin",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate": {
+      "$ref": "#/$defs/Origin"
+    },
+    "candidate_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Candidate Digest",
+      "type": "string"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "replaces_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Origin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "runtime_image": {
+      "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$",
+      "title": "Runtime Image",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "origin",
+    "candidate",
+    "candidate_digest",
+    "runtime_image"
+  ],
+  "title": "ReleaseLineageV1",
+  "type": "object"
+}

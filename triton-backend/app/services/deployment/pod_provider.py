@@ -1,4 +1,5 @@
 """Read Kubernetes evidence; never trust labels as an ownership boundary."""
+
 from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Literal
@@ -23,8 +24,10 @@ def controlled_by(obj: dict[str, Any], kind: str, uid: str) -> bool:
 
 
 def conditions(status: dict[str, Any]) -> list[PodCondition]:
-    return [PodCondition(**{k: row.get(k) for k in ("type", "status", "reason", "message")})
-            for row in status.get("conditions", [])]
+    return [
+        PodCondition(**{k: row.get(k) for k in ("type", "status", "reason", "message")})
+        for row in status.get("conditions", [])
+    ]
 
 
 def release(meta: dict[str, Any]) -> str | None:
@@ -46,13 +49,21 @@ def container_states(pod: dict[str, Any]) -> list[ContainerState]:
             kind: Literal["regular", "init", "sidecar"] = "regular"
             if default_kind == "init":
                 kind = "sidecar" if spec.get("restartPolicy") == "Always" else "init"
-            result.append(ContainerState(
-                name=spec["name"], kind=kind, ready=status.get("ready", False),
-                restart_count=status.get("restartCount", 0), state=state,
-                reason=detail.get("reason"), message=detail.get("message"), exit_code=detail.get("exitCode"),
-                last_termination_reason=((status.get("lastState") or {}).get("terminated") or {}).get("reason"),
-                image=spec.get("image"), image_id=status.get("imageID"),
-            ))
+            result.append(
+                ContainerState(
+                    name=spec["name"],
+                    kind=kind,
+                    ready=status.get("ready", False),
+                    restart_count=status.get("restartCount", 0),
+                    state=state,
+                    reason=detail.get("reason"),
+                    message=detail.get("message"),
+                    exit_code=detail.get("exitCode"),
+                    last_termination_reason=((status.get("lastState") or {}).get("terminated") or {}).get("reason"),
+                    image=spec.get("image"),
+                    image_id=status.get("imageID"),
+                )
+            )
     return result
 
 
@@ -69,16 +80,25 @@ def pod_state(pod: dict[str, Any], replica_set: dict[str, Any], revision: str | 
     rs_revision = (replica_set["metadata"].get("annotations") or {}).get(REVISION_KEY)
     terminating = bool(meta.get("deletionTimestamp"))
     return PodState(
-        uid=meta["uid"], name=meta["name"], node=pod.get("spec", {}).get("nodeName"),
+        uid=meta["uid"],
+        name=meta["name"],
+        node=pod.get("spec", {}).get("nodeName"),
         phase=status.get("phase", "Unknown"),
         ready=not terminating and any(c.type == "Ready" and c.status == "True" for c in conds),
-        terminating=terminating, created_at=meta.get("creationTimestamp"),
-        restarts=sum(c.restart_count for c in cs), release=release(meta), revision=rs_revision,
+        terminating=terminating,
+        created_at=meta.get("creationTimestamp"),
+        restarts=sum(c.restart_count for c in cs),
+        release=release(meta),
+        revision=rs_revision,
         current_revision=bool(revision and rs_revision == revision),
-        reason=status.get("reason") or (failure.reason if failure else None)
+        reason=status.get("reason")
+        or (failure.reason if failure else None)
         or (condition.reason if condition else None),
-        message=status.get("message") or (failure.message if failure else None)
-        or (condition.message if condition else None), conditions=conds, containers=cs,
+        message=status.get("message")
+        or (failure.message if failure else None)
+        or (condition.message if condition else None),
+        conditions=conds,
+        containers=cs,
     )
 
 
@@ -108,8 +128,11 @@ class PodProvider:
     def snapshot(self, namespace: str, name: str) -> tuple[DeploymentState, list[PodState]]:
         deployment = self.deployment(namespace, name)
         meta, status = deployment["metadata"], deployment.get("status", {})
-        sets = {r["metadata"]["uid"]: r for r in self.items(self.apps.list_namespaced_replica_set, namespace)
-                if controlled_by(r, "Deployment", meta["uid"])}
+        sets = {
+            r["metadata"]["uid"]: r
+            for r in self.items(self.apps.list_namespaced_replica_set, namespace)
+            if controlled_by(r, "Deployment", meta["uid"])
+        }
         revision = (meta.get("annotations") or {}).get(REVISION_KEY)
         pods = []
         for pod in self.items(self.core.list_namespaced_pod, namespace):
@@ -123,12 +146,18 @@ class PodProvider:
         generation = meta.get("generation", 0)
         observed = status.get("observedGeneration")
         state = DeploymentState(
-            uid=meta["uid"], name=meta["name"], generation=generation, observed_generation=observed,
+            uid=meta["uid"],
+            name=meta["name"],
+            generation=generation,
+            observed_generation=observed,
             stale=observed is None or observed < generation or after["metadata"].get("generation") != generation,
-            desired=deployment.get("spec", {}).get("replicas", 1), updated=status.get("updatedReplicas", 0),
-            ready=status.get("readyReplicas", 0), available=status.get("availableReplicas", 0),
+            desired=deployment.get("spec", {}).get("replicas", 1),
+            updated=status.get("updatedReplicas", 0),
+            ready=status.get("readyReplicas", 0),
+            available=status.get("availableReplicas", 0),
             release=release(deployment.get("spec", {}).get("template", {}).get("metadata", {})),
-            revision=revision, conditions=conditions(status),
+            revision=revision,
+            conditions=conditions(status),
         )
         return state, sorted(pods, key=lambda p: (p.name, p.uid))
 
@@ -146,13 +175,30 @@ class PodProvider:
         if self.deployment(namespace, name)["metadata"]["uid"] != deployment_uid:
             raise NotFoundError("Deployment was replaced; refresh pod state")
 
-    def logs(self, namespace: str, deployment_name: str, deployment_uid: str, pod: PodState,
-             container: str, previous: bool, since: datetime | None, lines: int, byte_limit: int) -> tuple[str, bool]:
+    def logs(
+        self,
+        namespace: str,
+        deployment_name: str,
+        deployment_uid: str,
+        pod: PodState,
+        container: str,
+        previous: bool,
+        since: datetime | None,
+        lines: int,
+        byte_limit: int,
+    ) -> tuple[str, bool]:
         self.verify(namespace, deployment_name, deployment_uid, pod)
         response = self.core.read_namespaced_pod_log(
-            pod.name, namespace, container=container, previous=previous, timestamps=True, follow=False,
+            pod.name,
+            namespace,
+            container=container,
+            previous=previous,
+            timestamps=True,
+            follow=False,
             since_seconds=max(1, ceil((datetime.now(timezone.utc) - since).total_seconds())) if since else None,
-            tail_lines=lines, limit_bytes=byte_limit, _request_timeout=TIMEOUT,
+            tail_lines=lines,
+            limit_bytes=byte_limit,
+            _request_timeout=TIMEOUT,
             _preload_content=False,
         )
         try:
@@ -192,14 +238,15 @@ def read_legacy_logs(namespace: str, name: str) -> str:
                 label = f"pod/{pod.name} uid/{pod.uid} container/{container.name}"
                 if pod.phase in {"Failed", "Succeeded"}:
                     chunks.append(f"--- {label} status ---\n{pod.phase}: {pod.reason or ''} {pod.message or ''}")
-                for previous in ([True, False] if container.name == "triton" else [False]):
+                for previous in [True, False] if container.name == "triton" else [False]:
                     if remaining <= 0:
                         chunks.append("[Log byte limit reached]")
                         break
                     suffix = " previous" if previous else ""
                     try:
-                        text, truncated = provider.logs(namespace, name, deployment.uid, pod, container.name,
-                                                        previous, None, 300, remaining)
+                        text, truncated = provider.logs(
+                            namespace, name, deployment.uid, pod, container.name, previous, None, 300, remaining
+                        )
                         remaining -= len(text.encode("utf-8"))
                         if text:
                             chunks.append(f"--- {label}{suffix} ---\n{text}")

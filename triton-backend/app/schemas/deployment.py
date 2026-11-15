@@ -237,7 +237,7 @@ def requirement_arguments(line: str) -> list[str]:
 
 
 class DeploymentResponse(SQLModel):
-    """Response after Kubernetes resources are applied."""
+    """Accepted creation, with compatible resource references and durable status."""
 
     instance_id: int
     namespace: str
@@ -247,6 +247,9 @@ class DeploymentResponse(SQLModel):
     image: str
     s3_url: str
     applied_resources: List[str]
+    operation_id: Optional[str] = None
+    status_url: Optional[str] = None
+    operation_state: Optional[str] = None
     external_url: Optional[str] = None
 
 

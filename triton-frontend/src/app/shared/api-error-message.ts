@@ -1,6 +1,13 @@
 import { HttpErrorResponse } from "@angular/common/http";
 
+export function isBackendUnavailable(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && [0, 502, 503, 504].includes(error.status);
+}
+
 export function mapApiErrorMessage(error: unknown, fallback: string): string {
+  if (isBackendUnavailable(error)) {
+    return "Connection to the backend is unavailable. Please try again.";
+  }
   if (error instanceof HttpErrorResponse) {
     const body = error.error as Record<string, unknown> | null;
     const detail = body?.["detail"];

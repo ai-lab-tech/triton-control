@@ -3,6 +3,7 @@ import { createFeature, createReducer, on } from "@ngrx/store";
 import { type Instance } from "../../pages/instances/instances.data";
 import {
   instanceDetailLoaded,
+  instanceDetailRefreshFailed,
   instanceDetailLoadFailed,
   instanceDetailPageOpened,
   instanceDetailRefreshed,
@@ -22,6 +23,7 @@ export interface InstancesDetailState {
   instance: Instance | null;
   loading: boolean;
   error: string | null;
+  errorStatus: number | null;
   s3Saving: boolean;
   tritonSaving: boolean;
 }
@@ -30,6 +32,7 @@ export const initialInstancesDetailState: InstancesDetailState = {
   instance: null,
   loading: false,
   error: null,
+  errorStatus: null,
   s3Saving: false,
   tritonSaving: false,
 };
@@ -44,19 +47,23 @@ export const instancesDetailReducer = createReducer(
     instance,
     loading: false,
     error: null,
+    errorStatus: null,
     s3Saving: false,
     tritonSaving: false,
   })),
-  on(instanceDetailLoadFailed, (_state, { message }) => ({
-    instance: null,
+  on(instanceDetailLoadFailed, instanceDetailRefreshFailed, (state, { message, status }) => ({
+    ...state,
+    instance: status === 404 || status === 403 || status === 401 ? null : state.instance,
     loading: false,
     error: message,
-    s3Saving: false,
-    tritonSaving: false,
+    errorStatus: status ?? null,
   })),
-  on(instanceDetailRefreshed, (state, { partial }) => ({
+  on(instanceDetailRefreshed, (state, { partial, instance }) => ({
     ...state,
-    instance: state.instance ? { ...state.instance, ...partial } : state.instance,
+    instance: state.instance ? { ...state.instance, ...partial } : (instance ?? null),
+    loading: false,
+    error: null,
+    errorStatus: null,
   })),
   on(instanceDetailSupplementLoaded, (state, { partial }) => ({
     ...state,

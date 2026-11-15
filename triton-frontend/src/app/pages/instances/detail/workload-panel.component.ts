@@ -229,7 +229,13 @@ export class WorkloadPanelComponent implements OnChanges {
     } catch (error) {
       if (request !== this.stateRequest) return;
       this.state.set(null);
+      // A pending response must not restore logs after access or state is lost.
+      this.logRequest++;
+      this.logsLoading.set(false);
+      this.pendingRead.set(false);
       this.logs.set(null);
+      this.lastLoaded.set(null);
+      this.logError.set("");
       this.error.set(mapApiErrorMessage(error, "Could not read pod state."));
     } finally {
       if (request === this.stateRequest) this.loading.set(false);

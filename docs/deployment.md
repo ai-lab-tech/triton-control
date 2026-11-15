@@ -816,3 +816,12 @@ The pod/log workspace requires ReplicaSet `get` and `list` permissions in additi
 to the existing Deployment, Pod and Pod log reads. Upgrade the Helm RBAC templates
 alongside the application image. No database migration is required. See
 [Pod state and container logs](pod-visibility.md) for contracts and upgrade notes.
+
+## Recoverable managed creation
+
+Managed development deployment creation returns `202` with an operation reference.
+The instance page shows progress and offers retry/cancel; acceptance is distinct from
+serving readiness. Keep the operation encryption key stable across restarts. Deleting
+a managed instance first requests owned-resource cleanup and returns `409`; retry
+deletion when cleanup completes. See [Durable operations](durable-operations.md) for
+upgrade instructions, configuration, client compatibility and recovery behavior.

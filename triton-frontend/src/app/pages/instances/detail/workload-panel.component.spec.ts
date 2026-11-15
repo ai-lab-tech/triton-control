@@ -173,6 +173,27 @@ describe("WorkloadPanelComponent", () => {
     expect(fixture.nativeElement.textContent).toContain("No instance access");
   });
 
+  it("discards in-flight logs after a pod refresh denies access", async () => {
+    // Arrange
+    await refresh();
+    const logRead = component.readLogs();
+    const logRequest = http.expectOne((r) => r.url.endsWith("/pod-logs"));
+    const stateRead = component.refresh();
+    // Act
+    http
+      .expectOne("/api/instances/47/pods")
+      .flush({ detail: "No instance access" }, { status: 403, statusText: "Forbidden" });
+    await stateRead;
+    logRequest.flush({ streams: [{ text: "stale output" }], truncated: false });
+    await logRead;
+    // Assert
+    expect(component.logs()).toBeNull();
+    expect(component.lastLoaded()).toBeNull();
+    expect(component.logsLoading()).toBeFalse();
+    expect(component.pendingRead()).toBeFalse();
+    expect(component.canRead()).toBeFalse();
+  });
+
   it("does not expose stale logs from an in-flight previous selection", async () => {
     await refresh();
     const pending = component.readLogs();

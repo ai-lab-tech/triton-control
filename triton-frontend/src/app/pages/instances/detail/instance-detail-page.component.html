@@ -1,5 +1,17 @@
+@if (loadError() && !showNotFound()) {
+  <div class="empty" role="alert">
+    <div>{{ loadError() }}</div>
+    @if (instance()) {
+      <div>Last known state. Updates and actions are temporarily unavailable.</div>
+    }
+    <a mat-stroked-button routerLink="/instances">Back to list</a>
+  </div>
+}
 @if (instance(); as instance) {
   <div class="instance-detail">
+    @if (instanceId(); as id) {
+      <app-deployment-operation [instanceId]="id" [connectionUnavailable]="!!loadError()" />
+    }
     <div class="detail-top">
       <nav class="page-breadcrumbs" aria-label="Breadcrumb">
         <a routerLink="/instances">Triton Instances</a>
@@ -389,11 +401,11 @@
                   <button
                     mat-stroked-button
                     type="button"
-                    class="network-copy-btn"
+                    class="network-copy-btn connection-edit-btn"
                     (click)="openTritonDialog()"
                   >
-                    <span class="material-icons">tune</span>
-                    Edit
+                    <span class="material-icons" aria-hidden="true">tune</span>
+                    Edit connection
                   </button>
                 }
               </div>
@@ -414,7 +426,7 @@
                     class="network-copy-btn"
                     (click)="copyBaseUrl(instance.url)"
                   >
-                    <span class="material-icons">content_copy</span>
+                    <span class="material-icons" aria-hidden="true">content_copy</span>
                     Copy
                   </button>
                 </span>
@@ -468,7 +480,7 @@
                 </div>
               }
               @if (copyBaseUrlMessage) {
-                <div class="panel-hint">{{ copyBaseUrlMessage }}</div>
+                <div class="panel-hint" role="status">{{ copyBaseUrlMessage }}</div>
               }
               @if (instance.healthError) {
                 <div class="panel-hint health-error">{{ instance.healthError }}</div>

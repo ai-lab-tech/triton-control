@@ -7,6 +7,7 @@
 @if (access(); as current) {
   <div class="endpoint-header">
     <div>
+      <span class="endpoint-eyebrow">Serving access</span>
       <h2>
         {{ current.access_mode === "ingress" ? "External endpoint" : "Cluster-only endpoint" }}
       </h2>
@@ -19,7 +20,14 @@
       </p>
     </div>
     @if (!editing() && canWrite()) {
-      <button mat-flat-button type="button" (click)="edit()" [disabled]="busy()">
+      <button
+        mat-flat-button
+        class="endpoint-primary"
+        type="button"
+        (click)="edit()"
+        [disabled]="busy()"
+      >
+        <span class="material-icons" aria-hidden="true">edit</span>
         Edit endpoint
       </button>
     }
@@ -32,6 +40,7 @@
       [cdkCopyToClipboard]="current.url"
       (cdkCopyToClipboardCopied)="copyMessage.set($event ? 'URL copied.' : 'Could not copy URL.')"
     >
+      <span class="material-icons" aria-hidden="true">content_copy</span>
       Copy URL
     </button>
   </div>
@@ -39,7 +48,7 @@
     <p role="status">{{ copyMessage() }}</p>
   }
   <div class="authentication">
-    <h3>Authentication</h3>
+    <h3><span class="material-icons" aria-hidden="true">shield</span>Authentication</h3>
     <p>
       {{
         current.basic_auth_enabled
@@ -137,7 +146,13 @@
       </p>
     }
     <div class="actions">
-      <button mat-flat-button type="button" (click)="save()" [disabled]="busy() || !valid()">
+      <button
+        mat-flat-button
+        class="endpoint-primary"
+        type="button"
+        (click)="save()"
+        [disabled]="busy() || !valid()"
+      >
         Save endpoint
       </button>
       <button mat-button type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>

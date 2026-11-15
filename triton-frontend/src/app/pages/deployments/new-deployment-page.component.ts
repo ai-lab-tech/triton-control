@@ -1,3 +1,6 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { AuthStore } from "../../shared/auth/auth.store";
 import { S3ProfileLabelComponent } from "../../shared/s3-profile-label.component";
 import { isEndpointHostname, resolvedEndpointHostname } from "../../shared/endpoint-hostname";
 import { Component, inject, signal } from "@angular/core";
@@ -73,6 +76,48 @@ export class NewDeploymentPageComponent {
     .trim()
     .replace(/\/$/, "");
 
+  private readonly auth = inject(AuthStore);
+  readonly previousInstance = signal<number | null>(null);
+  private get requestStorageKey(): string {
+    return `deployment-request:${this.auth.userEmail()}`;
+  }
+
+  private requestKey(payload: CreateDeploymentRequest): string {
+    // Works for existing HTTP development installations too (SubtleCrypto requires HTTPS).
+    const fingerprint = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(payload))));
+    let stored: { fingerprint?: string; key?: string } = {};
+    try {
+      stored = JSON.parse(sessionStorage.getItem(this.requestStorageKey) || "{}");
+    } catch {
+      /* new request */
+    }
+    const key =
+      stored.fingerprint === fingerprint && stored.key
+        ? stored.key
+        : bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    sessionStorage.setItem(
+      this.requestStorageKey,
+      JSON.stringify({ fingerprint, key, name: payload.deployment_name }),
+    );
+    return key;
+  }
+
+  private async recoverRequest(): Promise<void> {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(this.requestStorageKey) || "{}");
+      if (!stored.key || !stored.name) return;
+      const result = await firstValueFrom(
+        this.http.get<{ instance_id: number } | null>(
+          `${this.basePath}/api/deployments/requests/${encodeURIComponent(stored.key)}`,
+          { params: { deployment_name: stored.name } },
+        ),
+      );
+      this.previousInstance.set(result?.instance_id ?? null);
+    } catch {
+      /* The normal status page remains available when recovery is temporarily unavailable. */
+    }
+  }
+
   deploymentName = "";
   image = "nvcr.io/nvidia/tritonserver:26.06-py3";
   accessMode: "internal" | "ingress" = "internal";
@@ -138,6 +183,7 @@ export class NewDeploymentPageComponent {
   }
 
   constructor() {
+    void this.recoverRequest();
     void this.loadEndpointPolicy();
     void this.loadS3Profiles();
   }
@@ -310,10 +356,12 @@ export class NewDeploymentPageComponent {
     };
 
     try {
+      const key = this.requestKey(payload);
       const response = await firstValueFrom(
-        this.deploymentsApi.createDeploymentApiDeploymentsPost(payload),
+        this.deploymentsApi.createDeploymentApiDeploymentsPost(payload, key),
       );
-      this.setMessage("Deployment created.", "success");
+      this.setMessage("Deployment accepted. Waiting for serving readiness.", "info");
+      this.basicAuthPassword = "";
       if (response.instance_id) {
         void this.router.navigateByUrl(`/instances/${response.instance_id}`, {
           state: { openLogsOnce: true },
@@ -324,7 +372,6 @@ export class NewDeploymentPageComponent {
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to create deployment."), "error");
     } finally {
-      this.basicAuthPassword = "";
       this.deploying.set(false);
     }
   }

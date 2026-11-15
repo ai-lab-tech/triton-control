@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -142,6 +142,65 @@ class TeamEventEntity(SQLModel, table=True):
     subject_user_id: int | None = None
     action: str
     changes: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationTaskEntity(SQLModel, table=True):
+    """Engineering work item; execution states belong to separate attempts."""
+
+    __tablename__ = "preparation_tasks"
+    __table_args__ = (
+        CheckConstraint("revision > 0", name="ck_preparation_revision"),
+        CheckConstraint(
+            "state IN ('queued', 'claimed', 'awaiting_information', 'cancelled')",
+            name="ck_preparation_state",
+        ),
+        CheckConstraint("state != 'claimed' OR assignee_user_id IS NOT NULL", name="ck_preparation_claim"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    title: str = Field(sa_column=Column(String(200), nullable=False))
+    assigned_team_id: UUID = Field(foreign_key="teams.id", index=True)
+    # Historical identities survive user deletion; eligibility is checked on every use.
+    submitter_user_id: int = Field(index=True)
+    assignee_user_id: int | None = Field(default=None, index=True)
+    source_snapshot_id: UUID | None = None
+    state: str = Field(default="queued", index=True)
+    revision: int = 1
+    missing_inputs: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationTaskEventEntity(SQLModel, table=True):
+    """Append-only task history, written atomically with each revision."""
+
+    __tablename__ = "preparation_task_events"
+    __table_args__ = (UniqueConstraint("task_id", "revision", name="uq_preparation_event_revision"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    task_id: UUID = Field(foreign_key="preparation_tasks.id", index=True)
+    revision: int
+    actor_user_id: int
+    action: str
+    changes: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PreparationAttemptEntity(SQLModel, table=True):
+    """Immutable references to actual engineering attempts, never task status."""
+
+    __tablename__ = "preparation_attempts"
+    __table_args__ = (
+        UniqueConstraint("task_id", "installation_id", "record_id", name="uq_preparation_attempt_origin"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    task_id: UUID = Field(foreign_key="preparation_tasks.id", index=True)
+    installation_id: str = Field(sa_column=Column(String(256), nullable=False))
+    record_id: str = Field(sa_column=Column(String(256), nullable=False))
+    actor_user_id: int
+    attempt: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -473,6 +532,61 @@ class RegistryConfigEntity(SQLModel, table=True):
     __tablename__ = "registry_config"
     id: int = Field(default=1, primary_key=True)
     dockerconfigjson_enc: str = Field(default="", repr=False)
+
+
+class OperationEntity(SQLModel, table=True):
+    """Durable execution intent, separate from domain records."""
+
+    __tablename__ = "operations"
+    __table_args__ = (UniqueConstraint("actor_id", "kind", "target", "idempotency_key",
+                                       name="uq_operation_request"),)
+    id: str = Field(primary_key=True)
+    actor_id: int = Field(index=True)
+    kind: str = Field(max_length=80)
+    target: str = Field(max_length=256)
+    idempotency_key: str = Field(max_length=128)
+    payload_hash: str
+    payload: dict[str, Any] = Field(sa_column=Column(JSON))
+    state: str = Field(default="pending", index=True)
+    cancel_requested: bool = False
+    generation: int = 0
+    attempts: int = 0
+    worker: Optional[str] = None
+    lease_until: Optional[datetime] = None
+    available_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    message: str = ""
+
+
+class DeploymentIntentEntity(SQLModel, table=True):
+    """Frozen protected creation inputs and resource ownership; retained after deletion."""
+
+    __tablename__ = "deployment_intents"
+    operation_id: str = Field(primary_key=True, foreign_key="operations.id")
+    instance_id: int = Field(index=True, unique=True)
+    namespace: str
+    name: str
+    reservation: Optional[str] = Field(default=None, unique=True)
+    bundle_enc: str = Field(sa_column=Column(Text))
+    response: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    resource_uids: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
+    deadline_at: datetime
+    delete_requested: bool = False
+    cleaned: bool = False
+    examples_captured: bool = False
+
+
+class ServingCandidateEntity(SQLModel, table=True):
+    """Immutable candidate envelope and inventories; publication has no update path."""
+
+    __tablename__ = "serving_candidates"
+    installation_id: str = Field(primary_key=True)
+    record_id: str = Field(primary_key=True)
+    digest: str
+    payload: str = Field(sa_column=Column(Text, nullable=False))
+    inventories: str = Field(sa_column=Column(Text, nullable=False))
 
 
 class BuildQualificationEntity(SQLModel, table=True):
