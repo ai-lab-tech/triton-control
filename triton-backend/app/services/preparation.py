@@ -11,11 +11,13 @@ from uuid import UUID
 from sqlmodel import Session
 
 from app.core.identity import require_user_entity
-from app.db.entities import PreparationTaskEntity
+from app.db.entities import HandoffEntity, PreparationTaskEntity
 from app.exceptions import ConflictError, ForbiddenError
 from app.mappers.preparation import attempt_to_dto, event_to_dto, task_to_dto
+from app.repositories import handoffs as handoff_repository
 from app.repositories import preparation as repository
 from app.repositories import teams
+from app.schemas.handoffs import missing_evaluation_inputs
 from app.schemas.lineage import EngineeringAttempt
 from app.schemas.preparation import (
     AttemptDTO,
@@ -57,7 +59,27 @@ def _blocked(task: PreparationTaskEntity, eligible: set[int]) -> list[str]:
 def _dto(session: Session, task_id: UUID) -> TaskDTO:
     task = repository.get(session, task_id)
     eligible = set(teams.eligible_user_ids(session, task.assigned_team_id))
-    return task_to_dto(task, _blocked(task, eligible))
+    handoff = next(iter(handoff_repository.for_tasks(session, [task_id])), None)
+    return _task_dto(task, eligible, handoff)
+
+
+def _handoff_missing(handoff: HandoffEntity | None) -> list[str]:
+    if handoff is None:
+        return []
+    payload = handoff.payload
+    request = payload["request"]
+    return missing_evaluation_inputs(
+        payload["dataset"], payload["baseline"], request["expected_behavior"], request["acceptance_criteria"],
+    )
+
+
+def _task_dto(task: PreparationTaskEntity, eligible: set[int], handoff: HandoffEntity | None) -> TaskDTO:
+    # Receipt completeness is immutable. Preserve its blockers even if an older
+    # application version previously cleared the mutable task checklist.
+    missing = sorted(set(task.missing_inputs) | set(_handoff_missing(handoff)))
+    blocked = _blocked(task, eligible)
+    blocked.extend("missing_input:" + name for name in missing if "missing_input:" + name not in blocked)
+    return task_to_dto(task, blocked).model_copy(update={"missing_inputs": missing})
 
 
 def _access(session: Session, claims: dict[str, Any], task_id: UUID, *, lock: bool = False) -> tuple[int, bool, bool]:
@@ -79,7 +101,8 @@ def list_tasks(session: Session, claims: dict[str, Any], limit: int = 100, offse
     team_ids = [] if admin else list(repository.eligible_members(session, actor_id=actor))
     rows = repository.queue(session, actor, team_ids, admin=admin, limit=limit, offset=offset)
     eligible = repository.eligible_members(session, {row.assigned_team_id for row in rows})
-    return [task_to_dto(row, _blocked(row, eligible.get(row.assigned_team_id, set()))) for row in rows]
+    handoffs = {row.task_id: row for row in handoff_repository.for_tasks(session, [row.id for row in rows])}
+    return [_task_dto(row, eligible.get(row.assigned_team_id, set()), handoffs.get(row.id)) for row in rows]
 
 
 def get_task(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskDTO:
@@ -224,6 +247,9 @@ def resolve_inputs(session: Session, claims: dict[str, Any], task_id: UUID, requ
     actor, admin, eligible = _edit(session, claims, task_id, request)
     task = repository.get(session, task_id)
     _engineer_or_admin(admin, eligible, task.assignee_user_id, actor)
+    handoff = next(iter(handoff_repository.for_tasks(session, [task_id])), None)
+    if set(request.resolved_inputs) & set(_handoff_missing(handoff)):
+        raise ConflictError("Handoff evaluation inputs are still absent; submit a new revision with the missing inputs")
     if not set(request.resolved_inputs) <= set(task.missing_inputs):
         raise ConflictError("Resolved inputs must name currently missing inputs")
     before = _values(session, task_id)

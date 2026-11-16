@@ -9,7 +9,13 @@ from app.db.entities import HandoffEntity, HandoffNotificationEntity
 from app.exceptions import ConflictError, ForbiddenError
 from app.repositories import handoffs as repository
 from app.repositories import teams
-from app.schemas.handoffs import HandoffReceipt, HandoffRequest, NotificationDTO, ResolvedInput
+from app.schemas.handoffs import (
+    HandoffReceipt,
+    HandoffRequest,
+    NotificationDTO,
+    ResolvedInput,
+    missing_evaluation_inputs,
+)
 from app.schemas.lineage import InventoryV1, Origin, Snapshot
 from app.schemas.preparation import TaskCreate
 from app.services import handoff_sources, preparation
@@ -36,23 +42,52 @@ def get(session: Session, claims: dict[str, Any], handoff_id: UUID) -> HandoffRe
     return _receipt(session, claims, repository.get(session, handoff_id))
 
 
-def _inputs(request: HandoffRequest) -> list[Any]:
-    return [item for item in (request.source, request.dataset, request.baseline) if item is not None]
+def _selectors(session: Session, request: HandoffRequest) -> dict[str, Any]:
+    """Compare intent using authorized locations, not mutable credential/profile labels."""
+    payload = request.model_dump(mode="json")
+    payload["origin"] = {"installation_id": request.origin.installation_id}
+    for name in ("source", "dataset", "baseline"):
+        source = getattr(request, name)
+        if source is not None:
+            config, bucket, key = handoff_sources.authorize(session, source)
+            payload[name] = {
+                "kind": source.kind, "endpoint": config["s3_endpoint"], "bucket": bucket, "key": key,
+                "version_id": source.version_id, "expected_digest": source.expected_digest,
+            }
+    return payload
+
+
+def _reuse(
+    session: Session, claims: dict[str, Any], row: HandoffEntity, selectors: dict[str, Any],
+) -> HandoffReceipt:
+    receipt = _receipt(session, claims, row)
+    original = receipt.request.model_dump(mode="json")
+    original["origin"] = {"installation_id": receipt.request.origin.installation_id}
+    for name in ("source", "dataset", "baseline"):
+        captured = getattr(receipt, name)
+        if captured is not None:
+            original[name] = {
+                "kind": captured.source.kind, "endpoint": captured.endpoint,
+                "bucket": captured.bucket, "key": captured.key,
+                "version_id": captured.source.version_id, "expected_digest": captured.source.expected_digest,
+            }
+    if digest(original) != digest(selectors):
+        raise ConflictError("Handoff source and revision already contain different content; submit a new revision")
+    return receipt
 
 
 def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) -> HandoffReceipt:
     try:
         _actor(session, claims)
-        identity = digest({"origin": request.origin.model_dump(), "revision": request.revision})
         content = digest(request.model_dump(mode="json"))
-        for source in _inputs(request):
-            handoff_sources.authorize(session, source)
-        existing = repository.find(session, identity)
+        selectors = _selectors(session, request)
+        selected = selectors["source"]
+        existing = repository.find_source(
+            session, request.origin.installation_id, request.revision,
+            selected["endpoint"], selected["bucket"], selected["key"], request.source.version_id,
+        )
         if existing is not None:
-            receipt = _receipt(session, claims, existing)
-            if receipt.request_digest != content:
-                raise ConflictError("Handoff identity already contains different content; submit a new revision")
-            return receipt
+            return _reuse(session, claims, existing, selectors)
         # No database write/row lock across provider reads. Each mutable object is
         # resolved once to a non-null version ID; retries return the stored receipt.
         source = handoff_sources.resolve(session, request.source)
@@ -65,23 +100,25 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
                 config, bucket, key = handoff_sources.authorize(session, item.source)
                 if (config["s3_endpoint"], bucket, key) != (item.endpoint, item.bucket, item.key):
                     raise ConflictError("Source profile changed during submission; retry")
-        existing = repository.find(session, identity)
+        # Concurrent unpinned submissions must reuse the first committed capture,
+        # even if the object changed between their HEAD requests.
+        existing = repository.find_source(
+            session, request.origin.installation_id, request.revision,
+            source.endpoint, source.bucket, source.key, request.source.version_id,
+        ) or repository.find_source(
+            session, request.origin.installation_id, request.revision,
+            source.endpoint, source.bucket, source.key, source.version_id,
+        )
         if existing is not None:
-            receipt = _receipt(session, claims, existing)
-            if receipt.request_digest != content:
-                raise ConflictError("Handoff identity already contains different content; submit a new revision")
+            receipt = _reuse(session, claims, existing, selectors)
             session.commit()
             return receipt
-        missing = [
-            name
-            for name, value in (
-                ("evaluation_dataset", dataset),
-                ("baseline", baseline),
-                ("expected_behavior", request.expected_behavior),
-                ("acceptance_criteria", request.acceptance_criteria),
-            )
-            if value is None
-        ]
+        identity = digest({
+            "installation_id": request.origin.installation_id, "revision": request.revision,
+            "kind": "s3", "endpoint": source.endpoint, "bucket": source.bucket, "key": source.key,
+            "version_id": source.version_id,
+        })
+        missing = missing_evaluation_inputs(dataset, baseline, request.expected_behavior, request.acceptance_criteria)
         snapshot_id = uuid4()
         task = preparation.create_task(
             session,

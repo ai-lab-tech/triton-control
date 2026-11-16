@@ -40,15 +40,21 @@ class HandoffPostgresTests(fixtures.HandoffTests):
             conn.execute(text(f'DROP SCHEMA "{self.schema}" CASCADE'))
         self.admin_engine.dispose()
 
-    def race(self, changed):
+    def race(self, changed, aliases=False, moving=False):
         barrier = Barrier(2)
 
         def resolve(session, source):
             barrier.wait(timeout=15)
-            return self.resolved(session, source)
+            result = self.resolved(session, source)
+            return result.model_copy(update={"version_id": uuid4().hex}) if moving else result
 
         def submit(number):
             request = self.request(title="Changed" if changed and number else "Prepare Iris")
+            if aliases:
+                request = self.request(
+                    origin={"installation_id": "dev-lab", "record_id": f"alias-{number}"},
+                    title="Changed" if changed and number else "Prepare Iris",
+                )
             with Session(self.engine) as session:
                 try:
                     return handoffs.submit(session, self.submitter, request).id
@@ -68,6 +74,20 @@ class HandoffPostgresTests(fixtures.HandoffTests):
     def test_simultaneous_different_payloads_have_one_immutable_winner(self):
         results = self.race(True)
         self.assertEqual(results.count("conflict"), 1)
+        self.assertEqual(len(self.session.exec(select(PreparationTaskEntity)).all()), 1)
+
+    def test_concurrent_record_aliases_share_one_source_task(self):
+        results = self.race(False, aliases=True)
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
+        self.assertEqual(len(self.session.exec(select(HandoffNotificationEntity)).all()), 2)
+
+    def test_concurrent_changed_requirements_conflict_across_aliases(self):
+        self.assertEqual(self.race(True, aliases=True).count("conflict"), 1)
+
+    def test_concurrent_moving_source_selects_first_committed_capture(self):
+        results = self.race(False, aliases=True, moving=True)
+        self.assertEqual(results[0], results[1])
         self.assertEqual(len(self.session.exec(select(PreparationTaskEntity)).all()), 1)
 
     def test_receipt_is_append_only_and_repeated_schema_upgrade_preserves_it(self):

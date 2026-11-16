@@ -156,7 +156,10 @@
       @if (item.task.missing_inputs.length) {
         <div class="notice">
           <strong>Evaluation inputs incomplete</strong>
-          <p>Release readiness is blocked until these inputs are supplied and verified.</p>
+          <p>
+            Release readiness is blocked. Submit a new handoff revision with these inputs;
+            the original receipt remains unchanged.
+          </p>
           <ul>
             @for (name of item.task.missing_inputs; track name) {
               <li>{{ inputLabel(name) }}</li>

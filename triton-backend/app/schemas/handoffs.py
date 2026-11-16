@@ -30,6 +30,18 @@ class HandoffRequest(Request):
     acceptance_criteria: str | None = Field(default=None, min_length=1, max_length=8000)
 
 
+def missing_evaluation_inputs(
+    dataset: object | None, baseline: object | None,
+    expected_behavior: str | None, acceptance_criteria: str | None,
+) -> list[str]:
+    return [
+        name for name, value in (
+            ("evaluation_dataset", dataset), ("baseline", baseline),
+            ("expected_behavior", expected_behavior), ("acceptance_criteria", acceptance_criteria),
+        ) if value is None
+    ]
+
+
 class ResolvedInput(Request):
     source: S3Input
     bucket: str

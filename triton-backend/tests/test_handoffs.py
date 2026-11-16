@@ -16,6 +16,7 @@ from app.db.database import get_session
 from app.db.entities import HandoffEntity, HandoffNotificationEntity, PreparationTaskEntity, S3ProfileEntity
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.schemas.handoffs import HandoffRequest, ResolvedInput, S3Input
+from app.schemas.preparation import InformationRequest, ResolveInputsRequest
 from app.services import handoff_sources, handoffs, preparation, teams
 from tests.test_preparation import PreparationFixture
 
@@ -55,7 +56,7 @@ class HandoffFixture(PreparationFixture):
             bucket="models",
             key="allowed/" + source.path,
             endpoint="https://s3.test.invalid",
-            version_id="version-1",
+            version_id=source.version_id or "version-1",
             file={"path": source.path, "size": 5, "digest": "sha256:" + hashlib.sha256(b"model").hexdigest()},
         )
 
@@ -65,6 +66,118 @@ class HandoffFixture(PreparationFixture):
 
 
 class HandoffTests(HandoffFixture, unittest.TestCase):
+    def test_changed_record_label_reuses_source_without_provider_reads(self):
+        first = self.submit()
+        renamed = self.request(origin={"installation_id": "dev-lab", "record_id": "another-label"})
+        with patch.object(handoff_sources, "resolve", side_effect=AssertionError("must reuse captured source")):
+            second = handoffs.submit(self.session, self.submitter, renamed)
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(second.request.origin.record_id, "iris")
+        self.assertEqual(len(self.session.exec(select(PreparationTaskEntity)).all()), 1)
+        self.assertEqual(len(self.session.exec(select(HandoffNotificationEntity)).all()), 2)
+
+    def test_different_sources_with_same_origin_and_revision_are_distinct(self):
+        first = self.submit()
+        second = self.submit(self.request(source={"profile_id": 1, "path": "different.onnx"}))
+        self.assertNotEqual(first.task.id, second.task.id)
+
+    def test_explicit_versions_and_origin_installations_are_distinct(self):
+        first = self.submit(self.request(source={"profile_id": 1, "path": "model.onnx", "version_id": "v1"}))
+        second = self.submit(self.request(source={"profile_id": 1, "path": "model.onnx", "version_id": "v2"}))
+        other = self.submit(self.request(origin={"installation_id": "other-lab", "record_id": "iris"}))
+        self.assertEqual(len({first.task.id, second.task.id, other.task.id}), 3)
+
+    def test_profile_aliases_reuse_captured_source(self):
+        first = self.submit()
+        original = self.session.get(S3ProfileEntity, 1)
+        self.session.add(S3ProfileEntity.model_validate({**original.model_dump(), "id": 2, "name": "alias"}))
+        self.session.commit()
+        request = self.request(source={"profile_id": 2, "path": "model.onnx"})
+        with patch.object(handoff_sources, "resolve", side_effect=AssertionError("must reuse captured source")):
+            second = handoffs.submit(self.session, self.submitter, request)
+        self.assertEqual(first.id, second.id)
+
+    def test_changed_requirements_conflict_even_with_new_record_label(self):
+        self.submit()
+        with self.assertRaises(ConflictError):
+            self.submit(self.request(
+                origin={"installation_id": "dev-lab", "record_id": "another-label"},
+                acceptance_criteria="changed",
+            ))
+
+    def test_legacy_receipt_is_found_without_rewriting_its_identity(self):
+        from app.repositories import handoffs as repository
+        from app.services.lineage import digest
+
+        original = repository.add
+        legacy_identity = digest({"origin": self.request().origin.model_dump(), "revision": "1"})
+
+        def legacy_add(session, row, recipients):
+            row.identity_digest = legacy_identity
+            original(session, row, recipients)
+
+        with patch.object(repository, "add", side_effect=legacy_add):
+            first = self.submit()
+        with patch.object(handoff_sources, "resolve", side_effect=AssertionError("must reuse legacy capture")):
+            second = handoffs.submit(self.session, self.submitter, self.request(
+                origin={"installation_id": "dev-lab", "record_id": "new-label"},
+            ))
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(self.session.get(HandoffEntity, first.id).identity_digest, legacy_identity)
+
+    def test_handoff_evaluation_blockers_cannot_be_cleared_without_inputs(self):
+        receipt = self.submit()
+        for actor in (self.admin, self.engineer):
+            task = preparation.get_task(self.session, actor, receipt.task.id)
+            if actor == self.engineer:
+                task = self.claim(task)
+            events = preparation.list_events(self.session, actor, task.id)
+            with self.assertRaises(ConflictError):
+                preparation.resolve_inputs(self.session, actor, task.id, ResolveInputsRequest(
+                    expected_revision=task.revision, resolved_inputs=task.missing_inputs, reason="done",
+                ))
+            self.session.rollback()
+            current = handoffs.get(self.session, actor, receipt.id)
+            self.assertEqual(current.task.missing_inputs, task.missing_inputs)
+            self.assertEqual(current.task.revision, task.revision)
+            self.assertEqual(len(preparation.list_events(self.session, actor, task.id)), len(events))
+
+    def test_historical_cleared_flags_still_show_receipt_blockers_in_queue_and_detail(self):
+        receipt = self.submit()
+        row = self.session.get(PreparationTaskEntity, receipt.task.id)
+        row.missing_inputs = []
+        self.session.add(row)
+        self.session.commit()
+        for task in (
+            handoffs.get(self.session, self.submitter, receipt.id).task,
+            preparation.get_task(self.session, self.engineer, receipt.task.id),
+            preparation.list_tasks(self.session, self.engineer)[0],
+        ):
+            self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
+            self.assertIn("missing_input:evaluation_dataset", task.blocked_reasons)
+
+    def test_other_task_checklist_items_can_still_be_resolved(self):
+        receipt = self.submit()
+        task = preparation.request_information(self.session, self.admin, receipt.task.id, InformationRequest(
+            expected_revision=1, missing_inputs=["license_review"], reason="review license",
+        ))
+        task = preparation.resolve_inputs(self.session, self.admin, task.id, ResolveInputsRequest(
+            expected_revision=task.revision, resolved_inputs=["license_review"], reason="reviewed",
+        ))
+        self.assertNotIn("license_review", task.missing_inputs)
+        self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
+
+    def test_new_complete_revision_keeps_old_receipt_incomplete(self):
+        first = self.submit()
+        second = self.submit(self.request(
+            revision="2", dataset={"profile_id": 1, "path": "data.csv"},
+            baseline={"profile_id": 1, "path": "baseline.json"},
+            expected_behavior="correct class", acceptance_criteria="accuracy above 95%",
+        ))
+        self.assertEqual(second.task.missing_inputs, [])
+        self.assertEqual(handoffs.get(self.session, self.submitter, first.id).task.missing_inputs,
+                         first.task.missing_inputs)
+
     def test_submission_persists_exact_source_task_event_and_private_notifications(self):
         receipt = self.submit()
         self.assertEqual(receipt.source.version_id, "version-1")

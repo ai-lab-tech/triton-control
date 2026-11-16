@@ -38,16 +38,25 @@ engineering queue/detail workflow is #24.
 
 ## Identity, retries and atomicity
 
-A handoff identity is `(origin.installation_id, origin.record_id, revision)`.
-Source origin is distinct from the measured source snapshot identity. The UI uses
-the actual Control origin and profile/object reference as its source namespace.
-External callers supply their own stable origin; credentials are never identities.
+A handoff identity binds origin installation, source kind, resolved S3 endpoint,
+bucket, key, version ID and submission revision. The caller's `origin.record_id`
+and local S3 profile ID are labels, not deduplication keys. Different labels or
+profiles referencing the same object cannot create duplicate work. Distinct
+objects or explicitly selected versions remain distinct even with the same label.
+Source origin is distinct from the measured source snapshot identity. Credentials
+are never identities.
 `revision` identifies the explicit submission, not a mutable S3 alias. Changing
 requirements or recapturing changed source bytes requires a new revision.
 
-The complete normalized request is canonically hashed using the #25 JSON contract.
-The same identity/request returns the first receipt without resolving mutable
-references again. The same identity with different content returns HTTP 409.
+The complete normalized request is retained and hashed using the #25 JSON contract.
+Retry comparison ignores the record label and replaces profile/path aliases with
+their authorized storage locations; evaluation requirements and version/digest
+constraints must still match. The same source selector/revision returns the first
+receipt without resolving mutable references again. For an unpinned selector this
+preserves its first captured version, even when concurrent submissions observe
+different latest versions. Changing requirements under the same identity returns
+HTTP 409. The returned receipt and request digest always describe the first
+accepted request, including its original labels.
 Retries recheck the active account, task access and referenced profile access.
 A different caller cannot read or reuse a receipt without task authorization.
 
@@ -62,7 +71,12 @@ identity constraint is a final database guard. Requests after success return HTT
 The receipt contains the measured model inventory and #25 `Snapshot`, exact object
 versions/checksums, submitted requirements and current authorized task state.
 Absent dataset, baseline, expected behavior or acceptance criteria remain explicit
-missing inputs on the task. Completeness is independent of release approval and
+missing inputs on the task. Task checklist resolution cannot clear these receipt
+requirements: it returns HTTP 409 without changing task state/history. Submit a new
+revision containing the inputs instead. Queue, task and receipt reads derive these
+blockers from the immutable receipt, including when an older application previously
+cleared the task flags. Other engineering checklist items remain resolvable.
+Completeness is independent of release approval and
 validation evidence; a handoff is never a release-ready assertion.
 
 ## In-app notifications
@@ -88,6 +102,12 @@ on PostgreSQL and SQLite. Notification read state is mutable. Existing tasks do 
 receive invented handoffs or retroactive notifications. Task/history creation uses
 the #18 transaction hook. Both OpenAPI copies and generated-client compatibility
 must be checked when changing the contract.
+
+The source-identity correction needs no table migration or receipt rewrite. Lookup
+also examines captured source fields in existing receipts, so legacy label-based
+identities are reused. If historical duplicates already exist, the oldest matching
+receipt is reused; their tasks/history are retained, not silently merged or deleted.
+The existing engineering-group transaction lock serializes source deduplication.
 
 Focused behavior and authorization tests:
 
