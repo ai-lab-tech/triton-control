@@ -108,9 +108,11 @@ test.describe.serial("code-server plugin workflows", () => {
       await row(hfSource).click({ button: "right", timeout: 2000 });
       await expect(action).toBeVisible({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
-    // Keyboard activation avoids a mouse click merely highlighting the menu item.
-    await action.focus();
-    await action.press("Enter");
+    // Hover updates Monaco's active menu item; DOM focus alone does not update
+    // the action that its Enter handler runs.
+    await action.hover();
+    await expect(action.locator("..")).toHaveClass(/\bfocused\b/);
+    await page.keyboard.press("Enter");
     await expect(action).toBeHidden();
     await expect(runtimePrompt).toBeVisible({ timeout: 60_000 });
     await runtimePrompt.getByText("Transformers / Python", { exact: true }).click();
