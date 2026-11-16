@@ -173,6 +173,24 @@ class ServingMetadataTests(unittest.TestCase):
             data["spec"]["models"] = models
             self.reject(data)
 
+    def test_memory_kilo_suffix_matches_kubernetes(self) -> None:
+        schema = json.loads((SCHEMAS / "ServingRelease.schema.json").read_text())
+        validator = Draft202012Validator(schema)
+        for memory, accepted in (("128k", True), ("128K", False)):
+            with self.subTest(memory=memory):
+                data = fixture("release-manual")
+                data["spec"]["resourcesPerReplica"]["requests"]["memory"] = memory
+                self.assertEqual(validator.is_valid(data), accepted)
+                if accepted:
+                    load_metadata(json.dumps(data).encode())
+                else:
+                    self.reject(data)
+        # Check the numeric comparison across suffixes, not just their spelling.
+        data = fixture("release-manual")
+        data["spec"]["resourcesPerReplica"]["requests"]["memory"] = "257000k"
+        data["spec"]["resourcesPerReplica"]["limits"]["memory"] = "256M"
+        self.reject(data)
+
     def test_evidence_is_acyclic_and_matches_artifacts(self) -> None:
         for key in ("image", "inventoryDigest", "preparedInventoryDigest", "materializerImage", "releaseDigest"):
             data = fixture("release-manual")

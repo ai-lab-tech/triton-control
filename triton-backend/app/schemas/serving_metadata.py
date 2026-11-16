@@ -59,7 +59,7 @@ Uri = Annotated[
     AfterValidator(safe_uri),
 ]
 Cpu = Annotated[str, Field(max_length=20, pattern=r"^((0|[1-9][0-9]*)(\.[0-9]{1,3})?|[1-9][0-9]*m)$")]
-Memory = Annotated[str, Field(max_length=24, pattern=r"^[1-9][0-9]*(Ki|Mi|Gi|Ti|K|M|G|T)?$")]
+Memory = Annotated[str, Field(max_length=24, pattern=r"^[1-9][0-9]*(Ki|Mi|Gi|Ti|k|M|G|T)?$")]
 
 
 class Contract(BaseModel):
@@ -115,13 +115,13 @@ def cpu_value(value: str) -> Decimal:
 
 
 def memory_value(value: str) -> int:
-    match = re.fullmatch(r"([0-9]+)(Ki|Mi|Gi|Ti|K|M|G|T)?", value)
+    match = re.fullmatch(r"([0-9]+)(Ki|Mi|Gi|Ti|k|M|G|T)?", value)
     if match is None:
         raise ValueError("Invalid memory quantity")
     suffix = match[2] or ""
     multipliers = {
         "": 1,
-        "K": 1000,
+        "k": 1000,
         "M": 1000**2,
         "G": 1000**3,
         "T": 1000**4,

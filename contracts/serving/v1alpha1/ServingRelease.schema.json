@@ -137,7 +137,7 @@
         },
         "memory": {
           "maxLength": 24,
-          "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|K|M|G|T)?$",
+          "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|k|M|G|T)?$",
           "title": "Memory",
           "type": "string"
         }

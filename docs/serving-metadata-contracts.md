@@ -75,7 +75,7 @@ Other-language consumers must apply these checks as well as the shared schemas:
 
 - Startup model names are unique; each has unique positive numeric version strings.
 - CPU is a positive core decimal (at most three fractional digits) or integer
-  millicores. Memory is a positive integer byte count with optional K/M/G/T or
+  millicores. Memory is a positive integer byte count with optional k/M/G/T or
   Ki/Mi/Gi/Ti suffix. Requests cannot exceed limits; compare exact quantities.
   GPU count is a nonnegative integer. Counts are bounded at 1000000, but this
   structural ceiling grants no capacity: quotas and supported hardware are local
