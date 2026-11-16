@@ -239,6 +239,14 @@ jobs:
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
           python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_lineage tests.test_lineage_postgres -v
+      - name: Verify build context staging, concurrency and versioned retention
+        working-directory: triton-backend
+        env:
+          BUILD_CONTEXT_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
+          BUILD_CONTEXT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          BUILD_CONTEXT_TEST_S3_ACCESS_KEY: candidate_test
+          BUILD_CONTEXT_TEST_S3_SECRET_KEY: candidate_test_password
+        run: python -m unittest tests.test_build_contexts tests.test_build_contexts_postgres tests.test_build_contexts_s3 -v
       - name: Upload S3 diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4

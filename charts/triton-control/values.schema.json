@@ -6,6 +6,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "contextRetentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 7
+        },
         "policy": {
           "anyOf": [
             {

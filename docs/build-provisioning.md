@@ -2,8 +2,9 @@
 
 This package implements S06-A: qualification of one exact container-image builder
 and its installation policy. Builds remain disabled by default. S06-B supplies
-the user-facing build service and must call the qualification gate before execution.
-No build API, UI, production pipeline or automatic image deployment is introduced.
+the [build-context staging API](build-contexts.md). Staging alone does not enable
+execution; the S06-C executor must pass the qualification gate before execution.
+No image-build execution API, UI, production pipeline or automatic image deployment is introduced.
 
 ## Candidate and provenance
 
