@@ -1,0 +1,1 @@
+{"apiVersion":"serving.triton-control/v1alpha1","kind":"MetadataSource","metadata":{"name":"production-s3"},"spec":{"allowedTargets":["toy-production"],"approval":{"mode":"manual"},"enabled":false,"intervalSeconds":86400,"location":{"bucket":"synthetic-metadata","key":"targets/production.json","type":"s3"},"readCredential":"metadata-reader"}}

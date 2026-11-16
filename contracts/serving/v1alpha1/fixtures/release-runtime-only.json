@@ -1,0 +1,65 @@
+{
+  "apiVersion": "serving.triton-control/v1alpha1",
+  "kind": "ServingRelease",
+  "metadata": {
+    "name": "toy",
+    "release": "r2"
+  },
+  "spec": {
+    "image": "registry.example.invalid/synthetic/runtime@sha256:45ab6ada650acbd8a89f36c137631ad700397cb922f1abd34d805f28f823a949",
+    "repository": {
+      "uri": "s3://synthetic-models/toy/r1/",
+      "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+      "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931"
+    },
+    "models": [
+      {
+        "name": "toy",
+        "versions": [
+          "1"
+        ]
+      }
+    ],
+    "resourcesPerReplica": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "256Mi"
+      },
+      "gpuCount": 0
+    },
+    "lineage": {
+      "schema_version": 1,
+      "origin": {
+        "installation_id": "synthetic-fixture",
+        "record_id": "release-two"
+      },
+      "candidate": {
+        "installation_id": "synthetic-fixture",
+        "record_id": "candidate-one"
+      },
+      "candidate_digest": "sha256:492914058ada6ba50ef83ffb35e9f9760248585e87d0bfb1cc9f1c4f957f6c05",
+      "runtime_image": "registry.example.invalid/synthetic/runtime@sha256:45ab6ada650acbd8a89f36c137631ad700397cb922f1abd34d805f28f823a949",
+      "replaces_release": {
+        "installation_id": "synthetic-fixture",
+        "record_id": "release-one"
+      }
+    },
+    "lineageManifest": {
+      "uri": "artifacts/lineage-two.json",
+      "digest": "sha256:01f33fcd001b7870cd658e71ff609c36c32b2c8a11bf647b6e5136d4818fe991"
+    },
+    "validation": {
+      "uri": "artifacts/validation-two.json",
+      "digest": "sha256:686300f41912fb67ad51d8ca976a78b2ec86303b97272219f87e596afd95adf0",
+      "subjects": {
+        "image": "sha256:45ab6ada650acbd8a89f36c137631ad700397cb922f1abd34d805f28f823a949",
+        "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+        "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931"
+      }
+    }
+  }
+}

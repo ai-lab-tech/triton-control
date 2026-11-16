@@ -6,6 +6,7 @@ on:
     paths:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
+      - "contracts/serving/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -19,6 +20,7 @@ on:
     paths:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
+      - "contracts/serving/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -32,6 +34,31 @@ permissions:
   contents: read
 
 jobs:
+  serving-metadata-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend and contract tools
+        run: pip install -e './triton-backend[dev]' wheel
+      - name: Verify schemas, golden identities and rejection behavior
+        working-directory: triton-backend
+        run: |
+          python scripts/export_serving_metadata_schema.py --check
+          python scripts/generate_serving_metadata_fixtures.py --check
+          python -m unittest discover -s tests -p test_serving_metadata.py -v
+          python -m unittest discover -s tests -p test_lineage.py -v
+          python scripts/validate_serving_metadata.py ../contracts/serving/v1alpha1/fixtures/release-manual.yaml ../contracts/serving/v1alpha1/fixtures/target.json ../contracts/serving/v1alpha1/fixtures/source-git.yaml ../contracts/serving/v1alpha1/fixtures/source-s3.json
+      - name: Verify installed schemas and CLI outside the checkout
+        run: |
+          pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/serving-wheel" ./triton-backend
+          pip install --no-deps --target "$RUNNER_TEMP/serving-installed" "$RUNNER_TEMP"/serving-wheel/*.whl
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/serving-installed" python -m app.services.serving_metadata_cli "$GITHUB_WORKSPACE/contracts/serving/v1alpha1/fixtures/release-manual.yaml"
+          PYTHONPATH="$RUNNER_TEMP/serving-installed" "$RUNNER_TEMP/serving-installed/bin/triton-validate-metadata" "$GITHUB_WORKSPACE/contracts/serving/v1alpha1/fixtures/source-s3.json"
+
   pod-contracts-kubernetes:
     runs-on: ubuntu-latest
     timeout-minutes: 15

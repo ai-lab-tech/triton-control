@@ -1,0 +1,438 @@
+{
+  "$defs": {
+    "ArtifactSubjects": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "inventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventorydigest",
+          "type": "string"
+        },
+        "materializerImage": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materializerimage"
+        },
+        "preparedInventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Preparedinventorydigest",
+          "type": "string"
+        },
+        "sourceCode": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcecode"
+        },
+        "validationInput": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validationinput"
+        }
+      },
+      "required": [
+        "image",
+        "inventoryDigest",
+        "preparedInventoryDigest"
+      ],
+      "title": "ArtifactSubjects",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "subjects": {
+          "$ref": "#/$defs/ArtifactSubjects"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest",
+        "subjects"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "record_id"
+      ],
+      "title": "Origin",
+      "type": "object"
+    },
+    "Quantities": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "maxLength": 20,
+          "pattern": "^((0|[1-9][0-9]*)(\\.[0-9]{1,3})?|[1-9][0-9]*m)$",
+          "title": "Cpu",
+          "type": "string"
+        },
+        "memory": {
+          "maxLength": 24,
+          "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|K|M|G|T)?$",
+          "title": "Memory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cpu",
+        "memory"
+      ],
+      "title": "Quantities",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "ReleaseLineageV1": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate": {
+          "$ref": "#/$defs/Origin"
+        },
+        "candidate_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Candidate Digest",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "replaces_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "runtime_image": {
+          "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$",
+          "title": "Runtime Image",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "origin",
+        "candidate",
+        "candidate_digest",
+        "runtime_image"
+      ],
+      "title": "ReleaseLineageV1",
+      "type": "object"
+    },
+    "ReleaseMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "release": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Release",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "release"
+      ],
+      "title": "ReleaseMetadata",
+      "type": "object"
+    },
+    "ReleaseSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "maxLength": 512,
+          "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "lineage": {
+          "$ref": "#/$defs/ReleaseLineageV1"
+        },
+        "lineageManifest": {
+          "$ref": "#/$defs/Reference"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/StartupModel"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Models",
+          "type": "array"
+        },
+        "repository": {
+          "$ref": "#/$defs/Repository"
+        },
+        "resourcesPerReplica": {
+          "$ref": "#/$defs/Resources"
+        },
+        "security": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Evidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "validation": {
+          "$ref": "#/$defs/Evidence"
+        }
+      },
+      "required": [
+        "image",
+        "repository",
+        "models",
+        "resourcesPerReplica",
+        "lineage",
+        "lineageManifest",
+        "validation"
+      ],
+      "title": "ReleaseSpec",
+      "type": "object"
+    },
+    "Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "inventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventorydigest",
+          "type": "string"
+        },
+        "materializerImage": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materializerimage"
+        },
+        "preparedInventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Preparedinventorydigest",
+          "type": "string"
+        },
+        "uri": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri",
+        "inventoryDigest",
+        "preparedInventoryDigest"
+      ],
+      "title": "Repository",
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "properties": {
+        "gpuCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Gpucount",
+          "type": "integer"
+        },
+        "limits": {
+          "$ref": "#/$defs/Quantities"
+        },
+        "requests": {
+          "$ref": "#/$defs/Quantities"
+        }
+      },
+      "required": [
+        "requests",
+        "limits",
+        "gpuCount"
+      ],
+      "title": "Resources",
+      "type": "object"
+    },
+    "StartupModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "maxLength": 19,
+            "pattern": "^[1-9][0-9]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "versions"
+      ],
+      "title": "StartupModel",
+      "type": "object"
+    }
+  },
+  "$id": "urn:triton-control:serving:v1alpha1:ServingRelease",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "serving.triton-control/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "ServingRelease",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ReleaseMetadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/ReleaseSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "ServingRelease",
+  "type": "object"
+}
