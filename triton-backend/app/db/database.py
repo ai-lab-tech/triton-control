@@ -86,6 +86,8 @@ def init_db() -> None:
         ErrorEventEntity,
         HandoffEntity,
         HandoffNotificationEntity,
+        LocalBindingPolicyEntity,
+        LocalCredentialEntity,
         MlflowEntity,
         ModelPerfJobEntity,
         OidcConfigEntity,
