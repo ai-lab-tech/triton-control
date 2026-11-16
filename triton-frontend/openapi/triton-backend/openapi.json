@@ -4466,6 +4466,120 @@
         }
       }
     },
+    "/api/instances/{instance_id}/preparation-requests": {
+      "post": {
+        "tags": [
+          "experiment-snapshots"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_api_instances__instance_id__preparation_requests_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreparationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/snapshots/{snapshot_id}": {
+      "get": {
+        "tags": [
+          "experiment-snapshots"
+        ],
+        "summary": "Get",
+        "operationId": "get_api_preparation_snapshots__snapshot_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Snapshot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/instances/{instance_id}/models": {
       "get": {
         "tags": [
@@ -5823,6 +5937,30 @@
         ],
         "title": "ArgoWorkflowsStatusResponse",
         "description": "Runtime state of the Helm-managed global Argo Workflows server."
+      },
+      "ArtifactLocation": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "s3"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "reference"
+        ],
+        "title": "ArtifactLocation"
       },
       "AttemptDTO": {
         "properties": {
@@ -8188,6 +8326,29 @@
         "type": "object",
         "title": "InstanceS3ConfigDTO"
       },
+      "InventoryV1": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "InventoryV1"
+      },
       "InviteUserRequest": {
         "properties": {
           "email": {
@@ -9203,6 +9364,172 @@
         ],
         "title": "PodState"
       },
+      "PreparationAccepted": {
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/OperationResponse"
+          },
+          "snapshot_url": {
+            "type": "string",
+            "title": "Snapshot Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation",
+          "snapshot_url"
+        ],
+        "title": "PreparationAccepted"
+      },
+      "PreparationRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/StartupModel"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Models"
+          },
+          "deployment_uid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Uid"
+          },
+          "expected_generation": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Generation"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepositoryInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Snapshot Id"
+          },
+          "supplied_runtime_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplied Runtime Image"
+          },
+          "runtime_changes": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "none_declared",
+              "requires_rebuild"
+            ],
+            "title": "Runtime Changes",
+            "default": "unknown"
+          },
+          "evaluation_files": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Evaluation Files",
+            "default": []
+          },
+          "expected_behavior": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Behavior"
+          },
+          "acceptance_criteria": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Criteria"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "models"
+        ],
+        "title": "PreparationRequest"
+      },
       "ReasonRequest": {
         "properties": {
           "expected_revision": {
@@ -9272,6 +9599,29 @@
           "dockerconfigjson"
         ],
         "title": "RegistryUpdate"
+      },
+      "RepositoryInput": {
+        "properties": {
+          "profile_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Profile Id"
+          },
+          "prefix": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+            "title": "Prefix"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "prefix"
+        ],
+        "title": "RepositoryInput"
       },
       "ResolveInputsRequest": {
         "properties": {
@@ -9344,6 +9694,148 @@
           "file"
         ],
         "title": "ResolvedInput"
+      },
+      "RuntimeImage": {
+        "properties": {
+          "declared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed"
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node"
+          },
+          "pod_uid": {
+            "type": "string",
+            "title": "Pod Uid"
+          },
+          "restart_count": {
+            "type": "integer",
+            "title": "Restart Count",
+            "default": 0
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "declared",
+          "observed",
+          "node",
+          "pod_uid"
+        ],
+        "title": "RuntimeImage"
+      },
+      "RuntimeObservation": {
+        "properties": {
+          "managed": {
+            "type": "boolean",
+            "title": "Managed"
+          },
+          "deployment_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment Uid"
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation"
+          },
+          "observed_generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Generation"
+          },
+          "resource_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Version"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/RuntimeImage"
+            },
+            "type": "array",
+            "title": "Images",
+            "default": []
+          },
+          "resources": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Resources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "managed"
+        ],
+        "title": "RuntimeObservation"
       },
       "S3DeleteResponse": {
         "properties": {
@@ -9646,6 +10138,146 @@
         ],
         "title": "Snapshot"
       },
+      "SnapshotManifest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "instance_id": {
+            "type": "integer",
+            "title": "Instance Id"
+          },
+          "instance_name": {
+            "type": "string",
+            "title": "Instance Name"
+          },
+          "submitter_user_id": {
+            "type": "integer",
+            "title": "Submitter User Id"
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Captured At"
+          },
+          "previous_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Snapshot Id"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PreparationRequest"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeObservation"
+          },
+          "source_receipt": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Source Receipt"
+          },
+          "configuration_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Configuration Digest"
+          },
+          "source_snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/InventoryV1"
+          },
+          "workspace_inventory": {
+            "$ref": "#/components/schemas/InventoryV1"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "workspace_relation": {
+            "type": "string",
+            "enum": [
+              "not_selected",
+              "selected_unverified_changes"
+            ],
+            "title": "Workspace Relation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "instance_id",
+          "instance_name",
+          "submitter_user_id",
+          "captured_at",
+          "previous_snapshot_id",
+          "request",
+          "runtime",
+          "source_receipt",
+          "configuration_digest",
+          "source_snapshot",
+          "inventory",
+          "workspace_inventory",
+          "gaps",
+          "workspace_relation"
+        ],
+        "title": "SnapshotManifest"
+      },
+      "SnapshotReceipt": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "manifest_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Manifest Digest"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/SnapshotManifest"
+          },
+          "artifacts": {
+            "$ref": "#/components/schemas/ArtifactLocation"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskDTO"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "operation_id",
+          "manifest_digest",
+          "manifest",
+          "artifacts",
+          "task"
+        ],
+        "title": "SnapshotReceipt"
+      },
       "StartModelPerfRequest": {
         "properties": {
           "model_version": {
@@ -9710,6 +10342,34 @@
           "model_version"
         ],
         "title": "StartModelPerfRequest"
+      },
+      "StartupModel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            "title": "Name"
+          },
+          "versions": {
+            "items": {
+              "type": "string",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Versions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "versions"
+        ],
+        "title": "StartupModel"
       },
       "TaskDTO": {
         "properties": {
@@ -11195,6 +11855,34 @@
           "message"
         ],
         "title": "WorkspaceArgoUpgradeResponse"
+      },
+      "WorkspaceInput": {
+        "properties": {
+          "workspace_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Workspace Id"
+          },
+          "files": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "files"
+        ],
+        "title": "WorkspaceInput"
       }
     },
     "securitySchemes": {

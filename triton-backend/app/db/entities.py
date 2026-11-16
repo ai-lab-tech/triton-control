@@ -656,3 +656,17 @@ class HandoffNotificationEntity(SQLModel, table=True):
     user_id: int = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     read_at: datetime | None = None
+
+
+class PreparationSnapshotEntity(SQLModel, table=True):
+    """Completed immutable experiment receipt; source deletion does not cascade."""
+
+    __tablename__ = "preparation_snapshots"
+    id: UUID = Field(primary_key=True)
+    operation_id: str = Field(unique=True)
+    instance_id: int = Field(index=True)
+    actor_id: int
+    task_id: UUID = Field(index=True)
+    manifest_digest: str
+    manifest: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    artifacts: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))

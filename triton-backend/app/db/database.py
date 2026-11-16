@@ -92,6 +92,7 @@ def init_db() -> None:
         PerfAnalyzerEntity,
         PerfAnalyzerRunEntity,
         PreparationAttemptEntity,
+        PreparationSnapshotEntity,
         PreparationTaskEntity,
         PreparationTaskEventEntity,
         RecoveryRateLimitEntity,

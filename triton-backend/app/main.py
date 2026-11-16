@@ -43,6 +43,7 @@ from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
+from app.api.experiment_snapshots_api import router as experiment_snapshots_router
 from app.api.handoffs_api import router as handoffs_router
 from app.api.instance_api import router as instance_router
 from app.api.mlflow_api import router as mlflow_router
@@ -190,6 +191,10 @@ async def on_startup() -> None:
     perf_job_reconciler.start()
     if DEPLOYMENT_OPERATION_KIND not in operation_service.adapters:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
+    from app.services.snapshots.service import KIND as SNAPSHOT_KIND
+    from app.services.snapshots.service import SnapshotAdapter
+    if SNAPSHOT_KIND not in operation_service.adapters:
+        operation_service.register(SNAPSHOT_KIND, SnapshotAdapter())
     operation_worker.start()
     mlflow_migration.start()
 
@@ -221,6 +226,7 @@ app.include_router(code_server_router)
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])
 app.include_router(mlflow_router)
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
+app.include_router(experiment_snapshots_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_profile_router, dependencies=[Depends(get_claims)])
