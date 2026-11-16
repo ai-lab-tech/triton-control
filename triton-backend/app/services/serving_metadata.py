@@ -98,7 +98,7 @@ class _Parser:
         raise MetadataError("invalid-document")
 
 
-def _parse(raw: bytes, format: Format) -> Any:
+def parse_document(raw: bytes, format: Format) -> Any:
     if len(raw) > MAX_BYTES:
         raise MetadataError("byte-limit")
     try:
@@ -143,7 +143,7 @@ def load_metadata(raw: bytes, *, format: Format = "auto") -> ValidatedMetadata:
     """Validate exact input bytes. This does NOT authenticate evidence or authorize execution."""
     if format not in {"auto", "yaml", "json"}:
         raise MetadataError("unsupported-format")
-    data = _parse(raw, format)
+    data = parse_document(raw, format)
     if not isinstance(data, dict):
         raise MetadataError("mapping-required")
     if data.get("apiVersion") != API_VERSION:

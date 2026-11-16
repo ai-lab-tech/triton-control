@@ -1,0 +1,22 @@
+{
+  "apiVersion": "serving.triton-control/v1alpha1",
+  "kind": "ServingTarget",
+  "metadata": {
+    "name": "toy-production"
+  },
+  "spec": {
+    "release": {
+      "uri": "release.json",
+      "digest": "sha256:e2d417208f056941bd2973f3bece97a9ec0ff9007f3f664e4561209ac2dfb835"
+    },
+    "replicas": 1,
+    "credentials": {
+      "modelStorage": "production-models",
+      "imageRegistry": "serving-registry"
+    },
+    "rollout": {
+      "maxSurge": 0,
+      "maxUnavailable": 1
+    }
+  }
+}
