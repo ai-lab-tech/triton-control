@@ -1,0 +1,12 @@
+apiVersion: serving.triton-control/v1alpha1
+kind: MetadataSource
+metadata:
+  name: production-s3
+spec:
+  location:
+    type: s3
+    bucket: synthetic-metadata
+    key: targets/production.json
+  readCredential: metadata-reader
+  allowedTargets:
+  - toy-production

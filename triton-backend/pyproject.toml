@@ -24,8 +24,12 @@ dependencies = [
     "grpcio-tools>=1.73.0",
     "kubernetes==35.0.0", 
     "packaging>=24.0",
-    "pyyaml==6.0.3"
+    "pyyaml==6.0.3",
+    "jsonschema==4.26.0"
 ]
+
+[project.scripts]
+triton-validate-metadata = "app.services.serving_metadata_cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -35,6 +39,7 @@ dev = [
     "types-protobuf",
     "types-boto3",
     "types-Authlib",
+    "types-jsonschema",
     "bandit==1.9.4",
     "ruff",
     "import-linter==2.1",
@@ -62,6 +67,7 @@ select = ["E", "F", "W", "I"]
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.services.serving_contracts" = ["*.schema.json"]
 "app.services.deployment" = ["*.yaml"]
 "app.services.perf_analyzer" = ["*.yaml"]
 "app.services.development" = ["hf-builder-version.txt", "mlflow-triton-control-version.txt"]

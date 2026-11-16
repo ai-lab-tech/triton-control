@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "Credentials": {
+      "additionalProperties": false,
+      "properties": {
+        "imageRegistry": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Imageregistry",
+          "type": "string"
+        },
+        "modelStorage": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Modelstorage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelStorage",
+        "imageRegistry"
+      ],
+      "title": "Credentials",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "Rollout": {
+      "additionalProperties": false,
+      "properties": {
+        "maxSurge": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Maxsurge",
+          "type": "integer"
+        },
+        "maxUnavailable": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Maxunavailable",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxSurge",
+        "maxUnavailable"
+      ],
+      "title": "Rollout",
+      "type": "object"
+    },
+    "TargetSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "capacityOwner": {
+          "const": "source",
+          "default": "source",
+          "title": "Capacityowner",
+          "type": "string"
+        },
+        "credentials": {
+          "$ref": "#/$defs/Credentials"
+        },
+        "release": {
+          "$ref": "#/$defs/Reference"
+        },
+        "replicas": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Replicas",
+          "type": "integer"
+        },
+        "rollout": {
+          "$ref": "#/$defs/Rollout"
+        }
+      },
+      "required": [
+        "release",
+        "replicas",
+        "credentials",
+        "rollout"
+      ],
+      "title": "TargetSpec",
+      "type": "object"
+    }
+  },
+  "$id": "urn:triton-control:serving:v1alpha1:ServingTarget",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "serving.triton-control/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "ServingTarget",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/TargetSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "ServingTarget",
+  "type": "object"
+}

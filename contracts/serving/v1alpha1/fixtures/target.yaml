@@ -1,0 +1,15 @@
+apiVersion: serving.triton-control/v1alpha1
+kind: ServingTarget
+metadata:
+  name: toy-production
+spec:
+  release:
+    uri: release-manual.json
+    digest: sha256:a6889b0adc2df3a657e27ebc185f980762816c117b243c0c6ae94cf8d43cbe67
+  replicas: 1
+  credentials:
+    modelStorage: production-models
+    imageRegistry: serving-registry
+  rollout:
+    maxSurge: 0
+    maxUnavailable: 1

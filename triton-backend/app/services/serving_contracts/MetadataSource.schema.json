@@ -1,0 +1,200 @@
+{
+  "$defs": {
+    "ApprovalPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "independently-approved"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "ApprovalPolicy",
+      "type": "object"
+    },
+    "GitLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9/_.-]*$",
+          "title": "Ref",
+          "type": "string"
+        },
+        "repository": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "type": {
+          "const": "git",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "repository",
+        "ref",
+        "path"
+      ],
+      "title": "GitLocation",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "S3Location": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "maxLength": 63,
+          "minLength": 3,
+          "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+          "title": "Bucket",
+          "type": "string"
+        },
+        "key": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "type": {
+          "const": "s3",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "bucket",
+        "key"
+      ],
+      "title": "S3Location",
+      "type": "object"
+    },
+    "SourceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedTargets": {
+          "items": {
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "type": "string"
+          },
+          "maxItems": 1000,
+          "minItems": 1,
+          "title": "Allowedtargets",
+          "type": "array"
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalPolicy"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "intervalSeconds": {
+          "default": 86400,
+          "maximum": 2592000,
+          "minimum": 1,
+          "title": "Intervalseconds",
+          "type": "integer"
+        },
+        "location": {
+          "discriminator": {
+            "mapping": {
+              "git": "#/$defs/GitLocation",
+              "s3": "#/$defs/S3Location"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/GitLocation"
+            },
+            {
+              "$ref": "#/$defs/S3Location"
+            }
+          ],
+          "title": "Location"
+        },
+        "readCredential": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Readcredential",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "readCredential",
+        "allowedTargets"
+      ],
+      "title": "SourceSpec",
+      "type": "object"
+    }
+  },
+  "$id": "urn:triton-control:serving:v1alpha1:MetadataSource",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "serving.triton-control/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "MetadataSource",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/SourceSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "MetadataSource",
+  "type": "object"
+}

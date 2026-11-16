@@ -1,0 +1,19 @@
+{
+  "apiVersion": "serving.triton-control/v1alpha1",
+  "kind": "MetadataSource",
+  "metadata": {
+    "name": "production-git"
+  },
+  "spec": {
+    "location": {
+      "type": "git",
+      "repository": "https://git.example.invalid/team/releases.git",
+      "ref": "refs/heads/main",
+      "path": "targets/production.yaml"
+    },
+    "readCredential": "metadata-reader",
+    "allowedTargets": [
+      "toy-production"
+    ]
+  }
+}

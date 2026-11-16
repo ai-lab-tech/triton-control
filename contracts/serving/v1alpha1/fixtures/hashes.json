@@ -1,0 +1,15 @@
+{
+  "documents": {
+    "release-manual": "sha256:a6889b0adc2df3a657e27ebc185f980762816c117b243c0c6ae94cf8d43cbe67",
+    "release-runtime-only": "sha256:8a0eca4064e63b1a2a0b57c1bab88c33133a94f11cf43f801cefc23acef0653d",
+    "release-security": "sha256:9fc64763a99a4a136bdddfb23bdb1ee25f756940d6035108e45ea9bbc537bddc",
+    "source-git": "sha256:ae043ea286f06a3ee79e35d2461c8bf38927c75f5beb20e09b8e1c657224c1fc",
+    "source-s3": "sha256:b5c8f4942bd676d4959a9e9bab09ddecdb9111e47a190bb5460546708596dd71",
+    "target": "sha256:831c9b30195f0fd66c9b9330dd6e173aa31874ee7d8f66f590c0fdc095b79cb0",
+    "target-scaled": "sha256:73165c79d63637d2c73bac1fa9bc47751b6736d7e3e014f5a4bbeb5b586f8de7"
+  },
+  "lineageV1": {
+    "candidate": "sha256:492914058ada6ba50ef83ffb35e9f9760248585e87d0bfb1cc9f1c4f957f6c05",
+    "inventory": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931"
+  }
+}
