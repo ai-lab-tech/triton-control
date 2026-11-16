@@ -10189,6 +10189,11 @@
             "type": "object",
             "title": "Source Receipt"
           },
+          "configuration": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Configuration"
+          },
           "configuration_digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$",
@@ -10231,6 +10236,7 @@
           "request",
           "runtime",
           "source_receipt",
+          "configuration",
           "configuration_digest",
           "source_snapshot",
           "inventory",

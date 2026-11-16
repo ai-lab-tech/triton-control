@@ -85,6 +85,7 @@ class SnapshotManifest(Contract):
     request: PreparationRequest
     runtime: RuntimeObservation
     source_receipt: dict[str, Any]
+    configuration: dict[str, Any]
     configuration_digest: Digest
     source_snapshot: Snapshot
     inventory: InventoryV1

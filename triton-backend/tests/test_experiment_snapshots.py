@@ -183,6 +183,7 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         before = self.session.get(TritonInstanceEntity, 1).model_dump()
         receipt = self.finish()
         self.assertEqual(receipt.task.source_snapshot_id, receipt.id)
+        self.assertEqual(receipt.manifest.configuration["models"], ["iris"])
         self.assertIn("runtime_state_unverified", receipt.manifest.gaps)
         self.assertIn("running_model_bytes_unverified", receipt.task.missing_inputs)
         self.assertEqual(receipt.manifest.runtime.images[0].observed, self.runtime.images[0].observed)
@@ -196,6 +197,21 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
             self.session.add(row)
             self.session.commit()
         self.session.rollback()
+
+    def test_original_configuration_remains_readable_without_credential_values(self):
+        instance = self.session.get(TritonInstanceEntity, 1)
+        instance.s3_endpoint = "https://legacy-user:synthetic-private-value@storage.invalid"
+        self.session.add(instance)
+        self.session.commit()
+        # Use explicitly supplied model inputs, independently of legacy instance settings.
+        receipt = self.finish(request=self.request(repository={"profile_id": 1, "prefix": "provided"}))
+        self.assertEqual(receipt.manifest.configuration["models"], ["iris"])
+        self.assertIsNone(receipt.manifest.configuration["s3_endpoint"])
+        self.assertNotIn("synthetic-private-value", receipt.model_dump_json())
+        instance.model_names = ["new-experiment"]
+        self.session.add(instance)
+        self.session.commit()
+        self.assertEqual(self.receipt(receipt.operation_id).manifest.configuration["models"], ["iris"])
 
     def test_idempotent_replay_does_not_capture_again_or_create_another_task(self):
         first = self.finish()

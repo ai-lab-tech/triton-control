@@ -82,7 +82,7 @@ def _config(instance: Any) -> dict[str, Any]:
         "deployment": instance.deployment_name,
         "models": sorted(instance.model_names),
         "s3_enabled": instance.s3_enabled,
-        "s3_endpoint": instance.s3_endpoint,
+        "s3_endpoint": _safe_endpoint(instance.s3_endpoint),
         "s3_bucket": instance.s3_bucket,
         "s3_prefix": instance.s3_prefix,
     }
@@ -345,6 +345,7 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 request=request,
                 runtime=before,
                 source_receipt={**captured.receipt, **source_identity} if source else {},
+                configuration=configuration,
                 configuration_digest=digest(configuration),
                 source_snapshot=Snapshot(
                     origin=origin,
@@ -471,3 +472,17 @@ def _checked_profile_client(session: Session, claims: dict[str, Any], profile_id
     if profile is None or not profile.endpoint or not profile.access_key or not profile.secret_key_enc:
         raise BadRequestError("Selected S3 profile has no usable configured credentials")
     return _profile_client(session, claims, profile_id)
+
+
+def _safe_endpoint(value: str | None) -> str | None:
+    from urllib.parse import urlsplit
+    if not value:
+        return None
+    try:
+        endpoint = urlsplit(value)
+        if (endpoint.scheme not in {"http", "https"} or not endpoint.hostname or endpoint.username
+                or endpoint.password or endpoint.query or endpoint.fragment):
+            return None
+    except ValueError:
+        return None
+    return value

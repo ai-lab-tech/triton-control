@@ -126,7 +126,7 @@ contains no embedded secret; review project files before submitting. Raw provide
 errors, workspace stderr, environment variables, shell commands, Secret values
 and instance credentials are never copied into the receipt or operation status.
 
-Snapshot identity binds canonical manifest content, configuration identity,
+Snapshot identity binds canonical manifest content, the readable credential-free configuration and its identity,
 intended models, runtime evidence and both model/workspace inventories. A neutral
 lineage `Snapshot` binds the combined inventory without inventing MLflow IDs or
 engineering transformations. Manifest self-hashes and artifact-store receipts
@@ -192,8 +192,8 @@ Tests exercise actual runtime ownership/platform reads and workspace exec,
 concurrent submissions/workers, rollback/recovery, stale fences, immutable
 receipts, source changes, secret exclusion and version-pinned artifact retention.
 
-Local verification on 2026-11-16: all 39 focused tests passed with real PostgreSQL,
-MinIO and Kubernetes enabled. Full backend discovery passed 1,197 tests (164
+Local verification on 2026-11-16: all 41 focused tests passed with real PostgreSQL,
+MinIO and Kubernetes enabled. Full backend discovery passed 1,199 tests (164
 environment-dependent skips), with 82.6% coverage. Mypy (305 files), Ruff, all four
 architecture contracts, Bandit and Helm lint passed. Frontend API generation,
 Angular build, ESLint and Prettier passed with the updated OpenAPI copies.
