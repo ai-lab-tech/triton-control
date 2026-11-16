@@ -51,7 +51,7 @@ npm run -s generate:api
 
 - `/dashboard`
 - `/instances`
-- `/development`
+- `/workspaces`
 - `/deployments/new`
 - `/instances/:id/models/:modelName/versions/:version/profile` — model Perf controls and results
 - `/s3-profiles`

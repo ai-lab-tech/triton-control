@@ -52,7 +52,7 @@ Main sidebar entries:
 
 - Dashboard
 - Triton Instances
-- Development (when Kubernetes actions are available)
+- Workspaces (when Kubernetes actions are available)
 - Add Deployment (when Kubernetes actions are available)
 - Workflows (when Kubernetes actions and Argo Workflows are available)
 - Add Instance (button, last nav action): creates a manually managed Triton instance entry.
@@ -462,9 +462,9 @@ When ingress is not configured, Triton Control uses internal service DNS:
 http://<service>.<namespace>.svc.cluster.local:<port>
 ```
 
-## Development Workspace (Sidebar Entry)
+## Workspaces (Sidebar Entry)
 
-**Development** is a standalone product feature that creates a private,
+**Workspaces** is a standalone product feature that creates a private,
 Kubernetes-backed code-server workspace for the signed-in user. It is separate
 from development of the Triton Control application itself.
 
@@ -501,7 +501,7 @@ For plain HTTP or an untrusted local certificate, use
 The simple wizard avoids webviews, uploads the repository to S3, and shows the
 values needed to finish in **Add Deployment**.
 
-See [Development Workspaces](development-workspaces.md) for workspace fields,
+See [Workspaces](development-workspaces.md) for workspace fields,
 Kubernetes resources, persistence, proxy behavior, deployment steps, and API
 details.
 

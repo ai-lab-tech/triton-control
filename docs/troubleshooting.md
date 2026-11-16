@@ -158,7 +158,7 @@ connect by itself. No connection tab or webview is needed.
 - Missing menus: check that **Triton Control Deploy** is installed in the
   managed workspace, then reload. Older workspaces need the updated extension
   and startup integration, not a separately installed S3 client.
-- Workspace integration/access errors: reopen the workspace through **Development**
+- Workspace integration/access errors: reopen the workspace through **Workspaces**
   and check the workspace Secret and profile endpoint configuration. Do not
   paste access keys into the browser's connection settings.
 - S3 certificate or connection errors: check the selected saved profile's endpoint,
@@ -177,7 +177,7 @@ connection actions, transfer rules, limits, and upgrade requirements.
 ## code-server Deployment Form Does Not Open
 
 These webview requirements apply to the full deployment form, not the native
-S3 browser. If the Development workspace loads but the **Triton Control Deploy**
+S3 browser. If the workspace loads but the **Triton Control Deploy**
 deployment form stays blank or the browser console shows this error:
 
 ```text

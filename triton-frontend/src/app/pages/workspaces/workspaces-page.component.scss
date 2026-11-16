@@ -5,7 +5,7 @@
   margin: -1rem calc(-1 * clamp(1rem, 2vw, 2rem)) -1.25rem;
 }
 
-.development {
+.workspaces {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -46,11 +46,11 @@
 }
 
 .view-loading .spin {
-  animation: development-spin 1s linear infinite;
+  animation: workspaces-spin 1s linear infinite;
   color: #0f766e;
 }
 
-@keyframes development-spin {
+@keyframes workspaces-spin {
   to {
     transform: rotate(360deg);
   }
@@ -515,7 +515,7 @@
 }
 
 @media (max-width: 800px) {
-  .development {
+  .workspaces {
     height: auto;
     min-height: calc(100dvh - 64px - 5rem);
     overflow: visible;

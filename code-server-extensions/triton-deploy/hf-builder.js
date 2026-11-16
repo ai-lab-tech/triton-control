@@ -27,7 +27,7 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
         { label: "Transformers / Python", runtime: "transformers", description: "Text generation, classification and raw features" },
         { label: "vLLM", runtime: "vllm", description: "Native Triton vLLM backend" },
         { label: "TensorRT-LLM LLM API", runtime: "tensorrt-llm", description: "Python backend with the PyTorch LLM API" },
-      ], { title: "HF Builder: Serving runtime" });
+      ], { title: "HF Builder: Serving runtime", ignoreFocusOut: true });
       if (!choice) return;
       const runtime = choice.runtime;
       const tasks = runtime === "transformers" ? TASKS : ["text-generation"];
@@ -38,12 +38,12 @@ function registerHfBuilder(context, vscode, outputChannel, refresh) {
       let task;
       if (chooseTask || !inferredTask) {
         const orderedTasks = [...tasks].sort((a, b) => Number(b === inferredTask) - Number(a === inferredTask));
-        task = await vscode.window.showQuickPick(orderedTasks, { title: "HF Builder: Model task" });
+        task = await vscode.window.showQuickPick(orderedTasks, { title: "HF Builder: Model task", ignoreFocusOut: true });
         if (!task) return;
       }
       let device = "gpu";
       if (runtime === "transformers") {
-        device = await vscode.window.showQuickPick(["gpu", "cpu"], { title: "HF Builder: Serving device" });
+        device = await vscode.window.showQuickPick(["gpu", "cpu"], { title: "HF Builder: Serving device", ignoreFocusOut: true });
         if (!device) return;
       }
       const image = await vscode.window.showInputBox({

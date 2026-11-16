@@ -18,7 +18,7 @@ nav:
     - User Management: user-management.md
     - Preparation Tasks: preparation-tasks.md
     - Candidate Import: candidate-import.md
-    - Development Workspaces: development-workspaces.md
+    - Workspaces: development-workspaces.md
     - Argo Workflows: argo-workflows.md
   - Architecture:
     - Overview: architecture-overview.md
