@@ -7842,6 +7842,18 @@
           "origin": {
             "$ref": "#/components/schemas/Origin"
           },
+          "previous_handoff_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Handoff Id"
+          },
           "revision": {
             "type": "string",
             "maxLength": 256,

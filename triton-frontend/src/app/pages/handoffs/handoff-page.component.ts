@@ -50,12 +50,14 @@ export class HandoffPageComponent {
   profileId: number | null = null;
   sourcePath = "";
   revision = "1";
+  previousHandoffId = "";
   datasetPath = "";
   baselinePath = "";
   expectedBehavior = "";
   criteria = "";
 
   constructor() {
+    this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
       this.detail.set(!!id);
@@ -107,6 +109,7 @@ export class HandoffPageComponent {
             installation_id: this.document.location.origin,
             record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
           },
+          previous_handoff_id: this.previousHandoffId.trim() || null,
           revision: this.revision.trim(),
           title: this.title.trim(),
           source: source(this.sourcePath),

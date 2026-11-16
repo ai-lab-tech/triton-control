@@ -13,6 +13,14 @@
     </div>
     @if (detail()) {
       <a mat-stroked-button routerLink="/preparation/handoffs/new">New handoff</a>
+      @if (receipt(); as item) {
+        <a
+          mat-stroked-button
+          routerLink="/preparation/handoffs/new"
+          [queryParams]="{ previous: item.id }"
+          >New revision</a
+        >
+      }
     }
   </header>
   @if (error()) {
@@ -35,6 +43,13 @@
           Choose a stored S3 profile and the model file or archive. Paths are relative to the
           profile’s prefix. Bucket versioning must be enabled.
         </p>
+        <mat-form-field appearance="outline" class="wide">
+          <mat-label>Previous handoff ID (optional)</mat-label>
+          <input matInput name="previousHandoff" [(ngModel)]="previousHandoffId" />
+          <mat-hint
+            >When revising a handoff, link its ID and use a new submission revision.</mat-hint
+          >
+        </mat-form-field>
         <div class="fields">
           <mat-form-field appearance="outline"
             ><mat-label>Handoff title</mat-label
@@ -150,6 +165,12 @@
         <dd>
           <code>{{ item.task.id }}</code>
         </dd>
+        @if (item.request.previous_handoff_id; as previous) {
+          <dt>Previous handoff</dt>
+          <dd>
+            <a [routerLink]="['/preparation/handoffs', previous]">{{ previous }}</a>
+          </dd>
+        }
         <dt>Submission revision</dt>
         <dd>{{ item.request.revision }}</dd>
       </dl>

@@ -14,7 +14,7 @@ const receipt = {
     missing_inputs: ["evaluation_dataset"],
     blocked_reasons: [],
   },
-  request: { title: "Iris", revision: "1" },
+  request: { title: "Iris", revision: "2", previous_handoff_id: "previous-receipt" },
   source: { key: "iris.onnx", version_id: "v1", file: { digest: "sha256:abc", size: 5 } },
   dataset: null,
   baseline: null,
@@ -32,7 +32,10 @@ describe("HandoffPageComponent", () => {
         provideRouter([]),
         {
           provide: ActivatedRoute,
-          useValue: { paramMap: of(convertToParamMap(id ? { handoffId: id } : {})) },
+          useValue: {
+            paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
+            snapshot: { queryParamMap: convertToParamMap({}) },
+          },
         },
       ],
     }).compileComponents();
@@ -66,11 +69,13 @@ describe("HandoffPageComponent", () => {
     page.title = "Iris";
     page.profileId = 1;
     page.sourcePath = "iris.onnx";
+    page.previousHandoffId = "previous-receipt";
     const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
     let pending = page.submit();
     const first = http.expectOne("/api/preparation/handoffs");
     const identity = first.request.body.origin;
     expect(first.request.body.dataset).toBeNull();
+    expect(first.request.body.previous_handoff_id).toBe("previous-receipt");
     first.flush({ detail: "Please retry" }, { status: 503, statusText: "Unavailable" });
     await pending;
     expect(page.busy()).toBeFalse();
@@ -78,6 +83,7 @@ describe("HandoffPageComponent", () => {
     const retry = http.expectOne("/api/preparation/handoffs");
     expect(retry.request.body.origin).toEqual(identity);
     expect(retry.request.body.revision).toBe("1");
+    expect(retry.request.body.previous_handoff_id).toBe("previous-receipt");
     retry.flush(receipt);
     await pending;
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
@@ -92,6 +98,9 @@ describe("HandoffPageComponent", () => {
     expect(text).toContain("Evaluation dataset");
     expect(text).toContain("v1");
     expect(text).toContain("task-1");
+    expect(
+      fixture.nativeElement.querySelector('a[href="/preparation/handoffs/previous-receipt"]'),
+    ).not.toBeNull();
   });
   it("does not load source profiles or submit for viewers", async () => {
     const fixture = await setup(null, "viewer");

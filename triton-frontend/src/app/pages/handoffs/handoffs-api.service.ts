@@ -12,6 +12,7 @@ export interface SourceInput {
 export interface HandoffRequest {
   schema_version: 1;
   origin: { installation_id: string; record_id: string };
+  previous_handoff_id?: string | null;
   revision: string;
   title: string;
   source: SourceInput;

@@ -21,6 +21,7 @@ class S3Input(Request):
 class HandoffRequest(Request):
     schema_version: Literal[1] = 1
     origin: Origin
+    previous_handoff_id: UUID | None = None
     revision: str = Field(min_length=1, max_length=256)
     title: str = Field(min_length=1, max_length=200)
     source: S3Input

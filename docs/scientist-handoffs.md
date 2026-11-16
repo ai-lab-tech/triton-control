@@ -45,6 +45,14 @@ profiles referencing the same object cannot create duplicate work. Distinct
 objects or explicitly selected versions remain distinct even with the same label.
 Source origin is distinct from the measured source snapshot identity. Credentials
 are never identities.
+For revised inputs, supply `previous_handoff_id` referencing the prior receipt.
+The service checks current access to that receipt and requires a different revision
+within the same origin installation. The immutable request retains the link;
+retries with a different predecessor conflict. The UI offers **New revision** and
+shows a link to the previous receipt. Existing receipts without this optional field
+remain readable. Prior tasks, claims and history are preserved, not automatically
+cancelled or transferred to the new task.
+
 `revision` identifies the explicit submission, not a mutable S3 alias. Changing
 requirements or recapturing changed source bytes requires a new revision.
 

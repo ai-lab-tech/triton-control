@@ -207,6 +207,34 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             self.submit(self.request(acceptance_criteria="different criteria"))
         self.assertEqual(len(self.session.exec(select(PreparationTaskEntity)).all()), 1)
 
+    def test_revision_retains_authorized_predecessor_without_changing_history(self):
+        first = self.submit()
+        claimed = self.claim(first.task)
+        events = preparation.list_events(self.session, self.engineer, first.task.id)
+        request = self.request(revision="2", previous_handoff_id=first.id)
+        second = self.submit(request)
+        self.assertEqual(second.request.previous_handoff_id, first.id)
+        self.assertNotEqual(second.task.id, first.task.id)
+        self.assertEqual(self.submit(request).id, second.id)
+        original = handoffs.get(self.session, self.submitter, first.id)
+        self.assertEqual(original.task, claimed)
+        self.assertEqual(preparation.list_events(self.session, self.engineer, first.task.id), events)
+        with self.assertRaises(ConflictError):
+            self.submit(self.request(revision="2"))
+
+    def test_predecessor_requires_access_and_new_revision_in_same_installation(self):
+        first = self.submit()
+        for changes in (
+            {"revision": "1"},
+            {"revision": "2", "origin": {"installation_id": "other", "record_id": "iris"}},
+        ):
+            with self.assertRaises(ConflictError):
+                self.submit(self.request(previous_handoff_id=first.id, **changes))
+        teams.set_member(self.session, self.admin, self.team.id, 3, active=False)
+        with self.assertRaises(ForbiddenError):
+            self.submit(self.request(revision="2", previous_handoff_id=first.id), claims=self.claims(3))
+        self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
+
     def test_new_revision_creates_new_task(self):
         first, second = self.submit(), self.submit(self.request(revision="2"))
         self.assertNotEqual(first.task.id, second.task.id)

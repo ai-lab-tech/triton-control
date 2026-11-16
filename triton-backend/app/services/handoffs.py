@@ -76,9 +76,20 @@ def _reuse(
     return receipt
 
 
+def _previous(session: Session, claims: dict[str, Any], request: HandoffRequest) -> None:
+    if request.previous_handoff_id is None:
+        return
+    previous = get(session, claims, request.previous_handoff_id)
+    if previous.request.origin.installation_id != request.origin.installation_id:
+        raise ConflictError("A handoff revision must retain its origin installation")
+    if previous.request.revision == request.revision:
+        raise ConflictError("A revised handoff requires a new submission revision")
+
+
 def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) -> HandoffReceipt:
     try:
         _actor(session, claims)
+        _previous(session, claims, request)
         content = digest(request.model_dump(mode="json"))
         selectors = _selectors(session, request)
         selected = selectors["source"]
@@ -95,6 +106,7 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
         baseline = handoff_sources.resolve(session, request.baseline) if request.baseline else None
         teams.get(session, teams.INSTALLATION_TEAM_ID, lock=True)
         _actor(session, claims)
+        _previous(session, claims, request)
         for item in (source, dataset, baseline):
             if item is not None:
                 config, bucket, key = handoff_sources.authorize(session, item.source)
