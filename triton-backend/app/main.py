@@ -55,6 +55,7 @@ from app.api.preparation_api import router as preparation_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
+from app.api.task_workspaces_api import router as task_workspaces_router
 from app.api.team_api import router as team_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
@@ -211,6 +212,7 @@ app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
+app.include_router(task_workspaces_router)
 app.include_router(preparation_router, dependencies=[Depends(get_claims)])
 app.include_router(handoffs_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])

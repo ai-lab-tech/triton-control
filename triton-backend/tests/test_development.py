@@ -190,6 +190,9 @@ class HfBuilderStartupTests(unittest.TestCase):
 
 
 class CodeServerTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch("app.services.development.workspaces.associations.for_workspace", return_value=None))
+
     def _request(self) -> CreateCodeServerRequest:
         return CreateCodeServerRequest(
             name="Dev Workspace",

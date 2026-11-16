@@ -5758,6 +5758,110 @@
           }
         }
       }
+    },
+    "/api/preparation/tasks/{task_id}/workspace": {
+      "post": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Open Workspace",
+        "operationId": "open_workspace_api_preparation_tasks__task_id__workspace_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenTaskWorkspace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWorkspaceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Get Workspace",
+        "operationId": "get_workspace_api_preparation_tasks__task_id__workspace_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWorkspaceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11195,6 +11299,48 @@
           "message"
         ],
         "title": "WorkspaceArgoUpgradeResponse"
+      },
+      "OpenTaskWorkspace": {
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/CreateCodeServerRequest"
+          },
+          "admin_recovery_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Recovery Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OpenTaskWorkspace"
+      },
+      "TaskWorkspaceDTO": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/CodeServerDTO"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "workspace"
+        ],
+        "title": "TaskWorkspaceDTO"
       }
     },
     "securitySchemes": {
