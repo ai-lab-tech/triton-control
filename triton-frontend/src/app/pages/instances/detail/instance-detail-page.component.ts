@@ -133,9 +133,11 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly selectedDetailTabIndex = signal(0);
   readonly selectedPodUid = signal("");
   readonly selectedLogContainer = signal("");
+  readonly selectedPreviousRun = signal(false);
   readonly podLogSelectionRevision = signal(0);
 
-  openPodLogs(uid: string, container = ""): void {
+  openPodLogs(uid: string, container = "", previous = false): void {
+    this.selectedPreviousRun.set(previous);
     this.selectedLogContainer.set(container);
     this.selectedPodUid.set(uid);
     this.podLogSelectionRevision.update((value) => value + 1);
@@ -149,6 +151,20 @@ export class InstanceDetailPageComponent implements OnInit {
 
   readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id"));
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
+  readonly currentPodStates = computed(() =>
+    this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
+  );
+  readonly podStateSummary = computed(() => {
+    const counts = new Map<string, number>();
+    for (const status of this.instance()?.podStatuses ?? []) {
+      const separator = status.indexOf(": ");
+      const label = separator >= 0 ? status.slice(separator + 2).trim() : status.trim();
+      const state = label || "Unknown";
+      counts.set(state, (counts.get(state) ?? 0) + 1);
+    }
+    return [...counts].map(([label, count]) => ({ label, count }));
+  });
+
   readonly loading = toSignal(this.store.select(selectDetailLoading), { initialValue: false });
   readonly loadError = toSignal(this.store.select(selectDetailError), { initialValue: null });
   readonly loadErrorStatus = toSignal(this.store.select(selectDetailErrorStatus));

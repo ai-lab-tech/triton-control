@@ -75,9 +75,9 @@ export class ShellComponent {
         : []),
       { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
-        label: "Development",
+        label: "Workspaces",
         icon: "terminal",
-        path: "/development",
+        path: "/workspaces",
         disabledReason: kubernetesActionDisabledReason,
       },
       {

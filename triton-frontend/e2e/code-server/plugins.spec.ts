@@ -100,17 +100,22 @@ test.describe.serial("code-server plugin workflows", () => {
     });
     const widget = workbench.locator(".quick-input-widget");
     const runtimePrompt = widget.filter({ hasText: "HF Builder: Serving runtime" });
-    // Restoration may dismiss the menu after it becomes visible. Retry the entire
-    // selection, but preserve a wizard that opened after a delayed command response.
+    // Retry only opening the context menu during workbench restoration. Once
+    // activated, inspect may take time: do not cancel/relaunch it every two seconds.
     await expect(async () => {
-      if (await runtimePrompt.isVisible()) return;
       await workbench.locator("body").press("Escape");
       await row(hfSource).click({ timeout: 2000 });
       await row(hfSource).click({ button: "right", timeout: 2000 });
-      await action.click({ timeout: 2000 });
-      await expect(runtimePrompt).toBeVisible({ timeout: 2000 });
+      await expect(action).toBeVisible({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
-    await widget.getByText("Transformers / Python", { exact: true }).click();
+    // Hover updates Monaco's active menu item; DOM focus alone does not update
+    // the action that its Enter handler runs.
+    await action.hover();
+    await expect(action.locator("..")).toHaveClass(/\bfocused\b/);
+    await page.keyboard.press("Enter");
+    await expect(action).toBeHidden();
+    await expect(runtimePrompt).toBeVisible({ timeout: 60_000 });
+    await runtimePrompt.getByText("Transformers / Python", { exact: true }).click();
     await expect(widget).toContainText("HF Builder: Serving device");
     await widget.getByText("cpu", { exact: true }).click();
     await input(workspaceImage, "HF Builder: Target serving image");
@@ -268,8 +273,8 @@ test.describe.serial("code-server plugin workflows", () => {
     s3("put", `${prefix}/remote-${phase}.txt`, "original smoke content");
     page = await context.newPage();
     // Angular rehydrates authentication from the real backend session cookie.
-    await page.goto("/development");
-    workbench = page.frameLocator('iframe[title="Development"]');
+    await page.goto("/workspaces");
+    workbench = page.frameLocator('iframe[title="Workspace"]');
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
     await expect(page.locator(".frame-loading")).toBeHidden({ timeout: 30_000 });
     await expect(
@@ -438,7 +443,7 @@ test.describe.serial("code-server plugin workflows", () => {
 
   test("HF wizard uses the published builder and passes serving metadata to deployment", async () => {
     // Arrange
-    await page.goto("/development");
+    await page.goto("/workspaces");
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
     await expect(page.locator(".frame-loading")).toBeHidden({ timeout: 30_000 });
 
@@ -499,7 +504,7 @@ test.describe.serial("code-server plugin workflows", () => {
         { timeout: 540_000, intervals: [3000] },
       )
       .toBe("ready");
-    await page.goto("/development");
+    await page.goto("/workspaces");
     expect(readFile(`/workspace/${repository}/${model}/1/model.py`)).toContain("TritonPythonModel");
     expect(readFile(`/workspace/remote-${phase}.txt`)).toBe("edited smoke content");
     await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });

@@ -1,0 +1,59 @@
+{
+  "candidate": {
+    "attempts": [
+      {
+        "input_inventory": "sha256:863b830ce5979d09290832ccf0f3312c959bcfb089ffefb2a851e25b9633b210",
+        "operation": "packaging",
+        "origin": {
+          "installation_id": "fixture-dev",
+          "record_id": "capture-golden-candidate"
+        },
+        "output_inventory": "sha256:863b830ce5979d09290832ccf0f3312c959bcfb089ffefb2a851e25b9633b210",
+        "tool": "triton-control.neutral-importer/v1"
+      }
+    ],
+    "derived_from_snapshot": {
+      "inventory": "sha256:863b830ce5979d09290832ccf0f3312c959bcfb089ffefb2a851e25b9633b210",
+      "kind": "manual",
+      "origin": {
+        "installation_id": "fixture-manual",
+        "record_id": "prepared-input"
+      }
+    },
+    "origin": {
+      "installation_id": "fixture-dev",
+      "record_id": "golden-candidate"
+    },
+    "output_inventory": "sha256:863b830ce5979d09290832ccf0f3312c959bcfb089ffefb2a851e25b9633b210",
+    "plugin_references": [],
+    "previous_serving_candidate": null,
+    "schema_version": 1
+  },
+  "candidate_digest": "sha256:54c78ae853a61a3caa029ef8579fdff4d423de36fd88ba7edf5c7f2905371057",
+  "inventory": {
+    "files": [
+      {
+        "digest": "sha256:8041a36a0f1691108bf0efb16cd3e8a8b8bd721da6ef978d79d55a3c0a15ded3",
+        "path": "iris/1/model.onnx",
+        "size": 54
+      },
+      {
+        "digest": "sha256:dfecd92c5033098c197c739deccd1aab10386b443971de30ba5e8007c292a7ad",
+        "path": "iris/config.pbtxt",
+        "size": 54
+      }
+    ],
+    "schema_version": 1
+  },
+  "inventory_digest": "sha256:863b830ce5979d09290832ccf0f3312c959bcfb089ffefb2a851e25b9633b210",
+  "metadata_inventory": {
+    "files": [
+      {
+        "digest": "sha256:4add5dae409c08ea6d7a1c50d6c7883c5242c26ac854781d223a8e3e73a1c606",
+        "path": "lineage.json",
+        "size": 51
+      }
+    ],
+    "schema_version": 1
+  }
+}

@@ -6,7 +6,7 @@ on:
       - "code-server-extensions/**"
       - "triton-backend/app/services/development/**"
       - "triton-backend/app/api/development_api.py"
-      - "triton-frontend/src/app/pages/development/**"
+      - "triton-frontend/src/app/pages/workspaces/**"
       - "triton-frontend/e2e/code-server/**"
       - "triton-frontend/package*.json"
       - "charts/triton-control/**"

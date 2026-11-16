@@ -450,7 +450,7 @@ S3 deployment profiles:
 - The native code-server S3 browser loads all global profiles through
   `/api/development/workspace-s3-profiles/<namespace>/<statefulset-name>` using
   its injected workspace token. It uses credentials and CA certificates in
-  memory. See [Development Workspaces](development-workspaces.md#credentials-and-certificates).
+  memory. See [Workspaces](development-workspaces.md#credentials-and-certificates).
 
 ```json
 {

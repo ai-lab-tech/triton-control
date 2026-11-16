@@ -22,7 +22,18 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlmodel import Column, Field, SQLModel
 
 
@@ -587,6 +598,27 @@ class ServingCandidateEntity(SQLModel, table=True):
     digest: str
     payload: str = Field(sa_column=Column(Text, nullable=False))
     inventories: str = Field(sa_column=Column(Text, nullable=False))
+
+
+class CandidateImportEntity(SQLModel, table=True):
+    """Insert-only capture receipt alongside the canonical #25 candidate."""
+
+    __tablename__ = "candidate_imports"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["installation_id", "record_id"],
+            ["serving_candidates.installation_id", "serving_candidates.record_id"],
+            name="fk_candidate_import_origin",
+        ),
+    )
+    installation_id: str = Field(primary_key=True)
+    record_id: str = Field(primary_key=True)
+    candidate_digest: str = Field(index=True)
+    import_digest: str
+    owner_user_id: int
+    task_id: UUID | None = Field(default=None, foreign_key="preparation_tasks.id", index=True)
+    result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class BuildQualificationEntity(SQLModel, table=True):

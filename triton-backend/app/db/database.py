@@ -78,6 +78,7 @@ def init_db() -> None:
     from app.db.entities import (  # Import models to register them
         AccountLifecycleTokenEntity,
         BuildQualificationEntity,
+        CandidateImportEntity,
         CodeServerEntity,
         DashboardAlertEntity,
         DeploymentPolicyEntity,

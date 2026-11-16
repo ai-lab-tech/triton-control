@@ -151,7 +151,7 @@ For the plugin, connect through **Explorer → S3 Operations → Choose Profile�
 on a workspace item and select the profile you link to Argo. Drag scripts from
 the workspace onto an S3 destination; cross-storage drags copy by default.
 After a run, refresh the S3 tree and open or copy the output files from Explorer.
-See [Development Workspaces](development-workspaces.md#s3-profiles-and-s3-browser).
+See [Workspaces](development-workspaces.md#s3-profiles-and-s3-browser).
 
 AWS CLI requires its own credentials, endpoint, addressing mode, and optional
 CA configuration; it does not inherit the code-server connection. Use the same

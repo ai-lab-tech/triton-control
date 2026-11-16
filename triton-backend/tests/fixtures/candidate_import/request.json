@@ -1,0 +1,29 @@
+{
+  "attempts": [],
+  "candidate_origin": {
+    "installation_id": "fixture-dev",
+    "record_id": "golden-candidate"
+  },
+  "capture_origin": {
+    "installation_id": "fixture-dev",
+    "record_id": "capture-golden-candidate"
+  },
+  "expected_backends": {},
+  "expected_task_revision": null,
+  "manual_source_origin": {
+    "installation_id": "fixture-manual",
+    "record_id": "prepared-input"
+  },
+  "missing_evaluation_inputs": [
+    "evaluation_dataset",
+    "expected_results",
+    "acceptance_thresholds"
+  ],
+  "plugin_references": [],
+  "previous_serving_candidate": null,
+  "prior_inventories": [],
+  "schema_version": 1,
+  "source_snapshot": null,
+  "task_id": null,
+  "triton_version": "26.06"
+}

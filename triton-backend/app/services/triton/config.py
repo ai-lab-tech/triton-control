@@ -116,8 +116,8 @@ def _load_model_config_class(release_branch: str) -> type[Any]:
     return model_class
 
 
-def validate_triton_config_pbtxt(content: bytes, triton_version: str | None) -> None:
-    """Parse *content* as a Triton model config.pbtxt and raise HTTP 422 on error."""
+def parse_triton_config_pbtxt(content: bytes, triton_version: str | None) -> Any:
+    """Return a parsed ModelConfig using an explicitly supported Triton schema."""
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -126,8 +126,7 @@ def validate_triton_config_pbtxt(content: bytes, triton_version: str | None) -> 
     release_branch = _map_triton_version_to_release_branch(triton_version)
     if not release_branch:
         raise UnprocessableEntityError(
-            "Unable to map Triton version to release branch. "
-            f"Detected version: {triton_version or 'unknown'}"
+            f"Unable to map Triton version to release branch. Detected version: {triton_version or 'unknown'}"
         )
 
     model_config_class = _load_model_config_class(release_branch)
@@ -153,6 +152,13 @@ def validate_triton_config_pbtxt(content: bytes, triton_version: str | None) -> 
         raise UnprocessableEntityError(
             f"Invalid Triton config.pbtxt ({release_branch}): {exc}{hint}",
         ) from exc
+
+    return model_config
+
+
+def validate_triton_config_pbtxt(content: bytes, triton_version: str | None) -> None:
+    """Validate a model config while preserving the legacy no-result API."""
+    parse_triton_config_pbtxt(content, triton_version)
 
 
 def extract_triton_error_detail(exc: Exception) -> str:

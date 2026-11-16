@@ -14,7 +14,7 @@ Core capabilities:
 
 - existing Triton instance registration and management
 - self-deployed Triton serving workflows when Triton Control runs in Kubernetes
-- per-user browser-based Development workspaces backed by code-server
+- per-user browser-based workspaces backed by code-server
 - user management and instance access control
 - model inference workflows with model configuration inspection
 - S3-backed model repository integration with reusable S3 profiles and an
@@ -35,7 +35,7 @@ Product:
 
 - [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and Add Instance.
 - [User Management](user-management.md): roles, local and OIDC users, invitations, password resets, approvals, and instance assignment.
-- [Development Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
+- [Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
 - [Code-server Plugin Smoke Tests](development.md#code-server-plugin-smoke-tests): real browser workflows and code-server upgrade checks in an isolated cluster.
 - [Argo Workflows](argo-workflows.md): installation, authenticated proxy, Kubernetes layout, pod security, RBAC, and S3 profile linking for workflow artifacts.
 

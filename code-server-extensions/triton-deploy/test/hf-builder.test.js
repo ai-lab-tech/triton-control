@@ -47,6 +47,7 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
   ].join("\n"));
   const callbacks = new Map();
   const taskPrompts = [];
+  const quickPickOptions = [];
   const errors = [];
   const output = [];
   const destinationPrompts = [];
@@ -68,6 +69,7 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
     },
     window: {
       showQuickPick: async (items, options) => {
+        quickPickOptions.push(options);
         if (options.title === "HF Builder: Serving runtime") return items.find(item => item.runtime === runtime);
         if (options.title === "HF Builder: Serving device") return "cpu";
         if (options.title === "HF Builder: Model task") {
@@ -102,7 +104,7 @@ function builderWizard(t, { inferredTask, runtime = "transformers", selectedTask
     run: (command = "tritonControl.buildHuggingFaceRepository") => callbacks.get(command)({ fsPath: source }),
     readInvocation: () => JSON.parse(fs.readFileSync(invocationPath, "utf8")),
     invocationExists: () => fs.existsSync(invocationPath),
-    taskPrompts, errors, output, destinationPrompts, validationErrors, destinationPath, deploymentCalls,
+    taskPrompts, quickPickOptions, errors, output, destinationPrompts, validationErrors, destinationPath, deploymentCalls,
   };
 }
 
@@ -530,4 +532,20 @@ test("editor wizard passes selected runtime and image to the independent CLI", a
   assert.equal(invocation.includes("--task"), false);
   assert.equal(invocation[1], source);
   assert.equal(refreshed, true);
+});
+
+
+test("HF wizard selections stay open during workspace focus changes", async (t) => {
+  // Arrange
+  const wizard = builderWizard(t, { inferredTask: "feature-extraction" });
+  // Act
+  await wizard.run("tritonControl.buildHuggingFaceRepositoryWithTask");
+  // Assert
+  assert.deepEqual(wizard.errors, []);
+  assert.deepEqual(wizard.quickPickOptions.map(({ title, ignoreFocusOut }) => ({ title, ignoreFocusOut })), [
+    { title: "HF Builder: Serving runtime", ignoreFocusOut: true },
+    { title: "HF Builder: Model task", ignoreFocusOut: true },
+    { title: "HF Builder: Serving device", ignoreFocusOut: true },
+  ]);
+  assert.equal(wizard.invocationExists(), true);
 });
