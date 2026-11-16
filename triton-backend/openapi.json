@@ -2433,6 +2433,214 @@
         }
       }
     },
+    "/api/preparation/handoffs": {
+      "post": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_api_preparation_handoffs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/preparation/handoffs/{handoff_id}": {
+      "get": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Get",
+        "operationId": "get_api_preparation_handoffs__handoff_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Handoff Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/notifications": {
+      "get": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Notifications",
+        "operationId": "notifications_api_preparation_notifications_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationDTO"
+                  },
+                  "title": "Response Notifications Api Preparation Notifications Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/notifications/{notification_id}/read": {
+      "put": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_preparation_notifications__notification_id__read_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Notification Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard/alerts": {
       "get": {
         "tags": [
@@ -7427,6 +7635,32 @@
         ],
         "title": "ErrorEventDTO"
       },
+      "FileEntry": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "size",
+          "digest"
+        ],
+        "title": "FileEntry"
+      },
       "ForgotPasswordRequest": {
         "properties": {
           "email": {
@@ -7525,6 +7759,172 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HandoffReceipt": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "request_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Request Digest"
+          },
+          "request": {
+            "$ref": "#/components/schemas/HandoffRequest"
+          },
+          "source_snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ResolvedInput"
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskDTO"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "request_digest",
+          "request",
+          "source_snapshot",
+          "source",
+          "dataset",
+          "baseline",
+          "task",
+          "created_at"
+        ],
+        "title": "HandoffReceipt"
+      },
+      "HandoffRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "previous_handoff_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Handoff Id"
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "source": {
+            "$ref": "#/components/schemas/S3Input"
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected_behavior": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Behavior"
+          },
+          "acceptance_criteria": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Criteria"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "revision",
+          "title",
+          "source"
+        ],
+        "title": "HandoffRequest"
       },
       "InformationRequest": {
         "properties": {
@@ -8242,6 +8642,52 @@
         "type": "object",
         "title": "NeutralRecoveryResponse"
       },
+      "NotificationDTO": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "handoff_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Handoff Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "message": {
+            "type": "string",
+            "const": "A model handoff is ready for engineering review.",
+            "title": "Message",
+            "default": "A model handoff is ready for engineering review."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "handoff_id",
+          "created_at",
+          "read_at"
+        ],
+        "title": "NotificationDTO"
+      },
       "OidcSettingsDTO": {
         "properties": {
           "oidc_enabled": {
@@ -8862,6 +9308,43 @@
         ],
         "title": "ResolveInputsRequest"
       },
+      "ResolvedInput": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/S3Input"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "version_id": {
+            "type": "string",
+            "title": "Version Id"
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileEntry"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "bucket",
+          "key",
+          "endpoint",
+          "version_id",
+          "file"
+        ],
+        "title": "ResolvedInput"
+      },
       "S3DeleteResponse": {
         "properties": {
           "path": {
@@ -8965,6 +9448,60 @@
           "size"
         ],
         "title": "S3FileWriteResponse"
+      },
+      "S3Input": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "s3",
+            "title": "Kind",
+            "default": "s3"
+          },
+          "profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Profile Id"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f]+$",
+            "title": "Path"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "expected_digest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "path"
+        ],
+        "title": "S3Input"
       },
       "S3ListResponse": {
         "properties": {
@@ -9078,6 +9615,36 @@
           "password"
         ],
         "title": "SelfRegisterRequest"
+      },
+      "Snapshot": {
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "git",
+              "hf",
+              "mlflow"
+            ],
+            "title": "Kind"
+          },
+          "inventory": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Inventory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "kind",
+          "inventory"
+        ],
+        "title": "Snapshot"
       },
       "StartModelPerfRequest": {
         "properties": {

@@ -25,14 +25,18 @@ def create_tables(engine: Engine) -> None:
                 END;
                 $$
             """))
-            for table in ("preparation_task_events", "preparation_attempts", "candidate_imports"):
+            for table in (
+                "preparation_task_events", "preparation_attempts", "preparation_handoffs", "candidate_imports",
+            ):
                 connection.execute(text(f"DROP TRIGGER IF EXISTS immutable_history ON {table}"))
                 connection.execute(text(f"""
                     CREATE TRIGGER immutable_history BEFORE UPDATE OR DELETE ON {table}
                     FOR EACH ROW EXECUTE FUNCTION reject_preparation_history_mutation()
                 """))
         elif connection.dialect.name == "sqlite":
-            for table in ("preparation_task_events", "preparation_attempts", "candidate_imports"):
+            for table in (
+                "preparation_task_events", "preparation_attempts", "preparation_handoffs", "candidate_imports",
+            ):
                 for action in ("UPDATE", "DELETE"):
                     connection.execute(text(f"""
                         CREATE TRIGGER IF NOT EXISTS immutable_{table}_{action.lower()}

@@ -1,3 +1,4 @@
+import { HandoffPageComponent } from "./pages/handoffs/handoff-page.component";
 import { Routes } from "@angular/router";
 import { adminGuard, authGuard } from "./shared/auth/auth.guard";
 import { ShellComponent } from "./shell/shell.component";
@@ -38,6 +39,8 @@ export const APP_ROUTES: Routes = [
     children: [
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
+      { path: "preparation/handoffs/new", component: HandoffPageComponent },
+      { path: "preparation/handoffs/:handoffId", component: HandoffPageComponent },
       { path: "instances", component: InstancesPageComponent },
       { path: "workspaces", component: WorkspacesPageComponent },
       { path: "development", redirectTo: "workspaces", pathMatch: "full" },

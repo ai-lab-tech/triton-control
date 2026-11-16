@@ -43,6 +43,7 @@ from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
+from app.api.handoffs_api import router as handoffs_router
 from app.api.instance_api import router as instance_router
 from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
@@ -211,6 +212,7 @@ app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
 app.include_router(preparation_router, dependencies=[Depends(get_claims)])
+app.include_router(handoffs_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])
 app.include_router(error_log_router, dependencies=[Depends(get_claims)])
 app.include_router(deployment_router, dependencies=[Depends(get_claims)])

@@ -117,12 +117,57 @@ jobs:
           DEPLOYMENT_TEST_KUBERNETES: "1"
         run: |
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
-          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes -v
+          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
         working-directory: triton-backend
         env:
           BUILD_QUALIFICATION_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: python -m unittest tests.test_build_qualification -v
+
+  handoff-source-minio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend
+        working-directory: triton-backend
+        run: pip install -e ".[dev]"
+      - uses: actions/checkout@v4
+        with:
+          repository: minio/minio
+          ref: 07c3a429bfed433e49018cb0f78a52145d4bedeb
+          path: .ci-handoff-minio
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.6"
+          cache-dependency-path: .ci-handoff-minio/go.sum
+      - name: Build pinned MinIO and start isolated test storage
+        working-directory: .ci-handoff-minio
+        env:
+          MINIO_ROOT_USER: handoff_test
+          MINIO_ROOT_PASSWORD: handoff_test_password
+        run: |
+          go build -o "$RUNNER_TEMP/handoff-minio" .
+          "$RUNNER_TEMP/handoff-minio" server "$RUNNER_TEMP/handoff-minio-data" --address 127.0.0.1:9000 > "$RUNNER_TEMP/handoff-minio.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/handoff-minio.log"
+          exit 1
+      - name: Verify exact source versions and access failures
+        working-directory: triton-backend
+        env:
+          HANDOFF_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+        run: python -m unittest tests.test_handoff_s3_integration -v
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: handoff-minio-log
+          path: ${{ runner.temp }}/handoff-minio.log
 
   candidate-import-postgres-s3:
     runs-on: ubuntu-latest
@@ -275,7 +320,25 @@ jobs:
           pip install pip-audit
 
       - name: Run pip-audit
-        run: pip-audit
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          audit_log=$(mktemp)
+          trap 'rm -f "$audit_log"' EXIT
+          for attempt in 1 2 3; do
+            if pip-audit --timeout 60 --progress-spinner off 2>&1 | tee "$audit_log"; then
+              exit 0
+            else
+              audit_status=${PIPESTATUS[0]}
+            fi
+            # Retry transport failures only. Vulnerability findings and other
+            # audit failures retain their nonzero exit status immediately.
+            if ! grep -Eq '(requests.exceptions.(ReadTimeout|ConnectTimeout|ConnectionError)|urllib3.exceptions.(ReadTimeoutError|ConnectTimeoutError|NewConnectionError)|TimeoutError:.*timed out)' "$audit_log" || [ "$attempt" -eq 3 ]; then
+              exit "$audit_status"
+            fi
+            echo "::warning::pip-audit transport failure; retrying ($attempt/3)."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Check OpenAPI specs are current
         run: |

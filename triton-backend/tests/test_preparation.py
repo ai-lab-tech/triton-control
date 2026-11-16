@@ -398,6 +398,8 @@ class PreparationTests(PreparationFixture, unittest.TestCase):
         task = preparation.record_attempt(
             self.session, self.engineer, task.id, TaskRevision(expected_revision=2), self.attempt()
         )
+        # Release DTO read locks before schema DDL uses a separate connection.
+        self.session.commit()
         create_tables(self.engine)
         create_tables(self.engine)
         self.assertEqual(preparation.get_task(self.session, self.admin, task.id), task)
