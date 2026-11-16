@@ -21,10 +21,10 @@ from uuid import UUID, uuid4
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 
+from app.core.canonical import canonical_bytes, inventory_digest
 from app.exceptions import BadRequestError, ConflictError, ServiceUnavailableError
 from app.schemas.candidate_import import ArtifactLocation
 from app.schemas.lineage import FileEntry, InventoryV1
-from app.services.lineage import canonical_bytes, inventory_digest
 
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024**2

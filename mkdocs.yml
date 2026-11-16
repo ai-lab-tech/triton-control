@@ -29,6 +29,7 @@ nav:
     - Configuration: configuration.md
     - Deployment: deployment.md
     - Pod state and logs: pod-visibility.md
+    - Immutable materialization: immutable-materialization.md
     - Ingress and TLS Setup: ingress-tls.md
     - Security: security.md
     - Troubleshooting: troubleshooting.md

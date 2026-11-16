@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "Rewrite": {
+      "additionalProperties": false,
+      "description": "Explicit quoted string substitution; never execute config/model code.",
+      "properties": {
+        "file": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "File",
+          "type": "string"
+        },
+        "occurrences": {
+          "default": 1,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Occurrences",
+          "type": "integer"
+        },
+        "relative": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Relative",
+          "type": "string"
+        },
+        "target": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "relative",
+        "target"
+      ],
+      "title": "Rewrite",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "rewrites": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Rewrite"
+      },
+      "maxItems": 1000,
+      "title": "Rewrites",
+      "type": "array"
+    },
+    "version": {
+      "default": "identity/v1",
+      "enum": [
+        "identity/v1",
+        "triton-layout/v1"
+      ],
+      "title": "Version",
+      "type": "string"
+    },
+    "wrap_model": {
+      "anyOf": [
+        {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wrap Model"
+    }
+  },
+  "title": "Normalization",
+  "type": "object"
+}

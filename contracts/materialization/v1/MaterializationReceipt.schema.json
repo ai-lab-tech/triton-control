@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "materializer_image": {
+      "maxLength": 512,
+      "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+      "title": "Materializer Image",
+      "type": "string"
+    },
+    "normalization_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Normalization Digest",
+      "type": "string"
+    },
+    "plan_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Digest",
+      "type": "string"
+    },
+    "prepared_inventory_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Prepared Inventory Digest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_inventory_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Inventory Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_digest",
+    "source_inventory_digest",
+    "prepared_inventory_digest",
+    "normalization_digest",
+    "materializer_image"
+  ],
+  "title": "MaterializationReceipt",
+  "type": "object"
+}

@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
+triton-materialize = "app.services.materialization.cli:main"
 triton-validate-metadata = "app.services.serving_metadata_cli:main"
 
 [project.optional-dependencies]

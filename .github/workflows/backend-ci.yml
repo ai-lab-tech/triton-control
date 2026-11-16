@@ -7,6 +7,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/materialization/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -21,6 +22,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/materialization/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -34,6 +36,32 @@ permissions:
   contents: read
 
 jobs:
+  materializer-kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: helm/kind-action@v1.12.0
+        with:
+          install_only: true
+          version: v0.33.0
+      - name: Install qualification tools
+        run: pip install -e './triton-backend[dev]'
+      - name: Qualify the actual pinned helper and read-only Kubernetes mount
+        env:
+          PYTHON_BASE_IMAGE: python@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+          MATERIALIZER_EVIDENCE_DIR: ${{ runner.temp }}/materializer-evidence
+        run: bash triton-backend/scripts/ci_materializer.sh
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: materializer-qualification-linux-amd64
+          path: ${{ runner.temp }}/materializer-evidence
+          if-no-files-found: error
+
   serving-metadata-contracts:
     runs-on: ubuntu-latest
     steps:
@@ -238,7 +266,7 @@ jobs:
           LINEAGE_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
-          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_lineage tests.test_lineage_postgres -v
+          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_lineage tests.test_lineage_postgres -v
       - name: Upload S3 diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
