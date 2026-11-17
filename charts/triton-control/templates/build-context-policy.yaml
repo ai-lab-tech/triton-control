@@ -1,0 +1,13 @@
+{{- if .Values.buildQualification.policy }}
+{{- $days := int .Values.buildQualification.contextRetentionDays }}
+{{- if or (lt $days 1) (gt $days 365) }}
+{{- fail "buildQualification.contextRetentionDays must be between 1 and 365" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "triton-control.fullname" . }}-build-context-policy
+  namespace: {{ .Release.Namespace }}
+data:
+  policy.json: {{ toJson .Values.buildQualification.policy | quote }}
+{{- end }}

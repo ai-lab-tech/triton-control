@@ -25,7 +25,8 @@ dependencies = [
     "kubernetes==35.0.0", 
     "packaging>=24.0",
     "pyyaml==6.0.3",
-    "jsonschema==4.26.0"
+    "jsonschema==4.26.0",
+    "docker==7.1.0"
 ]
 
 [project.scripts]
@@ -166,3 +167,7 @@ name = "(4) foundation layers have no inward app dependencies"
 type = "forbidden"
 source_modules = ["app.db", "app.schemas", "app.exceptions"]
 forbidden_modules = ["app.api", "app.services", "app.core", "app.repositories", "app.mappers"]
+
+[[tool.mypy.overrides]]
+module = ["docker.*"]
+ignore_missing_imports = true

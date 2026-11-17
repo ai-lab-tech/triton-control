@@ -20,6 +20,7 @@ nav:
     - Validation Contracts: validation-contracts.md
     - Scientist Handoffs: scientist-handoffs.md
     - Candidate Import: candidate-import.md
+    - Build Contexts: build-contexts.md
     - Workspaces: development-workspaces.md
     - Task Workspaces: task-workspaces.md
     - Argo Workflows: argo-workflows.md

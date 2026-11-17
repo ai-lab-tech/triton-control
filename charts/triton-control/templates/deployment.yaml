@@ -55,7 +55,19 @@ spec:
             - name: api
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
+          {{- if .Values.buildQualification.policy }}
+          volumeMounts:
+            - name: build-context-policy
+              mountPath: /etc/triton-control/build-context
+              readOnly: true
+          {{- end }}
           env:
+            {{- if .Values.buildQualification.policy }}
+            - name: TRITON_BUILD_POLICY_FILE
+              value: /etc/triton-control/build-context/policy.json
+            - name: TRITON_BUILD_CONTEXT_RETENTION_DAYS
+              value: {{ .Values.buildQualification.contextRetentionDays | quote }}
+            {{- end }}
             - name: PERF_ANALYZER_IMAGE
               value: {{ .Values.perfAnalyzer.image | quote }}
             - name: PERF_ANALYZER_DEADLINE_SECONDS
@@ -161,6 +173,12 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if .Values.buildQualification.policy }}
+      volumes:
+        - name: build-context-policy
+          configMap:
+            name: {{ include "triton-control.fullname" . }}-build-context-policy
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

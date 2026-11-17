@@ -658,6 +658,29 @@ class HandoffNotificationEntity(SQLModel, table=True):
     read_at: datetime | None = None
 
 
+class BuildContextEntity(SQLModel, table=True):
+    """Staging lifecycle separate from durable operation intent and immutable receipt."""
+    __tablename__ = "build_contexts"
+    id: str = Field(primary_key=True)
+    policy_hash: str
+    storage_binding: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    expires_at: datetime = Field(index=True)
+    upload_token: str | None = None
+    upload_until: datetime | None = None
+    object_key: str | None = None
+    object_version: str | None = None
+    manifest: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    expired: bool = False
+
+
+class BuildContextReceiptEntity(SQLModel, table=True):
+    """Append-only verified receipt; retained after the temporary context is deleted."""
+    __tablename__ = "build_context_receipts"
+    id: str = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class TaskWorkspaceEntity(SQLModel, table=True):
     """One active workspace per task; retries preserve its identity and configuration."""
 

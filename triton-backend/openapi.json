@@ -1425,6 +1425,170 @@
         }
       }
     },
+    "/api/build-contexts": {
+      "post": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_api_build_contexts_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildContextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/build-contexts/{context_id}": {
+      "get": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_build_contexts__context_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "context_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Context Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/build-contexts/{context_id}/archive": {
+      "put": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Upload",
+        "operationId": "upload_api_build_contexts__context_id__archive_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "context_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Context Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-tar": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/teams": {
       "get": {
         "tags": [
@@ -6004,6 +6168,118 @@
         ],
         "title": "BootstrapStatusResponse"
       },
+      "BuildContextRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "archive_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Archive Digest"
+          },
+          "archive_bytes": {
+            "type": "integer",
+            "maximum": 1073741824.0,
+            "minimum": 1024.0,
+            "title": "Archive Bytes"
+          },
+          "dockerfile": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Dockerfile",
+            "default": "Dockerfile"
+          },
+          "allowed_paths": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Allowed Paths"
+          },
+          "dependency_files": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Dependency Files",
+            "default": []
+          },
+          "base_images": {
+            "items": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[a-z0-9][a-z0-9.:/_-]*@sha256:[0-9a-f]{64}$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Base Images",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "archive_digest",
+          "archive_bytes",
+          "allowed_paths"
+        ],
+        "title": "BuildContextRequest"
+      },
+      "BuildContextResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/OperationResponse"
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextManifest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "upload_url",
+          "expires_at",
+          "ready"
+        ],
+        "title": "BuildContextResponse"
+      },
       "CodeServerDTO": {
         "properties": {
           "id": {
@@ -6245,6 +6521,99 @@
           "kind"
         ],
         "title": "ContainerState"
+      },
+      "ContextFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Digest"
+          },
+          "executable": {
+            "type": "boolean",
+            "title": "Executable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "size",
+          "digest",
+          "executable"
+        ],
+        "title": "ContextFile"
+      },
+      "ContextManifest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ContextFile"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "inventory_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Inventory Digest"
+          },
+          "dockerfile_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Dockerfile Digest"
+          },
+          "dependencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Dependencies"
+          },
+          "base_images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Base Images"
+          },
+          "archive_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Archive Digest"
+          },
+          "archive_bytes": {
+            "type": "integer",
+            "title": "Archive Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "files",
+          "inventory_digest",
+          "dockerfile_digest",
+          "dependencies",
+          "base_images",
+          "archive_digest",
+          "archive_bytes"
+        ],
+        "title": "ContextManifest"
       },
       "CreateCodeServerRequest": {
         "properties": {
