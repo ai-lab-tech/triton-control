@@ -1,7 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { test, expect, BrowserContext, Page, FrameLocator, Frame } from "@playwright/test";
+import {
+  test,
+  expect,
+  BrowserContext,
+  Page,
+  FrameLocator,
+  Frame,
+  APIResponse,
+} from "@playwright/test";
 
 const namespace = "plugin-smoke";
 const phase = process.env.PLUGIN_SMOKE_PHASE || "baseline";
@@ -60,6 +68,8 @@ test.describe.serial("code-server plugin workflows", () => {
   let workbench: FrameLocator;
   let pod: string;
   let workspaceId: number;
+  let taskWorkspaceId: number | undefined;
+  let buildTaskId: string;
 
   function readFile(path: string): string {
     return kubectl("exec", pod, "--", "cat", path);
@@ -294,9 +304,40 @@ test.describe.serial("code-server plugin workflows", () => {
 
   test.afterAll(async () => {
     if (context) {
-      await context.close();
+      try {
+        if (taskWorkspaceId !== undefined) {
+          await jsonResponse(await context.request.delete(`/api/development/${taskWorkspaceId}`));
+        }
+      } finally {
+        await context.close();
+      }
     }
   });
+
+  async function jsonResponse(response: APIResponse) {
+    if (!response.ok())
+      throw new Error(`Smoke setup failed: ${response.status()} ${await response.text()}`);
+    return response.json();
+  }
+
+  for (const title of ["Build serving image", "Inspect serving builds"]) {
+    test(`${title} directs personal workspaces to an assigned task`, async () => {
+      // Arrange: reload so a previous command's notification cannot satisfy this check.
+      await page.goto(`/workspaces?workspace=${workspaceId}`);
+      await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
+      await expect(page.locator(".frame-loading")).toBeHidden();
+      const notification = workbench.locator(".notifications-toasts");
+
+      // Act
+      await command(`Triton Control: ${title}`);
+
+      // Assert
+      await expect(notification).toContainText(
+        "Open an assigned task workspace from Triton Control first.",
+      );
+      await expect(workbench.locator(".quick-input-widget")).toBeHidden();
+    });
+  }
 
   test("repository creator writes a Python model through the real wizard", async () => {
     await command("Triton Control: New Model Repository");
@@ -338,6 +379,12 @@ test.describe.serial("code-server plugin workflows", () => {
       .poll(() => probe(() => s3("get", `${prefix}/${filename}`)))
       .toBe("edited smoke content");
     await explorer();
+    // Showing Explorer does not expand the local workspace after editing S3 files.
+    const localRoot = row("workspace");
+    await expect(localRoot).toBeVisible();
+    if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
+      await localRoot.locator(".monaco-tl-twistie").click();
+    }
     await expect(row(repository)).toBeVisible();
     if ((await row(repository).getAttribute("aria-expanded")) === "true") {
       await row(repository).locator(".monaco-tl-twistie").click();
@@ -354,7 +401,6 @@ test.describe.serial("code-server plugin workflows", () => {
       .toBe(readFile(`/workspace/${repository}/${model}/1/model.py`));
     expect(readFile(`/workspace/${repository}/${model}/1/model.py`)).toContain("TritonPythonModel");
     // Reverse direction exercises S3 -> workspace copy, including patched drop handling.
-    const localRoot = row("workspace");
     await row(filename).click();
     await row(filename).getByText(filename, { exact: true }).dragTo(localRoot);
     await expect
@@ -529,5 +575,96 @@ test.describe.serial("code-server plugin workflows", () => {
         ),
       ).notebook,
     ).toBe(true);
+  });
+
+  test("task build history uses the managed workspace credential", async () => {
+    test.setTimeout(600_000);
+    // Arrange: a real version-pinned handoff and claimed task, with no builder policy enabled.
+    const profiles = await jsonResponse(await context.request.get("/api/s3-profiles"));
+    const profileId = profiles.find((profile: { name: string }) => profile.name === "Smoke S3").id;
+    const users = await jsonResponse(await context.request.get("/api/auth/users"));
+    const userId = users.find((user: { email: string }) => user.email === "plugins@example.com").id;
+    const team = await jsonResponse(await context.request.put("/api/teams/engineering"));
+    await jsonResponse(await context.request.put(`/api/teams/${team.id}/members/${userId}`));
+    const artifact = (role: string) => ({
+      profile_id: profileId,
+      path: `build-${phase}-${role}.txt`,
+    });
+    for (const role of ["source", "dataset", "baseline"]) {
+      s3("put", `${prefix}/${artifact(role).path}`, `Serving build smoke ${role}`);
+    }
+    const receipt = await jsonResponse(
+      await context.request.post("/api/preparation/handoffs", {
+        data: {
+          origin: { installation_id: "plugin-smoke", record_id: `serving-build-${phase}` },
+          revision: "1",
+          title: "Serving build smoke",
+          source: artifact("source"),
+          dataset: artifact("dataset"),
+          baseline: artifact("baseline"),
+          expected_behavior: "Read task build history using managed workspace credentials.",
+          acceptance_criteria:
+            "An installation without qualified build policy cannot start builds.",
+        },
+      }),
+    );
+    await jsonResponse(
+      await context.request.post(`/api/preparation-tasks/${receipt.task.id}/claim`, {
+        data: { expected_revision: receipt.task.revision },
+      }),
+    );
+    const opened = await jsonResponse(
+      await context.request.post(`/api/preparation/tasks/${receipt.task.id}/workspace`, {
+        data: {
+          workspace: {
+            name: `build-smoke-${phase}`,
+            image: workspaceImage,
+            theme: "Default Dark+",
+            storage_size: "1Gi",
+            memory: "1Gi",
+            cpu: "250m",
+          },
+        },
+      }),
+    );
+    taskWorkspaceId = opened.workspace.id;
+    buildTaskId = receipt.task.id;
+    await expect
+      .poll(
+        async () => {
+          const workspace = await jsonResponse(
+            await context.request.get(`/api/development/${taskWorkspaceId}`),
+          );
+          return workspace.status;
+        },
+        { timeout: 480_000, intervals: [3000] },
+      )
+      .toBe("ready");
+    await page.goto(`/workspaces?workspace=${taskWorkspaceId}`);
+    await expect(workbench.locator(".monaco-workbench.vs-dark")).toBeVisible({ timeout: 90_000 });
+    await expect(page.locator(".frame-loading")).toBeHidden();
+    const notification = workbench.locator(".notifications-toasts");
+
+    // Act
+    await command("Triton Control: Inspect serving builds");
+
+    // Assert: the installed extension host authenticated against the real backend.
+    await expect(notification).toContainText("No serving builds for this task yet.");
+    await expect(workbench.locator(".quick-input-widget")).toBeHidden();
+  });
+
+  test("task build submission enforces the installation policy before context selection", async () => {
+    // Arrange: the preceding scenario opened a genuine task workspace.
+    const notification = workbench.locator(".notifications-toasts");
+
+    // Act
+    await command("Triton Control: Build serving image");
+    const builds = await context.request.get(`/api/builds?task_id=${buildTaskId}`);
+
+    // Assert
+    await expect(notification).toContainText("Build access denied");
+    await expect(workbench.locator(".quick-input-widget")).toBeHidden();
+    expect(builds.ok()).toBeTruthy();
+    expect(await builds.json()).toEqual([]);
   });
 });

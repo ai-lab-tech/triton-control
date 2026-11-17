@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import exists
 from sqlmodel import Session, col, select
 
-from app.db.entities import BuildAttemptEntity, BuildEvidenceReferenceEntity
+from app.db.entities import BuildAttemptEntity, BuildEvidenceReferenceEntity, OperationEntity
 from app.exceptions import ConflictError, NotFoundError
 
 
@@ -71,3 +71,11 @@ def holds_context(session: Session, context_id: str) -> bool:
     return session.exec(select(BuildAttemptEntity).where(
         BuildAttemptEntity.context_id == context_id, col(BuildAttemptEntity.cleaned).is_(False),
     )).first() is not None
+
+
+def for_task(session: Session, task_id: str, actor_id: int | None, limit: int, offset: int) -> list[OperationEntity]:
+    query = select(OperationEntity).where(OperationEntity.kind == "build.image", OperationEntity.target == task_id)
+    if actor_id is not None:
+        query = query.where(OperationEntity.actor_id == actor_id)
+    return list(session.exec(query.order_by(col(OperationEntity.created_at).desc(), OperationEntity.id)
+                            .offset(offset).limit(limit)).all())

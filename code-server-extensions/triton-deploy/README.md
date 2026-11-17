@@ -374,3 +374,10 @@ The deployment form uses saved S3 profiles only. Manual S3 connection fields and
 profile creation have been removed from this form. Manage profiles in Triton
 Control. The workspace resolves the selected profile again before uploading, so
 current credentials are used and are not saved to extension settings by this form.
+
+## Task serving image builds
+
+Use **Build serving image** in an assigned task workspace to snapshot a context and build
+to an allowed repository. **Inspect serving builds** provides status, logs, cancellation,
+retry and the exact candidate digest. Build success is not production approval.
+See [the build workflow](../../docs/serving-image-build-ui.md) for setup and limits.

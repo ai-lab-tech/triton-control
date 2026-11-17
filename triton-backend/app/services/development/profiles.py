@@ -39,8 +39,8 @@ def authenticate_workspace(
     owner = users.find_by_id(session, workspace.owner_user_id)
     if not owner or not owner.is_active:
         raise ForbiddenError("Workspace owner is not active")
-    # Resolve the current owner/role on every request. This token is accepted only
-    # by this read-only endpoint; it cannot authenticate to other application APIs.
+    # Resolve the current owner/role on every request. Callers must enforce their
+    # endpoint scope; the build boundary additionally binds this identity to its task.
     require_member_or_admin(claims_from_user(owner, {}))
     from app.services.task_workspace_access import guard
     guard(session, workspace)

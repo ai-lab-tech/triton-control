@@ -17,6 +17,8 @@ operation = sys.argv[1]
 if operation == "init":
     if bucket not in [item["Name"] for item in s3.list_buckets()["Buckets"]]:
         s3.create_bucket(Bucket=bucket)
+    # Task handoffs pin immutable versions, including in repeated upgrade runs.
+    s3.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={"Status": "Enabled"})
 elif operation == "put":
     s3.put_object(Bucket=bucket, Key=sys.argv[2], Body=sys.argv[3].encode())
 elif operation == "get":

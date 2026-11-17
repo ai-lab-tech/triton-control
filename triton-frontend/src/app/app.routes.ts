@@ -1,3 +1,4 @@
+import { TaskBuildsPageComponent } from "./pages/builds/task-builds-page.component";
 import { HandoffPageComponent } from "./pages/handoffs/handoff-page.component";
 import { Routes } from "@angular/router";
 import { adminGuard, authGuard } from "./shared/auth/auth.guard";
@@ -37,6 +38,7 @@ export const APP_ROUTES: Routes = [
     component: ShellComponent,
     canActivate: [authGuard],
     children: [
+      { path: "preparation/tasks/:taskId/builds", component: TaskBuildsPageComponent },
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
       { path: "preparation/handoffs/new", component: HandoffPageComponent },

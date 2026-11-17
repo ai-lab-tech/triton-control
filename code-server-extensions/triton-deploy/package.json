@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -21,7 +21,9 @@
     "onCommand:tritonControl.refreshRepositories",
     "onView:tritonControl.workspaceActions",
     "onStartupFinished",
-    "onFileSystem:triton-s3"
+    "onFileSystem:triton-s3",
+    "onCommand:tritonControl.buildServingImage",
+    "onCommand:tritonControl.inspectServingBuilds"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -148,6 +150,16 @@
         "command": "tritonControl.createS3Bucket",
         "title": "Create Bucket\u2026",
         "category": "S3"
+      },
+      {
+        "command": "tritonControl.buildServingImage",
+        "title": "Triton Control: Build serving image",
+        "icon": "$(package)"
+      },
+      {
+        "command": "tritonControl.inspectServingBuilds",
+        "title": "Triton Control: Inspect serving builds",
+        "icon": "$(package)"
       }
     ],
     "viewsContainers": {
@@ -198,6 +210,16 @@
           "command": "tritonControl.switchS3Profile",
           "when": "view == workbench.explorer.fileView && tritonControl.s3Connected",
           "group": "navigation@81"
+        },
+        {
+          "command": "tritonControl.buildServingImage",
+          "when": "view == tritonControl.workspaceActions",
+          "group": "navigation@92"
+        },
+        {
+          "command": "tritonControl.inspectServingBuilds",
+          "when": "view == tritonControl.workspaceActions",
+          "group": "navigation@92"
         }
       ],
       "explorer/context": [
@@ -225,6 +247,11 @@
           "submenu": "tritonControl.s3Operations",
           "when": "resourceScheme == file || resourceScheme == vscode-remote || resourceScheme == triton-s3",
           "group": "tritonS3@1"
+        },
+        {
+          "command": "tritonControl.buildServingImage",
+          "when": "explorerResourceIsFolder && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "navigation@92"
         }
       ],
       "view/item/context": [

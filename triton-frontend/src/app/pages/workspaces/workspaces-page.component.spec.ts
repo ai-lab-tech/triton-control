@@ -455,6 +455,7 @@ describe("WorkspacesPageComponent", () => {
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(component.embeddedWorkspaceUrl()).not.toBeNull();
   });
+
   it("Load_WorkspaceSelectedByUrl_RefreshesAndEmbedsRequestedWorkspace", async () => {
     // Arrange
     const component = TestBed.createComponent(WorkspacesPageComponent).componentInstance;
