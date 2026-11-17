@@ -2,8 +2,6 @@
 
 from sqlmodel import Session, col, select
 
-from app.repositories.deployment_intents import KIND as DEPLOYMENT_KIND
-
 from app.db.entities import (
     BuildAttemptEntity,
     CodeServerEntity,
@@ -15,6 +13,7 @@ from app.db.entities import (
     PerfAnalyzerEntity,
     WorkflowS3CredentialEntity,
 )
+from app.repositories.deployment_intents import KIND as DEPLOYMENT_KIND
 
 
 def cutover_blockers(session: Session) -> list[str]:
