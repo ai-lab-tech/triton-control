@@ -379,6 +379,12 @@ test.describe.serial("code-server plugin workflows", () => {
       .poll(() => probe(() => s3("get", `${prefix}/${filename}`)))
       .toBe("edited smoke content");
     await explorer();
+    // Showing Explorer does not expand the local workspace after editing S3 files.
+    const localRoot = row("workspace");
+    await expect(localRoot).toBeVisible();
+    if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
+      await localRoot.locator(".monaco-tl-twistie").click();
+    }
     await expect(row(repository)).toBeVisible();
     if ((await row(repository).getAttribute("aria-expanded")) === "true") {
       await row(repository).locator(".monaco-tl-twistie").click();
@@ -395,7 +401,6 @@ test.describe.serial("code-server plugin workflows", () => {
       .toBe(readFile(`/workspace/${repository}/${model}/1/model.py`));
     expect(readFile(`/workspace/${repository}/${model}/1/model.py`)).toContain("TritonPythonModel");
     // Reverse direction exercises S3 -> workspace copy, including patched drop handling.
-    const localRoot = row("workspace");
     await row(filename).click();
     await row(filename).getByText(filename, { exact: true }).dragTo(localRoot);
     await expect
