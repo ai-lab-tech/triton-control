@@ -186,7 +186,12 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly tritonSaving = toSignal(this.store.select(selectDetailTritonSaving), {
     initialValue: false,
   });
-  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && this.installation.allows("direct_deployment") && !this.loadError());
+  readonly canWriteInstances = computed(
+    () =>
+      this.auth.canWriteInstances() &&
+      this.installation.allows("direct_deployment") &&
+      !this.loadError(),
+  );
 
   readonly metadataJson = computed(() => {
     const metadata = this.instance()?.serverMetadata;

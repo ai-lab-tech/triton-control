@@ -1,4 +1,7 @@
-<p role="note">{{ installation.label() }}. Trust and endpoint policy changes require independent review in production.</p>
+<p role="note">
+  {{ installation.label() }}. Trust and endpoint policy changes require independent review in
+  production.
+</p>
 <div class="settings">
   <div class="page-title">Settings</div>
 
@@ -673,7 +676,10 @@
                 </div>
                 <mat-form-field appearance="outline">
                   <mat-label>Domain configuration</mat-label>
-                  <mat-select [(ngModel)]="baseDomainChoice" [disabled]="policyBusy() || !installation.allows('trust_admin')">
+                  <mat-select
+                    [(ngModel)]="baseDomainChoice"
+                    [disabled]="policyBusy() || !installation.allows('trust_admin')"
+                  >
                     <mat-option value="default">Use Helm / environment default</mat-option>
                     <mat-option value="custom">Set in Triton Control</mat-option>
                   </mat-select>
@@ -705,7 +711,10 @@
                 </div>
                 <mat-form-field appearance="outline">
                   <mat-label>Allow HTTP endpoints</mat-label>
-                  <mat-select [(ngModel)]="httpPolicyChoice" [disabled]="policyBusy() || !installation.allows('trust_admin')">
+                  <mat-select
+                    [(ngModel)]="httpPolicyChoice"
+                    [disabled]="policyBusy() || !installation.allows('trust_admin')"
+                  >
                     <mat-option value="default">Use Helm / environment default</mat-option>
                     <mat-option value="deny">No — HTTPS only</mat-option>
                     <mat-option value="allow">Yes — allow HTTP</mat-option>
@@ -763,6 +772,8 @@
         </mat-card-content>
       </mat-card>
     </mat-tab>
-    @if (installation.allows("trust_admin")) { <mat-tab label="Registry"><app-registry-settings /></mat-tab> }
+    @if (installation.allows("trust_admin")) {
+      <mat-tab label="Registry"><app-registry-settings /></mat-tab>
+    }
   </mat-tab-group>
 </div>

@@ -64,7 +64,9 @@ export class ShellComponent {
   readonly role = this.auth.role;
   readonly isAdmin = this.auth.isAdmin;
   readonly isLoggedIn = this.auth.isLoggedIn;
-  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && this.installation.allows("direct_deployment"));
+  readonly canWriteInstances = computed(
+    () => this.auth.canWriteInstances() && this.installation.allows("direct_deployment"),
+  );
   readonly kubernetesEnabled = signal(false);
   readonly kubernetesCapabilityLoaded = signal(false);
 
@@ -101,8 +103,9 @@ export class ShellComponent {
         disabledReason: kubernetesActionDisabledReason,
       },
     ];
-    return items.filter(item => {
-      if (["/workspaces", "/workflows", "/mlflow"].includes(item.path)) return this.installation.allows("development_tools");
+    return items.filter((item) => {
+      if (["/workspaces", "/workflows", "/mlflow"].includes(item.path))
+        return this.installation.allows("development_tools");
       if (item.path === "/deployments/new") return this.installation.allows("direct_deployment");
       return true;
     });

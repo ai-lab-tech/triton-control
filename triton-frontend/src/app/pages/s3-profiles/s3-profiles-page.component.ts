@@ -106,7 +106,12 @@ export class S3ProfilesPageComponent {
   }
 
   async saveProfile(): Promise<void> {
-    if (!this.canManage() || this.saving() || (!this.selectedId && !this.installation.allows("trust_admin"))) return;
+    if (
+      !this.canManage() ||
+      this.saving() ||
+      (!this.selectedId && !this.installation.allows("trust_admin"))
+    )
+      return;
     this.saving.set(true);
     const payload = {
       name: this.draft.name.trim(),
@@ -122,9 +127,12 @@ export class S3ProfilesPageComponent {
     try {
       const saved = this.selectedId
         ? await firstValueFrom(
-            this.http.put<S3Profile>(this.apiUrl(`/api/s3-profiles/${this.selectedId}`),
+            this.http.put<S3Profile>(
+              this.apiUrl(`/api/s3-profiles/${this.selectedId}`),
               this.installation.snapshot()?.mode === "production"
-                ? { access_key: payload.access_key, secret_key: payload.secret_key } : payload),
+                ? { access_key: payload.access_key, secret_key: payload.secret_key }
+                : payload,
+            ),
           )
         : await firstValueFrom(this.http.post<S3Profile>(this.apiUrl("/api/s3-profiles"), payload));
       this.setMessage("S3 profile saved.", "success");

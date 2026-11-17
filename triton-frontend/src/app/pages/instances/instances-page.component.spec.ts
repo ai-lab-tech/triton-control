@@ -38,11 +38,23 @@ describe("InstancesPageComponent", () => {
         { provide: Router, useValue: routerMock },
       ],
     }).compileComponents();
-    TestBed.inject(InstallationService).snapshot.set({mode: "development", explanation: "Development",
-      capabilities: {serving_read: true, artifact_read: true, interactive_inference: true,
-        development_tools: true, development_jobs: true, direct_deployment: true,
-        model_write: true, artifact_write: true, trust_admin: true, credential_admin: true, identity_admin: true}});
-
+    TestBed.inject(InstallationService).snapshot.set({
+      mode: "development",
+      explanation: "Development",
+      capabilities: {
+        serving_read: true,
+        artifact_read: true,
+        interactive_inference: true,
+        development_tools: true,
+        development_jobs: true,
+        direct_deployment: true,
+        model_write: true,
+        artifact_write: true,
+        trust_admin: true,
+        credential_admin: true,
+        identity_admin: true,
+      },
+    });
 
     mockStore = TestBed.inject(MockStore);
     authState = TestBed.inject(AuthStore);

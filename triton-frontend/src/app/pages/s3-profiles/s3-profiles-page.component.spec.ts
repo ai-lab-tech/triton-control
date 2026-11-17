@@ -18,10 +18,23 @@ describe("S3ProfilesPageComponent", () => {
         { provide: BASE_PATH, useValue: "http://localhost:8000/" },
       ],
     }).compileComponents();
-    TestBed.inject(InstallationService).snapshot.set({mode: "development", explanation: "Development",
-      capabilities: {serving_read: true, artifact_read: true, interactive_inference: true,
-        development_tools: true, development_jobs: true, direct_deployment: true,
-        model_write: true, artifact_write: true, trust_admin: true, credential_admin: true, identity_admin: true}});
+    TestBed.inject(InstallationService).snapshot.set({
+      mode: "development",
+      explanation: "Development",
+      capabilities: {
+        serving_read: true,
+        artifact_read: true,
+        interactive_inference: true,
+        development_tools: true,
+        development_jobs: true,
+        direct_deployment: true,
+        model_write: true,
+        artifact_write: true,
+        trust_admin: true,
+        credential_admin: true,
+        identity_admin: true,
+      },
+    });
 
     TestBed.inject(AuthStore).setAuthenticatedUser({
       name: "Admin",
@@ -261,10 +274,22 @@ describe("S3ProfilesPageComponent", () => {
   });
   it("production admins can rotate credentials but cannot edit scope or create profiles", async () => {
     // Arrange
-    TestBed.inject(InstallationService).snapshot.set({ mode: "production", explanation: "Production",
-      capabilities: { credential_admin: true, trust_admin: false } });
-    const profile = { id: 7, name: "approved", endpoint: "https://s3", bucket: "models",
-      region: "us-east-1", prefix: "approved", access_key: "old", secret_key: "", ca_certificate: "" };
+    TestBed.inject(InstallationService).snapshot.set({
+      mode: "production",
+      explanation: "Production",
+      capabilities: { credential_admin: true, trust_admin: false },
+    });
+    const profile = {
+      id: 7,
+      name: "approved",
+      endpoint: "https://s3",
+      bucket: "models",
+      region: "us-east-1",
+      prefix: "approved",
+      access_key: "old",
+      secret_key: "",
+      ca_certificate: "",
+    };
     const fixture = createComponent([profile]);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -288,5 +313,4 @@ describe("S3ProfilesPageComponent", () => {
     http.expectOne("http://localhost:8000/api/s3-profiles").flush([profile]);
     await saving;
   });
-
 });

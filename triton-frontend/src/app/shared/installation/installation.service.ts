@@ -12,9 +12,13 @@ export interface InstallationCapabilities {
 @Injectable({ providedIn: "root" })
 export class InstallationService {
   private readonly injector = inject(Injector);
-  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`.trim().replace(/\/$/, "");
+  private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
+    .trim()
+    .replace(/\/$/, "");
   readonly snapshot = signal<InstallationCapabilities | null>(null);
-  readonly label = computed(() => this.snapshot()?.explanation ?? "Installation policy unavailable");
+  readonly label = computed(
+    () => this.snapshot()?.explanation ?? "Installation policy unavailable",
+  );
 
   allows(capability: string): boolean {
     return this.snapshot()?.capabilities[capability] === true;
@@ -22,9 +26,13 @@ export class InstallationService {
 
   async load(): Promise<boolean> {
     try {
-      const result = await firstValueFrom(this.injector.get(HttpClient).get<InstallationCapabilities>(
-        `${this.basePath}/api/capabilities`, { withCredentials: true },
-      ));
+      const result = await firstValueFrom(
+        this.injector
+          .get(HttpClient)
+          .get<InstallationCapabilities>(`${this.basePath}/api/capabilities`, {
+            withCredentials: true,
+          }),
+      );
       if (!["development", "production"].includes(result.mode) || !result.capabilities) {
         throw new Error("Invalid installation capabilities");
       }

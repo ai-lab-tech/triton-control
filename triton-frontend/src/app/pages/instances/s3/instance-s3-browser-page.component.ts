@@ -115,7 +115,9 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   readonly uploadBusy = computed(
     () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
   );
-  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && this.installation.allows("artifact_write"));
+  readonly canWriteInstances = computed(
+    () => this.auth.canWriteInstances() && this.installation.allows("artifact_write"),
+  );
   readonly prefixLabel = computed(() => this.prefix().trim() || "bucket root");
   readonly repositoryRootPath = computed(() => {
     const bucket = this.bucketName().trim();

@@ -72,7 +72,9 @@ export class InstancesPageComponent implements OnInit {
   readonly loading = toSignal(this.store.select(selectInstancesListLoading), {
     initialValue: false,
   });
-  readonly canDeleteInstances = computed(() => this.auth.isAdmin() && this.installation.allows("direct_deployment"));
+  readonly canDeleteInstances = computed(
+    () => this.auth.isAdmin() && this.installation.allows("direct_deployment"),
+  );
 
   readonly filteredInstances = computed(() => {
     const q = this._query().trim().toLowerCase();

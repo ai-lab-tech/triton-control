@@ -109,7 +109,8 @@ export class SettingsPageComponent {
   }
 
   async saveDeploymentPolicy(): Promise<void> {
-    if (!this.installation.allows("trust_admin") || this.policyBusy() || !this.deploymentPolicy()) return;
+    if (!this.installation.allows("trust_admin") || this.policyBusy() || !this.deploymentPolicy())
+      return;
     this.policyBusy.set(true);
     try {
       const policy = await firstValueFrom(
