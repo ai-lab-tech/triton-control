@@ -45,7 +45,7 @@ class FakeClient:
         self.post_calls = []
         self.closed = False
 
-    async def get(self, url):
+    async def get(self, url, **kwargs):
         self.get_calls.append(url)
         result = self.get_responses.pop(0)
         if isinstance(result, Exception):
@@ -65,6 +65,9 @@ class FakeClient:
 
 class TritonServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        allowlist = patch.dict("os.environ", {"TRITON_METRICS_ALLOWED_URLS": "http://triton:8002/metrics"})
+        allowlist.start()
+        self.addCleanup(allowlist.stop)
         await TritonService.close_all_clients()
 
     async def asyncTearDown(self):
