@@ -90,7 +90,9 @@ GitHub CI as described above.
 
 For frontend changes, follow `.github/workflows/frontend-ci.yml`, including
 dependency auditing, security scanning, API generation, ESLint, Prettier, unit
-tests with coverage. Run long-running smoke and end-to-end tests in GitHub CI.
+tests with coverage. Run `npm run generate:api -- --fresh` before pushing frontend
+or generator changes so an existing JAR cannot hide broken download sources.
+Run long-running smoke and end-to-end tests in GitHub CI.
 
 ## Documentation-only changes
 
