@@ -1,14 +1,6 @@
 """Offline S07-A identity/consistency checks, not evidence authentication or approval."""
 
-import json
-from dataclasses import dataclass
 from datetime import datetime
-from functools import lru_cache
-from importlib.resources import files
-
-from jsonschema import Draft202012Validator
-from pydantic import ValidationError
-from referencing import Registry
 
 from app.schemas.serving_metadata import ArtifactSubjects, ServingRelease
 from app.schemas.validation import (
@@ -21,46 +13,20 @@ from app.schemas.validation import (
     ValidationManifest,
     ValidationReport,
 )
-from app.services.lineage import canonical_bytes, digest
-from app.services.serving_metadata import Format, MetadataError, parse_document
+from app.services.contract_io import Format, MetadataError, ValidatedContract, load_contract
+from app.services.lineage import digest
 
-
-@dataclass(frozen=True)
-class ValidatedDocument:
-    document: Document
-    canonical: bytes
-    digest: str
+ValidatedDocument = ValidatedContract[Document]
 
 
 def document_digest(document: Document) -> str:
     return digest(document.model_dump(mode="json", by_alias=True))
 
 
-@lru_cache(maxsize=3)
-def _validator(kind: str) -> Draft202012Validator:
-    schema = json.loads(files("app.services.validation_contracts").joinpath(f"{kind}.schema.json").read_text())
-    return Draft202012Validator(schema, registry=Registry())
-
-
 def load_validation(raw: bytes, *, format: Format = "auto") -> ValidatedDocument:
-    if format not in {"auto", "yaml", "json"}:
-        raise MetadataError("unsupported-format")
-    data = parse_document(raw, format)
-    if not isinstance(data, dict):
-        raise MetadataError("mapping-required")
-    if data.get("apiVersion") != API_VERSION:
-        raise MetadataError("unsupported-version", "$.apiVersion")
-    kind = data.get("kind")
-    if not isinstance(kind, str) or kind not in DOCUMENT_MODELS:
-        raise MetadataError("unsupported-kind", "$.kind")
-    if next(_validator(kind).iter_errors(data), None) is not None:
-        raise MetadataError("schema-invalid")
-    try:
-        document = DOCUMENT_MODELS[kind].model_validate(data)
-    except ValidationError:
-        raise MetadataError("semantic-invalid") from None
-    return ValidatedDocument(
-        document, canonical_bytes(document.model_dump(mode="json", by_alias=True)), document_digest(document),
+    return load_contract(
+        raw, format=format, api_version=API_VERSION, models=DOCUMENT_MODELS,
+        schema_package="app.services.validation_contracts",
     )
 
 
@@ -119,6 +85,8 @@ def check_evidence_consistency(
         raise MetadataError("evidence-outside-validity")
     if target not in manifest.supported_targets:
         raise MetadataError("unsupported-target")
+    if target != report.measured_target:
+        raise MetadataError("unmeasured-target")
 
 
 def check_release_binding(

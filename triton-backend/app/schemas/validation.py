@@ -1,10 +1,11 @@
 """S07-A immutable validation contracts; no I/O or evaluator execution."""
 
-from datetime import timezone
+import re
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Literal, Protocol, Self
 
-from pydantic import AfterValidator, AwareDatetime, Field, StrictBool, model_validator
+from pydantic import AfterValidator, AwareDatetime, BeforeValidator, Field, StrictBool, model_validator
 
 from app.schemas.lineage import Digest
 from app.schemas.serving_metadata import (
@@ -22,7 +23,27 @@ API_VERSION = "validation.triton-control/v1alpha1"
 Version = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")]
 # Decimal strings keep metrics exact and canonical hashes independent of float encoding.
 Number = Annotated[str, Field(max_length=80, pattern=r"^-?(0|[1-9][0-9]*)(\.[0-9]+)?$")]
-Timestamp = Annotated[AwareDatetime, AfterValidator(lambda value: value.astimezone(timezone.utc))]
+
+def timestamp_input(value: object) -> object:
+    """Accept aware Python datetimes or explicit RFC 3339 wire timestamps."""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2})",
+        value,
+    ):
+        raise ValueError("Expected a timezone-aware RFC 3339 timestamp")
+    return value
+
+
+def utc_timestamp(value: datetime) -> datetime:
+    try:
+        return value.astimezone(timezone.utc)
+    except (OverflowError, ValueError):
+        raise ValueError("Timestamp is outside the supported UTC range") from None
+
+
+Timestamp = Annotated[AwareDatetime, BeforeValidator(timestamp_input), AfterValidator(utc_timestamp)]
 
 
 class EvaluatorIdentity(Contract):

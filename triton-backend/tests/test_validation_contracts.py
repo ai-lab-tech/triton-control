@@ -121,13 +121,19 @@ class ValidationContractTests(unittest.TestCase):
             with self.assertRaises(MetadataError):
                 load_validation(json.dumps(modified).encode())
 
-    def test_unsupported_hardware_remains_explicit_and_cannot_pass(self):
+    def test_unsupported_report_cannot_pass(self):
         report = ValidationReport.model_validate(data("report-unsupported"))
         check_report(self.manifest, report)
         with self.assertRaisesRegex(MetadataError, "validation-not-passed"):
             self.check(report=report)
+
+    def test_unsupported_target_is_rejected(self):
+        report = ValidationReport.model_validate(data("report-unsupported"))
+
         with self.assertRaisesRegex(MetadataError, "unsupported-target"):
             self.check(target=report.measured_target)
+
+    def test_passing_report_requires_supported_measured_target(self):
         forged = data("report-passed")
         forged["measuredTarget"]["architecture"] = "arm64"
         with self.assertRaisesRegex(MetadataError, "unsupported-measured-target"):
@@ -206,7 +212,7 @@ class ValidationContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ValidationReport.model_validate(data("report-passed") | {"status": "error"})
 
-    def test_policy_validity_tool_and_report_mismatches(self):
+    def test_envelope_report_tool_and_issuance_mismatches(self):
         mutations = [
             (("report", "digest"), OTHER_DIGEST),
             (("subjects", "image"), OTHER_DIGEST),
@@ -221,11 +227,17 @@ class ValidationContractTests(unittest.TestCase):
             node[path[-1]] = value
             with self.subTest(path=path), self.assertRaises(MetadataError):
                 self.check(envelope=EvidenceEnvelope.model_validate(revised))
+
+    def test_policy_mismatch_is_rejected(self):
         with self.assertRaisesRegex(MetadataError, "policy-mismatch"):
             self.check(policy=PolicyIdentity(name="synthetic-policy", version="2"))
+
+    def test_evidence_outside_validity_is_rejected(self):
         for now in (datetime(2025, 1, 1, tzinfo=timezone.utc), self.envelope.valid_until):
             with self.assertRaisesRegex(MetadataError, "evidence-outside-validity"):
                 self.check(now=now)
+
+    def test_evidence_check_requires_aware_current_time(self):
         with self.assertRaisesRegex(MetadataError, "timezone-required"):
             self.check(now=NOW.replace(tzinfo=None))
 
@@ -299,16 +311,80 @@ class ValidationContractTests(unittest.TestCase):
         # authentication belongs to S07-C and is not fabricated by this module.
         self.assertEqual(self.envelope.issuer, "synthetic-untrusted-issuer")
 
-    def test_cli_and_export_drift_checks(self):
+    def test_export_drift_checks(self):
         for script in ("export_validation_schema.py", "generate_validation_fixtures.py"):
             result = subprocess.run([sys.executable, str(ROOT / "triton-backend/scripts" / script), "--check"],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_cli_valid_document_reports_structure_only(self):
         result = subprocess.run([sys.executable, "-m", "app.services.validation_cli", str(FIXTURES / "manifest.json")],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["validation"], "structure-and-semantics-only")
+
+    def test_cli_invalid_input_does_not_leak_values(self):
         result = subprocess.run([sys.executable, "-m", "app.services.validation_cli", "-"],
                                 input=b"secret: SECRET", capture_output=True)
         self.assertEqual(result.returncode, 1)
         self.assertNotIn(b"SECRET", result.stderr)
+
+    def multi_target_bundle(self):
+        revised = data("manifest")
+        revised["supportedTargets"].append({**revised["supportedTargets"][0], "cpuModel": "different-cpu"})
+        manifest = ValidationManifest.model_validate(revised)
+        subjects = artifact_subjects(manifest).model_dump(mode="json", by_alias=True)
+        report = ValidationReport.model_validate(data("report-passed") | {
+            "manifestDigest": document_digest(manifest), "subjects": subjects,
+        })
+        envelope = EvidenceEnvelope.model_validate(data("evidence") | {
+            "subjects": subjects,
+            "report": {"uri": "report-passed.json", "digest": document_digest(report)},
+        })
+        return manifest, report, envelope
+
+    def test_supported_but_unmeasured_target_rejects_evidence(self):
+        manifest, report, envelope = self.multi_target_bundle()
+
+        with self.assertRaisesRegex(MetadataError, "unmeasured-target"):
+            self.check(manifest, report, envelope, target=manifest.supported_targets[1])
+
+    def test_measured_target_accepts_evidence_with_multiple_supported_profiles(self):
+        manifest, report, envelope = self.multi_target_bundle()
+
+        self.check(manifest, report, envelope, target=manifest.supported_targets[0])
+
+    def test_timestamp_coercions_rejected_by_model_and_loader(self):
+        for value in ("0", "1767225600", "2026-01-01", "2026-01-01 00:00:00Z", 0):
+            for name, field, model in (
+                ("report-passed", "startedAt", ValidationReport),
+                ("evidence", "issuedAt", EvidenceEnvelope),
+            ):
+                revised = data(name) | {field: value}
+                with self.subTest(value=value, field=field):
+                    with self.assertRaises(ValidationError):
+                        model.model_validate(revised)
+                    with self.assertRaises(MetadataError):
+                        load_validation(json.dumps(revised).encode())
+
+    def test_timestamp_overflow_is_a_safe_validation_error(self):
+        for name, field, value in (
+            ("report-passed", "startedAt", "0001-01-01T00:00:00+01:00"),
+            ("report-passed", "completedAt", "9999-12-31T23:59:59-01:00"),
+            ("evidence", "issuedAt", "0001-01-01T00:00:00+01:00"),
+            ("evidence", "validUntil", "9999-12-31T23:59:59-01:00"),
+        ):
+            raw = json.dumps(data(name) | {field: value}).encode()
+
+            with self.subTest(field=field), self.assertRaisesRegex(MetadataError, "semantic-invalid"):
+                load_validation(raw)
+
+    def test_cli_timestamp_overflow_returns_json_error_without_traceback(self):
+        raw = json.dumps(data("report-passed") | {"startedAt": "0001-01-01T00:00:00+01:00"}).encode()
+
+        result = subprocess.run([sys.executable, "-m", "app.services.validation_cli", "-"],
+                                input=raw, capture_output=True)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stderr), {"input": 0, "error": "semantic-invalid at $"})
+        self.assertEqual(result.stdout, b"")

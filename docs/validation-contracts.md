@@ -59,7 +59,9 @@ The report model checks each pass flag against its measured value. `check_report
 also checks the manifest hash, evaluator, artifact subjects, complete criterion set,
 units/thresholds and supported measured profile. Thus a client-supplied `passed`
 flag or a report containing only its successful checks is insufficient. Timestamps
-must be timezone-aware and ordered; they normalize to UTC. Diagnostics are bounded
+must be timezone-aware RFC 3339 strings and ordered; they normalize to UTC.
+Numeric epoch strings and timestamps outside the representable UTC range are
+rejected with safe validation errors. Diagnostics are bounded
 error codes and optional digest references to separately protected logs, not raw
 provider exception text.
 
@@ -70,7 +72,10 @@ architecture/model, Linux, GPU model/count, driver/CUDA versions and Triton vers
 CPU-only profiles require GPU/driver/CUDA fields to be null. GPU profiles require
 all of them, and their count must match per-replica resources. Version ranges and
 implicit architecture/GPU compatibility are deliberately not inferred. Supporting
-additional profiles changes the manifest and requires new evidence.
+additional profiles changes the manifest and requires new evidence. Declaring a
+profile supported does not establish measured performance: evidence can be used
+only for the exact `measuredTarget` in its report. Each additional profile needs
+its own report and evidence envelope.
 
 `check_evidence_consistency(manifest, report, envelope, target=..., policy=..., now=...)`
 checks passing report consistency, envelope/report identities, expected policy and
