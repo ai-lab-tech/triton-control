@@ -605,7 +605,7 @@ test.describe.serial("code-server plugin workflows", () => {
     );
     await jsonResponse(
       await context.request.post(`/api/preparation-tasks/${receipt.task.id}/claim`, {
-        data: { revision: receipt.task.revision },
+        data: { expected_revision: receipt.task.revision },
       }),
     );
     const opened = await jsonResponse(
