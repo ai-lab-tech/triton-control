@@ -50,6 +50,12 @@ def authenticate_token(token: str) -> dict[str, Any]:
         owner = users.find_by_id(session, owner_id)
         if not owner or not owner.is_active or owner.role.lower() not in {"member", "admin"}:
             raise ForbiddenError("Workspace owner is not active or lacks deployment access")
+        from app.services.task_workspace_access import guard
+        current_workspace = developments.find_by_workload(session, namespace, name)
+        if current_workspace is not None:
+            guard(session, current_workspace)
+        else:
+            raise ForbiddenError("Workspace no longer exists")
         return claims_from_user(owner, {
             "token_use": "workspace_deployment",  # nosec B105 - credential purpose
             "credential_version": owner.credential_version,

@@ -1,6 +1,6 @@
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
-import { BASE_PATH } from "../../api/generated";
+import { BASE_PATH, CodeServerDTO } from "../../api/generated";
 
 export interface SourceInput {
   kind: "s3";
@@ -32,7 +32,14 @@ export interface HandoffReceipt {
   source: ResolvedInput;
   dataset: ResolvedInput | null;
   baseline: ResolvedInput | null;
-  task: { id: string; state: string; missing_inputs: string[]; blocked_reasons: string[] };
+  task: {
+    id: string;
+    revision?: number;
+    assignee_user_id?: number | null;
+    state: string;
+    missing_inputs: string[];
+    blocked_reasons: string[];
+  };
   created_at: string;
 }
 export interface HandoffNotification {
@@ -59,6 +66,20 @@ export class HandoffsApiService {
   get(id: string) {
     return this.http.get<HandoffReceipt>(
       this.base + "/api/preparation/handoffs/" + encodeURIComponent(id),
+    );
+  }
+  claim(taskId: string, revision: number) {
+    return this.http.post(
+      this.base + "/api/preparation-tasks/" + encodeURIComponent(taskId) + "/claim",
+      {
+        expected_revision: revision,
+      },
+    );
+  }
+  openWorkspace(taskId: string) {
+    return this.http.post<{ task_id: string; workspace: CodeServerDTO }>(
+      this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace",
+      {},
     );
   }
   profiles() {

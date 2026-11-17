@@ -268,7 +268,7 @@ class CentralSettingsTests(unittest.TestCase):
         self.save_registry()
         request = CreateCodeServerRequest()
         with (
-            patch.object(workspaces, "_require_kubernetes_enabled"),
+            patch.object(workspaces, "require_kubernetes_enabled"),
             patch.object(workspaces.k8s, "apply_code_server_resources", return_value=[]) as apply,
         ):
             # Act
@@ -281,7 +281,7 @@ class CentralSettingsTests(unittest.TestCase):
         # Arrange
         request = CreateCodeServerRequest(dockerconfigjson=self.secret)
         with (
-            patch.object(workspaces, "_require_kubernetes_enabled"),
+            patch.object(workspaces, "require_kubernetes_enabled"),
             patch.object(workspaces.k8s, "apply_code_server_resources") as apply,
         ):
             # Act

@@ -174,6 +174,26 @@
         <dt>Submission revision</dt>
         <dd>{{ item.request.revision }}</dd>
       </dl>
+      @if (canSubmit() && item.task.state !== "cancelled") {
+        <div class="actions">
+          @if (!item.task.assignee_user_id) {
+            <button mat-stroked-button (click)="claimTask()" [disabled]="busy()">Claim task</button>
+          }
+          <button
+            mat-flat-button
+            (click)="openWorkspace()"
+            [disabled]="
+              busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
+            "
+          >
+            Open task workspace
+          </button>
+        </div>
+        <p>
+          Only the current assignee can open the workspace. Inputs are verified and read-only; use
+          /workspace/conversion for your changes. Reopening reuses the existing workspace.
+        </p>
+      }
       @if (item.task.missing_inputs.length) {
         <div class="notice">
           <strong>Evaluation inputs incomplete</strong>

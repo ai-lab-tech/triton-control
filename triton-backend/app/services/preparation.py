@@ -82,7 +82,10 @@ def _task_dto(task: PreparationTaskEntity, eligible: set[int], handoff: HandoffE
     return task_to_dto(task, blocked).model_copy(update={"missing_inputs": missing})
 
 
-def _access(session: Session, claims: dict[str, Any], task_id: UUID, *, lock: bool = False) -> tuple[int, bool, bool]:
+def authorize_task_access(
+    session: Session, claims: dict[str, Any], task_id: UUID, *, lock: bool = False,
+) -> tuple[int, bool, bool]:
+    """Check current task visibility and eligibility, optionally locking task and team."""
     task = repository.get(session, task_id, lock=lock)
     if lock:
         # Membership writes also lock this team row. Recheck eligibility after acquiring it.
@@ -106,21 +109,21 @@ def list_tasks(session: Session, claims: dict[str, Any], limit: int = 100, offse
 
 
 def get_task(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskDTO:
-    _access(session, claims, task_id)
+    authorize_task_access(session, claims, task_id)
     return _dto(session, task_id)
 
 
 def list_events(
     session: Session, claims: dict[str, Any], task_id: UUID, limit: int = 100, offset: int = 0
 ) -> list[TaskEventDTO]:
-    _access(session, claims, task_id)
+    authorize_task_access(session, claims, task_id)
     return [event_to_dto(row) for row in repository.events(session, task_id, limit, offset)]
 
 
 def list_attempts(
     session: Session, claims: dict[str, Any], task_id: UUID, limit: int = 100, offset: int = 0
 ) -> list[AttemptDTO]:
-    _access(session, claims, task_id)
+    authorize_task_access(session, claims, task_id)
     return [attempt_to_dto(row) for row in repository.attempts(session, task_id, limit, offset)]
 
 
@@ -158,7 +161,7 @@ def create_task(session: Session, claims: dict[str, Any], request: TaskCreate, *
 
 
 def _edit(session: Session, claims: dict[str, Any], task_id: UUID, request: TaskRevision) -> tuple[int, bool, bool]:
-    actor, admin, eligible = _access(session, claims, task_id, lock=True)
+    actor, admin, eligible = authorize_task_access(session, claims, task_id, lock=True)
     task = repository.get(session, task_id)
     if task.revision != request.expected_revision:
         raise ConflictError("Preparation task changed; reload its current revision")
