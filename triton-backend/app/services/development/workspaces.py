@@ -33,7 +33,7 @@ def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServ
             continue
         visible.append(row)
         _refresh_status(session, row)
-    return [_to_dto(row) for row in visible]
+    return [workspace_dto(row) for row in visible]
 
 
 def create_code_server(
@@ -41,7 +41,7 @@ def create_code_server(
     session: Session,
     claims: dict[str, Any],
 ) -> CodeServerDTO:
-    _require_kubernetes_enabled()
+    require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     owner_id = user.id or 0
     if code_servers.find_first_for_owner(session, owner_id):
@@ -50,7 +50,7 @@ def create_code_server(
         )
     name = request.name
     resource_prefix = _resource_prefix(owner_id, name)
-    namespace = _workspace_namespace()
+    namespace = workspace_namespace()
     statefulset_name = resource_prefix
     service_name = f"{resource_prefix}-svc"
     secret_name = f"{resource_prefix}-secret"
@@ -84,13 +84,13 @@ def create_code_server(
     if row.id:
         row.url = proxy_url(row.id)
         row = code_servers.save(session, row)
-    return _to_dto(row)
+    return workspace_dto(row)
 
 
 def get_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerDTO:
     row = _get_owned(session, claims, code_server_id)
     _refresh_status(session, row)
-    return _to_dto(row)
+    return workspace_dto(row)
 
 
 def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
@@ -103,7 +103,7 @@ def delete_code_server(
     claims: dict[str, Any],
     code_server_id: int,
 ) -> CodeServerDeleteResponse:
-    _require_kubernetes_enabled()
+    require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     row = code_servers.find_by_id(session, code_server_id)
     if row is None:
@@ -173,7 +173,7 @@ def _refresh_status(session: Session, row: CodeServerEntity) -> None:
         code_servers.save(session, row)
 
 
-def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
+def workspace_dto(row: CodeServerEntity) -> CodeServerDTO:
     return CodeServerDTO(
         id=row.id or 0,
         name=row.name,
@@ -188,14 +188,14 @@ def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
     )
 
 
-def _require_kubernetes_enabled() -> None:
+def require_kubernetes_enabled() -> None:
     if not kubernetes_enabled():
         raise BadRequestError(
             "Development workspaces are available only when Kubernetes is enabled for Triton Control",
         )
 
 
-def _workspace_namespace() -> str:
+def workspace_namespace() -> str:
     control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
     if control_ns:
         return control_ns

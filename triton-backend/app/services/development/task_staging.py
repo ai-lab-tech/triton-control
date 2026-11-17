@@ -22,8 +22,9 @@ def configure(manifests: list[dict[str, Any]], document: dict[str, Any], namespa
     # Even an image running as root must not remount the immutable input volume.
     container["securityContext"] = {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}}
     folders = json.dumps({"folders": [
-        {"path": "/inputs/verified", "name": "Verified inputs (read-only)"},
+        # Editor extensions use the first folder as their default output root.
         {"path": "/workspace/conversion", "name": "Conversion (writable)"},
+        {"path": "/inputs/verified", "name": "Verified inputs (read-only)"},
     ]})
     container["args"][0] = (
         "mkdir -p /workspace/conversion /workspace/.triton-control; "

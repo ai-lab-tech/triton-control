@@ -5,6 +5,7 @@ Uses only a unique test namespace and a tiny HTTP fixture, not a serving deploym
 
 import hashlib
 import os
+import shlex
 import time
 import unittest
 from unittest.mock import patch
@@ -73,10 +74,11 @@ HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
         main = spec["containers"][0]
         # Keep the generated staging/isolation wiring; replace the editor with a
         # filesystem probe so this test does not install code-server/extensions.
-        main["command"] = ["python3", "-c"]
-        main["args"] = ["""
+        startup = main["args"][0].split("CODE_SERVER_RUNTIME=", 1)[0]
+        main["command"] = ["/bin/sh", "-ec"]
+        probe = """
 from pathlib import Path
-import errno, time
+import errno, json, time
 p = Path('/inputs/verified/source/model.bin')
 assert p.read_bytes() == b'model'
 try:
@@ -85,11 +87,14 @@ except OSError as exc:
     assert exc.errno == errno.EROFS, exc
 else:
     raise RuntimeError('input mount is writable')
-Path('/workspace/conversion').mkdir(exist_ok=True)
-Path('/workspace/conversion/output').write_bytes(b'converted')
+folders = json.loads(Path('/workspace/.triton-control/workspace.code-workspace').read_text())['folders']
+assert folders[0]['path'] == '/workspace/conversion'
+assert folders[1]['path'] == '/inputs/verified'
+Path(folders[0]['path'], 'output').write_bytes(b'converted')
 print('READ_ONLY_INPUTS_AND_WRITABLE_CONVERSION_OK', flush=True)
 time.sleep(300)
-"""]
+"""
+        main["args"] = [startup + "exec python3 -c " + shlex.quote(probe)]
         main.pop("startupProbe", None)
         main.pop("readinessProbe", None)
         main["env"] = []

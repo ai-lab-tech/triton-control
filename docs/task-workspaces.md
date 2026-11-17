@@ -51,7 +51,8 @@ association, selected configuration, immutable inputs and audit event commit
 before Kubernetes resource creation. Repeated requests reuse the same workspace;
 changed settings or inputs return 409. An interrupted apply remains retryable
 using the saved identity. Retry re-applies the same resources and preserves
-existing workspace tokens. Kubernetes also retries failed init containers.
+existing workspace tokens. A completed resource apply is recorded independently of
+pod readiness, so status polling cannot hide an interrupted apply. Kubernetes also retries failed init containers.
 
 A separate administrator-controlled Python init image retrieves only the exact
 captured S3 versions through a token-authenticated backend endpoint. The backend
@@ -64,7 +65,8 @@ All files must pass before the init container atomically publishes
 `/inputs/verified`. Kubernetes mounts `/inputs` read-only in the editor, which
 has all Linux capabilities dropped and privilege escalation disabled. The editor
 has no Kubernetes service-account token. Conversion files live separately in
-`/workspace/conversion` on the workspace's persistent volume.
+`/workspace/conversion` on the workspace's persistent volume. Conversion is the
+first editor folder so builder and scaffolding defaults target writable storage.
 
 `/inputs/verified/task.json` contains the task ID, exact snapshot, file paths,
 version IDs, hashes, expected behavior and acceptance criteria. It contains no

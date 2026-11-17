@@ -1,11 +1,14 @@
 """Task authorization, durable retries, pinned inputs and workspace isolation."""
 
+import base64
 import hashlib
 import io
 import json
+import shlex
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
@@ -16,14 +19,14 @@ from app.api.task_workspaces_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import CodeServerEntity, S3ProfileEntity, TaskWorkspaceEntity
-from app.exceptions import BadRequestError, ConflictError, ForbiddenError, ServiceUnavailableError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.repositories import task_workspaces as repository
 from app.schemas.preparation import ReasonRequest, TaskRevision
 from app.schemas.task_workspaces import OpenTaskWorkspace
 from app.services import handoff_sources, preparation, task_workspaces, teams
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
-from app.services.development import workspaces
+from app.services.development import profiles, workspaces
 from app.services.development.task_stage_runner import stage
 from app.services.development.task_staging import configure
 from tests.test_handoffs import HandoffFixture
@@ -32,7 +35,7 @@ from tests.test_handoffs import HandoffFixture
 class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
     def seed(self):
         super().seed()
-        self.enterContext(patch.object(workspaces, "_require_kubernetes_enabled"))
+        self.enterContext(patch.object(workspaces, "require_kubernetes_enabled"))
         self.apply = self.enterContext(patch.object(
             k8s, "apply_code_server_resources", return_value=["StatefulSet/task"],
         ))
@@ -67,32 +70,72 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
             self.open()
         self.apply.assert_not_called()
 
-    def test_download_endpoint_authenticates_token_and_rechecks_task(self):
-        import base64
-        from types import SimpleNamespace
-
-        from app.services.development import profiles
-        result = self.open()
-        workspace = self.row(result)
+    def authenticated_workspace(self):
+        workspace = self.row(self.open())
         secret = SimpleNamespace(data={"S3_PROFILE_TOKEN": base64.b64encode(b"test-token").decode()})
         core = MagicMock()
         core.read_namespaced_secret.return_value = secret
-        with patch.object(profiles, "api_client"), patch.object(profiles.client, "CoreV1Api", return_value=core):
-            from app.exceptions import UnauthorizedError
-            with self.assertRaises(UnauthorizedError):
-                task_workspaces.input_file(self.session, workspace.namespace, workspace.statefulset_name, "wrong", 0)
-            def download(session, artifact, destination):
-                destination.write_bytes(b"model")
-            with patch.object(handoff_sources, "download", side_effect=download):
-                path = task_workspaces.input_file(self.session, workspace.namespace, workspace.statefulset_name,
-                                                "test-token", 0)
-                self.assertEqual(path.read_bytes(), b"model")
-                path.unlink()
-            teams.set_member(self.session, self.admin, self.team.id, 2, active=False)
-            with self.assertRaises(ForbiddenError):
-                task_workspaces.input_file(
-                    self.session, workspace.namespace, workspace.statefulset_name, "test-token", 0,
-                )
+        self.enterContext(patch.object(profiles, "api_client"))
+        self.enterContext(patch.object(profiles.client, "CoreV1Api", return_value=core))
+        return workspace
+
+    def test_download_rejects_invalid_token(self):
+        workspace = self.authenticated_workspace()
+
+        with self.assertRaises(UnauthorizedError):
+            task_workspaces.input_file(self.session, workspace.namespace, workspace.statefulset_name, "wrong", 0)
+
+    def test_download_returns_verified_bytes(self):
+        workspace = self.authenticated_workspace()
+        def download(session, artifact, destination):
+            destination.write_bytes(b"model")
+        self.enterContext(patch.object(handoff_sources, "download", side_effect=download))
+
+        path = task_workspaces.input_file(
+            self.session, workspace.namespace, workspace.statefulset_name, "test-token", 0,
+        )
+        self.addCleanup(path.unlink, missing_ok=True)
+
+        self.assertEqual(path.read_bytes(), b"model")
+
+    def test_download_rechecks_revoked_membership(self):
+        workspace = self.authenticated_workspace()
+        teams.set_member(self.session, self.admin, self.team.id, 2, active=False)
+        download = self.enterContext(patch.object(handoff_sources, "download"))
+
+        with self.assertRaises(ForbiddenError):
+            task_workspaces.input_file(
+                self.session, workspace.namespace, workspace.statefulset_name, "test-token", 0,
+            )
+
+        download.assert_not_called()
+
+    def test_retry_after_status_refresh_completes_partial_provisioning(self):
+        for status in ("creating", "ready"):
+            with self.subTest(status=status):
+                self.task = self.claim(self.submit(self.request(
+                    revision="partial-" + status,
+                    dataset={"profile_id": 1, "path": "dataset.json"},
+                    baseline={"profile_id": 1, "path": "baseline.json"},
+                    expected_behavior="Predict iris class", acceptance_criteria="Accuracy >= 0.95",
+                )).task)
+                self.apply.reset_mock()
+                self.apply.side_effect = RuntimeError("Service failed after StatefulSet creation")
+                with self.assertRaises(ServiceUnavailableError):
+                    self.open()
+                workspace_id = repository.get(self.session, self.task.id).workspace_id
+                with (patch.object(workspaces, "kubernetes_enabled", return_value=True),
+                      patch.object(k8s, "read_status", return_value=(status, "Pod status"))):
+                    workspaces.get_code_server(self.session, self.engineer, workspace_id)
+                self.apply.side_effect = None
+
+                result = self.open()
+
+                self.assertEqual(result.workspace.id, workspace_id)
+                self.assertEqual(self.apply.call_count, 2)
+                self.assertTrue(self.row(result).applied_resources)
+                names = [call.kwargs["statefulset_name"] for call in self.apply.call_args_list]
+                self.assertEqual(names[0], names[1])
 
     def test_changed_configuration_conflicts(self):
         self.open()
@@ -194,18 +237,30 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(document["acceptance_criteria"], "Accuracy >= 0.95")
         self.assertEqual(len(document["files"]), 3)
 
-    def test_http_boundary_does_not_allow_inline_registry_credentials(self):
+    def http_client(self):
         app = FastAPI()
         app.include_router(router)
         app.dependency_overrides[get_session] = lambda: self.session
         app.dependency_overrides[get_claims] = lambda: self.engineer
-        with TestClient(app) as client:
-            path = f"/api/preparation/tasks/{self.task.id}/workspace"
-            response = client.post(path, json={"workspace": {"dockerconfigjson": "secret"}})
-            self.assertEqual(response.status_code, 422)
-            response = client.post(path, json={})
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["task_id"], str(self.task.id))
+        return self.enterContext(TestClient(app))
+
+    def test_http_boundary_does_not_allow_inline_registry_credentials(self):
+        client = self.http_client()
+        path = f"/api/preparation/tasks/{self.task.id}/workspace"
+
+        response = client.post(path, json={"workspace": {"dockerconfigjson": "secret"}})
+
+        self.assertEqual(response.status_code, 422)
+        self.apply.assert_not_called()
+
+    def test_http_boundary_opens_workspace_with_defaults(self):
+        client = self.http_client()
+        path = f"/api/preparation/tasks/{self.task.id}/workspace"
+
+        response = client.post(path, json={})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["task_id"], str(self.task.id))
 
     def test_download_hash_version_and_size_before_publication(self):
         artifact = access.load_inputs(self.session, self.task.id).files[0].artifact
@@ -231,14 +286,22 @@ class TaskStagerTests(unittest.TestCase):
         return {"files": [{"path": "source/model.bin", "size": 5,
                             "digest": "sha256:" + hashlib.sha256(b"model").hexdigest()}]}
 
-    def test_partial_failure_never_publishes_inputs_and_retry_succeeds(self):
+    def test_partial_failure_never_publishes_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaises(ValueError):
                 stage(root, self.document(), lambda _: io.BytesIO(b"wrong"))
             self.assertFalse((root / "verified").exists())
             self.assertFalse((root / "pending").exists())
+
+    def test_retry_after_partial_failure_publishes_verified_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(ValueError):
+                stage(root, self.document(), lambda _: io.BytesIO(b"wrong"))
+
             stage(root, self.document(), lambda _: io.BytesIO(b"model"))
+
             self.assertEqual((root / "verified/source/model.bin").read_bytes(), b"model")
             self.assertTrue((root / "verified/task.json").exists())
 
@@ -260,3 +323,18 @@ class TaskStagerTests(unittest.TestCase):
         self.assertFalse(spec["automountServiceAccountToken"])
         self.assertEqual(init["command"], ["python3", "/stager/stage.py"])
         self.assertNotIn("S3_SECRET", json.dumps(spec))
+
+    def test_editor_default_output_root_is_writable_conversion_folder(self):
+        manifests = k8s._manifests(OpenTaskWorkspace().workspace, "test", "task-1", "task-1-svc", "task-1-secret")
+
+        configure(manifests, self.document(), "test", "task-1", "task-1-secret")
+
+        spec = next(item for item in manifests if item["kind"] == "StatefulSet")["spec"]["template"]["spec"]
+        command = shlex.split(spec["containers"][0]["args"][0])
+        folders = json.loads(command[command.index("printf") + 2])["folders"]
+        # HF Builder and scaffolding resolve default output relative to folders[0].
+        self.assertEqual(folders[0]["path"], "/workspace/conversion")
+        self.assertEqual(folders[1]["path"], "/inputs/verified")
+        mounts = spec["containers"][0]["volumeMounts"]
+        self.assertFalse(next(m for m in mounts if m["mountPath"] == "/workspace").get("readOnly", False))
+        self.assertTrue(next(m for m in mounts if m["mountPath"] == "/inputs")["readOnly"])

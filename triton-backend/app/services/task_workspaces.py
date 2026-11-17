@@ -34,7 +34,7 @@ def document(task_id: UUID, inputs: WorkspaceInputs) -> dict[str, Any]:
 
 def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
                    request: OpenTaskWorkspace) -> TaskWorkspaceDTO:
-    workspaces._require_kubernetes_enabled()
+    workspaces.require_kubernetes_enabled()
     if claims.get("token_use"):
         raise ForbiddenError("Interactive credentials are required to open task workspaces")
     recovery = request.admin_recovery_reason is not None
@@ -42,38 +42,7 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         actor = access.authorize(session, claims, task_id, recovery=recovery, lock=True)
         inputs = access.load_inputs(session, task_id)
         access.authorize_inputs(session, inputs)
-        association = repository.get(session, task_id)
-        configuration = request.workspace.model_dump(mode="json")
-        if association is not None and association.workspace_id is not None:
-            workspace = developments.find_by_id(session, association.workspace_id)
-            if workspace is None:
-                raise ConflictError("Task workspace association requires administrator recovery")
-            if workspace.owner_user_id != actor:
-                raise ConflictError("Another user owns this task workspace; an administrator must delete it first")
-            if (association.configuration != configuration
-                    or association.recovery_reason != request.admin_recovery_reason
-                    or association.inputs != inputs.model_dump(mode="json")):
-                raise ConflictError("Task workspace already exists with different inputs or settings")
-        else:
-            name = "task-" + task_id.hex[:24] + "-" + uuid4().hex[:12]
-            namespace = workspaces._workspace_namespace()
-            workspace = CodeServerEntity(
-                owner_user_id=actor, name=name, namespace=namespace, statefulset_name=name,
-                service_name=name + "-svc", secret_name=name + "-secret", image=request.workspace.image,
-                status="staging", status_message="Task inputs must be verified before the editor starts.",
-            )
-            repository.save_workspace(session, workspace)
-            association = association or TaskWorkspaceEntity(task_id=task_id)
-            association.workspace_id = workspace.id
-            association.configuration = configuration
-            association.inputs = inputs.model_dump(mode="json")
-            association.recovery_reason = request.admin_recovery_reason
-            repository.save(session, association)
-            task = tasks.get(session, task_id)
-            task.revision += 1
-            tasks.add_event(session, task, actor, "workspace_requested", {
-                "workspace_id": workspace.id, "admin_recovery_reason": request.admin_recovery_reason,
-            })
+        workspace = _reserve_workspace(session, task_id, actor, request, inputs)
         # Persist intent before any Kubernetes writes. The same task/name is reused
         # after a crash; no background process-local scheduling state is required.
         session.commit()
@@ -83,28 +52,76 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         if current is None or current.workspace_id != workspace.id:
             raise ConflictError("Task workspace changed during creation; retry")
         session.refresh(workspace)
-        if workspace.status not in {"ready", "creating"}:
-            configured = apply_registry_settings(request.workspace, session)
-            try:
-                workspace.applied_resources = k8s.apply_code_server_resources(
-                    configured, namespace=workspace.namespace, statefulset_name=workspace.statefulset_name,
-                    service_name=workspace.service_name, secret_name=workspace.secret_name,
-                    task_document=document(task_id, inputs),
-                )
-            except Exception:
-                workspace.status = "blocked"
-                workspace.status_message = "Workspace provisioning was interrupted. Reopen the task workspace to retry."
-                repository.save_workspace(session, workspace)
-                session.commit()
-                raise ServiceUnavailableError(workspace.status_message) from None
-            workspace.status = "creating"
-            workspace.status_message = "Verifying task inputs before starting the editor."
-            repository.save_workspace(session, workspace)
+        _provision_workspace(session, workspace, request, task_id, inputs)
         session.commit()
-        return TaskWorkspaceDTO(task_id=task_id, workspace=workspaces._to_dto(workspace))
+        return TaskWorkspaceDTO(task_id=task_id, workspace=workspaces.workspace_dto(workspace))
     except Exception:
         session.rollback()
         raise
+
+
+def _reserve_workspace(
+    session: Session, task_id: UUID, actor: int, request: OpenTaskWorkspace, inputs: WorkspaceInputs,
+) -> CodeServerEntity:
+    """Reserve identity and audit intent within the caller's task lock."""
+    association = repository.get(session, task_id)
+    configuration = request.workspace.model_dump(mode="json")
+    if association is not None and association.workspace_id is not None:
+        workspace = developments.find_by_id(session, association.workspace_id)
+        if workspace is None:
+            raise ConflictError("Task workspace association requires administrator recovery")
+        if workspace.owner_user_id != actor:
+            raise ConflictError("Another user owns this task workspace; an administrator must delete it first")
+        if (association.configuration != configuration
+                or association.recovery_reason != request.admin_recovery_reason
+                or association.inputs != inputs.model_dump(mode="json")):
+            raise ConflictError("Task workspace already exists with different inputs or settings")
+    else:
+        name = "task-" + task_id.hex[:24] + "-" + uuid4().hex[:12]
+        namespace = workspaces.workspace_namespace()
+        workspace = CodeServerEntity(
+            owner_user_id=actor, name=name, namespace=namespace, statefulset_name=name,
+            service_name=name + "-svc", secret_name=name + "-secret", image=request.workspace.image,
+            status="staging", status_message="Task inputs must be verified before the editor starts.",
+        )
+        repository.save_workspace(session, workspace)
+        association = association or TaskWorkspaceEntity(task_id=task_id)
+        association.workspace_id = workspace.id
+        association.configuration = configuration
+        association.inputs = inputs.model_dump(mode="json")
+        association.recovery_reason = request.admin_recovery_reason
+        repository.save(session, association)
+        task = tasks.get(session, task_id)
+        task.revision += 1
+        tasks.add_event(session, task, actor, "workspace_requested", {
+            "workspace_id": workspace.id, "admin_recovery_reason": request.admin_recovery_reason,
+        })
+    return workspace
+
+
+def _provision_workspace(
+    session: Session, workspace: CodeServerEntity, request: OpenTaskWorkspace,
+    task_id: UUID, inputs: WorkspaceInputs,
+) -> None:
+    """Record complete apply independently of the observed Kubernetes pod status."""
+    if not workspace.applied_resources or workspace.status not in {"ready", "creating"}:
+        configured = apply_registry_settings(request.workspace, session)
+        workspace.applied_resources = []
+        try:
+            workspace.applied_resources = k8s.apply_code_server_resources(
+                configured, namespace=workspace.namespace, statefulset_name=workspace.statefulset_name,
+                service_name=workspace.service_name, secret_name=workspace.secret_name,
+                task_document=document(task_id, inputs),
+            )
+        except Exception:
+            workspace.status = "blocked"
+            workspace.status_message = "Workspace provisioning was interrupted. Reopen the task workspace to retry."
+            repository.save_workspace(session, workspace)
+            session.commit()
+            raise ServiceUnavailableError(workspace.status_message) from None
+        workspace.status = "creating"
+        workspace.status_message = "Verifying task inputs before starting the editor."
+        repository.save_workspace(session, workspace)
 
 
 def get_workspace(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskWorkspaceDTO:

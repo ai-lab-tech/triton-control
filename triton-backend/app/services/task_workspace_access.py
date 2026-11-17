@@ -18,7 +18,7 @@ from app.services.lineage import inventory_digest
 
 def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recovery: bool = False,
               lock: bool = False) -> int:
-    actor, admin, eligible = preparation._access(session, claims, task_id, lock=lock)
+    actor, admin, eligible = preparation.authorize_task_access(session, claims, task_id, lock=lock)
     task = tasks.get(session, task_id)
     if task.state == "cancelled":
         raise ConflictError("Cancelled tasks cannot open a workspace")
@@ -27,7 +27,7 @@ def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recove
             raise ForbiddenError("Admin recovery requires a current administrator")
     elif not (eligible and task.assignee_user_id == actor):
         raise ForbiddenError("Only the current eligible assignee may open this task workspace")
-    if preparation._dto(session, task_id).missing_inputs:
+    if preparation.get_task(session, claims, task_id).missing_inputs:
         raise ConflictError("Complete the handoff evaluation inputs before opening a workspace")
     return actor
 
