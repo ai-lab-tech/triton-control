@@ -7,11 +7,75 @@ Logging a model, uploading an artifact and running an experiment do not submit a
 handoff. Submission does not run a build, validate a candidate or approve/deploy a
 release.
 
+## Submit an unpacked Triton repository
+
+Repositories created by the MLflow plugin, HF Builder or by hand can be submitted
+as a folder. You do not need to create a ZIP or tar archive.
+
+1. Upload the complete repository to a folder in your configured S3 profile.
+   If the plugin already wrote it to S3, use that existing folder.
+2. Open **Submit model** and select **Triton repository folder** as the model source type.
+3. Select the S3 profile and enter the repository folder path, relative to the
+   profile's prefix. A trailing slash is optional.
+4. Enter the dataset and baseline object paths, expected behavior and acceptance
+   criteria, then click **Submit to engineering**.
+5. An eligible ML engineer clicks **Claim task**, then **Open task workspace**.
+   The same person can submit and claim if they have engineering responsibility.
+
+For example, with profile prefix `projects/`, these S3 objects form a repository:
+
+```text
+projects/iris-repository/
+├── iris/
+│   ├── config.pbtxt
+│   └── 1/
+│       └── model.onnx
+├── requirements.txt
+└── serving.json
+```
+
+Enter `iris-repository/`. The task workspace receives the same layout under
+`/inputs/verified/source/`, including supporting files such as `serving.json`,
+requirements and nested Python modules. Inputs are read-only; copy the repository
+to `/workspace/conversion` when you need to edit it. Sibling prefixes, such as
+`iris-repository-backup/`, are not included.
+
+The bucket must have versioning enabled. Finish uploading before submitting: the
+backend lists the folder, pins and hashes every file, then lists it again to reject
+observed changes during capture. S3 does not provide an atomic multi-object folder
+transaction; publishers should stop modifying the folder while it is captured.
+The receipt retains each exact version and checksum plus a repository inventory
+hash. Later edits or added files do not change an existing receipt. Retry with the
+same submission revision to recover it; use **New revision** for changed inputs.
+Keep the captured object versions in S3 while the task needs them.
+
+Repository capture is limited to 998 files, 1 GiB total and a 120-second capture
+budget, with bounded individual network timeouts. Inventory metadata is capped at
+512 KiB so it fits workspace configuration limits. Empty files are preserved;
+empty S3 directory markers are ignored. Unsafe paths and file/directory collisions
+are rejected. The selected folder must contain at least one `model-name/config.pbtxt`.
+This checks the basic layout, not whether Triton can load or serve the model.
+Validation and release approval remain separate steps.
+
+**Single file or archive** remains available for the original submission flow.
+Dataset and baseline inputs still refer to individual S3 objects. These fields may
+be omitted at submission, but all evaluation inputs are required before opening a
+task workspace. See [task workspaces](task-workspaces.md) and
+[engineering responsibility](user-management.md).
+
 ## Source and routing contract
 
 `POST /api/preparation/handoffs` accepts the version-one `HandoffRequest` contract.
-The initial neutral adapter is `kind: s3`: a stored global S3 profile ID, a path
+The single-object adapter is `kind: s3`: a stored global S3 profile ID, a path
 relative to that profile's prefix, optional version ID and expected SHA-256.
+The repository adapter is `kind: s3_repository` with `profile_id` and `path`;
+its path selects descendants of that folder only. Individual version IDs are
+captured by the backend, not supplied as one folder version. For example:
+
+```json
+{"kind": "s3_repository", "profile_id": 1, "path": "iris-repository/"}
+```
+
 No endpoint or credentials can be supplied through the request. The authenticated
 account must currently be an active member/admin. Scoped workspace/workflow tokens
 cannot use this interactive endpoint. Profile access follows the existing global
@@ -37,6 +101,13 @@ An administrator can assign engineering responsibility afterwards. The shared
 engineering queue/detail workflow is #24.
 
 ## Identity, retries and atomicity
+
+Repository-folder identity uses the origin installation, authorized endpoint,
+bucket, canonical folder prefix, source kind and submission revision. Its first
+committed capture wins, including concurrent submissions. The folder has no single
+S3 version ID: the immutable file list retains all individual versions. A file
+object and repository prefix with the same name are separate source kinds.
+
 
 A handoff identity binds origin installation, source kind, resolved S3 endpoint,
 bucket, key, version ID and submission revision. The caller's `origin.record_id`
@@ -156,3 +227,23 @@ Local verification for this change:
 
 CI execution is pending publication of the branch. These local results do not
 claim that the feature has been deployed or that the later #24 workflow exists.
+
+## Repository-folder verification
+
+Unit tests cover nested and empty files, prefix boundaries, version pinning,
+mutation during capture, path collisions, limits, retries and read-only staging:
+
+```sh
+python -m unittest tests.test_handoff_repositories tests.test_handoffs tests.test_task_workspaces -v
+```
+
+`tests.test_handoff_repositories_postgres` uses `PREPARATION_TEST_DATABASE_URL`
+and isolated schemas to check concurrency and persistence.
+`tests.test_handoff_repositories_s3` uses `REPOSITORY_TEST_S3_ENDPOINT` plus
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` and a disposable versioned bucket to
+verify that workspace staging restores original bytes after the live model is
+replaced. Both provider suites run in the existing backend CI jobs.
+
+No new database tables or columns are required. Repository receipts use the
+existing immutable JSON payload and task snapshot contract; old single-object
+receipts retain their identities and remain readable.

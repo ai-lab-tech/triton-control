@@ -128,7 +128,7 @@ jobs:
           BUILD_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: |
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
-          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_builds_kubernetes -v
+          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_handoff_repositories_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_builds_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
         working-directory: triton-backend
         env:
@@ -179,7 +179,10 @@ jobs:
         working-directory: triton-backend
         env:
           HANDOFF_TEST_S3_ENDPOINT: http://127.0.0.1:9000
-        run: python -m unittest tests.test_handoff_s3_integration -v
+          REPOSITORY_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          AWS_ACCESS_KEY_ID: handoff_test
+          AWS_SECRET_ACCESS_KEY: handoff_test_password
+        run: python -m unittest tests.test_handoff_s3_integration tests.test_handoff_repositories_s3 -v
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

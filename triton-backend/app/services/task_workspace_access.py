@@ -3,6 +3,7 @@
 from typing import Any
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlmodel import Session
 
 from app.core.identity import claims_from_user
@@ -10,6 +11,7 @@ from app.db.entities import CodeServerEntity
 from app.exceptions import ConflictError, ForbiddenError
 from app.repositories import handoffs, task_workspaces, users
 from app.repositories import preparation as tasks
+from app.schemas.handoffs import ResolvedInput, ResolvedRepository
 from app.schemas.lineage import InventoryV1
 from app.schemas.task_workspaces import WorkspaceInput, WorkspaceInputs
 from app.services import handoff_sources, preparation
@@ -42,10 +44,16 @@ def load_inputs(session: Session, task_id: UUID) -> WorkspaceInputs:
     if not receipts:
         raise ConflictError("This snapshot has no registered workspace inputs")
     payload = receipts[0].payload
+    source: ResolvedInput | ResolvedRepository = TypeAdapter(ResolvedInput | ResolvedRepository).validate_python(
+        payload["source"],
+    )
+    source_files = source.files if isinstance(source, ResolvedRepository) else [source]
     return WorkspaceInputs(
         snapshot=payload["source_snapshot"],
-        files=[WorkspaceInput.model_validate({"role": role, "artifact": payload[role]})
-               for role in ("source", "dataset", "baseline") if payload[role] is not None],
+        files=[WorkspaceInput(role="source", artifact=item) for item in source_files] + [
+            WorkspaceInput.model_validate({"role": role, "artifact": payload[role]})
+            for role in ("dataset", "baseline") if payload[role] is not None
+        ],
         expected_behavior=payload["request"]["expected_behavior"],
         acceptance_criteria=payload["request"]["acceptance_criteria"],
     )

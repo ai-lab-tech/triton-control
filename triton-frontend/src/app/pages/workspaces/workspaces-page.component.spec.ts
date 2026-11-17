@@ -455,4 +455,28 @@ describe("WorkspacesPageComponent", () => {
     expect(component.selectedWorkspaceId()).toBe(3);
     expect(component.embeddedWorkspaceUrl()).not.toBeNull();
   });
+  it("Load_WorkspaceSelectedByUrl_RefreshesAndEmbedsRequestedWorkspace", async () => {
+    // Arrange
+    const component = TestBed.createComponent(WorkspacesPageComponent).componentInstance;
+    await component.load();
+    const requested = { ...readyWorkspace, id: 7, url: "/api/development/7/proxy/" };
+    Object.defineProperty(router, "url", {
+      value: "/workspaces?workspace=7",
+      configurable: true,
+    });
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(
+      of([readyWorkspace, requested]) as any,
+    );
+    codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet.and.returnValue(of(requested) as any);
+
+    // Act
+    await component.load();
+
+    // Assert
+    expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).toHaveBeenCalledWith(7);
+    expect(component.selectedWorkspaceId()).toBe(7);
+    expect(`${component.embeddedWorkspaceUrl()}`).toContain(
+      "/api/development/7/proxy/?_tc_reload=",
+    );
+  });
 });

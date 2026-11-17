@@ -413,6 +413,7 @@ export class WorkspacesPageComponent implements OnDestroy {
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
       if (options.refreshReadyWorkspace && selected.status === "ready") {
+        this.selectedWorkspaceId.set(selected.id);
         await this.refresh(selected);
         return;
       }
