@@ -64,13 +64,11 @@ describe("PreparationSettingsComponent", () => {
   it("reset removes the database override and displays deployment values", async () => {
     // Arrange
     const fixture = TestBed.createComponent(PreparationSettingsComponent);
-    http
-      .expectOne(url)
-      .flush({
-        limits: { ...limits, capture_timeout_seconds: 7200 },
-        defaults: limits,
-        source: "admin",
-      });
+    http.expectOne(url).flush({
+      limits: { ...limits, capture_timeout_seconds: 7200 },
+      defaults: limits,
+      source: "admin",
+    });
     await fixture.whenStable();
     // Act
     const pending = fixture.componentInstance.reset();
