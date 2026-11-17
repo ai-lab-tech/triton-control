@@ -1862,7 +1862,129 @@
         }
       }
     },
+    "/api/builds/options": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Options",
+        "operationId": "options_api_builds_options_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildOptions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/builds": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "List Builds",
+        "operationId": "list_builds_api_builds_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BuildResponse"
+                  },
+                  "title": "Response List Builds Api Builds Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "builds"
@@ -2033,6 +2155,53 @@
         ],
         "summary": "Cancel",
         "operationId": "cancel_api_builds__build_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Build Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/{build_id}/retry": {
+      "post": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Retry",
+        "operationId": "retry_api_builds__build_id__retry_post",
         "security": [
           {
             "HTTPBearer": []
@@ -7065,6 +7234,18 @@
             "title": "Schema Version",
             "default": 1
           },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
           "archive_digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$",
@@ -7201,6 +7382,33 @@
           "retained"
         ],
         "title": "BuildLogsResponse"
+      },
+      "BuildOptions": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Repositories"
+          },
+          "max_context_bytes": {
+            "type": "integer",
+            "title": "Max Context Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "repositories",
+          "max_context_bytes"
+        ],
+        "title": "BuildOptions"
       },
       "BuildRequest": {
         "properties": {

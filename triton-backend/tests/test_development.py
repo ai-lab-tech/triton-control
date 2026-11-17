@@ -533,12 +533,15 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("extension/resources/triton-control.svg", names)
 
     def test_TritonDeployExtensionPackage_ContributesActivityBarView(self) -> None:
+        # Arrange
         extension_dir = k8s._triton_deploy_extension_dir()
         package_json = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
 
+        # Act
         contributes = package_json["contributes"]
 
-        self.assertEqual(package_json["version"], "0.4.11")
+        # Assert
+        self.assertEqual(package_json["version"], "0.4.12")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
         self.assertIn("onFileSystem:triton-s3", package_json["activationEvents"])

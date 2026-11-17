@@ -69,6 +69,7 @@ class Observation:
     digest: str | None = None
     logs: str = ""
     truncated: bool = False
+    running: bool = False
 
 
 class Jobs:
@@ -180,11 +181,12 @@ class Jobs:
         )]
         if len(owned) > 1:
             raise ConflictError("Unexpected multiple executor pods; evidence is ambiguous")
-        logs, digest, truncated, exited_ok = "", None, False, False
+        logs, digest, truncated, exited_ok, running = "", None, False, False, False
         if owned:
             pod = owned[0]
             statuses = pod.status.container_statuses or []
             executor = next((s for s in statuses if s.name == "executor"), None)
+            running = bool(executor and executor.state.running)
             if executor and (executor.state.running or executor.state.terminated):
                 raw = self.core.read_namespaced_pod_log(
                     pod.metadata.name, row.namespace, container="executor", limit_bytes=LOG_LIMIT, tail_lines=LOG_LINES,
@@ -201,7 +203,7 @@ class Jobs:
         conditions = resource.status.conditions or []
         terminal = any(c.type in {"Complete", "Failed"} and c.status == "True" for c in conditions)
         success = any(c.type == "Complete" and c.status == "True" for c in conditions)
-        return Observation(terminal, success and exited_ok and digest is not None, digest, logs, truncated)
+        return Observation(terminal, success and exited_ok and digest is not None, digest, logs, truncated, running)
 
     def cleanup(self, row: BuildAttemptEntity) -> bool:
         resource = self.read(row)

@@ -53,14 +53,18 @@ class AsyncDatabaseWaitTests(unittest.IsolatedAsyncioTestCase):
         return lookup
 
     async def test_authentication_pool_wait_leaves_loop_responsive(self):
+        # Arrange
         gate = threading.Event()
         claims = {"access_allowed": True}
         asyncio.get_running_loop().call_later(0.03, gate.set)
-        request = Request({"type": "http", "session": {}})
+        request = Request({"type": "http", "session": {}, "headers": []})
         with patch.object(security, "extract_claims", AsyncMock(return_value={"sub": "test"})), patch.object(
             security, "_resolve_access_claims", self.gated_lookup(gate, claims)
         ):
-            self.assertEqual(await security.get_claims(request, None), claims)
+            # Act
+            result = await security.get_claims(request, None)
+        # Assert
+        self.assertEqual(result, claims)
 
     async def test_http_and_websocket_ownership_waits_leave_loop_responsive(self):
         for websocket in (False, True):

@@ -164,6 +164,9 @@
         <dt>Engineering task</dt>
         <dd>
           <code>{{ item.task.id }}</code>
+          <a [routerLink]="['/preparation/tasks', item.task.id, 'builds']"
+            >Build serving image and inspect attempts</a
+          >
         </dd>
         @if (item.request.previous_handoff_id; as previous) {
           <dt>Previous handoff</dt>
