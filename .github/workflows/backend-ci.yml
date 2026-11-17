@@ -7,6 +7,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/validation/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -21,6 +22,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/validation/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
       - "triton-frontend/openapi/triton-backend/openapi.json"
@@ -46,6 +48,10 @@ jobs:
       - name: Verify schemas, golden identities and rejection behavior
         working-directory: triton-backend
         run: |
+          python scripts/export_validation_schema.py --check
+          python scripts/generate_validation_fixtures.py --check
+          python -m unittest tests.test_validation_contracts -v
+          python -m app.services.validation_cli ../contracts/validation/v1alpha1/fixtures/manifest.json ../contracts/validation/v1alpha1/fixtures/report-passed.yaml ../contracts/validation/v1alpha1/fixtures/evidence.json
           python scripts/export_serving_metadata_schema.py --check
           python scripts/generate_serving_metadata_fixtures.py --check
           python -m unittest discover -s tests -p test_serving_metadata.py -v
@@ -56,6 +62,8 @@ jobs:
           pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/serving-wheel" ./triton-backend
           pip install --no-deps --target "$RUNNER_TEMP/serving-installed" "$RUNNER_TEMP"/serving-wheel/*.whl
           cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/serving-installed" python -m app.services.validation_cli "$GITHUB_WORKSPACE/contracts/validation/v1alpha1/fixtures/manifest.json"
+          PYTHONPATH="$RUNNER_TEMP/serving-installed" "$RUNNER_TEMP/serving-installed/bin/triton-validate-evidence" "$GITHUB_WORKSPACE/contracts/validation/v1alpha1/fixtures/evidence.yaml"
           PYTHONPATH="$RUNNER_TEMP/serving-installed" python -m app.services.serving_metadata_cli "$GITHUB_WORKSPACE/contracts/serving/v1alpha1/fixtures/release-manual.yaml"
           PYTHONPATH="$RUNNER_TEMP/serving-installed" "$RUNNER_TEMP/serving-installed/bin/triton-validate-metadata" "$GITHUB_WORKSPACE/contracts/serving/v1alpha1/fixtures/source-s3.json"
 
@@ -115,9 +123,12 @@ jobs:
           TEAMS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
           OPERATIONS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
           DEPLOYMENT_TEST_KUBERNETES: "1"
+          TASK_WORKSPACE_TEST_KUBERNETES: "1"
+          BUILD_TEST_KUBERNETES: "1"
+          BUILD_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: |
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
-          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes -v
+          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_handoff_repositories_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_build_ui_postgres tests.test_builds_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
         working-directory: triton-backend
         env:
@@ -129,6 +140,12 @@ jobs:
         env:
           SNAPSHOTS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: python -m unittest tests.test_experiment_snapshots_postgres -v
+
+      - name: Verify local bindings and concurrent policy updates with PostgreSQL
+        working-directory: triton-backend
+        env:
+          LOCAL_BINDINGS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
+        run: python -m unittest tests.test_local_bindings_postgres -v
 
   handoff-source-minio:
     runs-on: ubuntu-latest
@@ -168,7 +185,10 @@ jobs:
         working-directory: triton-backend
         env:
           HANDOFF_TEST_S3_ENDPOINT: http://127.0.0.1:9000
-        run: python -m unittest tests.test_handoff_s3_integration -v
+          REPOSITORY_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          AWS_ACCESS_KEY_ID: handoff_test
+          AWS_SECRET_ACCESS_KEY: handoff_test_password
+        run: python -m unittest tests.test_handoff_s3_integration tests.test_handoff_repositories_s3 -v
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -245,6 +265,14 @@ jobs:
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
           python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
+      - name: Verify build context staging, concurrency and versioned retention
+        working-directory: triton-backend
+        env:
+          BUILD_CONTEXT_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
+          BUILD_CONTEXT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          BUILD_CONTEXT_TEST_S3_ACCESS_KEY: candidate_test
+          BUILD_CONTEXT_TEST_S3_SECRET_KEY: candidate_test_password
+        run: python -m unittest tests.test_build_contexts tests.test_build_contexts_postgres tests.test_build_contexts_s3 -v
       - name: Upload S3 diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4

@@ -14,11 +14,14 @@ from app.schemas.handoffs import (
     HandoffRequest,
     NotificationDTO,
     ResolvedInput,
+    ResolvedRepository,
+    S3Input,
+    S3RepositoryInput,
     missing_evaluation_inputs,
 )
 from app.schemas.lineage import InventoryV1, Origin, Snapshot
 from app.schemas.preparation import TaskCreate
-from app.services import handoff_sources, preparation
+from app.services import handoff_repositories, handoff_sources, preparation
 from app.services.lineage import digest, inventory_digest
 
 
@@ -42,6 +45,13 @@ def get(session: Session, claims: dict[str, Any], handoff_id: UUID) -> HandoffRe
     return _receipt(session, claims, repository.get(session, handoff_id))
 
 
+def _selection(source: S3Input | S3RepositoryInput, endpoint: str | None, bucket: str, key: str) -> dict[str, Any]:
+    result: dict[str, Any] = {"kind": source.kind, "endpoint": endpoint, "bucket": bucket, "key": key}
+    if isinstance(source, S3Input):
+        result.update(version_id=source.version_id, expected_digest=source.expected_digest)
+    return result
+
+
 def _selectors(session: Session, request: HandoffRequest) -> dict[str, Any]:
     """Compare intent using authorized locations, not mutable credential/profile labels."""
     payload = request.model_dump(mode="json")
@@ -50,10 +60,7 @@ def _selectors(session: Session, request: HandoffRequest) -> dict[str, Any]:
         source = getattr(request, name)
         if source is not None:
             config, bucket, key = handoff_sources.authorize(session, source)
-            payload[name] = {
-                "kind": source.kind, "endpoint": config["s3_endpoint"], "bucket": bucket, "key": key,
-                "version_id": source.version_id, "expected_digest": source.expected_digest,
-            }
+            payload[name] = _selection(source, config["s3_endpoint"], bucket, key)
     return payload
 
 
@@ -66,11 +73,7 @@ def _reuse(
     for name in ("source", "dataset", "baseline"):
         captured = getattr(receipt, name)
         if captured is not None:
-            original[name] = {
-                "kind": captured.source.kind, "endpoint": captured.endpoint,
-                "bucket": captured.bucket, "key": captured.key,
-                "version_id": captured.source.version_id, "expected_digest": captured.source.expected_digest,
-            }
+            original[name] = _selection(captured.source, captured.endpoint, captured.bucket, captured.key)
     if digest(original) != digest(selectors):
         raise ConflictError("Handoff source and revision already contain different content; submit a new revision")
     return receipt
@@ -93,15 +96,19 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
         content = digest(request.model_dump(mode="json"))
         selectors = _selectors(session, request)
         selected = selectors["source"]
+        version = request.source.version_id if isinstance(request.source, S3Input) else None
         existing = repository.find_source(
             session, request.origin.installation_id, request.revision,
-            selected["endpoint"], selected["bucket"], selected["key"], request.source.version_id,
+            selected["endpoint"], selected["bucket"], selected["key"], version, request.source.kind,
         )
         if existing is not None:
             return _reuse(session, claims, existing, selectors)
         # No database write/row lock across provider reads. Each mutable object is
         # resolved once to a non-null version ID; retries return the stored receipt.
-        source = handoff_sources.resolve(session, request.source)
+        source = (
+            handoff_repositories.resolve(session, request.source) if isinstance(request.source, S3RepositoryInput)
+            else handoff_sources.resolve(session, request.source)
+        )
         dataset = handoff_sources.resolve(session, request.dataset) if request.dataset else None
         baseline = handoff_sources.resolve(session, request.baseline) if request.baseline else None
         teams.get(session, teams.INSTALLATION_TEAM_ID, lock=True)
@@ -116,10 +123,11 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
         # even if the object changed between their HEAD requests.
         existing = repository.find_source(
             session, request.origin.installation_id, request.revision,
-            source.endpoint, source.bucket, source.key, request.source.version_id,
+            source.endpoint, source.bucket, source.key, version, request.source.kind,
         ) or repository.find_source(
             session, request.origin.installation_id, request.revision,
-            source.endpoint, source.bucket, source.key, source.version_id,
+            source.endpoint, source.bucket, source.key,
+            source.version_id if isinstance(source, ResolvedInput) else None, request.source.kind,
         )
         if existing is not None:
             receipt = _reuse(session, claims, existing, selectors)
@@ -127,8 +135,8 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
             return receipt
         identity = digest({
             "installation_id": request.origin.installation_id, "revision": request.revision,
-            "kind": "s3", "endpoint": source.endpoint, "bucket": source.bucket, "key": source.key,
-            "version_id": source.version_id,
+            "kind": request.source.kind, "endpoint": source.endpoint, "bucket": source.bucket, "key": source.key,
+            "version_id": source.version_id if isinstance(source, ResolvedInput) else None,
         })
         missing = missing_evaluation_inputs(dataset, baseline, request.expected_behavior, request.acceptance_criteria)
         snapshot_id = uuid4()
@@ -141,10 +149,11 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
         snapshot = Snapshot(
             origin=Origin(installation_id=request.origin.installation_id, record_id=str(snapshot_id)),
             kind="manual",
-            inventory=inventory_digest(InventoryV1(files=(source.file,))),
+            inventory=inventory_digest(InventoryV1(files=(source.file,) if isinstance(source, ResolvedInput)
+                                                 else tuple(item.file for item in source.files))),
         )
 
-        def value(item: ResolvedInput | None) -> dict[str, Any] | None:
+        def value(item: ResolvedInput | ResolvedRepository | None) -> dict[str, Any] | None:
             return item.model_dump(mode="json") if item else None
 
         row = HandoffEntity(

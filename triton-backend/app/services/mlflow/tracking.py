@@ -68,6 +68,12 @@ def authenticate_workload(kind: str, namespace: str, name: str, token: str) -> d
         owner = users.find_by_id(session, owner_id)
         if not owner or not owner.is_active or owner.role.lower() not in {"member", "admin"}:
             raise ForbiddenError("MLflow workload owner is not active or lacks access")
+        if kind == "workspaces":
+            from app.services.task_workspace_access import guard
+            current_workspace = developments.find_by_workload(session, namespace, name)
+            if current_workspace is None:
+                raise ForbiddenError("Workspace no longer exists")
+            guard(session, current_workspace)
         return {"email": owner.email, "user_id": owner.id, "role": owner.role}
 
 

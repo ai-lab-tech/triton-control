@@ -358,6 +358,9 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 workspace_relation="selected_unverified_changes" if request.workspace else "not_selected",
             )
             location = store.publish(staging, inventory, workspace, manifest.model_dump(mode="json"), limits)
+            location = location.model_copy(update={"reference": {
+                **location.reference, "storage_binding": store_identity,
+            }})
             heartbeat.check()
             # Serialize the final fence and task/snapshot/operation transaction.
             current = operation_repo.owned(session, operation.id, operation.worker or "", operation.generation)
@@ -383,6 +386,8 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                     artifacts=location.model_dump(mode="json"),
                 ),
             )
+            from app.services.snapshots.inputs import register
+            register(session, repository.get(session, UUID(operation.id)))
             current.state = "succeeded"
             current.result = {"snapshot_id": operation.id, "task_id": str(task.id), "gaps": sorted(gaps)}
             current.worker, current.lease_until = None, None

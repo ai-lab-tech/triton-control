@@ -84,6 +84,12 @@ def authenticate_workspace(namespace: str, name: str, token: str) -> dict[str, A
         owner = users.find_by_id(session, owner_id)
         if not owner or not owner.is_active or owner.role.lower() not in {"member", "admin"}:
             raise ForbiddenError("Argo workspace owner is not active or lacks access")
+        from app.services.task_workspace_access import guard
+        current_workspace = developments.find_by_workload(session, namespace, name)
+        if current_workspace is not None:
+            guard(session, current_workspace)
+        else:
+            raise ForbiddenError("Workspace no longer exists")
         return claims_from_user(owner, {"token_use": "workspace_argo"})  # nosec B105 - credential purpose
 
 

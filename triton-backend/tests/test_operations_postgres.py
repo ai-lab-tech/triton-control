@@ -6,10 +6,10 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 
-from sqlalchemy import text
-from sqlmodel import Session, create_engine
+from sqlalchemy import inspect, text
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.db.entities import DeploymentIntentEntity, OperationEntity
+from app.db.entities import OperationEntity
 from app.db.schema import create_tables
 from app.repositories import operations as repo
 from tests import test_operations as shared
@@ -57,10 +57,31 @@ class OperationPostgresTests(shared.OperationTests):
         self.assertEqual(sum(row is not None for row in claims), 1)
 
     def test_concurrent_repeatable_schema(self):
-        DeploymentIntentEntity.__table__.drop(self.engine)
-        OperationEntity.__table__.drop(self.engine)
+        # Arrange: include transitive dependents (build evidence -> attempts -> operations).
+        # Metadata orders parents before children; drop_all reverses that order.
+        tables = {OperationEntity.__table__}
+        for table in SQLModel.metadata.sorted_tables:
+            if any(fk.column.table in tables for fk in table.foreign_keys):
+                tables.add(table)
+        SQLModel.metadata.drop_all(self.engine, tables=list(tables))
+        # Act: concurrent startup must recreate the tables and their constraints.
         with ThreadPoolExecutor(max_workers=3) as pool:
             list(pool.map(lambda _: create_tables(self.engine), range(3)))
         operation = self.submit()
         create_tables(self.engine)
+        # Assert: repeated startup preserves operations and recreates every foreign key.
         self.assertEqual(self.submit().id, operation.id)
+        inspector = inspect(self.engine)
+        for table in tables:
+            with self.subTest(table=table.name):
+                actual = {
+                    (tuple(fk["constrained_columns"]), fk["referred_table"], tuple(fk["referred_columns"]))
+                    for fk in inspector.get_foreign_keys(table.name)
+                }
+                expected = {
+                    (tuple(fk.parent.name for fk in constraint.elements),
+                     constraint.referred_table.name,
+                     tuple(fk.column.name for fk in constraint.elements))
+                    for constraint in table.foreign_key_constraints
+                }
+                self.assertEqual(actual, expected)

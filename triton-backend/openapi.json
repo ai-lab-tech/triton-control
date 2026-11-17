@@ -172,6 +172,279 @@
         ]
       }
     },
+    "/api/local-bindings/policy": {
+      "get": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Get Policy",
+        "operationId": "get_policy_api_local_bindings_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Put Policy",
+        "operationId": "put_policy_api_local_bindings_policy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/local-bindings/credentials/{name}": {
+      "put": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Put Credential",
+        "operationId": "put_credential_api_local_bindings_credentials__name__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GitCredential"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RegistryCredential"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Get Credential",
+        "operationId": "get_credential_api_local_bindings_credentials__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Delete Credential",
+        "operationId": "delete_credential_api_local_bindings_credentials__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/local-bindings/admissions": {
+      "post": {
+        "tags": [
+          "local-bindings"
+        ],
+        "summary": "Admit",
+        "operationId": "admit_api_local_bindings_admissions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/auth/options": {
       "get": {
         "tags": [
@@ -1425,6 +1698,550 @@
         }
       }
     },
+    "/api/build-contexts": {
+      "post": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_api_build_contexts_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildContextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/build-contexts/{context_id}": {
+      "get": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_build_contexts__context_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "context_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Context Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/build-contexts/{context_id}/archive": {
+      "put": {
+        "tags": [
+          "build-contexts"
+        ],
+        "summary": "Upload",
+        "operationId": "upload_api_build_contexts__context_id__archive_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "context_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Context Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-tar": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/options": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Options",
+        "operationId": "options_api_builds_options_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildOptions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "List Builds",
+        "operationId": "list_builds_api_builds_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BuildResponse"
+                  },
+                  "title": "Response List Builds Api Builds Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_api_builds_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/{build_id}": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_builds__build_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Build Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/{build_id}/logs": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Logs",
+        "operationId": "logs_api_builds__build_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Build Id"
+            }
+          },
+          {
+            "name": "attempt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Attempt"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildLogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/{build_id}/cancel": {
+      "post": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_api_builds__build_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Build Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/builds/{build_id}/retry": {
+      "post": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "Retry",
+        "operationId": "retry_api_builds__build_id__retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Build Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/teams": {
       "get": {
         "tags": [
@@ -1802,6 +2619,110 @@
                     "$ref": "#/components/schemas/TeamEventDTO"
                   },
                   "title": "Response List History Api Teams  Team Id  Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/tasks/{task_id}/workspace": {
+      "post": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Open Workspace",
+        "operationId": "open_workspace_api_preparation_tasks__task_id__workspace_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenTaskWorkspace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWorkspaceDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Get Workspace",
+        "operationId": "get_workspace_api_preparation_tasks__task_id__workspace_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWorkspaceDTO"
                 }
               }
             }
@@ -5889,6 +6810,108 @@
         ],
         "title": "AdminResetRequest"
       },
+      "AdmissionRequest": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MetadataSource"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ServingTarget"
+          },
+          "release": {
+            "$ref": "#/components/schemas/ServingRelease"
+          },
+          "hardware": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Hardware"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "release",
+          "hardware"
+        ],
+        "title": "AdmissionRequest"
+      },
+      "AdmissionResult": {
+        "properties": {
+          "policy_revision": {
+            "type": "integer",
+            "title": "Policy Revision"
+          },
+          "policy_digest": {
+            "type": "string",
+            "title": "Policy Digest"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Source Id"
+          },
+          "target_id": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Target Id"
+          },
+          "release_digest": {
+            "type": "string",
+            "title": "Release Digest"
+          },
+          "hardware": {
+            "$ref": "#/components/schemas/Hardware"
+          },
+          "peak_replicas": {
+            "type": "integer",
+            "title": "Peak Replicas"
+          },
+          "bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Bindings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policy_revision",
+          "policy_digest",
+          "source_id",
+          "target_id",
+          "release_digest",
+          "hardware",
+          "peak_replicas",
+          "bindings"
+        ],
+        "title": "AdmissionResult"
+      },
+      "ApprovalPolicy": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "independently-approved"
+            ],
+            "title": "Mode",
+            "default": "manual"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ApprovalPolicy"
+      },
       "ArgoWorkflowsStatusResponse": {
         "properties": {
           "enabled": {
@@ -5962,6 +6985,69 @@
         ],
         "title": "ArtifactLocation"
       },
+      "ArtifactSubjects": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Image"
+          },
+          "inventoryDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Inventorydigest"
+          },
+          "preparedInventoryDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Preparedinventorydigest"
+          },
+          "materializerImage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Materializerimage"
+          },
+          "sourceCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcecode"
+          },
+          "validationInput": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validationinput"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "image",
+          "inventoryDigest",
+          "preparedInventoryDigest"
+        ],
+        "title": "ArtifactSubjects"
+      },
       "AttemptDTO": {
         "properties": {
           "id": {
@@ -5990,6 +7076,142 @@
           "created_at"
         ],
         "title": "AttemptDTO"
+      },
+      "BindingPolicy": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "source_read": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/S3Binding"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CredentialBinding"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "git": "#/components/schemas/CredentialBinding",
+                    "registry": "#/components/schemas/CredentialBinding",
+                    "s3": "#/components/schemas/S3Binding"
+                  }
+                }
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Source Read"
+          },
+          "model_storage": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/S3Binding"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Model Storage"
+          },
+          "registry_pull": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/CredentialBinding"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Registry Pull"
+          },
+          "build_push": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/CredentialBinding"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Build Push"
+          },
+          "sources": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/SourceGrant"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Sources"
+          },
+          "targets": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/TargetGrant"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Targets"
+          },
+          "hardware": {
+            "patternProperties": {
+              "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$": {
+                "$ref": "#/components/schemas/Hardware"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 63,
+              "minLength": 1
+            },
+            "type": "object",
+            "maxProperties": 100,
+            "title": "Hardware"
+          },
+          "build_user_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Build User Ids",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BindingPolicy"
       },
       "BootstrapRegisterRequest": {
         "properties": {
@@ -6037,6 +7259,388 @@
           "needs_setup"
         ],
         "title": "BootstrapStatusResponse"
+      },
+      "BuildAttemptResponse": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "context_id": {
+            "type": "string",
+            "title": "Context Id"
+          },
+          "executor_image": {
+            "type": "string",
+            "title": "Executor Image"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "job_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Uid"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "final_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Digest"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "logs_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logs Expires At"
+          },
+          "cleaned": {
+            "type": "boolean",
+            "title": "Cleaned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "context_id",
+          "executor_image",
+          "destination",
+          "namespace",
+          "job_name",
+          "job_uid",
+          "state",
+          "final_digest",
+          "created_at",
+          "finished_at",
+          "logs_expires_at",
+          "cleaned"
+        ],
+        "title": "BuildAttemptResponse"
+      },
+      "BuildContextRequest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "archive_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Archive Digest"
+          },
+          "archive_bytes": {
+            "type": "integer",
+            "maximum": 1073741824.0,
+            "minimum": 1024.0,
+            "title": "Archive Bytes"
+          },
+          "dockerfile": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Dockerfile",
+            "default": "Dockerfile"
+          },
+          "allowed_paths": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Allowed Paths"
+          },
+          "dependency_files": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Dependency Files",
+            "default": []
+          },
+          "base_images": {
+            "items": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[a-z0-9][a-z0-9.:/_-]*@sha256:[0-9a-f]{64}$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Base Images",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "archive_digest",
+          "archive_bytes",
+          "allowed_paths"
+        ],
+        "title": "BuildContextRequest"
+      },
+      "BuildContextResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/OperationResponse"
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextManifest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "upload_url",
+          "expires_at",
+          "ready"
+        ],
+        "title": "BuildContextResponse"
+      },
+      "BuildLogsResponse": {
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "expired": {
+            "type": "boolean",
+            "title": "Expired"
+          },
+          "retained": {
+            "type": "boolean",
+            "title": "Retained"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt",
+          "output",
+          "truncated",
+          "expired",
+          "retained"
+        ],
+        "title": "BuildLogsResponse"
+      },
+      "BuildOptions": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Repositories"
+          },
+          "max_context_bytes": {
+            "type": "integer",
+            "title": "Max Context Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "repositories",
+          "max_context_bytes"
+        ],
+        "title": "BuildOptions"
+      },
+      "BuildRequest": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "context_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$",
+            "title": "Context Id"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Repository"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "context_id",
+          "repository"
+        ],
+        "title": "BuildRequest"
+      },
+      "BuildResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "actor_id": {
+            "type": "integer",
+            "title": "Actor Id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/OperationResponse"
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/BuildAttemptResponse"
+            },
+            "type": "array",
+            "title": "Attempts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "actor_id",
+          "operation",
+          "attempts"
+        ],
+        "title": "BuildResponse"
+      },
+      "Capacity": {
+        "properties": {
+          "cpu": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^((0|[1-9][0-9]*)(\\.[0-9]{1,3})?|[1-9][0-9]*m)$",
+            "title": "Cpu"
+          },
+          "memory": {
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|k|M|G|T)?$",
+            "title": "Memory"
+          },
+          "gpu": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Gpu"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cpu",
+          "memory",
+          "gpu"
+        ],
+        "title": "Capacity"
       },
       "CodeServerDTO": {
         "properties": {
@@ -6279,6 +7883,99 @@
           "kind"
         ],
         "title": "ContainerState"
+      },
+      "ContextFile": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Digest"
+          },
+          "executable": {
+            "type": "boolean",
+            "title": "Executable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "size",
+          "digest",
+          "executable"
+        ],
+        "title": "ContextFile"
+      },
+      "ContextManifest": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ContextFile"
+            },
+            "type": "array",
+            "title": "Files"
+          },
+          "inventory_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Inventory Digest"
+          },
+          "dockerfile_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Dockerfile Digest"
+          },
+          "dependencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Dependencies"
+          },
+          "base_images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Base Images"
+          },
+          "archive_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Archive Digest"
+          },
+          "archive_bytes": {
+            "type": "integer",
+            "title": "Archive Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "files",
+          "inventory_digest",
+          "dockerfile_digest",
+          "dependencies",
+          "base_images",
+          "archive_digest",
+          "archive_bytes"
+        ],
+        "title": "ContextManifest"
       },
       "CreateCodeServerRequest": {
         "properties": {
@@ -6913,6 +8610,88 @@
         ],
         "title": "CreateWorkflowS3CredentialRequest",
         "description": "Request body for creating workflow-scoped S3 credentials."
+      },
+      "CredentialBinding": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "git",
+              "registry"
+            ],
+            "title": "Provider"
+          },
+          "credential": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Credential"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "credential"
+        ],
+        "title": "CredentialBinding"
+      },
+      "CredentialResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Name"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "git",
+              "registry"
+            ],
+            "title": "Provider"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "provider",
+          "configured"
+        ],
+        "title": "CredentialResponse"
+      },
+      "Credentials": {
+        "properties": {
+          "modelStorage": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Modelstorage"
+          },
+          "imageRegistry": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Imageregistry"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "modelStorage",
+          "imageRegistry"
+        ],
+        "title": "Credentials"
       },
       "DashboardAlertDTO": {
         "properties": {
@@ -7773,6 +9552,43 @@
         ],
         "title": "ErrorEventDTO"
       },
+      "Evidence": {
+        "properties": {
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048,
+                "minLength": 1,
+                "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              }
+            ],
+            "title": "Uri"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Digest"
+          },
+          "subjects": {
+            "$ref": "#/components/schemas/ArtifactSubjects"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "uri",
+          "digest",
+          "subjects"
+        ],
+        "title": "Evidence"
+      },
       "FileEntry": {
         "properties": {
           "path": {
@@ -7885,6 +9701,91 @@
         ],
         "title": "FrontendErrorEventRequest"
       },
+      "GitCredential": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "git",
+            "title": "Provider"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+            "title": "Repository"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[^\\s:/@]+$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 16384,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "read_only": {
+            "type": "boolean",
+            "const": true,
+            "title": "Read Only"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "repository",
+          "username",
+          "password",
+          "read_only"
+        ],
+        "title": "GitCredential"
+      },
+      "GitLocation": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "git",
+            "title": "Type"
+          },
+          "repository": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+            "title": "Repository"
+          },
+          "ref": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9/_.-]*$",
+            "title": "Ref"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "repository",
+          "ref",
+          "path"
+        ],
+        "title": "GitLocation"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -7923,7 +9824,15 @@
             "$ref": "#/components/schemas/Snapshot"
           },
           "source": {
-            "$ref": "#/components/schemas/ResolvedInput"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedInput"
+              },
+              {
+                "$ref": "#/components/schemas/ResolvedRepository"
+              }
+            ],
+            "title": "Source"
           },
           "dataset": {
             "anyOf": [
@@ -8005,7 +9914,15 @@
             "title": "Title"
           },
           "source": {
-            "$ref": "#/components/schemas/S3Input"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Input"
+              },
+              {
+                "$ref": "#/components/schemas/S3RepositoryInput"
+              }
+            ],
+            "title": "Source"
           },
           "dataset": {
             "anyOf": [
@@ -8063,6 +9980,45 @@
           "source"
         ],
         "title": "HandoffRequest"
+      },
+      "Hardware": {
+        "properties": {
+          "architecture": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64"
+            ],
+            "title": "Architecture"
+          },
+          "accelerator": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 63,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accelerator"
+          },
+          "max_gpu_per_replica": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Max Gpu Per Replica",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "architecture"
+        ],
+        "title": "Hardware"
       },
       "InformationRequest": {
         "properties": {
@@ -8463,6 +10419,52 @@
           "user"
         ],
         "title": "LoginResponse"
+      },
+      "Metadata": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Metadata"
+      },
+      "MetadataSource": {
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "serving.triton-control/v1alpha1",
+            "title": "Apiversion"
+          },
+          "kind": {
+            "type": "string",
+            "const": "MetadataSource",
+            "title": "Kind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/SourceSpec"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "apiVersion",
+          "kind",
+          "metadata",
+          "spec"
+        ],
+        "title": "MetadataSource"
       },
       "MlflowDeleteResponse": {
         "properties": {
@@ -8917,6 +10919,29 @@
         ],
         "title": "OidcSettingsDTO"
       },
+      "OpenTaskWorkspace": {
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/CreateCodeServerRequest"
+          },
+          "admin_recovery_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Recovery Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OpenTaskWorkspace"
+      },
       "OperationRequest": {
         "properties": {
           "kind": {
@@ -9364,6 +11389,43 @@
         ],
         "title": "PodState"
       },
+      "PolicyResponse": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/BindingPolicy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "policy"
+        ],
+        "title": "PolicyResponse"
+      },
+      "PolicyUpdate": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/BindingPolicy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "policy"
+        ],
+        "title": "PolicyUpdate"
+      },
       "PreparationAccepted": {
         "properties": {
           "operation": {
@@ -9530,6 +11592,29 @@
         ],
         "title": "PreparationRequest"
       },
+      "Quantities": {
+        "properties": {
+          "cpu": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^((0|[1-9][0-9]*)(\\.[0-9]{1,3})?|[1-9][0-9]*m)$",
+            "title": "Cpu"
+          },
+          "memory": {
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|k|M|G|T)?$",
+            "title": "Memory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cpu",
+          "memory"
+        ],
+        "title": "Quantities"
+      },
       "ReasonRequest": {
         "properties": {
           "expected_revision": {
@@ -9586,6 +11671,95 @@
         ],
         "title": "ReassignRequest"
       },
+      "Reference": {
+        "properties": {
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048,
+                "minLength": 1,
+                "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              }
+            ],
+            "title": "Uri"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "uri",
+          "digest"
+        ],
+        "title": "Reference"
+      },
+      "RegistryCredential": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "registry",
+            "title": "Provider"
+          },
+          "registry": {
+            "type": "string",
+            "maxLength": 253,
+            "pattern": "^[a-z0-9][a-z0-9.-]*(:[1-9][0-9]{0,4})?$",
+            "title": "Registry"
+          },
+          "repository_prefix": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+            "title": "Repository Prefix"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[^\\s:/@]+$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 16384,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "pull",
+              "push"
+            ],
+            "title": "Permission"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "registry",
+          "repository_prefix",
+          "username",
+          "password",
+          "permission"
+        ],
+        "title": "RegistryCredential"
+      },
       "RegistryUpdate": {
         "properties": {
           "dockerconfigjson": {
@@ -9599,6 +11773,174 @@
           "dockerconfigjson"
         ],
         "title": "RegistryUpdate"
+      },
+      "ReleaseLineageV1": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "candidate_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Candidate Digest"
+          },
+          "runtime_image": {
+            "type": "string",
+            "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$",
+            "title": "Runtime Image"
+          },
+          "replaces_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "candidate",
+          "candidate_digest",
+          "runtime_image"
+        ],
+        "title": "ReleaseLineageV1"
+      },
+      "ReleaseMetadata": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Name"
+          },
+          "release": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Release"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "release"
+        ],
+        "title": "ReleaseMetadata"
+      },
+      "ReleaseSpec": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+            "title": "Image"
+          },
+          "repository": {
+            "$ref": "#/components/schemas/Repository"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/StartupModel"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Models"
+          },
+          "resourcesPerReplica": {
+            "$ref": "#/components/schemas/Resources"
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/ReleaseLineageV1"
+          },
+          "lineageManifest": {
+            "$ref": "#/components/schemas/Reference"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Evidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "image",
+          "repository",
+          "models",
+          "resourcesPerReplica",
+          "lineage",
+          "lineageManifest",
+          "validation"
+        ],
+        "title": "ReleaseSpec"
+      },
+      "Repository": {
+        "properties": {
+          "uri": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+            "title": "Uri"
+          },
+          "inventoryDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Inventorydigest"
+          },
+          "preparedInventoryDigest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Preparedinventorydigest"
+          },
+          "materializerImage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Materializerimage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "uri",
+          "inventoryDigest",
+          "preparedInventoryDigest"
+        ],
+        "title": "Repository"
       },
       "RepositoryInput": {
         "properties": {
@@ -9694,6 +12036,91 @@
           "file"
         ],
         "title": "ResolvedInput"
+      },
+      "ResolvedRepository": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/S3RepositoryInput"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedInput"
+            },
+            "type": "array",
+            "maxItems": 998,
+            "minItems": 1,
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "bucket",
+          "key",
+          "endpoint",
+          "files"
+        ],
+        "title": "ResolvedRepository"
+      },
+      "Resources": {
+        "properties": {
+          "requests": {
+            "$ref": "#/components/schemas/Quantities"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Quantities"
+          },
+          "gpuCount": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Gpucount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requests",
+          "limits",
+          "gpuCount"
+        ],
+        "title": "Resources"
+      },
+      "Rollout": {
+        "properties": {
+          "maxSurge": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Maxsurge"
+          },
+          "maxUnavailable": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Maxunavailable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "maxSurge",
+          "maxUnavailable"
+        ],
+        "title": "Rollout"
       },
       "RuntimeImage": {
         "properties": {
@@ -9836,6 +12263,57 @@
           "managed"
         ],
         "title": "RuntimeObservation"
+      },
+      "S3Binding": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "s3",
+            "title": "Provider"
+          },
+          "profile_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Profile Id"
+          },
+          "endpoint": {
+            "type": "string",
+            "maxLength": 2048,
+            "pattern": "^https?://[^\\s@?#]+$",
+            "title": "Endpoint"
+          },
+          "bucket": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 3,
+            "title": "Bucket"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ],
+            "title": "Prefix",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "profile_id",
+          "endpoint",
+          "bucket"
+        ],
+        "title": "S3Binding"
       },
       "S3DeleteResponse": {
         "properties": {
@@ -10016,6 +12494,37 @@
         ],
         "title": "S3ListResponse"
       },
+      "S3Location": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "s3",
+            "title": "Type"
+          },
+          "bucket": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 3,
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+            "title": "Bucket"
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+            "title": "Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "bucket",
+          "key"
+        ],
+        "title": "S3Location"
+      },
       "S3ProfileDTO": {
         "properties": {
           "id": {
@@ -10079,6 +12588,35 @@
         ],
         "title": "S3ProfileDTO"
       },
+      "S3RepositoryInput": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "s3_repository",
+            "title": "Kind"
+          },
+          "profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Profile Id"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f]+$",
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "profile_id",
+          "path"
+        ],
+        "title": "S3RepositoryInput"
+      },
       "SelfRegisterRequest": {
         "properties": {
           "email": {
@@ -10107,6 +12645,64 @@
           "password"
         ],
         "title": "SelfRegisterRequest"
+      },
+      "ServingRelease": {
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "serving.triton-control/v1alpha1",
+            "title": "Apiversion"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ServingRelease",
+            "title": "Kind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ReleaseMetadata"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ReleaseSpec"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "apiVersion",
+          "kind",
+          "metadata",
+          "spec"
+        ],
+        "title": "ServingRelease"
+      },
+      "ServingTarget": {
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "serving.triton-control/v1alpha1",
+            "title": "Apiversion"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ServingTarget",
+            "title": "Kind"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/TargetSpec"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "apiVersion",
+          "kind",
+          "metadata",
+          "spec"
+        ],
+        "title": "ServingTarget"
       },
       "Snapshot": {
         "properties": {
@@ -10284,6 +12880,116 @@
         ],
         "title": "SnapshotReceipt"
       },
+      "SourceGrant": {
+        "properties": {
+          "location": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GitLocation"
+              },
+              {
+                "$ref": "#/components/schemas/S3Location"
+              }
+            ],
+            "title": "Location",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "git": "#/components/schemas/GitLocation",
+                "s3": "#/components/schemas/S3Location"
+              }
+            }
+          },
+          "read_binding": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Read Binding"
+          },
+          "user_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "User Ids",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "location",
+          "read_binding"
+        ],
+        "title": "SourceGrant"
+      },
+      "SourceSpec": {
+        "properties": {
+          "location": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GitLocation"
+              },
+              {
+                "$ref": "#/components/schemas/S3Location"
+              }
+            ],
+            "title": "Location",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "git": "#/components/schemas/GitLocation",
+                "s3": "#/components/schemas/S3Location"
+              }
+            }
+          },
+          "readCredential": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Readcredential"
+          },
+          "allowedTargets": {
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Allowedtargets"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "maximum": 2592000.0,
+            "minimum": 1.0,
+            "title": "Intervalseconds",
+            "default": 86400
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalPolicy"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "location",
+          "readCredential",
+          "allowedTargets"
+        ],
+        "title": "SourceSpec"
+      },
       "StartModelPerfRequest": {
         "properties": {
           "model_version": {
@@ -10376,6 +13082,126 @@
           "versions"
         ],
         "title": "StartupModel"
+      },
+      "TargetGrant": {
+        "properties": {
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Source Ids"
+          },
+          "user_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "User Ids",
+            "default": []
+          },
+          "model_storage": {
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Model Storage"
+          },
+          "registry_pull": {
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Registry Pull"
+          },
+          "hardware": {
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Hardware"
+          },
+          "per_replica": {
+            "$ref": "#/components/schemas/Capacity"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Capacity"
+          },
+          "max_replicas": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Max Replicas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_ids",
+          "model_storage",
+          "registry_pull",
+          "hardware",
+          "per_replica",
+          "total",
+          "max_replicas"
+        ],
+        "title": "TargetGrant"
+      },
+      "TargetSpec": {
+        "properties": {
+          "release": {
+            "$ref": "#/components/schemas/Reference"
+          },
+          "replicas": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Replicas"
+          },
+          "capacityOwner": {
+            "type": "string",
+            "const": "source",
+            "title": "Capacityowner",
+            "default": "source"
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/Credentials"
+          },
+          "rollout": {
+            "$ref": "#/components/schemas/Rollout"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "release",
+          "replicas",
+          "credentials",
+          "rollout"
+        ],
+        "title": "TargetSpec"
       },
       "TaskDTO": {
         "properties": {
@@ -10536,6 +13362,25 @@
           "expected_revision"
         ],
         "title": "TaskRevision"
+      },
+      "TaskWorkspaceDTO": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/CodeServerDTO"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "workspace"
+        ],
+        "title": "TaskWorkspaceDTO"
       },
       "TeamDTO": {
         "properties": {

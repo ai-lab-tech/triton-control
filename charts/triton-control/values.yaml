@@ -445,5 +445,8 @@ perfAnalyzer:
 # Configure a complete BuildPolicy object from docs/build-provisioning.md.
 # No floating executor image or automatic build enablement is shipped.
 buildQualification:
+  fixtureRevision: "" # Reviewed qualification receipt revision; required to execute builds.
+  # Temporary context retention; periodic cleanup keeps receipts and build history.
+  contextRetentionDays: 7
   # policy.namespace is persistent; disposable qualification uses its own temporary namespace.
   policy: null

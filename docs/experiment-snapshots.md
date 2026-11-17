@@ -172,8 +172,25 @@ Startup adds `preparation_snapshots` through the existing serialized additive
 schema initializer. Existing deployments/tasks are not rewritten. Older binaries
 ignore the additional table; keep its data and controlled staging during rollback.
 The new API is the contract for the #22/#24 user flows; this ticket adds no new UI.
-The workspace materialization service can consume this snapshot's task ID and
-inventories in its own follow-up integration; no workspace is started here.
+Capture registers immutable task-workspace inputs in the same transaction as the
+receipt and task. After claiming the task, an eligible engineer can open its
+workspace even while experiment gaps remain. Those gaps are retained unchanged:
+workspace access is preparation, not evaluation or release approval. Existing
+handoff workspaces still require their evaluation inputs before opening.
+
+The workspace restores the captured model inventory under `/inputs/verified/source/`
+and selected project files under `/inputs/verified/source/.workspace/`. Downloads
+read only the retained directory snapshot or exact retained S3 versions and verify
+each size and digest. They never reread the live experiment. Assignment and storage
+binding are rechecked on access; changing the configured staging root, endpoint,
+bucket or prefix revokes access rather than redirecting old receipts. Directory
+reads reject links. Capturing an experiment does not start a workspace automatically.
+
+Workspace staging retains its 3 GiB total and 512 KiB input-manifest limits. Larger
+captures remain valid snapshots but cannot be opened through this bounded workspace
+path. Empty captures have no files to register. Receipts created before storage
+bindings and workspace inputs were recorded require an explicit new capture;
+their origin or storage identity is never inferred during upgrade.
 
 ## Verification
 

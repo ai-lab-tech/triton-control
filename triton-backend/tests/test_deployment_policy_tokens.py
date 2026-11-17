@@ -13,7 +13,7 @@ class PolicyTokenTests(unittest.IsolatedAsyncioTestCase):
     async def test_policy_read_allowed_for_all_deployment_token_types(self):
         for token in ("workspace_deployment", "workflow_deployment", "mlflow_workflow"):
             # Arrange
-            request = SimpleNamespace(url=SimpleNamespace(path="/api/deployments/policy"), method="GET")
+            request = SimpleNamespace(url=SimpleNamespace(path="/api/deployments/policy"), method="GET", headers={})
             with (
                 patch("app.core.security.extract_claims", AsyncMock(return_value={"token_use": token})),
                 patch("app.core.security._resolve_access_claims", return_value={"token_use": token}),
@@ -26,7 +26,7 @@ class PolicyTokenTests(unittest.IsolatedAsyncioTestCase):
     async def test_policy_update_denied_for_all_deployment_token_types(self):
         for token in ("workspace_deployment", "workflow_deployment", "mlflow_workflow"):
             # Arrange
-            request = SimpleNamespace(url=SimpleNamespace(path="/api/deployments/policy"), method="PUT")
+            request = SimpleNamespace(url=SimpleNamespace(path="/api/deployments/policy"), method="PUT", headers={})
             with patch("app.core.security.extract_claims", AsyncMock(return_value={"token_use": token})):
                 # Act / Assert
                 with self.assertRaises(HTTPException) as raised:

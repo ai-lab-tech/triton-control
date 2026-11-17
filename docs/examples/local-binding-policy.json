@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "source_read": {
+    "metadata-reader": {
+      "provider": "s3",
+      "profile_id": 1,
+      "endpoint": "https://storage.example.invalid",
+      "bucket": "synthetic-metadata",
+      "prefix": "targets"
+    }
+  },
+  "model_storage": {
+    "production-models": {
+      "provider": "s3",
+      "profile_id": 2,
+      "endpoint": "https://storage.example.invalid",
+      "bucket": "synthetic-models",
+      "prefix": "toy"
+    }
+  },
+  "registry_pull": {
+    "serving-registry": {
+      "provider": "registry",
+      "credential": "pull-credential"
+    }
+  },
+  "build_push": {
+    "build-registry": {
+      "provider": "registry",
+      "credential": "push-credential"
+    }
+  },
+  "sources": {
+    "production-s3": {
+      "location": {
+        "type": "s3",
+        "bucket": "synthetic-metadata",
+        "key": "targets/production.json"
+      },
+      "read_binding": "metadata-reader",
+      "user_ids": [
+        2
+      ]
+    }
+  },
+  "hardware": {
+    "cpu": {
+      "architecture": "arm64",
+      "max_gpu_per_replica": 0
+    }
+  },
+  "build_user_ids": [
+    2
+  ],
+  "targets": {
+    "toy-production": {
+      "source_ids": [
+        "production-s3"
+      ],
+      "user_ids": [
+        2
+      ],
+      "model_storage": [
+        "production-models"
+      ],
+      "registry_pull": [
+        "serving-registry"
+      ],
+      "hardware": [
+        "cpu"
+      ],
+      "per_replica": {
+        "cpu": "2",
+        "memory": "1Gi",
+        "gpu": 0
+      },
+      "total": {
+        "cpu": "4",
+        "memory": "2Gi",
+        "gpu": 0
+      },
+      "max_replicas": 4
+    }
+  }
+}

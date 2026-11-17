@@ -379,7 +379,8 @@ export class WorkspacesPageComponent implements OnDestroy {
   }
 
   selectedWorkspace(): CodeServer | null {
-    const selectedId = this.selectedWorkspaceId();
+    const requested = new URLSearchParams(this.router.url.split("?")[1] ?? "").get("workspace");
+    const selectedId = this.selectedWorkspaceId() ?? (requested ? Number(requested) : null);
     return this.workspaces().find((workspace) => workspace.id === selectedId) ?? null;
   }
 
@@ -407,10 +408,12 @@ export class WorkspacesPageComponent implements OnDestroy {
     options: { refreshReadyWorkspace?: boolean } = {},
   ): Promise<void> {
     const workspaces = this.workspaces();
-    const selectedId = this.selectedWorkspaceId();
+    const requested = new URLSearchParams(this.router.url.split("?")[1] ?? "").get("workspace");
+    const selectedId = this.selectedWorkspaceId() ?? (requested ? Number(requested) : null);
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
       if (options.refreshReadyWorkspace && selected.status === "ready") {
+        this.selectedWorkspaceId.set(selected.id);
         await this.refresh(selected);
         return;
       }

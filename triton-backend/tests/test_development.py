@@ -190,6 +190,9 @@ class HfBuilderStartupTests(unittest.TestCase):
 
 
 class CodeServerTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch("app.services.development.workspaces.associations.for_workspace", return_value=None))
+
     def _request(self) -> CreateCodeServerRequest:
         return CreateCodeServerRequest(
             name="Dev Workspace",
@@ -530,12 +533,15 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("extension/resources/triton-control.svg", names)
 
     def test_TritonDeployExtensionPackage_ContributesActivityBarView(self) -> None:
+        # Arrange
         extension_dir = k8s._triton_deploy_extension_dir()
         package_json = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
 
+        # Act
         contributes = package_json["contributes"]
 
-        self.assertEqual(package_json["version"], "0.4.11")
+        # Assert
+        self.assertEqual(package_json["version"], "0.4.12")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
         self.assertIn("onFileSystem:triton-s3", package_json["activationEvents"])
@@ -582,7 +588,7 @@ class CodeServerTests(unittest.TestCase):
         with patch("app.services.development.workspaces.kubernetes_enabled", return_value=True), patch(
             "app.services.development.workspaces.require_user_entity",
             return_value=user,
-        ), patch("app.services.development.workspaces._workspace_namespace", return_value="triton-control"), patch(
+        ), patch("app.services.development.workspaces.workspace_namespace", return_value="triton-control"), patch(
             "app.services.development.workspaces.k8s.apply_code_server_resources",
             return_value=["Secret/code-7-dev-workspace-secret", "StatefulSet/code-7-dev-workspace"],
         ), patch(
@@ -713,14 +719,14 @@ class CodeServerTests(unittest.TestCase):
             {},
             clear=True,
         ):
-            self.assertEqual(workspaces._workspace_namespace(), "triton-control")
+            self.assertEqual(workspaces.workspace_namespace(), "triton-control")
 
     def test_WorkspaceNamespace_InCluster_UsesControlNamespace(self) -> None:
         with patch("app.services.development.workspaces.is_running_in_cluster", return_value=True), patch(
             "app.services.development.workspaces.in_cluster_namespace",
             return_value="triton-control",
         ):
-            self.assertEqual(workspaces._workspace_namespace(), "triton-control")
+            self.assertEqual(workspaces.workspace_namespace(), "triton-control")
 
     def test_WorkspaceNamespace_ConfiguredEnv_UsesConfiguredNamespace(self) -> None:
         with patch("app.services.development.workspaces.is_running_in_cluster", return_value=False), patch.dict(
@@ -728,7 +734,7 @@ class CodeServerTests(unittest.TestCase):
             {"KUBERNETES_NAMESPACE": "dev-tools"},
             clear=True,
         ):
-            self.assertEqual(workspaces._workspace_namespace(), "dev-tools")
+            self.assertEqual(workspaces.workspace_namespace(), "dev-tools")
 
     def test_ListCodeServers_ReturnsOnlyCurrentOwnerRows(self) -> None:
         user = SimpleNamespace(id=7)

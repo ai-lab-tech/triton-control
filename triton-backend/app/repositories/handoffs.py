@@ -11,7 +11,7 @@ from app.exceptions import NotFoundError
 
 def find_source(
     session: Session, installation: str, revision: str, endpoint: str, bucket: str, key: str,
-    version: str | None,
+    version: str | None, kind: str = "s3",
 ) -> HandoffEntity | None:
     """Match captured source identity, including receipts written before source hashing.
 
@@ -26,6 +26,14 @@ def find_source(
         payload["source"]["bucket"].as_string() == bucket,
         payload["source"]["key"].as_string() == key,
     )
+    if kind == "s3_repository":
+        statement = statement.where(payload["request"]["source"]["kind"].as_string() == kind)
+    else:
+        # Legacy single-object receipts can omit the default kind.
+        statement = statement.where(
+            (payload["request"]["source"]["kind"].as_string() == "s3")
+            | payload["request"]["source"]["kind"].as_string().is_(None)
+        )
     if version is None:
         statement = statement.where(payload["request"]["source"]["version_id"].as_string().is_(None))
     else:
