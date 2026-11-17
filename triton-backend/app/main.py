@@ -70,6 +70,7 @@ from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
 from app.repositories.deployment_intents import KIND as DEPLOYMENT_OPERATION_KIND
 from app.services import error_logs
+from app.services.builds.access import authenticate as authenticate_build_workspace
 from app.services.builds.contexts import KIND as BUILD_CONTEXT_KIND
 from app.services.builds.contexts import adapter as build_context_adapter
 from app.services.builds.contexts_cleanup import RetentionWorker
@@ -119,6 +120,7 @@ app = FastAPI(
 )
 
 app.state.workspace_deployment_authenticator = authenticate_workspace_deployment
+app.state.workspace_build_authenticator = authenticate_build_workspace
 
 
 @app.exception_handler(RequestValidationError)

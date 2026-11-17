@@ -29,6 +29,7 @@ function activate(context) {
   outputChannel = vscode.window.createOutputChannel("Triton Control Deploy");
   context.subscriptions.push(outputChannel);
   registerHfBuilder(context, vscode, outputChannel, scheduleRepositoryRefresh);
+  require("./serving-build").registerServingBuild(context, vscode);
   actionsProvider = new TritonControlActionsProvider();
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(

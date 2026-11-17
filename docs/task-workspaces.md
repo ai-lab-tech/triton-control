@@ -46,6 +46,14 @@ member/admin permission model. Team membership adds no artifact permission.
 
 ## Verified inputs and retries
 
+Repository-folder handoffs preserve every captured path under
+`/inputs/verified/source/` (for example `iris/1/model.onnx`). Every file is
+downloaded by its recorded S3 version and verified independently. No ZIP creation
+or extraction is needed. Supporting files and empty files are preserved. The
+source inventory hash covers the complete repository. See the
+[repository submission walkthrough](scientist-handoffs.md#submit-an-unpacked-triton-repository).
+
+
 A database task lock and unique association serialize concurrent opens. The
 association, selected configuration, immutable inputs and audit event commit
 before Kubernetes resource creation. Repeated requests reuse the same workspace;

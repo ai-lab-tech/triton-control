@@ -18,6 +18,7 @@ from app.repositories import build_contexts as repo
 from app.repositories import operations, teams
 from app.schemas.build_contexts import BuildContextRequest, BuildContextResponse, ContextManifest
 from app.schemas.operations import OperationRequest, ReconcileResult
+from app.services.builds import access
 from app.services.builds import contexts_storage as provider
 from app.services.builds.contexts_archive import prepare
 from app.services.builds.qualification import require_qualified
@@ -57,6 +58,7 @@ def checked(session: Session, claims: dict[str, Any], context_id: str, action: A
     op = service.checked(session, claims, context_id, action)
     if op.kind != KIND:
         raise ForbiddenError("Not a build context operation")
+    access.task_scope(claims, op.payload["request"].get("task_id"))
     return op
 
 
@@ -77,8 +79,10 @@ def submit(
     installation_policy.require("development_jobs")
     if claims.get("token_use"):
         raise ForbiddenError("Delegated deployment tokens cannot stage build contexts")
-    result = service.submit(session, claims, OperationRequest(kind=KIND, target=TARGET,
-                                                            payload=request.model_dump(mode="json")), key)
+    access.task_scope(claims, request.task_id)
+    result = service.submit(session, claims, OperationRequest(
+        kind=KIND, target=TARGET, payload=request.model_dump(mode="json", exclude_none=True),
+    ), key)
     return response(session, operations.get(session, result.id))
 
 
@@ -184,7 +188,7 @@ class ContextAdapter:
         settings = provider.policy()
         if request.archive_bytes > settings.max_context_bytes:
             raise BadRequestError("Build archive exceeds installation byte limit")
-        return {"request": request.model_dump(mode="json"), "policy_hash": settings.fingerprint(),
+        return {"request": request.model_dump(mode="json", exclude_none=True), "policy_hash": settings.fingerprint(),
                 "retention_seconds": provider.retention_seconds()}
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:

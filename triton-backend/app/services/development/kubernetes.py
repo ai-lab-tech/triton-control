@@ -696,6 +696,8 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
         "extension.vsixmanifest": _triton_deploy_vsix_manifest(package_json),
         "[Content_Types].xml": _vsix_content_types(),
     }
+    for module in ("build-client.js", "build-snapshot.js", "serving-build.js"):
+        files["extension/" + module] = (extension_dir / module).read_text(encoding="utf-8")
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in files.items():

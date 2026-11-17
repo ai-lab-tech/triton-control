@@ -1,5 +1,6 @@
 import { installationGuard } from "./shared/installation/installation.guard";
 import { InstallationRestrictedComponent } from "./shared/installation/installation-restricted.component";
+import { TaskBuildsPageComponent } from "./pages/builds/task-builds-page.component";
 import { HandoffPageComponent } from "./pages/handoffs/handoff-page.component";
 import { Routes } from "@angular/router";
 import { adminGuard, authGuard } from "./shared/auth/auth.guard";
@@ -41,6 +42,11 @@ export const APP_ROUTES: Routes = [
     canActivateChild: [installationGuard],
     children: [
       { path: "installation-restricted", component: InstallationRestrictedComponent },
+      {
+        path: "preparation/tasks/:taskId/builds",
+        data: { capability: "development_jobs" },
+        component: TaskBuildsPageComponent,
+      },
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
       {
