@@ -188,12 +188,20 @@ class Jobs:
             executor = next((s for s in statuses if s.name == "executor"), None)
             running = bool(executor and executor.state.running)
             if executor and (executor.state.running or executor.state.terminated):
-                raw = self.core.read_namespaced_pod_log(
-                    pod.metadata.name, row.namespace, container="executor", limit_bytes=LOG_LIMIT, tail_lines=LOG_LINES,
-                    _request_timeout=TIMEOUT,
-                )
-                logs = redact(raw, self.sensitive_values(row))
-                truncated = len(raw.encode()) >= LOG_LIMIT or len(raw.splitlines()) >= LOG_LINES
+                try:
+                    raw = self.core.read_namespaced_pod_log(
+                        pod.metadata.name, row.namespace, container="executor", limit_bytes=LOG_LIMIT,
+                        tail_lines=LOG_LINES, _request_timeout=TIMEOUT,
+                    )
+                except ApiException as error:
+                    if error.status != 404:
+                        raise
+                    # Deadline/cancellation cleanup can remove a listed pod before
+                    # its logs are read. Still observe the Job's terminal status.
+                    running = False
+                else:
+                    logs = redact(raw, self.sensitive_values(row))
+                    truncated = len(raw.encode()) >= LOG_LIMIT or len(raw.splitlines()) >= LOG_LINES
             if executor and executor.state.terminated:
                 terminated = executor.state.terminated
                 exited_ok = terminated.exit_code == 0
