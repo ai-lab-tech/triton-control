@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app.db.entities import BuildContextEntity, BuildContextReceiptEntity
+from app.db.entities import BuildAttemptEntity, BuildContextEntity, BuildContextReceiptEntity
 from app.exceptions import NotFoundError
 
 
@@ -43,4 +43,7 @@ def publish(session: Session, context_id: str, payload: dict[str, Any]) -> None:
 def due(session: Session, stamp: datetime, limit: int = 100) -> list[str]:
     return list(session.exec(select(BuildContextEntity.id).where(
         BuildContextEntity.expires_at <= stamp, col(BuildContextEntity.expired).is_(False),
+        col(BuildContextEntity.id).notin_(select(BuildAttemptEntity.context_id).where(
+            col(BuildAttemptEntity.cleaned).is_(False),
+        )),
     ).order_by(col(BuildContextEntity.expires_at)).limit(limit)).all())

@@ -59,8 +59,8 @@ def binding(session: Session, settings: BuildPolicy) -> dict[str, Any]:
 
 
 class ContextStore:
-    def __init__(self, client: Any, bucket: str) -> None:
-        self.client, self.bucket = client, bucket
+    def __init__(self, client: Any, bucket: str, ca_certificate: str = "") -> None:
+        self.client, self.bucket, self.ca_certificate = client, bucket, ca_certificate
 
     def put(self, key: str, stream: BinaryIO, manifest: ContextManifest) -> str:
         try:
@@ -76,6 +76,16 @@ class ContextStore:
             return str(version)
         except (BotoCoreError, ClientError):
             raise ServiceUnavailableError("Build context storage unavailable") from None
+
+    def download_url(self, key: str, version: str, seconds: int) -> str:
+        """Short-lived access to exactly one immutable version; never persist in evidence."""
+        url = str(self.client.generate_presigned_url(
+            "get_object", Params={"Bucket": self.bucket, "Key": key, "VersionId": version},
+            ExpiresIn=seconds,
+        ))
+        if urlparse(url).scheme != "https":
+            raise ForbiddenError("Executor context downloads require trusted HTTPS")
+        return url
 
     def verify(
         self, key: str, version: str, manifest: ContextManifest, checkpoint: Callable[[], None] = lambda: None,
@@ -158,6 +168,6 @@ def storage(session: Session, expected: dict[str, Any]) -> Iterator[ContextStore
         connect_timeout=3, read_timeout=10, retries={"max_attempts": 1, "mode": "standard"},
     ))
     try:
-        yield ContextStore(client, profile.bucket)
+        yield ContextStore(client, profile.bucket, profile.ca_certificate or "")
     finally:
         client.close()

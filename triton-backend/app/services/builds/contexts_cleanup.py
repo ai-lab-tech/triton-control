@@ -8,7 +8,7 @@ from typing import Callable
 from sqlmodel import Session
 
 from app.repositories import build_contexts as repo
-from app.repositories import operations
+from app.repositories import builds, operations
 from app.services.builds.contexts_storage import storage
 
 
@@ -22,6 +22,8 @@ def cleanup(sessions: Callable[[], Session], limit: int = 100) -> dict[str, int]
                 row = repo.get(session, context_id, lock=True)
                 stamp = operations.now(session)
                 if row.expired or row.expires_at > stamp or (row.upload_until and row.upload_until > stamp):
+                    continue
+                if builds.holds_context(session, context_id):
                     continue
                 started = time.monotonic()
 
@@ -66,6 +68,8 @@ class RetentionWorker:
         while not self.stopped.is_set():
             try:
                 result = cleanup(self.sessions, limit=10)
+                with self.sessions() as session:
+                    builds.expire_logs(session, operations.now(session))
                 if result["failed"]:
                     logging.getLogger(__name__).warning("Some build context cleanup attempts will be retried")
             except Exception:

@@ -39,6 +39,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
+from app.api.build_api import router as build_router
 from app.api.build_context_api import router as build_context_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
@@ -69,6 +70,8 @@ from app.services import error_logs
 from app.services.builds.contexts import KIND as BUILD_CONTEXT_KIND
 from app.services.builds.contexts import adapter as build_context_adapter
 from app.services.builds.contexts_cleanup import RetentionWorker
+from app.services.builds.execution import KIND as BUILD_KIND
+from app.services.builds.execution import adapter as build_adapter
 from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
 from app.services.mlflow import migration as mlflow_migration
@@ -199,6 +202,8 @@ async def on_startup() -> None:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
     if BUILD_CONTEXT_KIND not in operation_service.adapters:
         operation_service.register(BUILD_CONTEXT_KIND, build_context_adapter)
+    if BUILD_KIND not in operation_service.adapters:
+        operation_service.register(BUILD_KIND, build_adapter)
     operation_worker.start()
     build_context_retention.start()
     mlflow_migration.start()
@@ -223,6 +228,7 @@ app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(build_context_router, dependencies=[Depends(get_claims)])
+app.include_router(build_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
 app.include_router(task_workspaces_router)
 app.include_router(preparation_router, dependencies=[Depends(get_claims)])

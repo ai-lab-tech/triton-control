@@ -65,6 +65,8 @@ spec:
             {{- if .Values.buildQualification.policy }}
             - name: TRITON_BUILD_POLICY_FILE
               value: /etc/triton-control/build-context/policy.json
+            - name: TRITON_BUILD_FIXTURE_REVISION
+              value: {{ .Values.buildQualification.fixtureRevision | quote }}
             - name: TRITON_BUILD_CONTEXT_RETENTION_DAYS
               value: {{ .Values.buildQualification.contextRetentionDays | quote }}
             {{- end }}

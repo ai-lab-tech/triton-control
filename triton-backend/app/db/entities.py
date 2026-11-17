@@ -718,3 +718,42 @@ class WorkspaceSnapshotInputsEntity(SQLModel, table=True):
     __tablename__ = "workspace_snapshot_inputs"
     snapshot_id: UUID = Field(primary_key=True)
     payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class BuildAttemptEntity(SQLModel, table=True):
+    """Write-ahead Job identity and retained executor evidence for one build attempt."""
+
+    __tablename__ = "build_attempts"
+    operation_id: str = Field(primary_key=True, foreign_key="operations.id")
+    number: int = Field(primary_key=True)
+    context_id: str = Field(index=True)
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    context_receipt: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    executor_image: str
+    destination: str
+    namespace: str
+    job_name: str = Field(unique=True)
+    job_uid: str | None = None
+    state: str = "pending"
+    final_digest: str | None = None
+    logs: str = Field(default="", sa_column=Column(Text, nullable=False))
+    logs_truncated: bool = False
+    logs_expired: bool = False
+    retry_requested: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    deadline_at: datetime
+    finished_at: datetime | None = None
+    logs_expires_at: datetime | None = Field(default=None, index=True)
+    cleaned: bool = False
+
+
+class BuildEvidenceReferenceEntity(SQLModel, table=True):
+    """Release integration pins evidence before publishing the referencing release."""
+
+    __tablename__ = "build_evidence_references"
+    __table_args__ = (ForeignKeyConstraint(
+        ["operation_id", "attempt"], ["build_attempts.operation_id", "build_attempts.number"],
+    ),)
+    operation_id: str = Field(primary_key=True)
+    attempt: int = Field(primary_key=True)
+    release_digest: str = Field(primary_key=True)

@@ -183,6 +183,11 @@
               "type": "object"
             }
           ]
+        },
+        "fixtureRevision": {
+          "type": "string",
+          "maxLength": 128,
+          "default": ""
         }
       }
     }

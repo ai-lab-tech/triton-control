@@ -22,6 +22,7 @@ REQUIRED_CHECKS = frozenset(
         "pod_policy",
         "network_policy",
         "staging_roundtrip",
+        "versioned_https_context",
         "runtime_pull",
     }
 )

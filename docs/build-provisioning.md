@@ -4,7 +4,7 @@ This package implements S06-A: qualification of one exact container-image builde
 and its installation policy. Builds remain disabled by default. S06-B supplies
 the [build-context staging API](build-contexts.md). Staging alone does not enable
 execution; the S06-C executor must pass the qualification gate before execution.
-No image-build execution API, UI, production pipeline or automatic image deployment is introduced.
+S06-C adds the [runtime-build execution API](runtime-builds.md). It does not deploy images automatically.
 
 ## Candidate and provenance
 
@@ -42,10 +42,12 @@ and [verification instructions](https://github.com/osscontainertools/kaniko#veri
 Supply a complete JSON `BuildPolicy` to the CLI. `buildQualification.policy` in
 Helm accepts the same fields and provisions a dedicated namespace, policy
 ConfigMap and egress/ingress NetworkPolicy. This namespace is persistent: build
-Jobs reuse it, and Job TTL cleanup removes completed Jobs rather than the namespace.
+Jobs reuse it. The execution service retains evidence before deleting completed Jobs.
 Leave it null to provision nothing.
-S06-A Helm templates reject `enabled: true` because the build service is not yet
-installed. Review the rendered manifests before installing them.
+Execution defaults to disabled. Enabling requires a current passing qualification
+receipt including version-pinned HTTPS context transport; configure
+`buildQualification.fixtureRevision` from that receipt. Review rendered manifests
+before installing them.
 
 Required fields:
 
@@ -63,7 +65,8 @@ Required fields:
 
 Limits default to 10 MiB compressed context, 1000 millicores, 1024 MiB and
 300 seconds. Bounds are validated by Pydantic; Jobs set CPU/memory requests and
-limits, a deadline, zero retries, and a cleanup TTL. HTTP transport is allowed only
+limits, a deadline and zero automatic retries. Runtime Jobs have no TTL until
+the service has retained their evidence. HTTP transport is allowed only
 inside the disposable registry fixture. Site registries must use trusted TLS.
 
 The tested pod contract uses UID 0, RuntimeDefault seccomp, no privileged mode,
@@ -81,8 +84,8 @@ service/pod destinations explicitly for the chosen CNI and requalify changes.
 ## Run the disposable fixture
 
 Prerequisites: Python backend dependencies, kubectl, crane, cosign and openssl;
-cluster-admin access for a disposable namespace; an existing writable S3 staging
-profile; and access to the pinned helper images. No Docker socket is mounted or
+cluster-admin access for a disposable namespace; an existing writable, versioned
+S3 staging profile with HTTPS reachable from both the fixture and executor; and access to the pinned helper images. No Docker socket is mounted or
 used by the builder. Host tools seed the private fixture base via the registry API.
 The helpers are digest-pinned in `scripts/builder_fixture.py`.
 

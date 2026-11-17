@@ -5,7 +5,7 @@ import tempfile
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Callable
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -266,6 +266,7 @@ class ContextAdapter:
 
 def consume_for_build(
     session: Session, claims: dict[str, Any], context_id: str, fixture_revision: str,
+    checkpoint: Callable[[], None] = lambda: None,
 ) -> dict[str, Any]:
     """S06-C admission hook. Reverify exact retained version before executor startup.
 
@@ -281,7 +282,8 @@ def consume_for_build(
         raise ConflictError("A verified, retained build context is required")
     payload = dict(receipt.payload)
     with provider.storage(session, payload["storage_binding"]) as store:
-        store.verify(payload["key"], payload["version_id"], ContextManifest.model_validate(payload["manifest"]))
+        store.verify(payload["key"], payload["version_id"],
+                     ContextManifest.model_validate(payload["manifest"]), checkpoint)
     # Reserve enough retention for a Job admitted immediately after this hook.
     # Each later S06-C retry must pass admission again before starting its Job.
     row.expires_at = max(row.expires_at, operations.now(session) + timedelta(seconds=settings.timeout_seconds + 300))
