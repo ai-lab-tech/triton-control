@@ -1,59 +1,64 @@
-# Arbeitsregeln für Coding-Agents
+# Coding Agent Instructions
 
-Diese Regeln gelten für das gesamte Repository.
+These instructions apply to the entire repository.
 
-## Verbindliche lokale CI-Prüfung vor jedem Push
+## Repository language
 
-- Vor jedem Push die Workflows unter `.github/workflows/` lesen und anhand des
-  gesamten zu pushenden Diffs bestimmen, welche Jobs betroffen sind. Nicht nur
-  den letzten Commit oder einzelne geänderte Tests betrachten.
-- Die betroffenen CI-Prüfungen zuerst lokal ausführen: gleiche Befehle,
-  Arbeitsverzeichnisse, Tool-Versionen, Konfigurationen und Coverage-Grenzen wie
-  im Workflow. Die Workflow-Dateien sind die maßgebliche Quelle.
-- Nicht nach erfolgreichen Unit-Tests aufhören. Auch Typprüfung, Linter,
-  Formatierung, Architekturprüfungen, Security-Scans, generierte Dateien und
-  betroffene Integrations-/Smoke-Tests gehören zur Prüfung.
-- Fehlende Werkzeuge und Abhängigkeiten nach Möglichkeit in einer isolierten
-  Umgebung installieren; benötigte Testdienste lokal bereitstellen.
-- Bei fehlgeschlagenen Prüfungen nicht pushen. Ursache beheben und betroffene
-  Prüfungen erneut ausführen. Fehler nicht durch Abschwächen der CI-Regeln,
-  Coverage-Grenzen oder Tests umgehen.
-- Ist eine erforderliche Prüfung lokal nicht ausführbar, die konkrete Prüfung,
-  Ursache und verbleibende Unsicherheit nennen. Alle übrigen Prüfungen fertig
-  ausführen. Ohne ausdrückliche Freigabe für diese Ausnahme nicht pushen;
-  eine allgemeine Aufforderung zum Push ist keine Freigabe zum Überspringen.
-- Ergebnisse müssen zum endgültigen Code passen. Nach weiteren Codeänderungen
-  die dadurch betroffenen Prüfungen wiederholen. Vor dem Push zusätzlich
-  `git diff --check` ausführen und den zu pushenden Diff prüfen.
-- Im Abschlussbericht bestandene, fehlgeschlagene und übersprungene Prüfungen
-  getrennt nennen. Nur tatsächlich ausgeführte Prüfungen als bestanden melden.
-  Lokaler Erfolg bedeutet nicht, dass GitHub CI bereits erfolgreich war.
+All content added to this repository must be in English. This includes code
+identifiers, comments, docstrings, documentation, agent instructions, user-facing
+text, error messages, test descriptions, and commit messages. Apply the same rule
+to new or rewritten text in existing files. The language used in conversation with
+the user does not change this requirement.
+
+## Required local CI checks before every push
+
+- Before every push, read the workflows in `.github/workflows/` and determine
+  which jobs apply to the entire diff being pushed. Do not consider only the last
+  commit or individual changed tests.
+- Run the applicable CI checks locally first, using the same commands, working
+  directories, tool versions, configuration, and coverage thresholds as CI.
+  Workflow files are the authoritative source.
+- Do not stop after unit tests pass. Include type checking, linting, formatting,
+  architecture checks, security scans, generated-file checks, and applicable
+  integration and smoke tests.
+- Install missing tools and dependencies in an isolated environment where
+  possible, and provision the required local test services.
+- Do not push with failing checks. Fix the cause and rerun the affected checks.
+  Do not bypass failures by weakening CI rules, coverage thresholds, or tests.
+- If a required check cannot run locally, identify the exact check, the blocker,
+  and the remaining uncertainty. Complete all other checks. Do not push without
+  explicit approval for that exception; a general request to push does not
+  authorize skipping checks.
+- Results must apply to the final code. After further code changes, rerun the
+  affected checks. Before pushing, also run `git diff --check` and review the
+  complete diff being pushed.
+- Report passed, failed, and skipped checks separately. Only claim checks passed
+  if they were actually run. Local success does not mean GitHub CI has passed.
 
 ## Backend
 
-Bei Backend-Änderungen insbesondere den vollständigen `unit-tests`-Job aus
-`.github/workflows/backend-ci.yml` lokal abdecken. Dazu gehören derzeit:
+For backend changes, run the complete `unit-tests` job from
+`.github/workflows/backend-ci.yml` locally. It currently includes:
 
-- Dependency-Audit und Prüfung der eingecheckten OpenAPI-Dateien
-- vollständige Unit-Tests mit Coverage-Grenze und Coverage-Zusammenfassung
+- Dependency auditing and checked-in OpenAPI specification verification
+- The full unit test suite, coverage threshold, and coverage summary
 - `mypy app/ tests/ scripts/ main.py`
 - `ruff check app/ main.py`
 - `lint-imports`
 - `bandit -r app/ main.py`
 
-Je nach Änderung zusätzlich die betroffenen PostgreSQL-, S3-, Kubernetes-,
-Helm-, Vertrags- und Extension-Tests aus den Workflows ausführen.
+Also run applicable PostgreSQL, S3, Kubernetes, Helm, contract, and extension tests
+from the workflows according to the changes being pushed.
 
 ## Frontend
 
-Bei Frontend-Änderungen `.github/workflows/frontend-ci.yml` beachten, insbesondere
-Dependency-Audit, Security-Scan, API-Generierung, ESLint, Prettier, Unit-Tests mit
-Coverage sowie betroffene Smoke-/End-to-End-Tests.
+For frontend changes, follow `.github/workflows/frontend-ci.yml`, including
+dependency auditing, security scanning, API generation, ESLint, Prettier, unit
+tests with coverage, and applicable smoke and end-to-end tests.
 
-## Reine Dokumentationsänderungen
+## Documentation-only changes
 
-Wenn ausschließlich Dokumentation oder Agent-Anweisungen geändert werden und
-kein Workflow für diese Dateien Prüfungen verlangt, sind keine fachfremden
-Backend-/Frontend-Testläufe nötig. Workflow-Trigger und Verweise prüfen sowie
-`git diff --check` ausführen. Diese Ausnahme gilt nicht für Codeänderungen,
-die im selben Push enthalten sind.
+When a push changes only documentation or agent instructions and no workflow
+requires checks for those files, unrelated backend and frontend test suites are
+not required. Check workflow triggers and references, and run `git diff --check`.
+This exception does not apply to code changes included in the same push.
