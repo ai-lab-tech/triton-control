@@ -5,6 +5,43 @@ on the S04-A task workspace and S06-C durable build contracts. API controllers d
 to services; repositories own SQL; schemas perform no I/O. The extension separates
 VS Code interaction, HTTP transport and bounded filesystem snapshots.
 
+## Start here: create and claim a task
+
+A preparation task records the model you are working on and who is responsible
+for it. Claiming the task assigns it to you. Image builds must run from that
+assigned task's workspace, not a personal workspace.
+
+1. **Enable engineering access.** Ask an administrator to open **Users** and
+   check **ML engineer** for your account. Your account must also have member or
+   administrator access.
+2. **Open Submit model** from the Triton Control sidebar.
+3. **Choose your model.** Enter a handoff title, select an S3 profile, enter the
+   model's object path and set a submission revision, for example `1`. The object
+   must already exist, and the bucket must have versioning enabled. Paths are
+   relative to the S3 profile's prefix.
+4. **Fill in the evaluation requirements:** the dataset object path, baseline
+   object path, expected behavior and acceptance criteria. Although the submission
+   form allows these fields to be omitted, all four are needed to open the task
+   workspace. The dataset and baseline objects must already exist in S3.
+5. **Click Submit to engineering.** This creates a preparation task and opens
+   its handoff receipt.
+6. **Click Claim task** on the receipt to assign the task to yourself.
+7. **Click Open task workspace** and wait for code-server to start.
+8. In code-server, press **F1** and choose **Triton Control: Build serving image**.
+   Follow the build steps below.
+
+If **Open task workspace** is disabled, check that the task is assigned and no
+required inputs are missing. Only the current assignee can open its normal task
+workspace. If you submitted incomplete inputs, use **New revision** on the receipt
+to submit the missing information, then claim the new task.
+
+Before an image build can start, an administrator must also configure an enabled,
+qualified build policy with registry and staging storage access. Creating a task
+does not enable this installation configuration automatically.
+
+For more detail, see [engineering access](user-management.md),
+[model handoffs](scientist-handoffs.md) and [task workspaces](task-workspaces.md).
+
 ## Workflow
 
 1. Claim a preparation task and open its verified task workspace.
