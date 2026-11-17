@@ -14,7 +14,12 @@ const receipt = {
     missing_inputs: ["evaluation_dataset"],
     blocked_reasons: [],
   },
-  request: { title: "Iris", revision: "2", previous_handoff_id: "previous-receipt" },
+  request: {
+    title: "Iris",
+    revision: "2",
+    previous_handoff_id: "previous-receipt",
+    source: { kind: "s3" },
+  },
   source: { key: "iris.onnx", version_id: "v1", file: { digest: "sha256:abc", size: 5 } },
   dataset: null,
   baseline: null,
@@ -168,5 +173,78 @@ describe("HandoffPageComponent", () => {
     await pending;
     expect(fixture.componentInstance.error()).toContain("current eligible assignee");
     expect(fixture.componentInstance.busy()).toBeFalse();
+  });
+  it("submits a repository folder while keeping evaluation inputs as individual objects", async () => {
+    // Arrange
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "test" }]);
+    const page = fixture.componentInstance;
+    page.profileId = 1;
+    page.title = "Generated Triton repository";
+    page.sourceKind = "s3_repository";
+    page.sourcePath = " repositories/iris/ ";
+    page.datasetPath = "evaluation/data.csv";
+    page.baselinePath = "evaluation/baseline.json";
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+
+    // Act
+    const pending = page.submit();
+    const submission = http.expectOne("/api/preparation/handoffs");
+    const body = submission.request.body;
+    submission.flush(receipt);
+    await pending;
+
+    // Assert
+    expect(body.source).toEqual({
+      kind: "s3_repository",
+      profile_id: 1,
+      path: "repositories/iris/",
+    });
+    expect(body.dataset).toEqual({ kind: "s3", profile_id: 1, path: "evaluation/data.csv" });
+    expect(body.baseline.kind).toBe("s3");
+    expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
+  });
+
+  it("renders repository files with their exact versions and inventory hash", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush({
+      ...receipt,
+      request: { ...receipt.request, source: { kind: "s3_repository" } },
+      source_snapshot: { inventory: "sha256:inventory" },
+      source: {
+        key: "repositories/iris",
+        files: [
+          {
+            key: "repositories/iris/iris/config.pbtxt",
+            version_id: "config-v1",
+            file: { path: "iris/config.pbtxt", digest: "sha256:config", size: 12 },
+          },
+          {
+            key: "repositories/iris/iris/1/model.onnx",
+            version_id: "model-v2",
+            file: { path: "iris/1/model.onnx", digest: "sha256:model", size: 42 },
+          },
+        ],
+      },
+    });
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    const text = fixture.nativeElement.textContent;
+    for (const expected of [
+      "config-v1",
+      "model-v2",
+      "sha256:inventory",
+      "iris/1/model.onnx",
+      "/inputs/verified/source",
+    ]) {
+      expect(text).toContain(expected);
+    }
   });
 });

@@ -9686,7 +9686,15 @@
             "$ref": "#/components/schemas/Snapshot"
           },
           "source": {
-            "$ref": "#/components/schemas/ResolvedInput"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedInput"
+              },
+              {
+                "$ref": "#/components/schemas/ResolvedRepository"
+              }
+            ],
+            "title": "Source"
           },
           "dataset": {
             "anyOf": [
@@ -9768,7 +9776,15 @@
             "title": "Title"
           },
           "source": {
-            "$ref": "#/components/schemas/S3Input"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Input"
+              },
+              {
+                "$ref": "#/components/schemas/S3RepositoryInput"
+              }
+            ],
+            "title": "Source"
           },
           "dataset": {
             "anyOf": [
@@ -11671,6 +11687,44 @@
         ],
         "title": "ResolvedInput"
       },
+      "ResolvedRepository": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/S3RepositoryInput"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedInput"
+            },
+            "type": "array",
+            "maxItems": 998,
+            "minItems": 1,
+            "title": "Files"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "bucket",
+          "key",
+          "endpoint",
+          "files"
+        ],
+        "title": "ResolvedRepository"
+      },
       "Resources": {
         "properties": {
           "requests": {
@@ -12041,6 +12095,35 @@
           "secret_key"
         ],
         "title": "S3ProfileDTO"
+      },
+      "S3RepositoryInput": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "s3_repository",
+            "title": "Kind"
+          },
+          "profile_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Profile Id"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f]+$",
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "profile_id",
+          "path"
+        ],
+        "title": "S3RepositoryInput"
       },
       "SelfRegisterRequest": {
         "properties": {

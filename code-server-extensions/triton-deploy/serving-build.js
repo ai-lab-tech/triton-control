@@ -58,8 +58,17 @@ function registerServingBuild(context, vscode) {
     frozen.request.task_id = taskId;
     output.show(true);
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Preparing serving image build", cancellable: true }, async (progress, cancellation) => {
-      const contextKey = keyFor(frozen.request);
+      const fingerprint = keyFor(frozen.request);
+      const stateKey = `build.contextKey.${fingerprint}`;
+      let contextKey = context.workspaceState.get(stateKey) || fingerprint;
       let staged = await request(connection, "/api/build-contexts", { method: "POST", body: frozen.request, key: contextKey });
+      if (!staged.ready && (["succeeded", "failed", "cancelled"].includes(staged.operation.state) || Date.parse(staged.expires_at) <= Date.now())) {
+        // An explicit new submission can replace an unusable context. Persist the
+        // new key BEFORE admission so a lost response/editor restart replays it.
+        contextKey = crypto.randomUUID();
+        await context.workspaceState.update(stateKey, contextKey);
+        staged = await request(connection, "/api/build-contexts", { method: "POST", body: frozen.request, key: contextKey });
+      }
       await context.workspaceState.update(`build.context.${taskId}`, staged.id);
       if (!staged.ready && !["succeeded", "failed", "cancelled"].includes(staged.operation.state)) {
         try { staged = await request(connection, `/api/build-contexts/${staged.id}/archive`, { method: "PUT", body: frozen.archive }); }
@@ -68,6 +77,7 @@ function registerServingBuild(context, vscode) {
       for (let count = 0; !staged.ready && count < 90; count++) {
         if (disposed || cancellation.isCancellationRequested) return;
         if (["failed", "cancelled"].includes(staged.operation.state)) throw new Error("Context verification failed. Check Dockerfile digests and selected inputs; capture a corrected context.");
+        if (staged.operation.state === "succeeded" || Date.parse(staged.expires_at) <= Date.now()) throw new Error("Context expired. Repeat Build serving image to upload a new snapshot.");
         progress.report({ message: "Verifying immutable context…" });
         await new Promise(resolve => setTimeout(resolve, 2000));
         staged = await request(connection, `/api/build-contexts/${staged.id}`);

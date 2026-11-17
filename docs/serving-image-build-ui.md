@@ -68,7 +68,11 @@ The handoff receipt links to `/preparation/tasks/:taskId/builds`. This task page
 build history, logs, exact candidate image references and cancel/retry actions. It can
 also start a build from an existing verified context ID and permitted repository.
 Each page contains up to 50 builds. Use the extension to capture a new local context.
-Expired contexts require a new snapshot; retries never silently recapture source files.
+Expired contexts require a new snapshot: repeat **Build serving image** and confirm
+the upload, even if the files are unchanged. An expired, failed or cancelled context
+is replaced with a new context key. That key is saved before admission so a lost
+response or editor restart resumes the same replacement. Pending and usable contexts
+retain their keys; build retries never silently recapture source files.
 
 Build success is **not production readiness**, correctness validation, approval, or
 release publication. The durable operation remains associated with its task; its

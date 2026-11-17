@@ -147,7 +147,7 @@ for (const status of [401, 403]) {
       showOpenDialog: async () => { selected = true; },
       showErrorMessage: async message => errors.push(message),
     }, commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; } } };
-    const context = { subscriptions: [], workspaceState: { update: async () => {} } };
+    const context = { subscriptions: [], workspaceState: { get: () => undefined, update: async () => {} } };
     registerServingBuild(context, vscode);
     t.after(() => context.subscriptions.forEach(item => item.dispose()));
     // Act
@@ -200,7 +200,7 @@ test("build command submits a frozen task-bound context and displays the exact c
     showWarningMessage: async () => "Build serving image", showErrorMessage: async message => { throw new Error(message); },
     withProgress: async (options, run) => run({ report() {} }, { isCancellationRequested: false }),
   }, commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; } } };
-  const context = { subscriptions: [], workspaceState: { update: async () => {} } };
+  const context = { subscriptions: [], workspaceState: { get: () => undefined, update: async () => {} } };
   registerServingBuild(context, vscode);
   t.after(() => context.subscriptions.forEach(item => item.dispose()));
   // Act
@@ -280,3 +280,98 @@ function workspaceEnvironment(t, url) {
     t.after(() => { if (previous === undefined) delete process.env[name]; else process.env[name] = previous; });
   }
 }
+
+async function recoveryFixture(t, initial, loseResponse = false) {
+  const root = await fixture(t), calls = [], errors = [], commands = new Map(), state = new Map();
+  const taskId = "11111111-1111-1111-1111-111111111111";
+  const oldId = "b".repeat(32), newId = "c".repeat(32);
+  let originalKey, ready = false;
+  const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", chunk => chunks.push(chunk));
+    req.on("end", () => {
+      const key = req.headers["idempotency-key"];
+      calls.push({ route: req.url, method: req.method, key, body: Buffer.concat(chunks) });
+      res.setHeader("content-type", "application/json");
+      let result;
+      if (req.url.startsWith("/api/builds/options")) result = { repositories: ["registry/model"], max_context_bytes: 10000 };
+      else if (req.url === "/api/build-contexts") {
+        originalKey ??= key;
+        if (key === originalKey) result = { id: oldId, ...initial };
+        else {
+          if (loseResponse) { loseResponse = false; req.socket.destroy(); return; }
+          result = { id: newId, ready, operation: { state: ready ? "succeeded" : "pending" } };
+        }
+      } else if (req.url.endsWith("/archive")) {
+        ready = true;
+        result = { id: req.url.split("/")[3], ready, operation: { state: "succeeded" } };
+      } else result = { id: "a".repeat(32), operation: { state: "succeeded" }, attempts: [] };
+      res.end(JSON.stringify(result));
+    });
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  workspaceEnvironment(t, `http://127.0.0.1:${server.address().port}/api/development/workspace-s3-profiles/dev/task`);
+  const readFile = fs.readFile;
+  t.mock.method(fs, "readFile", (...args) => args[0] === "/inputs/verified/task.json" ? Promise.resolve(JSON.stringify({ task_id: taskId })) : readFile(...args));
+  const context = { subscriptions: [], workspaceState: {
+    get: key => state.get(key), update: async (key, value) => { state.set(key, value); },
+  } };
+  const vscode = { ProgressLocation: { Notification: 1 }, window: {
+    createOutputChannel: () => ({ dispose() {}, show() {}, appendLine() {} }),
+    showInputBox: async options => options.value, showQuickPick: async () => "registry/model",
+    showWarningMessage: async () => "Build serving image", showErrorMessage: async error => errors.push(error),
+    withProgress: async (_, run) => run({ report() {} }, { isCancellationRequested: false }),
+  }, commands: { registerCommand: (name, handler) => { commands.set(name, handler); return { dispose() {} }; } } };
+  const register = () => require("../serving-build").registerServingBuild(context, vscode);
+  register();
+  t.after(() => context.subscriptions.forEach(item => item.dispose()));
+  return { calls, errors, oldId, newId,
+    run: () => commands.get("tritonControl.buildServingImage")({ fsPath: root }),
+    restart: () => { context.subscriptions.forEach(item => item.dispose()); context.subscriptions = []; register(); },
+  };
+}
+
+for (const state of ["succeeded", "failed", "cancelled"]) {
+  test(`new submission replaces an unusable ${state} context without changing files`, async t => {
+    // Arrange
+    const fixture = await recoveryFixture(t, { ready: false, operation: { state }, expires_at: state === "succeeded" ? "2000-01-01T00:00:00Z" : "2100-01-01T00:00:00Z" });
+    // Act
+    await fixture.run();
+    // Assert
+    const admissions = fixture.calls.filter(call => call.route === "/api/build-contexts");
+    assert.equal(admissions.length, 2);
+    assert.notEqual(admissions[0].key, admissions[1].key);
+    assert.deepEqual(admissions[0].body, admissions[1].body);
+    assert.ok(fixture.calls.some(call => call.route === `/api/build-contexts/${fixture.newId}/archive`));
+    assert.equal(JSON.parse(fixture.calls.find(call => call.route === "/api/builds").body).context_id, fixture.newId);
+    assert.deepEqual(fixture.errors, []);
+  });
+}
+
+test("replacement admission with a lost response reuses its key after editor restart", async t => {
+  // Arrange
+  const fixture = await recoveryFixture(t, { ready: false, operation: { state: "succeeded" } }, true);
+  // Act
+  await fixture.run();
+  fixture.restart();
+  await fixture.run();
+  // Assert
+  const admissions = fixture.calls.filter(call => call.route === "/api/build-contexts");
+  assert.equal(admissions.length, 3);
+  assert.notEqual(admissions[0].key, admissions[1].key);
+  assert.equal(admissions[1].key, admissions[2].key);
+  assert.equal(fixture.calls.filter(call => call.route === "/api/builds").length, 1);
+  assert.equal(fixture.errors.length, 1);
+});
+
+test("pending context is resumed without replacing its idempotency key", async t => {
+  // Arrange
+  const fixture = await recoveryFixture(t, { ready: false, operation: { state: "pending" } });
+  // Act
+  await fixture.run();
+  // Assert
+  assert.equal(fixture.calls.filter(call => call.route === "/api/build-contexts").length, 1);
+  assert.ok(fixture.calls.some(call => call.route === `/api/build-contexts/${fixture.oldId}/archive`));
+  assert.deepEqual(fixture.errors, []);
+});
