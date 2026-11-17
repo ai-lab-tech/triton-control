@@ -313,7 +313,6 @@ class PerfJobReconciler:
         self.thread.start()
 
     def stop(self) -> None:
-        installation_policy.require("development_jobs")
         self.event.set()
         if self.thread:
             self.thread.join(timeout=20)

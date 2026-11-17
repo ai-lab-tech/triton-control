@@ -67,3 +67,14 @@ isolated schemas, including concurrent revocation/rotation.
 `tests.test_installation_policy_kubernetes` uses `INSTALLATION_TEST_KUBERNETES=1` and
 `KUBERNETES_KUBECONFIG_PATH`, creating disposable namespaces to verify cutover leaves
 serving services intact and refuses orphan development access.
+
+## Rotate instance artifact-read credentials
+
+After rotating an existing S3 profile, an administrator can refresh the credentials
+copied into an existing instance with `PUT /api/instances/{id}/s3` and JSON
+`{"enabled": true, "s3_profile_id": 1}`. In production, send only those two fields.
+The profile must match the existing endpoint, bucket, region, TLS trust and address
+style, and its prefix must contain the instance's existing repository prefix.
+Only the copied access key and secret are updated; storage settings remain unchanged.
+This refreshes Control's artifact browsing and health checks, not credentials mounted
+in external serving workloads, which require a separately controlled rotation.

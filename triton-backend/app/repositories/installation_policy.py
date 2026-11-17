@@ -2,6 +2,8 @@
 
 from sqlmodel import Session, col, select
 
+from app.repositories.deployment_intents import KIND as DEPLOYMENT_KIND
+
 from app.db.entities import (
     BuildAttemptEntity,
     CodeServerEntity,
@@ -23,7 +25,7 @@ def cutover_blockers(session: Session) -> list[str]:
         if session.exec(select(entity).limit(1)).first() is not None:
             blockers.append(label)
     if session.exec(select(OperationEntity).where(
-        col(OperationEntity.kind).in_(["deployment.create", "build.context.stage", "build.image"]),
+        col(OperationEntity.kind).in_([DEPLOYMENT_KIND, "build.context.stage", "build.image"]),
         col(OperationEntity.state).notin_(["succeeded", "failed", "cancelled"]),
     ).limit(1)).first():
         blockers.append("queued development operations")

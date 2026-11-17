@@ -33,7 +33,7 @@ _REVIEWED = {
                 "remove_member list_history",
     "instance_api": "list_instances get_instance get_instance_by_name",
     "model_api": "get_instance_models get_instance_model_config",
-    "s3_api": "get_instance_s3 list_instance_s3 get_instance_s3_content get_instance_s3_content_raw",
+    "s3_api": "get_instance_s3 update_instance_s3 list_instance_s3 get_instance_s3_content get_instance_s3_content_raw",
     "pod_api": "instance_pods instance_pod_logs",
     "deployment_api": "get_deployment_policy get_deployment_logs get_deployment_access",
     "dashboard_api": "list_dashboard_alerts",

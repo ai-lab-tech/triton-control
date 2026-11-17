@@ -118,6 +118,15 @@ class ProductionBoundaryTests(unittest.TestCase):
                 read.assert_awaited_once()
         self.assertEqual(self.client.get("/health").status_code, 200)
 
+    def test_instance_credential_rotation_reaches_scope_checked_service(self):
+        from app.services.storage import s3 as storage
+        self.claims("admin")
+        with patch.object(storage, "update_instance_s3", side_effect=ForbiddenError("Scope differs")) as rotate:
+            response = self.client.put("/api/instances/1/s3", json={"enabled": True, "s3_profile_id": 1})
+        rotate.assert_called_once()
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Scope differs", response.text)
+
     def test_existing_workspaces_and_argo_websocket_aliases_are_closed(self):
         # Arrange / Act / Assert
         for path in ("/api/development/1/proxy", "/api/development/1/proxy/socket", "/api/workflows/proxy",
