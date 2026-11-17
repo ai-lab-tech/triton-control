@@ -1,3 +1,6 @@
+{{- if or (gt (int .Values.modelPreparation.maxObjectGiB) (int .Values.modelPreparation.maxRepositoryGiB)) (gt (int .Values.modelPreparation.maxRepositoryGiB) (int .Values.modelPreparation.maxWorkspaceGiB)) }}
+{{- fail "Model preparation requires maxObjectGiB <= maxRepositoryGiB <= maxWorkspaceGiB" }}
+{{- end }}
 {{- if and .Values.tritonDeployments.ingressTlsSecretName .Values.tritonDeployments.certManagerClusterIssuer }}
 {{- fail "Set either tritonDeployments.ingressTlsSecretName or tritonDeployments.certManagerClusterIssuer, not both" }}
 {{- end }}
@@ -62,6 +65,16 @@ spec:
               readOnly: true
           {{- end }}
           env:
+            - name: PREPARATION_MAX_OBJECT_GIB
+              value: {{ .Values.modelPreparation.maxObjectGiB | quote }}
+            - name: PREPARATION_MAX_REPOSITORY_GIB
+              value: {{ .Values.modelPreparation.maxRepositoryGiB | quote }}
+            - name: PREPARATION_MAX_WORKSPACE_GIB
+              value: {{ .Values.modelPreparation.maxWorkspaceGiB | quote }}
+            - name: PREPARATION_CAPTURE_TIMEOUT_SECONDS
+              value: {{ .Values.modelPreparation.captureTimeoutSeconds | quote }}
+            - name: PREPARATION_DOWNLOAD_TIMEOUT_SECONDS
+              value: {{ .Values.modelPreparation.downloadTimeoutSeconds | quote }}
             {{- if .Values.buildQualification.policy }}
             - name: TRITON_BUILD_POLICY_FILE
               value: /etc/triton-control/build-context/policy.json

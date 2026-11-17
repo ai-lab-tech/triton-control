@@ -1,7 +1,7 @@
 """Capture bounded Triton repository prefixes as inventories of exact S3 versions."""
 
 import time
-from typing import Any
+from typing import Any, Callable
 
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -12,11 +12,10 @@ from app.exceptions import BadGatewayError, BadRequestError, ConflictError, Forb
 from app.schemas.handoffs import ResolvedRepository, S3Input, S3RepositoryInput
 from app.schemas.lineage import FileEntry
 from app.services import handoff_sources
+from app.services.preparation_settings import effective
 from app.services.storage.s3_client import build_s3_client
 
 MAX_FILES = 998  # Workspace input limit leaves room for dataset and baseline.
-MAX_BYTES = 1024**3
-MAX_SECONDS = 120
 MAX_MANIFEST_BYTES = 512 * 1024
 
 
@@ -25,7 +24,8 @@ def _check_deadline(deadline: float) -> None:
         raise BadRequestError("Repository capture exceeded its time limit")
 
 
-def _scan(client: Any, bucket: str, prefix: str, deadline: float) -> dict[str, tuple[str, int]]:
+def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int,
+          checkpoint: Callable[[int], None]) -> dict[str, tuple[str, int]]:
     """List only descendants; HEAD pins each current object, including empty files."""
     files: dict[str, tuple[str, int]] = {}
     entries, total = 0, 0
@@ -36,6 +36,7 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float) -> dict[str, t
         _check_deadline(deadline)
         for item in page.get("Contents", []):
             _check_deadline(deadline)
+            checkpoint(0)
             entries += 1
             if entries > MAX_FILES * 2:
                 raise BadRequestError("Repository contains too many entries")
@@ -56,8 +57,8 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float) -> dict[str, t
             if not version or version == "null":
                 raise BadRequestError("Enable S3 bucket versioning before submitting a repository")
             total += size
-            if size < 0 or total > MAX_BYTES:
-                raise BadRequestError("Repository exceeds the 1 GiB capture limit")
+            if size < 0 or total > max_bytes:
+                raise BadRequestError("Repository exceeds the configured capture size limit")
             files[relative] = (version, size)
     # Prevent a file/directory collision before writing anything into the workspace.
     for name in files:
@@ -69,27 +70,30 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float) -> dict[str, t
     return files
 
 
-def resolve(session: Session, source: S3RepositoryInput) -> ResolvedRepository:
+def resolve(session: Session, source: S3RepositoryInput, *,
+            checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedRepository:
     config, bucket, key = handoff_sources.authorize(session, source)
-    deadline = time.monotonic() + MAX_SECONDS
+    limits = effective(session)
+    deadline = time.monotonic() + limits.capture_timeout_seconds
+    max_bytes = limits.max_repository_gib * 1024**3
     client: Any = None
     try:
         client = build_s3_client(config, client_config=Config(
             connect_timeout=3, read_timeout=10, retries={"max_attempts": 1},
         ))
-        selected = _scan(client, bucket, key + "/", deadline)
+        selected = _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint)
         captured = []
         for relative, (version, size) in sorted(selected.items()):
             _check_deadline(deadline)
             artifact = handoff_sources.resolve(session, S3Input(
                 profile_id=source.profile_id, path=source.path + "/" + relative, version_id=version,
-            ), deadline=deadline, allow_empty=True)
+            ), deadline=deadline, allow_empty=True, checkpoint=checkpoint)
             if (artifact.endpoint, artifact.bucket, artifact.key, artifact.file.size) != (
                 config["s3_endpoint"], bucket, key + "/" + relative, size,
             ):
                 raise ConflictError("Repository source changed during capture; retry after publishing finishes")
             captured.append(artifact.model_copy(update={"file": artifact.file.model_copy(update={"path": relative})}))
-        if _scan(client, bucket, key + "/", deadline) != selected:
+        if _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint) != selected:
             raise ConflictError("Repository changed during capture; retry after publishing finishes")
         result = ResolvedRepository(source=source, endpoint=config["s3_endpoint"] or "",
                                     bucket=bucket, key=key, files=captured)

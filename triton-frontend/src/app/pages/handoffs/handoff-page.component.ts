@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { Component, inject, signal } from "@angular/core";
+import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { DOCUMENT, DatePipe, DecimalPipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
@@ -13,6 +13,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import {
+  CaptureOperation,
   HandoffsApiService,
   HandoffReceipt,
   SourceInput,
@@ -46,6 +47,10 @@ export class HandoffPageComponent {
   readonly busy = signal(false);
   readonly error = signal("");
   readonly detail = signal(false);
+  readonly capture = signal<CaptureOperation | null>(null);
+  private captureTimer: ReturnType<typeof setTimeout> | undefined;
+  private destroyed = false;
+  private captureGeneration = 0;
   title = "";
   profileId: number | null = null;
   sourcePath = "";
@@ -58,6 +63,12 @@ export class HandoffPageComponent {
   criteria = "";
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+      clearTimeout(this.captureTimer);
+    });
+    const captureId = this.route.snapshot.queryParamMap.get("capture");
+    if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
     this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
@@ -124,6 +135,7 @@ export class HandoffPageComponent {
     if (
       this.busy() ||
       !this.canSubmit() ||
+      this.capture() !== null ||
       this.profileId === null ||
       !this.title.trim() ||
       !this.sourcePath.trim() ||
@@ -138,7 +150,7 @@ export class HandoffPageComponent {
     this.busy.set(true);
     this.error.set("");
     try {
-      const receipt = await firstValueFrom(
+      const operation = await firstValueFrom(
         this.api.submit({
           schema_version: 1,
           origin: {
@@ -158,7 +170,14 @@ export class HandoffPageComponent {
           acceptance_criteria: this.criteria.trim() || null,
         }),
       );
-      await this.router.navigate(["/preparation/handoffs", receipt.id]);
+      this.capture.set(operation);
+      await this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { capture: operation.id },
+        queryParamsHandling: "merge",
+        replaceUrl: true,
+      });
+      await this.acceptCapture(operation);
     } catch (error) {
       this.error.set(
         mapApiErrorMessage(error, "Could not submit handoff. Retry with the same revision."),
@@ -167,6 +186,46 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  private async acceptCapture(operation: CaptureOperation): Promise<void> {
+    if (this.destroyed) return;
+    this.capture.set(operation);
+    if (operation.state === "succeeded" && operation.result.handoff_id) {
+      await this.router.navigate(["/preparation/handoffs", operation.result.handoff_id]);
+      this.capture.set(null);
+    } else if (!["failed", "cancelled"].includes(operation.state)) {
+      this.captureTimer = setTimeout(() => {
+        void this.monitorCapture(operation.id);
+      }, 3000);
+    }
+  }
+  async monitorCapture(id: string): Promise<void> {
+    clearTimeout(this.captureTimer);
+    const generation = ++this.captureGeneration;
+    try {
+      const operation = await firstValueFrom(this.api.capture(id));
+      if (generation === this.captureGeneration) await this.acceptCapture(operation);
+    } catch (error) {
+      if (!this.destroyed)
+        this.error.set(
+          mapApiErrorMessage(error, "Could not read capture progress. Reload to resume."),
+        );
+    }
+  }
+  async captureAction(action: "cancel" | "retry"): Promise<void> {
+    const current = this.capture();
+    if (!current || this.busy()) return;
+    this.busy.set(true);
+    ++this.captureGeneration;
+    clearTimeout(this.captureTimer);
+    try {
+      await this.acceptCapture(await firstValueFrom(this.api.captureAction(current.id, action)));
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not update capture."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   verifiedInputs(item: HandoffReceipt) {
     const sources =
       "files" in item.source

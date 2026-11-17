@@ -67,7 +67,8 @@ captured S3 versions through a token-authenticated backend endpoint. The backend
 checks the current profile endpoint, bucket and prefix, downloads to a private
 temporary file and checks size, version and SHA-256 before serving bytes. The
 init container verifies the streamed bytes again. No archives are extracted.
-Each input is limited to 1 GiB and the input set to 3 GiB.
+Input size and download budgets follow [Model preparation settings](model-preparation-settings.md).
+The verified-input volume is sized from the actual captured bytes plus overhead.
 
 All files must pass before the init container atomically publishes
 `/inputs/verified`. Kubernetes mounts `/inputs` read-only in the editor, which

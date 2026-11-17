@@ -55,6 +55,7 @@ from app.api.operation_api import router as operation_router
 from app.api.perf_analyzer_api import router as perf_analyzer_router
 from app.api.pod_api import router as pod_router
 from app.api.preparation_api import router as preparation_router
+from app.api.preparation_settings_api import router as preparation_settings_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
@@ -74,7 +75,10 @@ from app.services.builds.execution import KIND as BUILD_KIND
 from app.services.builds.execution import adapter as build_adapter
 from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
+from app.services.handoff_capture import KIND as HANDOFF_CAPTURE_KIND
+from app.services.handoff_capture import adapter as handoff_capture_adapter
 from app.services.mlflow import migration as mlflow_migration
+from app.services.operations import OperationWorker
 from app.services.operations import service as operation_service
 from app.services.operations import worker as operation_worker
 from app.services.perf_analyzer.jobs import reconciler as perf_job_reconciler
@@ -192,6 +196,9 @@ app.add_middleware(
 )
 
 
+capture_worker = OperationWorker(operation_service, kinds=[HANDOFF_CAPTURE_KIND])
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     """Initialize database tables on startup."""
@@ -202,9 +209,13 @@ async def on_startup() -> None:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
     if BUILD_CONTEXT_KIND not in operation_service.adapters:
         operation_service.register(BUILD_CONTEXT_KIND, build_context_adapter)
+    if HANDOFF_CAPTURE_KIND not in operation_service.adapters:
+        operation_service.register(HANDOFF_CAPTURE_KIND, handoff_capture_adapter)
     if BUILD_KIND not in operation_service.adapters:
         operation_service.register(BUILD_KIND, build_adapter)
+    operation_worker.kinds = [kind for kind in operation_service.adapters if kind != HANDOFF_CAPTURE_KIND]
     operation_worker.start()
+    capture_worker.start()
     build_context_retention.start()
     mlflow_migration.start()
 
@@ -215,6 +226,7 @@ async def on_shutdown() -> None:
     await instance_health_refresher.stop()
     await asyncio.to_thread(perf_job_reconciler.stop)
     await asyncio.to_thread(operation_worker.stop)
+    await asyncio.to_thread(capture_worker.stop)
     await asyncio.to_thread(build_context_retention.stop)
     await mlflow_migration.stop()
     await TritonService.close_all_clients()
@@ -222,6 +234,7 @@ async def on_shutdown() -> None:
 
 app.include_router(oidc_router)
 app.include_router(registry_router)
+app.include_router(preparation_settings_router)
 app.include_router(local_bindings_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])

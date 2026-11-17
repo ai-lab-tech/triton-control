@@ -1,0 +1,133 @@
+"""Durable handoff jobs: admission, progress, cancellation and atomic publication."""
+
+import unittest
+from datetime import datetime
+from unittest.mock import patch
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
+from app.api.handoffs_api import router
+from app.core.security import get_claims
+from app.db.database import get_session
+from app.db.entities import HandoffEntity, OperationEntity, PreparationTaskEntity
+from app.exceptions import BadRequestError, ForbiddenError
+from app.repositories import operations
+from app.services import handoff_capture, handoff_sources
+from app.services.operations import OperationService, OperationWorker
+from tests.test_handoffs import HandoffFixture
+
+
+class CaptureTests(HandoffFixture, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.configure_capture()
+
+    def configure_capture(self, *, clock=True):
+        self.service = OperationService()
+        self.service.register(handoff_capture.KIND, handoff_capture.adapter)
+        self.enterContext(patch.object(handoff_capture, "service", self.service))
+        if clock:
+            self.enterContext(patch.object(operations, "now", lambda _: datetime.utcnow()))
+        self.worker = OperationWorker(self.service, lambda: Session(self.engine))
+
+    def capture(self):
+        return handoff_capture.submit(self.session, self.submitter, self.request(), "capture-one")
+
+    def resolve(self, session, source, **options):
+        options["checkpoint"](5)
+        return self.resolved(session, source)
+
+    def test_admission_is_fast_and_worker_publishes_once(self):
+        # Arrange
+        provider = self.enterContext(patch.object(handoff_sources, "resolve", side_effect=self.resolve))
+        # Act
+        queued = self.capture()
+        reads_at_admission = provider.call_count
+        self.worker.run_once()
+        repeated = self.capture()
+        self.worker.run_once()
+        result = self.service.read(self.session, self.submitter, queued.id)
+        # Assert
+        self.assertEqual(reads_at_admission, 0)
+        self.assertEqual(result.state, "succeeded")
+        self.assertEqual(result.result["bytes_verified"], 5)
+        self.assertEqual(repeated.id, queued.id)
+        self.assertEqual(provider.call_count, 1)
+        self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
+
+    def test_cancellation_before_work_has_no_receipt(self):
+        # Arrange
+        queued = self.capture()
+        provider = self.enterContext(patch.object(handoff_sources, "resolve"))
+        # Act
+        self.service.cancel(self.session, self.submitter, queued.id)
+        self.worker.run_once()
+        result = self.service.read(self.session, self.submitter, queued.id)
+        # Assert
+        self.assertEqual(result.state, "cancelled")
+        provider.assert_not_called()
+        self.assertEqual(self.session.exec(select(HandoffEntity)).all(), [])
+
+    def test_cancellation_during_hashing_fences_publication(self):
+        # Arrange
+        queued = self.capture()
+        def cancelled(session, source, **options):
+            self.service.cancel(session, self.submitter, queued.id)
+            return self.resolved(session, source)
+        self.enterContext(patch.object(handoff_sources, "resolve", side_effect=cancelled))
+        # Act
+        self.worker.run_once()
+        # Assert
+        self.assertEqual(self.session.exec(select(HandoffEntity)).all(), [])
+        self.assertEqual(self.session.exec(select(PreparationTaskEntity)).all(), [])
+
+    def test_failed_capture_can_retry_same_job_after_limits_change(self):
+        # Arrange
+        queued = self.capture()
+        with patch.object(handoff_sources, "resolve", side_effect=BadRequestError("Input exceeds configured limit")):
+            self.worker.run_once()
+        self.enterContext(patch.object(handoff_sources, "resolve", side_effect=self.resolve))
+        # Act
+        retried = self.service.retry(self.session, self.submitter, queued.id)
+        self.worker.run_once()
+        result = self.service.read(self.session, self.submitter, queued.id)
+        # Assert
+        self.assertEqual(retried.id, queued.id)
+        self.assertEqual(result.state, "succeeded")
+        self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
+
+    def test_other_member_cannot_read_progress(self):
+        # Arrange
+        queued = self.capture()
+        # Act / Assert
+        with self.assertRaises(ForbiddenError):
+            self.service.read(self.session, self.engineer, queued.id)
+
+    def test_api_returns_202_and_status_without_provider_reads(self):
+        # Arrange
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_session] = lambda: self.session
+        app.dependency_overrides[get_claims] = lambda: self.submitter
+        provider = self.enterContext(patch.object(handoff_sources, "resolve"))
+        client = self.enterContext(TestClient(app))
+        # Act
+        response = client.post("/api/preparation/handoff-captures", json=self.request().model_dump(mode="json"),
+                               headers={"Idempotency-Key": "http-capture"})
+        # Assert
+        self.assertEqual(response.status_code, 202, response.text)
+        self.assertEqual(response.json()["state"], "pending")
+        self.assertTrue(response.json()["status_url"].startswith("/api/operations/"))
+        provider.assert_not_called()
+
+    def test_separate_worker_only_claims_its_configured_kind(self):
+        # Arrange
+        self.capture()
+        worker = OperationWorker(self.service, lambda: Session(self.engine), kinds=["unrelated.kind"])
+        # Act
+        worked = worker.run_once()
+        # Assert
+        self.assertFalse(worked)
+        self.assertEqual(self.session.exec(select(OperationEntity)).one().state, "pending")

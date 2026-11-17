@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from kubernetes.utils.quantity import parse_quantity
 from sqlmodel import Session
 
 from app.db.entities import CodeServerEntity, TaskWorkspaceEntity
@@ -17,12 +18,15 @@ from app.services import handoff_sources
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
 from app.services.development import profiles, workspaces
+from app.services.preparation_settings import effective
 from app.services.registry_settings import apply_registry_settings
 
 
-def document(task_id: UUID, inputs: WorkspaceInputs) -> dict[str, Any]:
+def document(task_id: UUID, inputs: WorkspaceInputs, download_timeout: int = 3600) -> dict[str, Any]:
     return {
         "schema_version": 1, "task_id": str(task_id),
+        "max_input_bytes": sum(item.artifact.file.size for item in inputs.files),
+        "download_timeout_seconds": download_timeout,
         "snapshot": inputs.snapshot.model_dump(mode="json"),
         "expected_behavior": inputs.expected_behavior, "acceptance_criteria": inputs.acceptance_criteria,
         "conversion_directory": "/workspace/conversion",
@@ -42,6 +46,14 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         actor = access.authorize(session, claims, task_id, recovery=recovery, lock=True)
         inputs = access.load_inputs(session, task_id)
         access.authorize_inputs(session, inputs)
+        if "storage_size" not in request.workspace.model_fields_set:
+            # Allow a writable copy plus 1 GiB overhead when default storage is too small.
+            required_bytes = sum(item.artifact.file.size for item in inputs.files) + 1024**3
+            if required_bytes > parse_quantity(request.workspace.storage_size):
+                size_gib = (required_bytes + 1024**3 - 1) // 1024**3
+                request = request.model_copy(update={"workspace": request.workspace.model_copy(
+                    update={"storage_size": f"{size_gib}Gi"},
+                )})
         workspace = _reserve_workspace(session, task_id, actor, request, inputs)
         # Persist intent before any Kubernetes writes. The same task/name is reused
         # after a crash; no background process-local scheduling state is required.
@@ -111,7 +123,7 @@ def _provision_workspace(
             workspace.applied_resources = k8s.apply_code_server_resources(
                 configured, namespace=workspace.namespace, statefulset_name=workspace.statefulset_name,
                 service_name=workspace.service_name, secret_name=workspace.secret_name,
-                task_document=document(task_id, inputs),
+                task_document=document(task_id, inputs, effective(session).download_timeout_seconds),
             )
         except Exception:
             workspace.status = "blocked"

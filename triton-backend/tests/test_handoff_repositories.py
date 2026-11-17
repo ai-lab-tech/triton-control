@@ -19,6 +19,7 @@ from app.db.database import get_session
 from app.db.entities import HandoffEntity, PreparationTaskEntity, S3ProfileEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.schemas.handoffs import S3RepositoryInput
+from app.schemas.preparation_settings import PreparationLimits
 from app.services import handoff_repositories as repositories
 from app.services import handoff_sources, handoffs, task_workspace_access, task_workspaces
 from app.services.development.task_stage_runner import stage
@@ -212,7 +213,10 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
                 # Arrange
                 self.client.get_object.reset_mock()
                 # Act
-                with patch.object(repositories, limit, 1), self.assertRaises(BadRequestError):
+                guard = (patch.object(repositories, "MAX_FILES", 1) if limit == "MAX_FILES" else
+                         patch.object(repositories, "effective", return_value=PreparationLimits().model_copy(
+                             update={"max_repository_gib": 0})))
+                with guard, self.assertRaises(BadRequestError):
                     repositories.resolve(self.session, self.repository_request().source)
                 # Assert
                 self.client.get_object.assert_not_called()
@@ -230,7 +234,7 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
 
     def test_expired_capture_stops_before_listing(self):
         # Arrange
-        clock = self.enterContext(patch.object(repositories.time, "monotonic", side_effect=[0, 121]))
+        clock = self.enterContext(patch.object(repositories.time, "monotonic", side_effect=[0, 3601]))
         # Act
         with self.assertRaises(BadRequestError) as error:
             repositories.resolve(self.session, self.repository_request().source)

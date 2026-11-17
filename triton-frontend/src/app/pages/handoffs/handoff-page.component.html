@@ -31,11 +31,36 @@
       {{ detail() ? "Loading handoff…" : "Verifying source versions and checksums. Please wait…" }}
     </p>
   }
+  @if (capture(); as operation) {
+    <section class="notice" aria-live="polite">
+      <strong>Model capture: {{ operation.state }}</strong>
+      <p>{{ operation.message || "Queued for source verification" }}</p>
+      <p>
+        {{ (operation.result.bytes_verified || 0) / 1073741824 | number: "1.0-2" }} GiB verified
+        this attempt.
+      </p>
+      <p>You can leave this page. Save its URL to resume progress after reopening.</p>
+      @if (operation.state === "failed") {
+        <button mat-stroked-button (click)="captureAction('retry')" [disabled]="busy()">
+          Retry capture
+        </button>
+      } @else if (operation.state !== "succeeded" && operation.state !== "cancelled") {
+        <button mat-stroked-button (click)="captureAction('cancel')" [disabled]="busy()">
+          Cancel capture
+        </button>
+      }
+      @if (operation.state === "failed" || operation.state === "cancelled") {
+        <a mat-stroked-button routerLink="/preparation/handoffs/new" (click)="capture.set(null)"
+          >New submission</a
+        >
+      }
+    </section>
+  }
   @if (!canSubmit()) {
     <p class="notice">
       Submitting and inspecting handoffs requires member or administrator access.
     </p>
-  } @else if (!detail()) {
+  } @else if (!detail() && !capture()) {
     <form #form="ngForm" (ngSubmit)="submit()" class="panel">
       <fieldset [disabled]="busy()">
         <legend>1. Model source</legend>

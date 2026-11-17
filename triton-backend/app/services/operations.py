@@ -140,8 +140,10 @@ class ExecutionContext:
 
 
 class OperationWorker:
-    def __init__(self, service: OperationService, sessions: Callable[[], Session] = session_factory) -> None:
+    def __init__(self, service: OperationService, sessions: Callable[[], Session] = session_factory,
+                 kinds: list[str] | None = None) -> None:
         self.service, self.sessions = service, sessions
+        self.kinds = kinds
         self.identity = uuid4().hex
         self.stop_event = Event()
         self.thread: Thread | None = None
@@ -150,7 +152,8 @@ class OperationWorker:
         if not self.service.adapters:
             return False
         with self.sessions() as session:
-            row = repo.claim(session, self.identity, list(self.service.adapters), 30)
+            kinds = self.kinds if self.kinds is not None else list(self.service.adapters)
+            row = repo.claim(session, self.identity, kinds, 30)
         if row is None:
             return False
         context = ExecutionContext(self.service, self.sessions, row)

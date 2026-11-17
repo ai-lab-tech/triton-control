@@ -232,3 +232,6 @@ TEAMS_TEST_DATABASE_URL=postgresql://teams_test:teams_test@localhost:5432/teams_
 Use a dedicated test database whose user can create schemas. The CI
 `teams-postgres` job provisions one and exercises complete startup, uniqueness
 races, repeated membership requests and concurrent deactivation.
+
+Administrators can also configure model size and capture budgets in
+**Settings → Model preparation**. See [preparation settings](model-preparation-settings.md).

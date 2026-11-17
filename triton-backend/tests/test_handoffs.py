@@ -369,7 +369,7 @@ class SourceTests(HandoffFixture, unittest.TestCase):
         for client, changes in [
             (self.client(), {"expected_digest": "sha256:" + "a" * 64}),
             (self.client(size=2), {}),
-            (self.client(size=handoff_sources.MAX_BYTES + 1), {}),
+            (self.client(size=10 * 1024**3 + 1), {}),
         ]:
             with self.assertRaises(BadRequestError):
                 self.resolve(client, **changes)
@@ -392,7 +392,7 @@ class SourceTests(HandoffFixture, unittest.TestCase):
 
     def test_deadline_stops_reading_and_closes_body(self):
         client = self.client()
-        with patch.object(handoff_sources.time, "monotonic", side_effect=[0, 121]):
+        with patch.object(handoff_sources.time, "monotonic", side_effect=[0, 3601]):
             with self.assertRaises(BadRequestError):
                 self.resolve(client)
         self.assertTrue(client.get_object.return_value["Body"].closed)

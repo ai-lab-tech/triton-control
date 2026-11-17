@@ -172,6 +172,100 @@
         ]
       }
     },
+    "/api/settings/model-preparation": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_settings_model_preparation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_settings_model_preparation_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreparationLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_settings_model_preparation_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/local-bindings/policy": {
       "get": {
         "tags": [
@@ -3168,6 +3262,63 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/handoff-captures": {
+      "post": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Capture",
+        "operationId": "capture_api_preparation_handoff_captures_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoffRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
                 }
               }
             }
@@ -11056,6 +11207,73 @@
           "policy"
         ],
         "title": "PolicyUpdate"
+      },
+      "PreparationLimits": {
+        "properties": {
+          "max_object_gib": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 1.0,
+            "title": "Max Object Gib",
+            "default": 10
+          },
+          "max_repository_gib": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 1.0,
+            "title": "Max Repository Gib",
+            "default": 15
+          },
+          "max_workspace_gib": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 1.0,
+            "title": "Max Workspace Gib",
+            "default": 15
+          },
+          "capture_timeout_seconds": {
+            "type": "integer",
+            "maximum": 604800.0,
+            "minimum": 60.0,
+            "title": "Capture Timeout Seconds",
+            "default": 3600
+          },
+          "download_timeout_seconds": {
+            "type": "integer",
+            "maximum": 604800.0,
+            "minimum": 60.0,
+            "title": "Download Timeout Seconds",
+            "default": 3600
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PreparationLimits"
+      },
+      "PreparationSettings": {
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/PreparationLimits"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/PreparationLimits"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "deployment",
+              "admin"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limits",
+          "defaults",
+          "source"
+        ],
+        "title": "PreparationSettings"
       },
       "Quantities": {
         "properties": {
