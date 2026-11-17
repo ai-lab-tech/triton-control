@@ -656,3 +656,104 @@ class HandoffNotificationEntity(SQLModel, table=True):
     user_id: int = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     read_at: datetime | None = None
+
+
+class LocalBindingPolicyEntity(SQLModel, table=True):
+    """Versioned local allowlist; never contains credential values."""
+
+    __tablename__ = "local_binding_policy"
+    id: int = Field(default=1, primary_key=True)
+    revision: int = 1
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class LocalCredentialEntity(SQLModel, table=True):
+    """Admin-managed, purpose-scoped encrypted Git/registry credentials."""
+
+    __tablename__ = "local_credentials"
+    name: str = Field(primary_key=True)
+    provider: str
+    scope: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    secret_enc: str = Field(repr=False)
+
+
+class BuildContextEntity(SQLModel, table=True):
+    """Staging lifecycle separate from durable operation intent and immutable receipt."""
+    __tablename__ = "build_contexts"
+    id: str = Field(primary_key=True)
+    policy_hash: str
+    storage_binding: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    expires_at: datetime = Field(index=True)
+    upload_token: str | None = None
+    upload_until: datetime | None = None
+    object_key: str | None = None
+    object_version: str | None = None
+    manifest: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    expired: bool = False
+
+
+class BuildContextReceiptEntity(SQLModel, table=True):
+    """Append-only verified receipt; retained after the temporary context is deleted."""
+    __tablename__ = "build_context_receipts"
+    id: str = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TaskWorkspaceEntity(SQLModel, table=True):
+    """One active workspace per task; retries preserve its identity and configuration."""
+
+    __tablename__ = "task_workspaces"
+    task_id: UUID = Field(primary_key=True, foreign_key="preparation_tasks.id")
+    workspace_id: int | None = Field(default=None, foreign_key="code_servers.id", unique=True)
+    configuration: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    inputs: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    recovery_reason: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkspaceSnapshotInputsEntity(SQLModel, table=True):
+    """Immutable provider-neutral inputs registered by authorized snapshot capture."""
+
+    __tablename__ = "workspace_snapshot_inputs"
+    snapshot_id: UUID = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class BuildAttemptEntity(SQLModel, table=True):
+    """Write-ahead Job identity and retained executor evidence for one build attempt."""
+
+    __tablename__ = "build_attempts"
+    operation_id: str = Field(primary_key=True, foreign_key="operations.id")
+    number: int = Field(primary_key=True)
+    context_id: str = Field(index=True)
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    context_receipt: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    executor_image: str
+    destination: str
+    namespace: str
+    job_name: str = Field(unique=True)
+    job_uid: str | None = None
+    state: str = "pending"
+    final_digest: str | None = None
+    logs: str = Field(default="", sa_column=Column(Text, nullable=False))
+    logs_truncated: bool = False
+    logs_expired: bool = False
+    retry_requested: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    deadline_at: datetime
+    finished_at: datetime | None = None
+    logs_expires_at: datetime | None = Field(default=None, index=True)
+    cleaned: bool = False
+
+
+class BuildEvidenceReferenceEntity(SQLModel, table=True):
+    """Release integration pins evidence before publishing the referencing release."""
+
+    __tablename__ = "build_evidence_references"
+    __table_args__ = (ForeignKeyConstraint(
+        ["operation_id", "attempt"], ["build_attempts.operation_id", "build_attempts.number"],
+    ),)
+    operation_id: str = Field(primary_key=True)
+    attempt: int = Field(primary_key=True)
+    release_digest: str = Field(primary_key=True)

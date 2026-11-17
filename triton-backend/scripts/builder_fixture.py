@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import boto3
 from botocore.config import Config
@@ -58,6 +59,7 @@ class Fixture:
         }
         self.processes: list[subprocess.Popen[Any]] = []
         self.keys: list[str] = []
+        self.context_urls: dict[str, str] = {}
         self.created = False
 
     def apply(self, obj: dict[str, Any]) -> str:
@@ -141,15 +143,35 @@ class Fixture:
         if len(data) > self.policy.max_context_bytes:
             raise RuntimeError("Context exceeds installation size limit")
         key = self.policy.staging_prefix + self.run_id + "/" + suffix + ".tar.gz"
-        self.s3.put_object(Bucket=self.staging["bucket"], Key=key, Body=data)
         self.keys.append(key)
-        fetched = self.s3.get_object(Bucket=self.staging["bucket"], Key=key)["Body"].read()
+        result = self.s3.put_object(Bucket=self.staging["bucket"], Key=key, Body=data)
+        version = result.get("VersionId")
+        if not version or version == "null":
+            raise RuntimeError("Qualification requires an already-versioned staging bucket")
+        fetched = self.s3.get_object(Bucket=self.staging["bucket"], Key=key, VersionId=version)["Body"].read()
         self.report["checks"]["staging_roundtrip"] = hashlib.sha256(data).digest() == hashlib.sha256(fetched).digest()
         self.report.setdefault("context_sha256", {})[suffix] = hashlib.sha256(data).hexdigest()
-        return f"s3://{self.staging['bucket']}/{key}"
+        context = f"s3://{self.staging['bucket']}/{key}"
+        url = self.s3.generate_presigned_url("get_object", Params={
+            "Bucket": self.staging["bucket"], "Key": key, "VersionId": version,
+        }, ExpiresIn=self.policy.timeout_seconds + 180)
+        if urlsplit(url).scheme != "https":
+            raise RuntimeError("Qualification requires trusted HTTPS staging reachable from the executor")
+        self.context_urls[context] = url
+        # A successful build must consume the recorded version, never this mutable latest object.
+        self.s3.put_object(Bucket=self.staging["bucket"], Key=key, Body=b"not a build context")
+        return context
 
     def build(self, name: str, context: str, destination: str, *, deadline: int | None = None) -> dict[str, Any]:
         manifest = job(self.policy, name, context, destination, "qualification-docker")
+        pod = manifest["spec"]["template"]["spec"]
+        executor = pod["containers"][0]
+        executor.pop("envFrom")
+        self.secret(name + "-context", {"url": self.context_urls[context]})
+        executor["args"][0] = "--context=$(BUILD_CONTEXT)"
+        executor["env"] = [{"name": "BUILD_CONTEXT", "valueFrom": {
+            "secretKeyRef": {"name": name + "-context", "key": "url"},
+        }}]
         # HTTP is limited to this disposable test registry, never the production renderer.
         manifest["spec"]["template"]["spec"]["containers"][0]["args"] += ["--insecure", "--insecure-pull"]
         if self.staging.get("ca_file"):
@@ -158,7 +180,7 @@ class Fixture:
             pod["containers"][0]["volumeMounts"].append(
                 {"name": "staging-ca", "mountPath": "/qualification-ca", "readOnly": True}
             )
-            pod["containers"][0]["env"] = [{"name": "AWS_CA_BUNDLE", "value": "/qualification-ca/ca.pem"}]
+            executor["env"].append({"name": "SSL_CERT_DIR", "value": "/kaniko/ssl/certs:/qualification-ca"})
         if deadline:
             manifest["spec"]["activeDeadlineSeconds"] = deadline
         self.apply(manifest)
@@ -209,7 +231,12 @@ class Fixture:
             if hasattr(self, "s3"):
                 for key in self.keys:
                     try:
-                        self.s3.delete_object(Bucket=self.staging["bucket"], Key=key)
+                        versions = self.s3.list_object_versions(Bucket=self.staging["bucket"], Prefix=key)
+                        for obj in versions.get("Versions", []) + versions.get("DeleteMarkers", []):
+                            if obj["Key"] == key:
+                                self.s3.delete_object(
+                                    Bucket=self.staging["bucket"], Key=key, VersionId=obj["VersionId"],
+                                )
                     except Exception:
                         cleanup_ok = False
             if self.created:
@@ -396,12 +423,14 @@ location / { return 403; } } }
             logs = command("kubectl", "logs", "job/build", "-n", ns)
             for value in [*passwords.values(), self.staging["access_key"], self.staging["secret_key"]]:
                 logs = logs.replace(value, "[redacted]")
-            self.report["build_log_tail"] = logs[-4000:]
+            from app.services.builds.jobs_kubernetes import redact
+            self.report["build_log_tail"] = redact(logs[-4000:], list(self.context_urls.values()))
             self.report["failures"].append({"phase": "build", "type": "JobFailed"})
             return
         self.report["checks"].update(
             dict.fromkeys(
-                ["private_base_pull", "scoped_push", "no_host_socket", "no_service_account_token", "pod_policy"], True
+                ["private_base_pull", "scoped_push", "no_host_socket", "no_service_account_token",
+                 "pod_policy", "versioned_https_context"], True
             )
         )
         pod = self.pods("build")[0]

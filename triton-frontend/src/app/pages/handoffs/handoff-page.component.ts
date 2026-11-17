@@ -49,6 +49,7 @@ export class HandoffPageComponent {
   title = "";
   profileId: number | null = null;
   sourcePath = "";
+  sourceKind: "s3" | "s3_repository" = "s3";
   revision = "1";
   previousHandoffId = "";
   datasetPath = "";
@@ -84,6 +85,41 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  async claimTask() {
+    const receipt = this.receipt();
+    if (!receipt || receipt.task.revision === undefined || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      await firstValueFrom(this.api.claim(receipt.task.id, receipt.task.revision));
+      await this.loadReceipt(receipt.id);
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not claim this task."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async openWorkspace() {
+    const receipt = this.receipt();
+    if (!receipt || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id));
+      await this.router.navigate(["/workspaces"], {
+        queryParams: { workspace: result.workspace.id },
+      });
+    } catch (error) {
+      this.error.set(
+        mapApiErrorMessage(
+          error,
+          "Could not open task workspace. Check your assignment and input access.",
+        ),
+      );
+    } finally {
+      this.busy.set(false);
+    }
+  }
   async submit() {
     if (
       this.busy() ||
@@ -112,7 +148,10 @@ export class HandoffPageComponent {
           previous_handoff_id: this.previousHandoffId.trim() || null,
           revision: this.revision.trim(),
           title: this.title.trim(),
-          source: source(this.sourcePath),
+          source:
+            this.sourceKind === "s3_repository"
+              ? { kind: "s3_repository", profile_id: this.profileId!, path: this.sourcePath.trim() }
+              : source(this.sourcePath),
           dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
           baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
           expected_behavior: this.expectedBehavior.trim() || null,
@@ -128,6 +167,18 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  verifiedInputs(item: HandoffReceipt) {
+    const sources =
+      "files" in item.source
+        ? item.source.files.map((file) => ({ label: `Model · ${file.file.path}`, value: file }))
+        : [{ label: "Model", value: item.source }];
+    return [
+      ...sources,
+      { label: "Evaluation dataset", value: item.dataset },
+      { label: "Baseline", value: item.baseline },
+    ];
+  }
+
   inputLabel(name: string) {
     return (
       (

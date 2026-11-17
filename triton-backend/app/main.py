@@ -39,12 +39,15 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
+from app.api.build_api import router as build_router
+from app.api.build_context_api import router as build_context_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
 from app.api.handoffs_api import router as handoffs_router
 from app.api.instance_api import router as instance_router
+from app.api.local_bindings_api import router as local_bindings_router
 from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
@@ -55,6 +58,7 @@ from app.api.preparation_api import router as preparation_router
 from app.api.registry_api import router as registry_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
+from app.api.task_workspaces_api import router as task_workspaces_router
 from app.api.team_api import router as team_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
@@ -63,6 +67,12 @@ from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
 from app.repositories.deployment_intents import KIND as DEPLOYMENT_OPERATION_KIND
 from app.services import error_logs
+from app.services.builds.access import authenticate as authenticate_build_workspace
+from app.services.builds.contexts import KIND as BUILD_CONTEXT_KIND
+from app.services.builds.contexts import adapter as build_context_adapter
+from app.services.builds.contexts_cleanup import RetentionWorker
+from app.services.builds.execution import KIND as BUILD_KIND
+from app.services.builds.execution import adapter as build_adapter
 from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
 from app.services.mlflow import migration as mlflow_migration
@@ -73,6 +83,7 @@ from app.services.triton.client import TritonService
 from app.services.triton.health import instance_health_refresher
 
 configure_logging()
+build_context_retention = RetentionWorker(session_factory)
 
 
 class DatabaseErrorLogHandler(logging.Handler):
@@ -105,6 +116,7 @@ app = FastAPI(
 )
 
 app.state.workspace_deployment_authenticator = authenticate_workspace_deployment
+app.state.workspace_build_authenticator = authenticate_build_workspace
 
 
 @app.exception_handler(RequestValidationError)
@@ -190,7 +202,12 @@ async def on_startup() -> None:
     perf_job_reconciler.start()
     if DEPLOYMENT_OPERATION_KIND not in operation_service.adapters:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
+    if BUILD_CONTEXT_KIND not in operation_service.adapters:
+        operation_service.register(BUILD_CONTEXT_KIND, build_context_adapter)
+    if BUILD_KIND not in operation_service.adapters:
+        operation_service.register(BUILD_KIND, build_adapter)
     operation_worker.start()
+    build_context_retention.start()
     mlflow_migration.start()
 
 
@@ -200,17 +217,22 @@ async def on_shutdown() -> None:
     await instance_health_refresher.stop()
     await asyncio.to_thread(perf_job_reconciler.stop)
     await asyncio.to_thread(operation_worker.stop)
+    await asyncio.to_thread(build_context_retention.stop)
     await mlflow_migration.stop()
     await TritonService.close_all_clients()
 
 
 app.include_router(oidc_router)
 app.include_router(registry_router)
+app.include_router(local_bindings_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
+app.include_router(build_context_router, dependencies=[Depends(get_claims)])
+app.include_router(build_router, dependencies=[Depends(get_claims)])
 app.include_router(team_router, dependencies=[Depends(get_claims)])
+app.include_router(task_workspaces_router)
 app.include_router(preparation_router, dependencies=[Depends(get_claims)])
 app.include_router(handoffs_router, dependencies=[Depends(get_claims)])
 app.include_router(dashboard_router, dependencies=[Depends(get_claims)])

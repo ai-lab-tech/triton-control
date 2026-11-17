@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.schemas.lineage import Digest, FileEntry, Origin, Snapshot
 from app.schemas.preparation import Request, TaskDTO
@@ -18,13 +18,28 @@ class S3Input(Request):
     expected_digest: Digest | None = None
 
 
+class S3RepositoryInput(Request):
+    kind: Literal["s3_repository"]
+    profile_id: int = Field(strict=True, ge=1)
+    path: str = Field(min_length=1, max_length=1024, pattern=r"^[^\x00-\x1f]+$")
+
+    @field_validator("path")
+    @classmethod
+    def folder_path(cls, value: str) -> str:
+        # One optional trailing slash is a folder spelling, not a different identity.
+        value = value.removesuffix("/")
+        if not value:
+            raise ValueError("Select a repository folder within the profile")
+        return value
+
+
 class HandoffRequest(Request):
     schema_version: Literal[1] = 1
     origin: Origin
     previous_handoff_id: UUID | None = None
     revision: str = Field(min_length=1, max_length=256)
     title: str = Field(min_length=1, max_length=200)
-    source: S3Input
+    source: S3Input | S3RepositoryInput
     dataset: S3Input | None = None
     baseline: S3Input | None = None
     expected_behavior: str | None = Field(default=None, min_length=1, max_length=8000)
@@ -52,13 +67,21 @@ class ResolvedInput(Request):
     file: FileEntry
 
 
+class ResolvedRepository(Request):
+    source: S3RepositoryInput
+    bucket: str
+    key: str
+    endpoint: str
+    files: list[ResolvedInput] = Field(min_length=1, max_length=998)
+
+
 class HandoffReceipt(Request):
     schema_version: Literal[1] = 1
     id: UUID
     request_digest: Digest
     request: HandoffRequest
     source_snapshot: Snapshot
-    source: ResolvedInput
+    source: ResolvedInput | ResolvedRepository
     dataset: ResolvedInput | None
     baseline: ResolvedInput | None
     task: TaskDTO

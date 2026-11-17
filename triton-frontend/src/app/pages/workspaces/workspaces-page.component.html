@@ -321,9 +321,20 @@
           } @else {
             <div class="frame-placeholder">
               <span class="material-icons">terminal</span>
-              <div class="placeholder-title">Workspace is starting</div>
+              <div class="placeholder-title">
+                {{ workspace.status === "blocked" ? "Workspace blocked" : "Workspace is starting" }}
+              </div>
               <div class="placeholder-copy">
-                The workspace is not ready yet. It will open automatically once the pod is ready.
+                {{
+                  workspace.status_message ||
+                    "The workspace will open automatically once the pod is ready."
+                }}
+                @if (workspace.status === "blocked") {
+                  <p>
+                    Resolve the input problem and reopen the task workspace from its handoff to
+                    retry.
+                  </p>
+                }
               </div>
             </div>
           }

@@ -40,8 +40,8 @@
       <fieldset [disabled]="busy()">
         <legend>1. Model source</legend>
         <p>
-          Choose a stored S3 profile and the model file or archive. Paths are relative to the
-          profile’s prefix. Bucket versioning must be enabled.
+          Choose a stored S3 profile and either a model file or an unpacked Triton repository
+          folder. Paths are relative to the profile’s prefix. Bucket versioning must be enabled.
         </p>
         <mat-form-field appearance="outline" class="wide">
           <mat-label>Previous handoff ID (optional)</mat-label>
@@ -50,6 +50,21 @@
             >When revising a handoff, link its ID and use a new submission revision.</mat-hint
           >
         </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Model source type</mat-label>
+          <mat-select name="sourceKind" [(ngModel)]="sourceKind">
+            <mat-option value="s3">Single file or archive</mat-option>
+            <mat-option value="s3_repository">Triton repository folder</mat-option>
+          </mat-select>
+        </mat-form-field>
+        @if (sourceKind === "s3_repository") {
+          <p>
+            Select the folder containing model-name/config.pbtxt and model version folders.
+            Repositories from MLflow, HF Builder or manual creation use the same layout. Upload the
+            complete folder to S3 first; no ZIP is needed. Finish uploading before submitting. Every
+            file is captured with its exact version and checksum.
+          </p>
+        }
         <div class="fields">
           <mat-form-field appearance="outline"
             ><mat-label>Handoff title</mat-label
@@ -73,7 +88,9 @@
               [(ngModel)]="sourcePath"
               required
               maxlength="1024"
-              placeholder="models/iris/model.onnx"
+              [placeholder]="
+                sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
+              "
           /></mat-form-field>
           <mat-form-field appearance="outline"
             ><mat-label>Submission revision</mat-label
@@ -164,6 +181,9 @@
         <dt>Engineering task</dt>
         <dd>
           <code>{{ item.task.id }}</code>
+          <a [routerLink]="['/preparation/tasks', item.task.id, 'builds']"
+            >Build serving image and inspect attempts</a
+          >
         </dd>
         @if (item.request.previous_handoff_id; as previous) {
           <dt>Previous handoff</dt>
@@ -174,6 +194,26 @@
         <dt>Submission revision</dt>
         <dd>{{ item.request.revision }}</dd>
       </dl>
+      @if (canSubmit() && item.task.state !== "cancelled") {
+        <div class="actions">
+          @if (!item.task.assignee_user_id) {
+            <button mat-stroked-button (click)="claimTask()" [disabled]="busy()">Claim task</button>
+          }
+          <button
+            mat-flat-button
+            (click)="openWorkspace()"
+            [disabled]="
+              busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
+            "
+          >
+            Open task workspace
+          </button>
+        </div>
+        <p>
+          Only the current assignee can open the workspace. Inputs are verified and read-only; use
+          /workspace/conversion for your changes. Reopening reuses the existing workspace.
+        </p>
+      }
       @if (item.task.missing_inputs.length) {
         <div class="notice">
           <strong>Evaluation inputs incomplete</strong>
@@ -195,14 +235,15 @@
         </p>
       }
       <h3>Verified source inputs</h3>
-      @for (
-        input of [
-          { label: "Model", value: item.source },
-          { label: "Evaluation dataset", value: item.dataset },
-          { label: "Baseline", value: item.baseline },
-        ];
-        track input.label
-      ) {
+      @if (item.request.source.kind === "s3_repository") {
+        <p>
+          The repository structure is restored under /inputs/verified/source in the task workspace.
+        </p>
+        <p>
+          Repository inventory: <code>{{ item.source_snapshot?.inventory }}</code>
+        </p>
+      }
+      @for (input of verifiedInputs(item); track input.label) {
         @if (input.value; as value) {
           <section class="source">
             <strong>{{ input.label }}</strong>

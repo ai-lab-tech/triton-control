@@ -1,0 +1,1 @@
+SYNTHETIC image descriptor; not a registry image

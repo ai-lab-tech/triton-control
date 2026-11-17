@@ -1,7 +1,4 @@
 {{- with .Values.buildQualification.policy }}
-{{- if .enabled }}
-{{- fail "S06-A only provisions qualification; keep policy.enabled=false until a qualified build service is installed" }}
-{{- end }}
 {{- if not (regexMatch "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$" (required "executor_image must be pinned" .executor_image)) }}
 {{- fail "executor_image must be a registry image pinned by sha256 digest" }}
 {{- end }}
