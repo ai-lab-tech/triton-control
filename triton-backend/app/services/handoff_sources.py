@@ -12,7 +12,7 @@ from sqlmodel import Session
 
 from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError
 from app.repositories import s3_profiles
-from app.schemas.handoffs import ResolvedInput, S3Input
+from app.schemas.handoffs import ResolvedInput, S3Input, S3RepositoryInput
 from app.schemas.lineage import FileEntry
 from app.services.storage.s3_client import S3Config, build_s3_client
 
@@ -20,7 +20,7 @@ MAX_BYTES = 1024 * 1024 * 1024
 MAX_SECONDS = 120
 
 
-def authorize(session: Session, source: S3Input) -> tuple[S3Config, str, str]:
+def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3Config, str, str]:
     profile = s3_profiles.get(session, source.profile_id)
     if profile is None:
         raise ForbiddenError("Source profile is unavailable")
@@ -55,7 +55,8 @@ def authorize(session: Session, source: S3Input) -> tuple[S3Config, str, str]:
     )
 
 
-def resolve(session: Session, source: S3Input) -> ResolvedInput:
+def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
+            allow_empty: bool = False) -> ResolvedInput:
     config, bucket, key = authorize(session, source)
     client: Any = None
     started = time.monotonic()
@@ -72,13 +73,13 @@ def resolve(session: Session, source: S3Input) -> ResolvedInput:
         if not version or version == "null":
             raise BadRequestError("Enable S3 bucket versioning before submitting immutable handoff inputs")
         size = head["ContentLength"]
-        if size < 1 or size > MAX_BYTES:
+        if size < (0 if allow_empty else 1) or size > MAX_BYTES:
             raise BadRequestError("Handoff input must contain between 1 byte and 1 GiB")
         response = client.get_object(Bucket=bucket, Key=key, VersionId=version)
         body = response["Body"]
         measured, checksum = 0, hashlib.sha256()
         while True:
-            if time.monotonic() - started > MAX_SECONDS:
+            if time.monotonic() > (deadline if deadline is not None else started + MAX_SECONDS):
                 raise BadRequestError("Handoff input capture exceeded its time limit")
             chunk = body.read(1024 * 1024)
             if not chunk:
@@ -124,7 +125,7 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
     config, bucket, key = authorize(session, artifact.source)
     if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
         raise ForbiddenError("Captured source profile changed")
-    if not artifact.version_id or artifact.version_id == "null" or not 0 < artifact.file.size <= MAX_BYTES:
+    if not artifact.version_id or artifact.version_id == "null" or not 0 <= artifact.file.size <= MAX_BYTES:
         raise BadRequestError("Workspace input requires a bounded, versioned artifact")
     client: Any = None
     body: Any = None

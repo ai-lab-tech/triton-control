@@ -9,13 +9,18 @@ export interface SourceInput {
   version_id?: string;
   expected_digest?: string;
 }
+export interface RepositoryInput {
+  kind: "s3_repository";
+  profile_id: number;
+  path: string;
+}
 export interface HandoffRequest {
   schema_version: 1;
   origin: { installation_id: string; record_id: string };
   previous_handoff_id?: string | null;
   revision: string;
   title: string;
-  source: SourceInput;
+  source: SourceInput | RepositoryInput;
   dataset: SourceInput | null;
   baseline: SourceInput | null;
   expected_behavior: string | null;
@@ -24,12 +29,17 @@ export interface HandoffRequest {
 export interface ResolvedInput {
   version_id: string;
   key: string;
-  file: { digest: string; size: number };
+  file: { path?: string; digest: string; size: number };
+}
+export interface ResolvedRepository {
+  key: string;
+  files: ResolvedInput[];
 }
 export interface HandoffReceipt {
   id: string;
   request: HandoffRequest;
-  source: ResolvedInput;
+  source: ResolvedInput | ResolvedRepository;
+  source_snapshot?: { inventory: string };
   dataset: ResolvedInput | null;
   baseline: ResolvedInput | null;
   task: {
