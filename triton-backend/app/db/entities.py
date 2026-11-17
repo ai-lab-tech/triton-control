@@ -658,6 +658,25 @@ class HandoffNotificationEntity(SQLModel, table=True):
     read_at: datetime | None = None
 
 
+class LocalBindingPolicyEntity(SQLModel, table=True):
+    """Versioned local allowlist; never contains credential values."""
+
+    __tablename__ = "local_binding_policy"
+    id: int = Field(default=1, primary_key=True)
+    revision: int = 1
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class LocalCredentialEntity(SQLModel, table=True):
+    """Admin-managed, purpose-scoped encrypted Git/registry credentials."""
+
+    __tablename__ = "local_credentials"
+    name: str = Field(primary_key=True)
+    provider: str
+    scope: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    secret_enc: str = Field(repr=False)
+
+
 class BuildContextEntity(SQLModel, table=True):
     """Staging lifecycle separate from durable operation intent and immutable receipt."""
     __tablename__ = "build_contexts"

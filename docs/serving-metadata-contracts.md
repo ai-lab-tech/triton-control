@@ -186,3 +186,5 @@ external acceptance. Downstream acceptance criteria were reviewed against:
 | [S08-D](https://github.com/ai-lab-tech/triton-control-concepts/issues/40) | Frozen identities, provenance references and external receipts support artifacts/evidence → release → target publication ordering and conflict checks. |
 | [S09-D](https://github.com/ai-lab-tech/triton-control-concepts/issues/44) | Target/release hashes are available for review; no metadata field substitutes for independent human approval or audit. |
 | [S12-A](https://github.com/ai-lab-tech/triton-control-concepts/issues/55) | Source/prepared inventories and pinned materializer identities are explicit; no fabricated helper digest/default or runtime rewriting is introduced. |
+
+Local authorization and credential resolution are implemented by [S08-B local bindings](local-bindings.md).

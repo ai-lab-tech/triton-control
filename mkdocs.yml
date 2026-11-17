@@ -27,6 +27,7 @@ nav:
   - Architecture:
     - Overview: architecture-overview.md
     - Backend Components: architecture-backend-components.md
+    - Local Credential Bindings: local-bindings.md
     - Model Config Validation: model-config-validation.md
   - Operations:
     - Configuration: configuration.md

@@ -46,6 +46,7 @@ from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
 from app.api.handoffs_api import router as handoffs_router
 from app.api.instance_api import router as instance_router
+from app.api.local_bindings_api import router as local_bindings_router
 from app.api.mlflow_api import router as mlflow_router
 from app.api.model_api import router as model_router
 from app.api.oidc_api import router as oidc_router
@@ -216,6 +217,7 @@ async def on_shutdown() -> None:
 
 app.include_router(oidc_router)
 app.include_router(registry_router)
+app.include_router(local_bindings_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])
 app.include_router(user_router, dependencies=[Depends(get_claims)])
