@@ -12,6 +12,25 @@ the user does not change this requirement.
 
 ## Required local CI checks before every push
 
+The verification rule below is quoted from
+[GitLab Runner's AGENTS.md, Verification](https://github.com/gitlabhq/gitlab-runner/blob/main/AGENTS.md#verification):
+
+> After making changes, always run these in order before pushing. All must pass:
+
+For this repository, use the applicable backend and frontend checks listed below,
+in the order defined by their CI workflows. GitLab Runner's Go-specific commands
+do not apply here.
+
+The hook rule is quoted from
+[Apache Infrastructure Actions' AGENTS.md, Pre-commit checks](https://github.com/apache/infrastructure-actions/blob/main/AGENTS.md#pre-commit-checks-prek):
+
+> do **not** skip hooks with `--no-verify`.
+
+Apply this rule to any configured hooks in this repository. If a check rewrites
+files, inspect and commit the corrections, then rerun the check successfully
+before pushing. The following repository-specific requirements implement these
+rules for Triton Control:
+
 - Before every push, read the workflows in `.github/workflows/` and determine
   which jobs apply to the entire diff being pushed. Do not consider only the last
   commit or individual changed tests.
