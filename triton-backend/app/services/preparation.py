@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.db.entities import HandoffEntity, PreparationTaskEntity
 from app.exceptions import ConflictError, ForbiddenError
@@ -133,6 +134,7 @@ def create_task(session: Session, claims: dict[str, Any], request: TaskCreate, *
     No resource content or access is granted here. The caller must authorize and
     capture any source snapshot before passing its immutable identifier.
     """
+    installation_policy.require("development_jobs")
     teams.get(session, teams.INSTALLATION_TEAM_ID, lock=True)
     actor, _, role = _actor(session, claims)
     if role not in {"admin", "member"}:
@@ -161,6 +163,7 @@ def create_task(session: Session, claims: dict[str, Any], request: TaskCreate, *
 
 
 def _edit(session: Session, claims: dict[str, Any], task_id: UUID, request: TaskRevision) -> tuple[int, bool, bool]:
+    installation_policy.require("development_jobs")
     actor, admin, eligible = authorize_task_access(session, claims, task_id, lock=True)
     task = repository.get(session, task_id)
     if task.revision != request.expected_revision:
@@ -302,6 +305,7 @@ def record_attempt(
     commit: bool = True,
 ) -> TaskDTO:
     """Internal hook: retain an actual completed attempt with #25 identities."""
+    installation_policy.require("development_jobs")
     actor, admin, eligible = _edit(session, claims, task_id, request)
     task = repository.get(session, task_id)
     _engineer_or_admin(admin, eligible, task.assignee_user_id, actor)

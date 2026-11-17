@@ -6,6 +6,32 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/capabilities": {
+      "get": {
+        "tags": [
+          "capabilities"
+        ],
+        "summary": "Read Capabilities",
+        "operationId": "read_capabilities_api_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/login": {
       "get": {
         "tags": [
@@ -7473,6 +7499,52 @@
           "attempts"
         ],
         "title": "BuildResponse"
+      },
+      "Capabilities": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "development",
+              "production"
+            ],
+            "title": "Mode"
+          },
+          "capabilities": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "enum": [
+                "serving_read",
+                "artifact_read",
+                "interactive_inference",
+                "development_tools",
+                "development_jobs",
+                "model_write",
+                "artifact_write",
+                "direct_deployment",
+                "identity_admin",
+                "credential_admin",
+                "trust_admin",
+                "production_changes"
+              ]
+            },
+            "type": "object",
+            "title": "Capabilities"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "capabilities",
+          "explanation"
+        ],
+        "title": "Capabilities"
       },
       "Capacity": {
         "properties": {

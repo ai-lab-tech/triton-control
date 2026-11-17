@@ -9,6 +9,7 @@ import anyio
 import httpx
 from fastapi import Request, Response
 
+from app.core import installation_policy
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError
 from app.repositories import mlflow
@@ -50,6 +51,7 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 
 async def proxy_http(path: str, request: Request, claims: dict[str, Any]) -> Response:
     """Proxy authenticated request to the singleton MLflow server."""
+    installation_policy.require("development_tools")
     if path.strip("/") == "api/2.0/mlflow/triton-control/artifact-store" and request.method == "GET":
         from starlette.responses import JSONResponse
 

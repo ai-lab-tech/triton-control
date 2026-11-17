@@ -41,11 +41,13 @@ from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.build_api import router as build_router
 from app.api.build_context_api import router as build_context_router
+from app.api.capabilities_api import router as capabilities_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
 from app.api.handoffs_api import router as handoffs_router
+from app.api.installation_policy import InstallationPolicyMiddleware
 from app.api.instance_api import router as instance_router
 from app.api.local_bindings_api import router as local_bindings_router
 from app.api.mlflow_api import router as mlflow_router
@@ -62,6 +64,7 @@ from app.api.task_workspaces_api import router as task_workspaces_router
 from app.api.team_api import router as team_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
+from app.core import installation_policy
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
@@ -75,6 +78,7 @@ from app.services.builds.execution import KIND as BUILD_KIND
 from app.services.builds.execution import adapter as build_adapter
 from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
+from app.services.installation_policy import verify_cutover
 from app.services.mlflow import migration as mlflow_migration
 from app.services.operations import service as operation_service
 from app.services.operations import worker as operation_worker
@@ -185,6 +189,8 @@ cors_origins = _parse_csv(
     )
 )
 
+app.add_middleware(InstallationPolicyMiddleware, routes=app.router.routes)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -197,8 +203,13 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup() -> None:
     """Initialize database tables on startup."""
+    installation_policy.mode()  # Validate before DB access or worker startup.
     init_db()
+    with session_factory() as session:
+        verify_cutover(session)
     instance_health_refresher.start()
+    if installation_policy.mode() == "production":
+        return
     perf_job_reconciler.start()
     if DEPLOYMENT_OPERATION_KIND not in operation_service.adapters:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
@@ -222,6 +233,7 @@ async def on_shutdown() -> None:
     await TritonService.close_all_clients()
 
 
+app.include_router(capabilities_router)
 app.include_router(oidc_router)
 app.include_router(registry_router)
 app.include_router(local_bindings_router)

@@ -15,6 +15,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_admin
 from app.exceptions import AppError, BadRequestError, InternalError
 from app.repositories import users
@@ -86,6 +87,7 @@ async def start_oidc_preflight(
     http_request: Request,
     claims: dict[str, Any],
 ) -> object:
+    installation_policy.require("trust_admin")
     require_admin(claims)
     if is_env_config_source():
         raise BadRequestError(
@@ -98,6 +100,7 @@ async def start_oidc_preflight(
 
 
 async def oidc_preflight_callback(http_request: Request, session: Session) -> object:
+    installation_policy.require("trust_admin")
     context = http_request.session.get(OIDC_PREFLIGHT_SESSION_KEY)
     if not context:
         raise BadRequestError("OIDC preflight session is missing or expired")

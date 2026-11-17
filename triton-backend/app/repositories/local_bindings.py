@@ -45,9 +45,12 @@ def credential(session: Session, name: str, *, lock: bool = False) -> LocalCrede
     return session.exec(query.with_for_update() if lock else query).first()
 
 
-def save_credential(session: Session, name: str, provider: str, scope: dict[str, Any], encrypted: str) -> None:
+def save_credential(session: Session, name: str, provider: str, scope: dict[str, Any], encrypted: str,
+                    *, require_existing: bool = False) -> None:
     row = credential(session, name, lock=True)
     if row is None:
+        if require_existing:
+            raise ForbiddenError("New credential scopes require independent review")
         row = LocalCredentialEntity(name=name, provider=provider, scope=scope, secret_enc=encrypted)
     else:
         if row.provider != provider or row.scope != scope:

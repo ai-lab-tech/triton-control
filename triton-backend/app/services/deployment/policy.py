@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_admin
 from app.exceptions import BadRequestError
 from app.repositories import deployment_policy
@@ -85,6 +86,7 @@ def get_policy(session: Session) -> DeploymentPolicyResponse:
 def update_policy(
     request: DeploymentPolicyUpdate, session: Session, claims: dict[str, Any],
 ) -> DeploymentPolicyResponse:
+    installation_policy.require("trust_admin")
     require_admin(claims)
     domain = _normalize_base_domain(request.base_domain) if request.base_domain is not None else None
     update_domain = "base_domain" in request.model_fields_set

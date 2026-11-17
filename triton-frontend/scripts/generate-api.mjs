@@ -10,8 +10,8 @@ const root = resolve(__dirname, "..");
 const spec = process.env.OPENAPI_SPEC || join(root, "openapi", "triton-backend", "openapi.json");
 const out = join(root, "src", "app", "api", "generated");
 const jarDir = join(root, "tools");
-const jar = join(jarDir, "swagger-codegen-cli.jar");
 const version = "3.0.52";
+const jar = join(jarDir, `swagger-codegen-cli-${version}.jar`);
 const javaExecutable =
   process.env.JAVA_HOME && existsSync(join(process.env.JAVA_HOME, "bin", "java.exe"))
     ? join(process.env.JAVA_HOME, "bin", "java.exe")
@@ -21,6 +21,7 @@ const jarUrls = [
   process.env.SWAGGER_CODEGEN_JAR_URL,
   `https://repo.maven.apache.org/maven2/${defaultJarPath}`,
   `https://repo1.maven.org/maven2/${defaultJarPath}`,
+  `https://maven-central.storage-download.googleapis.com/maven2/${defaultJarPath}`,
 ].filter(Boolean);
 
 if (!existsSync(spec)) {
@@ -29,8 +30,9 @@ if (!existsSync(spec)) {
 
 mkdirSync(jarDir, { recursive: true });
 
-if (!existsSync(jar)) {
-  const buffer = await downloadWithRetry(jarUrls);
+if (process.argv.includes("--fresh") || !existsSync(jar)) {
+  // Maven mirrors can temporarily return 404 for an already published artifact.
+  const buffer = await downloadWithRetry(jarUrls, { retryNotFound: true });
   writeFileSync(jar, buffer);
 }
 

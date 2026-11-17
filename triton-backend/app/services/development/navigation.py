@@ -5,11 +5,14 @@ from __future__ import annotations
 from threading import Lock
 from typing import Any
 
+from app.core import installation_policy
+
 _pending_instance_by_user: dict[str, int] = {}
 _lock = Lock()
 
 
 def notify_deployment_created(claims: dict[str, Any], instance_id: int) -> None:
+    installation_policy.require("development_tools")
     key = _claims_key(claims)
     if not key or instance_id <= 0:
         return
@@ -18,6 +21,7 @@ def notify_deployment_created(claims: dict[str, Any], instance_id: int) -> None:
 
 
 def consume_deployment_created(claims: dict[str, Any]) -> int | None:
+    installation_policy.require("development_tools")
     key = _claims_key(claims)
     if not key:
         return None

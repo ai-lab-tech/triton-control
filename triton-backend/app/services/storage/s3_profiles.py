@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_admin, require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
@@ -54,6 +55,7 @@ def create_profile(
     claims: dict[str, Any],
     request: CreateS3ProfileRequest,
 ) -> S3ProfileDTO:
+    installation_policy.require("trust_admin")
     require_admin(claims)
     owner = require_user_entity(session, claims)
     owner_id = owner.id or 0
@@ -90,6 +92,12 @@ def update_profile(
     installation = mlflow.get(session)
     if installation is not None and installation.s3_profile_id == profile_id:
         raise ConflictError("This S3 profile is used by MLflow; uninstall MLflow before changing or deleting it")
+    if installation_policy.mode() == "production":
+        session.refresh(profile, with_for_update=True)
+        for field in ("name", "endpoint", "bucket", "region", "prefix", "force_path_style", "ca_certificate"):
+            value = getattr(request, field)
+            if value is not None and value != getattr(profile, field):
+                raise ForbiddenError("Credential scope and trust changes require independent review")
     linked_credentials = workflow_s3_credentials.list_for_profile(session, profile_id)
     if request.name is not None:
         name = _clean_required(request.name, "Profile name")
@@ -121,7 +129,8 @@ def update_profile(
         linked.sync_error = "Profile updated; S3 configuration synchronization pending."
         session.add(linked)
     profile = s3_profiles.save(session, profile)
-    sync_profile_credentials(session, profile_id)
+    if installation_policy.mode() == "development":
+        sync_profile_credentials(session, profile_id)
     return _to_dto(profile)
 
 
@@ -156,7 +165,8 @@ def _to_dto(
         bucket=profile.bucket,
         region=profile.region or "us-east-1",
         access_key=profile.access_key,
-        secret_key=decrypt_secret(profile.secret_key_enc or "") if include_secret else "",
+        secret_key=(decrypt_secret(profile.secret_key_enc or "")
+                    if include_secret and installation_policy.mode() == "development" else ""),
         prefix=profile.prefix or "",
         force_path_style=bool(profile.force_path_style),
         ca_certificate=profile.ca_certificate or "",

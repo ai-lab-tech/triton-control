@@ -11,6 +11,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.entities import BuildContextEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import build_contexts as repo
@@ -75,6 +76,7 @@ def response(session: Session, op: OperationEntity) -> BuildContextResponse:
 def submit(
     session: Session, claims: dict[str, Any], request: BuildContextRequest, key: str,
 ) -> BuildContextResponse:
+    installation_policy.require("development_jobs")
     if claims.get("token_use"):
         raise ForbiddenError("Delegated deployment tokens cannot stage build contexts")
     access.task_scope(claims, request.task_id)
@@ -89,6 +91,7 @@ def read(session: Session, claims: dict[str, Any], context_id: str) -> BuildCont
 
 
 def begin_upload(session: Session, claims: dict[str, Any], context_id: str) -> tuple[str, BuildContextRequest, int]:
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "submit")
     ensure(session, op)
     op = operations.get(session, context_id, lock=True)
@@ -133,6 +136,7 @@ def abort_upload(session: Session, context_id: str, token: str) -> None:
 def finish_upload(
     session: Session, claims: dict[str, Any], context_id: str, token: str, source: BinaryIO,
 ) -> BuildContextResponse:
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "submit")
     request = BuildContextRequest.model_validate(op.payload["request"])
     settings = provider.policy()
@@ -212,6 +216,7 @@ class ContextAdapter:
         session.add(row)
 
     def reconcile(self, op: OperationEntity, context: ExecutionContext) -> ReconcileResult:
+        installation_policy.require("development_jobs")
         with context.sessions() as session:
             row = ensure(session, op)
             binding = dict(row.storage_binding)
@@ -277,6 +282,7 @@ def consume_for_build(
     S06-C must keep the context retained for its complete Job/retry lifetime.
     This hook does not create Jobs or assert site-secret provisioning is valid.
     """
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "execute")
     settings = provider.policy()
     require_qualified(session, settings, fixture_revision, mode="development")

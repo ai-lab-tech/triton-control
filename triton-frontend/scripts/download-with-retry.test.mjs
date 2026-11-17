@@ -86,3 +86,29 @@ test("reports exhausted network failures without waiting after the last attempt"
   await assert.rejects(result, /primary -> connection reset/);
   assert.deepEqual(delays, [2000, 4000, 8000]);
 });
+
+test("retries temporary artifact 404 responses when explicitly enabled", async () => {
+  const delays = [];
+  const responses = [new Response(null, { status: 404 }), new Response("jar")];
+  const result = await downloadWithRetry(["primary"], {
+    retryNotFound: true,
+    fetchImpl: async () => responses.shift(),
+    sleep: async (delay) => delays.push(delay),
+  });
+  assert.equal(result.toString(), "jar");
+  assert.deepEqual(delays, [2000]);
+});
+
+test("falls back after bounded artifact 404 retries", async () => {
+  const calls = [];
+  const result = await downloadWithRetry(["primary", "mirror"], {
+    retryNotFound: true,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return new Response("jar", { status: url === "primary" ? 404 : 200 });
+    },
+    sleep: async () => {},
+  });
+  assert.equal(result.toString(), "jar");
+  assert.deepEqual(calls, ["primary", "primary", "primary", "primary", "mirror"]);
+});

@@ -8,6 +8,7 @@ from typing import Any, TypeVar
 from cryptography.fernet import Fernet, InvalidToken
 from sqlmodel import Session, SQLModel
 
+from app.core import installation_policy
 from app.core.access_control import require_admin
 from app.exceptions import BadRequestError
 from app.repositories import registry_config
@@ -51,6 +52,7 @@ def get_settings(session: Session, claims: dict[str, Any]) -> dict[str, bool]:
 
 
 def update_settings(request: RegistryUpdate, session: Session, claims: dict[str, Any]) -> dict[str, bool]:
+    installation_policy.require("trust_admin")
     require_admin(claims)
     registry_config.save(session, encrypt_registry_secret(request.dockerconfigjson))
     return {"configured": bool(request.dockerconfigjson)}
