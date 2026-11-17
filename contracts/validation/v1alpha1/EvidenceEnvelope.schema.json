@@ -1,0 +1,216 @@
+{
+  "$defs": {
+    "ArtifactSubjects": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "inventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventorydigest",
+          "type": "string"
+        },
+        "materializerImage": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materializerimage"
+        },
+        "preparedInventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Preparedinventorydigest",
+          "type": "string"
+        },
+        "sourceCode": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcecode"
+        },
+        "validationInput": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validationinput"
+        }
+      },
+      "required": [
+        "image",
+        "inventoryDigest",
+        "preparedInventoryDigest"
+      ],
+      "title": "ArtifactSubjects",
+      "type": "object"
+    },
+    "PolicyIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "PolicyIdentity",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "ToolVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ToolVersion",
+      "type": "object"
+    }
+  },
+  "$id": "urn:triton-control:validation:v1alpha1:EvidenceEnvelope",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "validation.triton-control/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "issuedAt": {
+      "format": "date-time",
+      "title": "Issuedat",
+      "type": "string"
+    },
+    "issuer": {
+      "maxLength": 63,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+      "title": "Issuer",
+      "type": "string"
+    },
+    "kind": {
+      "const": "EvidenceEnvelope",
+      "title": "Kind",
+      "type": "string"
+    },
+    "policy": {
+      "$ref": "#/$defs/PolicyIdentity"
+    },
+    "report": {
+      "$ref": "#/$defs/Reference"
+    },
+    "subjects": {
+      "$ref": "#/$defs/ArtifactSubjects"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/ToolVersion"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Tools",
+      "type": "array"
+    },
+    "validUntil": {
+      "format": "date-time",
+      "title": "Validuntil",
+      "type": "string"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "issuer",
+    "policy",
+    "tools",
+    "subjects",
+    "report",
+    "issuedAt",
+    "validUntil"
+  ],
+  "title": "EvidenceEnvelope",
+  "type": "object"
+}

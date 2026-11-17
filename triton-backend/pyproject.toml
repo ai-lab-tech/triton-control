@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
+triton-validate-evidence = "app.services.validation_cli:main"
 triton-validate-metadata = "app.services.serving_metadata_cli:main"
 
 [project.optional-dependencies]
@@ -67,6 +68,7 @@ select = ["E", "F", "W", "I"]
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.services.validation_contracts" = ["*.schema.json"]
 "app.services.serving_contracts" = ["*.schema.json"]
 "app.services.deployment" = ["*.yaml"]
 "app.services.perf_analyzer" = ["*.yaml"]
