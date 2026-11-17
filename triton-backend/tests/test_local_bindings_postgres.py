@@ -3,15 +3,18 @@
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event
+from unittest.mock import patch
 from uuid import uuid4
 
 from sqlalchemy import text
 from sqlmodel import Session, create_engine
 
 from app.db.schema import create_tables
-from app.exceptions import ConflictError
+from app.exceptions import ConflictError, ForbiddenError
 from app.repositories import local_bindings as repository
+from app.schemas.local_bindings import RegistryCredential
+from app.services import local_bindings as service
 from tests import test_local_bindings
 
 
@@ -62,3 +65,44 @@ class PostgresLocalBindingTests(test_local_bindings.LocalBindingTests):
             list(pool.map(lambda _: create_tables(self.engine), range(2)))
         self.assertEqual(self.admit().model_dump(), before)
         self.assertEqual(self.session.get(type(self.profiles[0]), self.profiles[0].id).bucket, "synthetic-metadata")
+
+    def test_inflight_rotation_cannot_restore_scope_after_recreation(self):
+        rotating = Event()
+        replaced = Event()
+        encrypt = service.encrypt_registry_secret
+        original = RegistryCredential(
+            provider="registry", registry="registry.example.invalid", repository_prefix="synthetic",
+            username="test-user", password="inflight-rotation", permission="pull",
+        )
+        replacement = original.model_copy(update={"repository_prefix": "replacement"})
+        # Use a different secret so the replacing request does not pause too.
+        replacement = RegistryCredential.model_validate(replacement.model_dump() | {"password": "replacement-secret"})
+
+        def pause_rotation(value):
+            result = encrypt(value)
+            if value == "inflight-rotation":
+                rotating.set()
+                if not replaced.wait(timeout=10):
+                    raise TimeoutError("Credential recreation did not finish")
+            return result
+
+        def rotate():
+            with Session(self.engine) as session:
+                service.put_credential(session, self.admin_claims, "pull-credential", original)
+
+        with patch.object(service, "encrypt_registry_secret", side_effect=pause_rotation):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(rotate)
+                try:
+                    self.assertTrue(rotating.wait(timeout=10))
+                    service.delete_credential(self.session, self.admin_claims, "pull-credential")
+                    service.put_credential(self.session, self.admin_claims, "pull-credential", replacement)
+                finally:
+                    replaced.set()
+
+                with self.assertRaises(ForbiddenError):
+                    future.result(timeout=10)
+
+        row = repository.credential(self.session, "pull-credential")
+        self.assertEqual(row.scope["repository_prefix"], "replacement")
+        self.assertEqual(service.decrypt_registry_secret(row.secret_enc), "replacement-secret")

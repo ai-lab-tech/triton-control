@@ -125,4 +125,48 @@ describe("HandoffPageComponent", () => {
     );
     expect(fixture.componentInstance.receipt()).toBeNull();
   });
+  it("claims using the current revision and reloads the receipt", async () => {
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush({
+      ...receipt,
+      task: { ...receipt.task, revision: 4, assignee_user_id: null },
+    });
+    await fixture.whenStable();
+    const pending = fixture.componentInstance.claimTask();
+    const claim = http.expectOne("/api/preparation-tasks/task-1/claim");
+    expect(claim.request.body.expected_revision).toBe(4);
+    claim.flush({});
+    await Promise.resolve();
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush({
+      ...receipt,
+      task: { ...receipt.task, revision: 5, assignee_user_id: 2 },
+    });
+    await pending;
+    expect(fixture.componentInstance.receipt()?.task.assignee_user_id).toBe(2);
+  });
+  it("opens the task workspace and navigates to its exact instance", async () => {
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    const pending = fixture.componentInstance.openWorkspace();
+    http.expectOne("/api/preparation/tasks/task-1/workspace").flush({ workspace: { id: 42 } });
+    await pending;
+    expect(navigate).toHaveBeenCalledWith(["/workspaces"], { queryParams: { workspace: 42 } });
+  });
+  it("shows assignment revocation errors and permits retry", async () => {
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const pending = fixture.componentInstance.openWorkspace();
+    http
+      .expectOne("/api/preparation/tasks/task-1/workspace")
+      .flush(
+        { detail: "Only the current eligible assignee may open this task workspace" },
+        { status: 403, statusText: "Forbidden" },
+      );
+    await pending;
+    expect(fixture.componentInstance.error()).toContain("current eligible assignee");
+    expect(fixture.componentInstance.busy()).toBeFalse();
+  });
 });

@@ -85,7 +85,9 @@ change does not migrate or improve that existing storage encryption.
 
 Credential GET/PUT responses return only `name`, `provider`, `configured`.
 DELETE revokes the named credential; dangling bindings subsequently deny access.
-Rotating a password under the same scope is supported. Changing provider,
+Rotating a password under the same scope is supported. Scope checks and password
+writes share a database row lock, so an in-flight rotation cannot overwrite a
+concurrently recreated credential with a different scope. Changing provider,
 username, repository scope or permission requires explicit deletion/recreation.
 There is no secret export endpoint. Input validation errors use the existing
 sanitized handler and do not echo credential values.

@@ -675,3 +675,46 @@ class LocalCredentialEntity(SQLModel, table=True):
     provider: str
     scope: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     secret_enc: str = Field(repr=False)
+
+
+class BuildContextEntity(SQLModel, table=True):
+    """Staging lifecycle separate from durable operation intent and immutable receipt."""
+    __tablename__ = "build_contexts"
+    id: str = Field(primary_key=True)
+    policy_hash: str
+    storage_binding: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    expires_at: datetime = Field(index=True)
+    upload_token: str | None = None
+    upload_until: datetime | None = None
+    object_key: str | None = None
+    object_version: str | None = None
+    manifest: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    expired: bool = False
+
+
+class BuildContextReceiptEntity(SQLModel, table=True):
+    """Append-only verified receipt; retained after the temporary context is deleted."""
+    __tablename__ = "build_context_receipts"
+    id: str = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TaskWorkspaceEntity(SQLModel, table=True):
+    """One active workspace per task; retries preserve its identity and configuration."""
+
+    __tablename__ = "task_workspaces"
+    task_id: UUID = Field(primary_key=True, foreign_key="preparation_tasks.id")
+    workspace_id: int | None = Field(default=None, foreign_key="code_servers.id", unique=True)
+    configuration: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    inputs: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    recovery_reason: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkspaceSnapshotInputsEntity(SQLModel, table=True):
+    """Immutable provider-neutral inputs registered by authorized snapshot capture."""
+
+    __tablename__ = "workspace_snapshot_inputs"
+    snapshot_id: UUID = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))

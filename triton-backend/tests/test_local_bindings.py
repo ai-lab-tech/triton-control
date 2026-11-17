@@ -323,24 +323,31 @@ class LocalBindingTests(unittest.TestCase):
         with self.assertRaises(ForbiddenError):
             self.admit()  # request is 250m, limit is 1 CPU
 
-    def test_memory_gpu_and_unknown_hardware_fail_closed(self):
+    def test_memory_capacity_exceeded_is_rejected(self):
+        raw = copy.deepcopy(self.raw_policy)
+        raw["targets"]["toy-production"]["total"]["memory"] = "128Mi"
+        self.configure(raw)
+
+        with self.assertRaisesRegex(ForbiddenError, "capacity limit"):
+            self.admit()
+
+    def test_gpu_on_cpu_hardware_is_rejected(self):
         self.configure()
-        for field, value in (("memory", "128Mi"), ("gpu", 0)):
-            data = copy.deepcopy(self.request_data)
-            raw = copy.deepcopy(self.raw_policy)
-            if field == "memory":
-                raw["targets"]["toy-production"]["total"][field] = value
-                self.configure(raw, revision=1)
-            else:
-                data["release"]["spec"]["resourcesPerReplica"]["gpuCount"] = 1
-                data["target"]["spec"]["release"]["digest"] = digest(
-                    self.request(data).release.model_dump(mode="json", by_alias=True)
-                )
-            with self.subTest(field=field), self.assertRaises(ForbiddenError):
-                self.admit(data)
+        data = copy.deepcopy(self.request_data)
+        data["release"]["spec"]["resourcesPerReplica"]["gpuCount"] = 1
+        data["target"]["spec"]["release"]["digest"] = digest(
+            self.request(data).release.model_dump(mode="json", by_alias=True)
+        )
+
+        with self.assertRaisesRegex(ForbiddenError, "hardware GPU limit"):
+            self.admit(data)
+
+    def test_unknown_hardware_is_rejected(self):
+        self.configure()
         data = copy.deepcopy(self.request_data)
         data["hardware"] = "unknown"
-        with self.assertRaises(ForbiddenError):
+
+        with self.assertRaisesRegex(ForbiddenError, "hardware is not supported"):
             self.admit(data)
 
     def test_release_identity_mismatch_is_rejected(self):
@@ -408,28 +415,35 @@ class LocalBindingTests(unittest.TestCase):
         self.addCleanup(app.dependency_overrides.clear)
         return TestClient(app)
 
-    def test_api_returns_no_secrets_in_success_or_validation_errors(self):
+    def test_api_admission_returns_no_secrets(self):
         self.configure()
         with closing(self.client()) as client:
             response = client.post("/api/local-bindings/admissions", json=self.request_data)
-            self.assertEqual(response.status_code, 200, response.text)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        for secret in (self.secret, "synthetic-storage-password", "synthetic-access", "test-user"):
+            self.assertNotIn(secret, response.text)
+
+    def test_api_credential_status_returns_no_secrets(self):
+        with closing(self.client()) as client:
             response = client.get("/api/local-bindings/credentials/pull-credential")
-            self.assertEqual(response.status_code, 200)
-            self.assertNotIn(self.secret, response.text)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(self.secret, response.text)
+
+    def test_api_validation_error_returns_no_secrets(self):
+        with closing(self.client()) as client:
             response = client.put(
                 "/api/local-bindings/credentials/new",
                 json={
-                    "provider": "registry",
-                    "registry": "invalid/host",
-                    "repository_prefix": "synthetic",
-                    "username": "test-user",
-                    "password": self.secret,
-                    "permission": "pull",
+                    "provider": "registry", "registry": "invalid/host", "repository_prefix": "synthetic",
+                    "username": "test-user", "password": self.secret, "permission": "pull",
                 },
             )
-            self.assertEqual(response.status_code, 422)
-            self.assertNotIn(self.secret, response.text)
-            self.assertNotIn("test-user", response.text)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertNotIn(self.secret, response.text)
+        self.assertNotIn("test-user", response.text)
 
     def test_api_forbids_members_from_admin_configuration(self):
         with closing(self.client(self.claims)) as client:

@@ -171,11 +171,8 @@ def put_credential(
 ) -> CredentialResponse:
     _actor(session, claims, admin=True)
     _mode()
-    # Purpose/scope cannot silently change under an existing allowlisted name.
+    # The repository checks scope under its write lock, including concurrent recreation.
     scope = request.model_dump(mode="json", exclude={"password"})
-    old = repository.credential(session, name)
-    if old and (old.provider != request.provider or old.scope != scope):
-        raise ForbiddenError("Delete the credential before changing its scope or purpose")
     encrypted = encrypt_registry_secret(request.password.get_secret_value())
     repository.save_credential(session, name, request.provider, scope, encrypted)
     return CredentialResponse(name=name, provider=request.provider, configured=True)

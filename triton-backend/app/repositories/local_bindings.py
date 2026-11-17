@@ -5,10 +5,10 @@ from typing import Any, cast
 from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col
+from sqlmodel import Session, col, select
 
 from app.db.entities import LocalBindingPolicyEntity, LocalCredentialEntity
-from app.exceptions import ConflictError
+from app.exceptions import ConflictError, ForbiddenError
 
 
 def policy(session: Session) -> LocalBindingPolicyEntity | None:
@@ -39,16 +39,21 @@ def save_policy(session: Session, expected: int, payload: dict[str, Any]) -> int
     return expected + 1
 
 
-def credential(session: Session, name: str) -> LocalCredentialEntity | None:
-    return session.get(LocalCredentialEntity, name, populate_existing=True)
+def credential(session: Session, name: str, *, lock: bool = False) -> LocalCredentialEntity | None:
+    query = (select(LocalCredentialEntity).where(LocalCredentialEntity.name == name)
+             .execution_options(populate_existing=True))
+    return session.exec(query.with_for_update() if lock else query).first()
 
 
 def save_credential(session: Session, name: str, provider: str, scope: dict[str, Any], encrypted: str) -> None:
-    row = credential(session, name)
+    row = credential(session, name, lock=True)
     if row is None:
         row = LocalCredentialEntity(name=name, provider=provider, scope=scope, secret_enc=encrypted)
     else:
-        row.provider, row.scope, row.secret_enc = provider, scope, encrypted
+        if row.provider != provider or row.scope != scope:
+            session.rollback()
+            raise ForbiddenError("Delete the credential before changing its scope or purpose")
+        row.secret_enc = encrypted
     session.add(row)
     try:
         session.commit()

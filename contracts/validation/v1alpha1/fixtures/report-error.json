@@ -1,0 +1,34 @@
+{
+  "apiVersion": "validation.triton-control/v1alpha1",
+  "kind": "ValidationReport",
+  "manifestDigest": "sha256:d4096bc0a883fb2b6168e79be90459489389009678e428423857e0a53816dc69",
+  "evaluator": {
+    "name": "synthetic-evaluator",
+    "version": "1.0",
+    "image": "example.invalid/evaluator@sha256:d0655641d1cc4bd099886b44149dbd7ec3eef7d3abd756964e262917096c17f7",
+    "code": {
+      "uri": "artifacts/evaluator.txt",
+      "digest": "sha256:9e55c457c2f0571addca2a220a9240e5a0b0fea7d1df95f93a0b10505da1d9e4"
+    }
+  },
+  "subjects": {
+    "image": "sha256:3267996e4f0ac4d86d7385245dc5466ead491ddd20fd60ffc00bd42f7eab4c88",
+    "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+    "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+    "materializerImage": null,
+    "sourceCode": "sha256:9e55c457c2f0571addca2a220a9240e5a0b0fea7d1df95f93a0b10505da1d9e4",
+    "validationInput": "sha256:d4096bc0a883fb2b6168e79be90459489389009678e428423857e0a53816dc69"
+  },
+  "measuredTarget": null,
+  "startedAt": "2026-01-01T00:00:00Z",
+  "completedAt": "2026-01-01T00:01:00Z",
+  "status": "error",
+  "metrics": [],
+  "errors": [
+    {
+      "code": "runner-failure",
+      "diagnostic": null
+    }
+  ],
+  "performanceScope": "single-replica"
+}

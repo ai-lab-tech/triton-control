@@ -1,0 +1,86 @@
+{
+  "apiVersion": "validation.triton-control/v1alpha1",
+  "kind": "ValidationManifest",
+  "image": "registry.example.invalid/synthetic/runtime@sha256:3267996e4f0ac4d86d7385245dc5466ead491ddd20fd60ffc00bd42f7eab4c88",
+  "repository": {
+    "uri": "s3://synthetic-models/toy/r1/",
+    "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+    "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+    "materializerImage": null
+  },
+  "sourceCode": {
+    "uri": "artifacts/evaluator.txt",
+    "digest": "sha256:9e55c457c2f0571addca2a220a9240e5a0b0fea7d1df95f93a0b10505da1d9e4"
+  },
+  "dataset": {
+    "uri": "artifacts/dataset.txt",
+    "digest": "sha256:caba3b40a80aef71b8f7052e506bb008a6f89efcb3016999035515b36e4ed34f"
+  },
+  "expectedOutputs": {
+    "uri": "artifacts/expected.txt",
+    "digest": "sha256:9d42d3ed5cb1812b1c222519afb896b9ef81994356cf7c02c9a38f132d388bf6"
+  },
+  "evaluator": {
+    "name": "synthetic-evaluator",
+    "version": "1.0",
+    "image": "example.invalid/evaluator@sha256:d0655641d1cc4bd099886b44149dbd7ec3eef7d3abd756964e262917096c17f7",
+    "code": {
+      "uri": "artifacts/evaluator.txt",
+      "digest": "sha256:9e55c457c2f0571addca2a220a9240e5a0b0fea7d1df95f93a0b10505da1d9e4"
+    }
+  },
+  "criteria": [
+    {
+      "metric": "accuracy",
+      "category": "correctness",
+      "unit": "ratio",
+      "operator": "gte",
+      "threshold": "0.95"
+    },
+    {
+      "metric": "latency-p95",
+      "category": "performance",
+      "unit": "milliseconds",
+      "operator": "lte",
+      "threshold": "20"
+    }
+  ],
+  "startup": {
+    "models": [
+      {
+        "name": "toy",
+        "versions": [
+          "1"
+        ]
+      }
+    ],
+    "configuration": {
+      "uri": "artifacts/startup.txt",
+      "digest": "sha256:330af4628d4aebe81eed6aca2b80b9993739c3c8c7d0980ce7b5f9440a873bbb"
+    },
+    "resourcesPerReplica": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "256Mi"
+      },
+      "gpuCount": 0
+    }
+  },
+  "supportedTargets": [
+    {
+      "architecture": "amd64",
+      "operatingSystem": "linux",
+      "cpuModel": "synthetic-cpu",
+      "gpuModel": null,
+      "gpuCount": 0,
+      "driverVersion": null,
+      "cudaVersion": null,
+      "tritonVersion": "synthetic-1"
+    }
+  ],
+  "performanceScope": "single-replica"
+}

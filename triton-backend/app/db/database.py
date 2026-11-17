@@ -77,6 +77,8 @@ def init_db() -> None:
     """Initialize database - create all tables."""
     from app.db.entities import (  # Import models to register them
         AccountLifecycleTokenEntity,
+        BuildContextEntity,
+        BuildContextReceiptEntity,
         BuildQualificationEntity,
         CandidateImportEntity,
         CodeServerEntity,

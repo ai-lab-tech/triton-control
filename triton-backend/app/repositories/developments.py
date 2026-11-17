@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.db.entities import CodeServerEntity
+from app.db.entities import CodeServerEntity, TaskWorkspaceEntity
 
 
 def find_by_id(session: Session, code_server_id: int) -> CodeServerEntity | None:
@@ -26,6 +26,9 @@ def find_first_for_owner(session: Session, owner_user_id: int) -> CodeServerEnti
     return session.exec(
         select(CodeServerEntity)
         .where(CodeServerEntity.owner_user_id == owner_user_id)
+        .where(~select(TaskWorkspaceEntity.task_id).where(
+            TaskWorkspaceEntity.workspace_id == CodeServerEntity.id,
+        ).exists())
         .order_by(CodeServerEntity.created_at.desc()),  # type: ignore[attr-defined]
     ).first()
 

@@ -1,0 +1,435 @@
+{
+  "$defs": {
+    "ArtifactSubjects": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "inventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventorydigest",
+          "type": "string"
+        },
+        "materializerImage": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Materializerimage"
+        },
+        "preparedInventoryDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Preparedinventorydigest",
+          "type": "string"
+        },
+        "sourceCode": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcecode"
+        },
+        "validationInput": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validationinput"
+        }
+      },
+      "required": [
+        "image",
+        "inventoryDigest",
+        "preparedInventoryDigest"
+      ],
+      "title": "ArtifactSubjects",
+      "type": "object"
+    },
+    "Criterion": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "correctness",
+            "performance"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "metric": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Metric",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "gte",
+            "lte",
+            "eq"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "threshold": {
+          "maxLength": 80,
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "title": "Threshold",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "category",
+        "unit",
+        "operator",
+        "threshold"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    },
+    "EvaluationError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "unsupported-target",
+            "runner-failure",
+            "missing-metric",
+            "artifact-mismatch",
+            "evaluation-failure",
+            "timeout",
+            "cancelled"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "EvaluationError",
+      "type": "object"
+    },
+    "EvaluatorIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/Reference"
+        },
+        "image": {
+          "maxLength": 512,
+          "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+          "title": "Image",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "image",
+        "code"
+      ],
+      "title": "EvaluatorIdentity",
+      "type": "object"
+    },
+    "HardwareRuntime": {
+      "additionalProperties": false,
+      "description": "Exact supported profiles in v1alpha1; no inferred GPU/driver compatibility.",
+      "properties": {
+        "architecture": {
+          "enum": [
+            "amd64",
+            "arm64"
+          ],
+          "title": "Architecture",
+          "type": "string"
+        },
+        "cpuModel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+          "title": "Cpumodel",
+          "type": "string"
+        },
+        "cudaVersion": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cudaversion"
+        },
+        "driverVersion": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Driverversion"
+        },
+        "gpuCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "title": "Gpucount",
+          "type": "integer"
+        },
+        "gpuModel": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gpumodel"
+        },
+        "operatingSystem": {
+          "const": "linux",
+          "title": "Operatingsystem",
+          "type": "string"
+        },
+        "tritonVersion": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+          "title": "Tritonversion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "architecture",
+        "operatingSystem",
+        "cpuModel",
+        "gpuCount",
+        "tritonVersion"
+      ],
+      "title": "HardwareRuntime",
+      "type": "object"
+    },
+    "MetricResult": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion": {
+          "$ref": "#/$defs/Criterion"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "value": {
+          "maxLength": 80,
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion",
+        "value",
+        "passed"
+      ],
+      "title": "MetricResult",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "$id": "urn:triton-control:validation:v1alpha1:ValidationReport",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "validation.triton-control/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "completedAt": {
+      "format": "date-time",
+      "title": "Completedat",
+      "type": "string"
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/EvaluationError"
+      },
+      "maxItems": 100,
+      "title": "Errors",
+      "type": "array"
+    },
+    "evaluator": {
+      "$ref": "#/$defs/EvaluatorIdentity"
+    },
+    "kind": {
+      "const": "ValidationReport",
+      "title": "Kind",
+      "type": "string"
+    },
+    "manifestDigest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifestdigest",
+      "type": "string"
+    },
+    "measuredTarget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HardwareRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/MetricResult"
+      },
+      "maxItems": 100,
+      "title": "Metrics",
+      "type": "array"
+    },
+    "performanceScope": {
+      "const": "single-replica",
+      "default": "single-replica",
+      "title": "Performancescope",
+      "type": "string"
+    },
+    "startedAt": {
+      "format": "date-time",
+      "title": "Startedat",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "error",
+        "unsupported"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "subjects": {
+      "$ref": "#/$defs/ArtifactSubjects"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "manifestDigest",
+    "evaluator",
+    "subjects",
+    "measuredTarget",
+    "startedAt",
+    "completedAt",
+    "status",
+    "metrics",
+    "errors"
+  ],
+  "title": "ValidationReport",
+  "type": "object"
+}

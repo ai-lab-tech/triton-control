@@ -1,5 +1,6 @@
 """HTTP endpoints for per-user Kubernetes Development workspaces."""
 
+import asyncio
 from typing import Any
 
 import anyio
@@ -140,7 +141,16 @@ async def proxy_code_server_websocket(
         return
     try:
         target = await anyio.to_thread.run_sync(_owned_proxy_target, claims, code_server_id)
-        await code_server_proxy.proxy_websocket(target, path, websocket)
+        bridge = asyncio.create_task(code_server_proxy.proxy_websocket(target, path, websocket))
+        monitor = asyncio.create_task(_monitor_workspace_access(claims, code_server_id))
+        try:
+            done, _ = await asyncio.wait({bridge, monitor}, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                await task
+        finally:
+            bridge.cancel()
+            monitor.cancel()
+            await asyncio.gather(bridge, monitor, return_exceptions=True)
     except AppError:
         await websocket.close(code=1008)
 
@@ -150,3 +160,10 @@ def _owned_proxy_target(claims: dict[str, Any], code_server_id: int) -> code_ser
     with session_factory() as session:
         row = workspaces.get_owned_code_server(session, claims, code_server_id)
         return code_server_proxy.proxy_target(row)
+
+
+async def _monitor_workspace_access(claims: dict[str, Any], code_server_id: int) -> None:
+    """Terminate long-lived editor sessions after assignment/account revocation."""
+    while True:
+        await asyncio.sleep(15)
+        await anyio.to_thread.run_sync(_owned_proxy_target, claims, code_server_id)
