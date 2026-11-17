@@ -25,6 +25,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
@@ -127,6 +128,7 @@ def update_instance_s3(
     instance_id: int,
     request: UpdateInstanceS3Request,
 ) -> InstanceS3ConfigDTO:
+    installation_policy.require("trust_admin")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
@@ -352,6 +354,7 @@ def put_instance_s3_content(
     content: str | bytes,
     content_type: str | None = None,
 ) -> S3FileWriteResponse:
+    installation_policy.require("artifact_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:
@@ -405,6 +408,7 @@ def delete_instance_s3_content(
     instance_id: int,
     path: str,
 ) -> S3DeleteResponse:
+    installation_policy.require("artifact_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:

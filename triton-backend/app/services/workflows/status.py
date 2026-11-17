@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import httpx
 
+from app.core import installation_policy
 from app.exceptions import ServiceUnavailableError
 from app.schemas import ArgoWorkflowsStatusResponse
 from app.services.workflows import auth
@@ -13,6 +14,7 @@ from app.services.workflows.config import get_config
 
 
 def get_status() -> ArgoWorkflowsStatusResponse:
+    installation_policy.require("development_tools")
     config = get_config()
     if not config.enabled:
         return ArgoWorkflowsStatusResponse(

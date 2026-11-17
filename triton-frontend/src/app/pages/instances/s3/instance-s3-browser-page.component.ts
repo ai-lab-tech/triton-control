@@ -1,3 +1,4 @@
+import { InstallationService } from "../../../shared/installation/installation.service";
 import { Component, computed, inject, OnInit } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { Actions, ofType } from "@ngrx/effects";
@@ -73,6 +74,7 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
   templateUrl: "./instance-s3-browser-page.component.html",
 })
 export class InstanceS3BrowserPageComponent implements OnInit {
+  readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
   private readonly instancesApi = inject(InstancesService);
   private readonly route = inject(ActivatedRoute);
@@ -113,7 +115,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   readonly uploadBusy = computed(
     () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
   );
-  readonly canWriteInstances = this.auth.canWriteInstances;
+  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && this.installation.allows("artifact_write"));
   readonly prefixLabel = computed(() => this.prefix().trim() || "bucket root");
   readonly repositoryRootPath = computed(() => {
     const bucket = this.bucketName().trim();

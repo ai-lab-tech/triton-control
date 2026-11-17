@@ -1,3 +1,4 @@
+import { InstallationService } from "../../shared/installation/installation.service";
 import { RegistrySettingsComponent } from "./registry-settings.component";
 import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
@@ -71,6 +72,7 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
   templateUrl: "./settings-page.component.html",
 })
 export class SettingsPageComponent {
+  readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
   private readonly usersApi = inject(UsersService);
   private readonly deploymentsApi = inject(DeploymentsService);
@@ -107,7 +109,7 @@ export class SettingsPageComponent {
   }
 
   async saveDeploymentPolicy(): Promise<void> {
-    if (this.policyBusy() || !this.deploymentPolicy()) return;
+    if (!this.installation.allows("trust_admin") || this.policyBusy() || !this.deploymentPolicy()) return;
     this.policyBusy.set(true);
     try {
       const policy = await firstValueFrom(
@@ -221,7 +223,7 @@ export class SettingsPageComponent {
   }
 
   canEditOidcSettings(): boolean {
-    return this.isDbConfigSource();
+    return this.installation.allows("trust_admin") && this.isDbConfigSource();
   }
 
   canSaveSettings(): boolean {

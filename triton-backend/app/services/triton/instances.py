@@ -24,6 +24,7 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import is_admin, require_admin, require_member_or_admin
 from app.core.identity import require_user_entity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError, ServiceUnavailableError
@@ -48,6 +49,7 @@ async def create_instance(
     session: Session,
     claims: dict[str, Any],
 ) -> TritonInstanceDTO:
+    installation_policy.require("direct_deployment")
     require_member_or_admin(claims)
 
     try:
@@ -153,6 +155,7 @@ async def update_instance(
     claims: dict[str, Any],
     instance_id: int,
 ) -> TritonInstanceDTO:
+    installation_policy.require("direct_deployment")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
@@ -221,6 +224,7 @@ def get_instance(session: Session, claims: dict[str, Any], instance_id: int) -> 
 
 
 def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) -> None:
+    installation_policy.require("direct_deployment")
     require_admin(claims)
     instance = instances.find_by_id(session, instance_id)
     if not instance:

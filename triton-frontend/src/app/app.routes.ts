@@ -1,3 +1,5 @@
+import { installationGuard } from "./shared/installation/installation.guard";
+import { InstallationRestrictedComponent } from "./shared/installation/installation-restricted.component";
 import { HandoffPageComponent } from "./pages/handoffs/handoff-page.component";
 import { Routes } from "@angular/router";
 import { adminGuard, authGuard } from "./shared/auth/auth.guard";
@@ -36,25 +38,27 @@ export const APP_ROUTES: Routes = [
     path: "",
     component: ShellComponent,
     canActivate: [authGuard],
+    canActivateChild: [installationGuard],
     children: [
+      { path: "installation-restricted", component: InstallationRestrictedComponent },
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
       { path: "dashboard", component: DashboardPageComponent },
-      { path: "preparation/handoffs/new", component: HandoffPageComponent },
-      { path: "preparation/handoffs/:handoffId", component: HandoffPageComponent },
+      { path: "preparation/handoffs/new", data: { capability: "development_jobs" }, component: HandoffPageComponent },
+      { path: "preparation/handoffs/:handoffId", data: { capability: "development_jobs" }, component: HandoffPageComponent },
       { path: "instances", component: InstancesPageComponent },
-      { path: "workspaces", component: WorkspacesPageComponent },
+      { path: "workspaces", data: { capability: "development_tools" }, component: WorkspacesPageComponent },
       { path: "development", redirectTo: "workspaces", pathMatch: "full" },
-      { path: "deployments/new", component: NewDeploymentPageComponent },
-      { path: "workflows", component: WorkflowsPageComponent },
-      { path: "mlflow", component: MlflowPageComponent },
+      { path: "deployments/new", data: { capability: "direct_deployment" }, component: NewDeploymentPageComponent },
+      { path: "workflows", data: { capability: "development_tools" }, component: WorkflowsPageComponent },
+      { path: "mlflow", data: { capability: "development_tools" }, component: MlflowPageComponent },
       { path: "instances/:id", component: InstanceDetailPageComponent },
       {
         path: "instances/:id/models/:modelName/versions/:version/infer",
-        component: InstanceModelInferPageComponent,
+        data: { capability: "interactive_inference" }, component: InstanceModelInferPageComponent,
       },
       {
         path: "instances/:id/models/:modelName/versions/:version/profile",
-        component: InstanceModelProfilePageComponent,
+        data: { capability: "development_jobs" }, component: InstanceModelProfilePageComponent,
       },
       { path: "instances/:id/s3", component: InstanceS3BrowserPageComponent },
       { path: "s3-profiles", component: S3ProfilesPageComponent },

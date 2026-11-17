@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import ValidationError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.entities import BuildAttemptEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
@@ -54,6 +55,7 @@ def response(session: Session, op: OperationEntity) -> BuildResponse:
 
 
 def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key: str) -> BuildResponse:
+    installation_policy.require("development_jobs")
     claims_guard(claims)
     # Validate context ownership and qualification before accepting public API intent.
     settings = qualified(session)
@@ -100,6 +102,7 @@ def fence(session: Session, op: OperationEntity) -> None:
 
 
 def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> BuildAttemptEntity:
+    installation_policy.require("development_jobs")
     existing = builds.latest(session, op.id)
     if existing is not None and not existing.retry_requested:
         return existing
@@ -178,6 +181,7 @@ class BuildAdapter:
         session.add(row)
 
     def reconcile(self, op: OperationEntity, context: ExecutionContext) -> ReconcileResult:
+        installation_policy.require("development_jobs")
         with context.sessions() as session:
             row = builds.latest(session, op.id)
             stopping = op.cancel_requested or preparation.get(session, UUID(op.target)).state == "cancelled"
@@ -207,6 +211,7 @@ def reconcile_attempt(
     session: Session, op: OperationEntity, row: BuildAttemptEntity, context: ExecutionContext,
     provider: jobs_kubernetes.Jobs,
 ) -> ReconcileResult:
+    installation_policy.require("development_jobs")
     context.checkpoint()
     fence(session, op)
     if row.finished_at is not None:

@@ -10,6 +10,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from kubernetes.config.config_exception import ConfigException  # type: ignore[import-untyped]
 from urllib3.exceptions import HTTPError
 
+from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.repositories import instances
@@ -231,6 +232,7 @@ def update_access(
     claims: dict[str, Any],
     instance_id: int,
 ) -> DeploymentAccessResponse:
+    installation_policy.require("direct_deployment")
     require_member_or_admin(claims)
     instance = _managed_instance(session, claims, instance_id)
     validate_policy(request)

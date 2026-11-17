@@ -27,6 +27,7 @@ from urllib.parse import quote
 
 import httpx
 
+from app.core import installation_policy
 from app.core.tls import create_default_context_with_extra_ca
 
 
@@ -594,6 +595,7 @@ class TritonService:
 
     async def load_model(self, model_name: str) -> None:
         """Trigger explicit model load via Triton's repository API."""
+        installation_policy.require("model_write")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/load"
 
@@ -602,6 +604,7 @@ class TritonService:
 
     async def unload_model(self, model_name: str) -> None:
         """Trigger explicit model unload via Triton's repository API."""
+        installation_policy.require("model_write")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/unload"
 
@@ -610,6 +613,7 @@ class TritonService:
 
     async def infer_model(self, model_name: str, version: str, payload: Any) -> httpx.Response:
         """Send an inference request to a specific Triton model version."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
@@ -620,6 +624,7 @@ class TritonService:
 
     async def infer_model_raw(self, model_name: str, version: str, payload: bytes, content_type: str) -> httpx.Response:
         """Send an inference request to Triton without JSON re-serialization."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
@@ -634,6 +639,7 @@ class TritonService:
 
     async def generate_model_raw(self, model_name: str, payload: bytes, content_type: str) -> httpx.Response:
         """Send a generate request to a Triton text-generation model."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/generate"
 

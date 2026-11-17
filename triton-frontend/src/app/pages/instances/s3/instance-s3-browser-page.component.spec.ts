@@ -1,3 +1,4 @@
+import { InstallationService } from "../../../shared/installation/installation.service";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
@@ -97,6 +98,11 @@ describe("InstanceS3BrowserPageComponent", () => {
         { provide: MatSnackBar, useValue: snackBarMock },
       ],
     }).compileComponents();
+    TestBed.inject(InstallationService).snapshot.set({mode: "development", explanation: "Development",
+      capabilities: {serving_read: true, artifact_read: true, interactive_inference: true,
+        development_tools: true, development_jobs: true, direct_deployment: true,
+        model_write: true, artifact_write: true, trust_admin: true, credential_admin: true, identity_admin: true}});
+
 
     mockStore = TestBed.inject(MockStore);
     authState = TestBed.inject(AuthStore);

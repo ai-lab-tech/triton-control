@@ -16,6 +16,7 @@ import websockets
 from fastapi import Request, Response, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
+from app.core import installation_policy
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadGatewayError
 from app.services.kubernetes_client import api_client, is_running_in_cluster
@@ -58,6 +59,7 @@ def proxy_target(row: CodeServerEntity) -> CodeServerProxyTarget:
 
 async def proxy_http(row: CodeServerProxyTarget, path: str, request: Request) -> Response:
     """Proxy an authenticated browser request to the workspace's Kubernetes Service."""
+    installation_policy.require("development_tools")
     body = await request.body()
     headers = {
         key: value
@@ -78,6 +80,7 @@ async def proxy_http(row: CodeServerProxyTarget, path: str, request: Request) ->
 
 async def proxy_websocket(row: CodeServerProxyTarget, path: str, websocket: WebSocket) -> None:
     """Bridge an authenticated browser WebSocket to the workspace through the Kubernetes API."""
+    installation_policy.require("development_tools")
     upstream_url, headers, ssl_context = _websocket_upstream(row, path, list(websocket.query_params.multi_items()))
     requested_protocols = _requested_subprotocols(websocket)
     upstream = None

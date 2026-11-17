@@ -1,3 +1,4 @@
+import { InstallationService } from "../shared/installation/installation.service";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BreakpointObserver } from "@angular/cdk/layout";
 import { TestBed } from "@angular/core/testing";
@@ -64,6 +65,11 @@ describe("ShellComponent", () => {
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: false }) } },
       ],
     }).compileComponents();
+    TestBed.inject(InstallationService).snapshot.set({mode: "development", explanation: "Development",
+      capabilities: {serving_read: true, artifact_read: true, interactive_inference: true,
+        development_tools: true, development_jobs: true, direct_deployment: true,
+        model_write: true, artifact_write: true, trust_admin: true, credential_admin: true, identity_admin: true}});
+
 
     authState = TestBed.inject(AuthStore);
     mockStore = TestBed.inject(MockStore);
@@ -336,6 +342,11 @@ describe("ShellComponentHandset", () => {
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: true }) } },
       ],
     }).compileComponents();
+    TestBed.inject(InstallationService).snapshot.set({mode: "development", explanation: "Development",
+      capabilities: {serving_read: true, artifact_read: true, interactive_inference: true,
+        development_tools: true, development_jobs: true, direct_deployment: true,
+        model_write: true, artifact_write: true, trust_admin: true, credential_admin: true, identity_admin: true}});
+
   });
 
   it("CloseNavOnMobile_HandsetLayout_DoesCloseNavigation", () => {

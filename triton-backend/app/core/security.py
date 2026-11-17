@@ -17,6 +17,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core import identity as _identity
+from app.core import installation_policy
 from app.core.token_extractor import bearer, extract_claims
 from app.db.database import session_factory
 from app.exceptions import AppError, ForbiddenError, UnauthorizedError
@@ -29,6 +30,8 @@ async def _get_claims_with_access_policy(
 ) -> Dict[str, Any]:
     source_claims = await extract_claims(request, creds)
     if source_claims.get("token_use") in {"mlflow_workflow", "workspace_deployment", "workflow_deployment"}:
+        if installation_policy.mode() == "production":
+            raise HTTPException(status_code=403, detail="Development delegation is disabled in production")
         path, method = request.url.path, request.method
         mlflow_path = path == "/api/deployments/mlflow" or path.startswith("/api/deployments/mlflow/")
         permitted = (

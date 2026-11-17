@@ -1,3 +1,4 @@
+<p role="note">{{ installation.label() }}. In production, existing credentials may be rotated or revoked; scope changes require review.</p>
 <div class="s3-profiles">
   <div class="page-title">S3 Profiles</div>
 
@@ -28,7 +29,7 @@
                 }
               }
             </mat-select-trigger>
-            <mat-option value="">New profile</mat-option>
+            @if (installation.allows("trust_admin")) { <mat-option value="">New profile</mat-option> }
             @for (profile of profiles(); track profile.id) {
               <mat-option [value]="profile.id.toString()"
                 ><app-s3-profile-label [profile]="profile"
@@ -36,7 +37,7 @@
             }
           </mat-select>
         </mat-form-field>
-        <button mat-stroked-button type="button" (click)="newProfile()">
+        <button mat-stroked-button type="button" (click)="newProfile()" [disabled]="!installation.allows('trust_admin')">
           <span class="material-icons">add</span>
           New
         </button>
@@ -55,7 +56,7 @@
             <input
               id="s3-profile-name"
               matInput
-              [(ngModel)]="draft.name"
+              [(ngModel)]="draft.name" [disabled]="!installation.allows('trust_admin')"
               placeholder="team-minio"
             />
           </mat-form-field>
@@ -66,7 +67,7 @@
             <input
               id="s3-profile-endpoint"
               matInput
-              [(ngModel)]="draft.endpoint"
+              [(ngModel)]="draft.endpoint" [disabled]="!installation.allows('trust_admin')"
               placeholder="https://s3.example.com"
             />
           </mat-form-field>
@@ -74,13 +75,13 @@
         <div class="form-row">
           <label class="field-label" for="s3-profile-bucket">Bucket</label>
           <mat-form-field appearance="outline">
-            <input id="s3-profile-bucket" matInput [(ngModel)]="draft.bucket" />
+            <input id="s3-profile-bucket" matInput [(ngModel)]="draft.bucket" [disabled]="!installation.allows('trust_admin')" />
           </mat-form-field>
         </div>
         <div class="form-row">
           <label class="field-label" for="s3-profile-region">Region</label>
           <mat-form-field appearance="outline">
-            <input id="s3-profile-region" matInput [(ngModel)]="draft.region" />
+            <input id="s3-profile-region" matInput [(ngModel)]="draft.region" [disabled]="!installation.allows('trust_admin')" />
           </mat-form-field>
         </div>
         <div class="form-row">
@@ -110,7 +111,7 @@
             </div>
           </div>
           <label class="switch">
-            <input type="checkbox" [(ngModel)]="draft.force_path_style" />
+            <input type="checkbox" [(ngModel)]="draft.force_path_style" [disabled]="!installation.allows('trust_admin')" />
             <span class="slider"></span>
           </label>
         </div>
@@ -122,7 +123,7 @@
                 id="s3-profile-ca"
                 matInput
                 rows="5"
-                [(ngModel)]="draft.ca_certificate"
+                [(ngModel)]="draft.ca_certificate" [disabled]="!installation.allows('trust_admin')"
                 placeholder="-----BEGIN CERTIFICATE-----"
               ></textarea>
               <mat-hint>
@@ -139,7 +140,7 @@
           color="primary"
           type="button"
           (click)="saveProfile()"
-          [disabled]="saving()"
+          [disabled]="saving() || (!selectedId && !installation.allows('trust_admin'))"
         >
           <span class="material-icons">save</span>
           Save

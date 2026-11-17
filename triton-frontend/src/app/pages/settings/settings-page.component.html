@@ -1,3 +1,4 @@
+<p role="note">{{ installation.label() }}. Trust and endpoint policy changes require independent review in production.</p>
 <div class="settings">
   <div class="page-title">Settings</div>
 
@@ -672,7 +673,7 @@
                 </div>
                 <mat-form-field appearance="outline">
                   <mat-label>Domain configuration</mat-label>
-                  <mat-select [(ngModel)]="baseDomainChoice" [disabled]="policyBusy()">
+                  <mat-select [(ngModel)]="baseDomainChoice" [disabled]="policyBusy() || !installation.allows('trust_admin')">
                     <mat-option value="default">Use Helm / environment default</mat-option>
                     <mat-option value="custom">Set in Triton Control</mat-option>
                   </mat-select>
@@ -683,7 +684,7 @@
                     <input
                       matInput
                       [(ngModel)]="modelBaseDomain"
-                      [disabled]="policyBusy()"
+                      [disabled]="policyBusy() || !installation.allows('trust_admin')"
                       placeholder="models.example.com"
                     />
                     <mat-hint>Domain only; leave empty to use short hostnames.</mat-hint>
@@ -704,7 +705,7 @@
                 </div>
                 <mat-form-field appearance="outline">
                   <mat-label>Allow HTTP endpoints</mat-label>
-                  <mat-select [(ngModel)]="httpPolicyChoice" [disabled]="policyBusy()">
+                  <mat-select [(ngModel)]="httpPolicyChoice" [disabled]="policyBusy() || !installation.allows('trust_admin')">
                     <mat-option value="default">Use Helm / environment default</mat-option>
                     <mat-option value="deny">No — HTTPS only</mat-option>
                     <mat-option value="allow">Yes — allow HTTP</mat-option>
@@ -733,7 +734,7 @@
                 class="endpoint-save"
                 type="button"
                 (click)="saveDeploymentPolicy()"
-                [disabled]="policyBusy()"
+                [disabled]="policyBusy() || !installation.allows('trust_admin')"
               >
                 <mat-icon>save</mat-icon>
                 {{ policyBusy() ? "Saving…" : "Save endpoint settings" }}
@@ -744,7 +745,7 @@
               mat-stroked-button
               type="button"
               (click)="loadDeploymentPolicy()"
-              [disabled]="policyBusy()"
+              [disabled]="policyBusy() || !installation.allows('trust_admin')"
             >
               {{ policyBusy() ? "Loading…" : "Reload settings" }}
             </button>
@@ -762,6 +763,6 @@
         </mat-card-content>
       </mat-card>
     </mat-tab>
-    <mat-tab label="Registry"><app-registry-settings /></mat-tab>
+    @if (installation.allows("trust_admin")) { <mat-tab label="Registry"><app-registry-settings /></mat-tab> }
   </mat-tab-group>
 </div>

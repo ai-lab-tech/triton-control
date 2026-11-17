@@ -1,0 +1,14 @@
+{{- $mode := include "triton-control.installationMode" . -}}
+{{- if eq $mode "production" -}}
+{{- if .Values.argoWorkflows.enabled -}}
+{{- fail "Production must omit Argo Workflows: set argoWorkflows.enabled=false" -}}
+{{- end -}}
+{{- if .Values.buildQualification.policy -}}
+{{- fail "Production must omit development build qualification policy and namespace" -}}
+{{- end -}}
+{{- range .Values.app.env -}}
+{{- if or (hasPrefix "DEVELOPMENT_" .name) (hasPrefix "MLFLOW_" .name) (hasPrefix "ARGO_WORKFLOWS_" .name) -}}
+{{- fail "Production must omit development tool environment overrides" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
