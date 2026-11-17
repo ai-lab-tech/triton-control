@@ -60,6 +60,7 @@ def apply_code_server_resources(
     statefulset_name: str,
     service_name: str,
     secret_name: str,
+    task_document: dict[str, Any] | None = None,
 ) -> list[str]:
     from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
     from kubernetes.config.config_exception import ConfigException  # type: ignore[import-untyped]
@@ -78,15 +79,31 @@ def apply_code_server_resources(
         _ensure_namespace(api, namespace)
         runtime_class_name = gpu_runtime_class_name(api, request.gpu_count)
         applied = []
-        for manifest in _manifests(
+        manifests = _manifests(
             request,
             namespace,
             statefulset_name,
             service_name,
             secret_name,
             runtime_class_name=runtime_class_name,
-        ):
-            from kubernetes import utils  # type: ignore[import-untyped]
+        )
+        if task_document is not None:
+            from app.services.development.task_staging import configure
+            configure(manifests, task_document, namespace, statefulset_name, secret_name)
+            # A retry must preserve tokens already present in a running init pod.
+            from kubernetes import client  # type: ignore[import-untyped]
+            try:
+                existing = client.CoreV1Api(api).read_namespaced_secret(secret_name, namespace)
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+            else:
+                for manifest in manifests:
+                    if manifest["kind"] == "Secret" and manifest["metadata"]["name"] == secret_name:
+                        manifest.pop("stringData", None)
+                        manifest["data"] = existing.data
+        for manifest in manifests:
+            from kubernetes import utils
 
             meta = manifest.get("metadata") or {}
             kind = manifest.get("kind", "Resource")
@@ -142,6 +159,8 @@ def delete_code_server_resources(
     _delete(core.delete_namespaced_secret, "Secret", secret_name)
     _delete(core.delete_namespaced_secret, "Secret", _image_pull_secret_name(statefulset_name))
     _delete(core.delete_namespaced_config_map, "ConfigMap", _triton_deploy_extension_configmap_name(statefulset_name))
+    from app.services.development.task_staging import configmap_name
+    _delete(core.delete_namespaced_config_map, "ConfigMap", configmap_name(statefulset_name))
     _delete(net.delete_namespaced_ingress, "Ingress", f"{statefulset_name}-ingress")
     return ", ".join(deleted) if deleted else "No Development resources found to delete."
 
@@ -172,6 +191,17 @@ def read_status(namespace: str, statefulset_name: str) -> tuple[str, str]:
     for pod in pods:
         pod_name = getattr(getattr(pod, "metadata", None), "name", "") or "unknown"
         phase = getattr(getattr(pod, "status", None), "phase", "") or "Unknown"
+        for init in getattr(getattr(pod, "status", None), "init_container_statuses", None) or []:
+            if getattr(init, "name", "") == "stage-task-inputs":
+                state = getattr(init, "state", None)
+                terminated = getattr(state, "terminated", None)
+                waiting = getattr(state, "waiting", None)
+                if (terminated and getattr(terminated, "exit_code", 0) != 0) or (
+                    waiting and getattr(waiting, "reason", "") in {
+                        "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
+                    }
+                ):
+                    return "blocked", "Task input staging failed; check source access and hashes, then retry."
         conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
         ready = any(
             getattr(c, "type", "") == "Ready" and getattr(c, "status", "") == "True"

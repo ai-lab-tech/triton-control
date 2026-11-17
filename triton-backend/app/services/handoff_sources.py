@@ -2,6 +2,7 @@
 
 import hashlib
 import time
+from pathlib import Path
 from typing import Any
 from unicodedata import normalize
 
@@ -111,6 +112,47 @@ def resolve(session: Session, source: S3Input) -> ResolvedInput:
         raise BadGatewayError("Source storage could not be read") from None
     except (BotoCoreError, OSError, RuntimeError):
         raise BadGatewayError("Source storage could not be read") from None
+    finally:
+        if body is not None:
+            body.close()
+        if client is not None:
+            client.close()
+
+
+def download(session: Session, artifact: ResolvedInput, destination: Path) -> None:
+    """Read only the captured version; verify before exposing any bytes to a workspace."""
+    config, bucket, key = authorize(session, artifact.source)
+    if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
+        raise ForbiddenError("Captured source profile changed")
+    if not artifact.version_id or artifact.version_id == "null" or not 0 < artifact.file.size <= MAX_BYTES:
+        raise BadRequestError("Workspace input requires a bounded, versioned artifact")
+    client: Any = None
+    body: Any = None
+    try:
+        client = build_s3_client(config, client_config=Config(
+            connect_timeout=3, read_timeout=10, retries={"max_attempts": 1},
+        ))
+        response = client.get_object(Bucket=bucket, Key=key, VersionId=artifact.version_id)
+        body = response["Body"]
+        measured, checksum = 0, hashlib.sha256()
+        started = time.monotonic()
+        with destination.open("wb") as output:
+            while True:
+                if time.monotonic() - started > MAX_SECONDS:
+                    raise BadRequestError("Workspace input download exceeded its time limit")
+                chunk = body.read(1024 * 1024)
+                if not chunk:
+                    break
+                measured += len(chunk)
+                if measured > artifact.file.size:
+                    raise BadRequestError("Workspace input size does not match its snapshot")
+                checksum.update(chunk)
+                output.write(chunk)
+        if (measured != artifact.file.size or "sha256:" + checksum.hexdigest() != artifact.file.digest
+                or response.get("VersionId") != artifact.version_id):
+            raise BadRequestError("Workspace input hash or version does not match its snapshot")
+    except (BotoCoreError, ClientError, OSError):
+        raise BadGatewayError("Workspace input storage is unavailable") from None
     finally:
         if body is not None:
             body.close()

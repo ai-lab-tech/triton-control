@@ -10,21 +10,30 @@ from sqlmodel import Session
 
 from app.core.identity import require_user_entity
 from app.db.entities import CodeServerEntity
-from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.repositories import developments as code_servers
+from app.repositories import preparation as task_repository
+from app.repositories import task_workspaces as associations
 from app.schemas import CodeServerDeleteResponse, CodeServerDTO, CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.oidc.config import kubernetes_enabled
 from app.services.registry_settings import apply_registry_settings
+from app.services.task_workspace_access import guard
 
 
 def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServerDTO]:
     user = require_user_entity(session, claims)
     rows = code_servers.list_for_owner(session, user.id or 0)
+    visible = []
     for row in rows:
+        try:
+            guard(session, row)
+        except (ForbiddenError, ConflictError):
+            continue
+        visible.append(row)
         _refresh_status(session, row)
-    return [_to_dto(row) for row in rows]
+    return [workspace_dto(row) for row in visible]
 
 
 def create_code_server(
@@ -32,7 +41,7 @@ def create_code_server(
     session: Session,
     claims: dict[str, Any],
 ) -> CodeServerDTO:
-    _require_kubernetes_enabled()
+    require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     owner_id = user.id or 0
     if code_servers.find_first_for_owner(session, owner_id):
@@ -41,7 +50,7 @@ def create_code_server(
         )
     name = request.name
     resource_prefix = _resource_prefix(owner_id, name)
-    namespace = _workspace_namespace()
+    namespace = workspace_namespace()
     statefulset_name = resource_prefix
     service_name = f"{resource_prefix}-svc"
     secret_name = f"{resource_prefix}-secret"
@@ -75,13 +84,13 @@ def create_code_server(
     if row.id:
         row.url = proxy_url(row.id)
         row = code_servers.save(session, row)
-    return _to_dto(row)
+    return workspace_dto(row)
 
 
 def get_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerDTO:
     row = _get_owned(session, claims, code_server_id)
     _refresh_status(session, row)
-    return _to_dto(row)
+    return workspace_dto(row)
 
 
 def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
@@ -94,8 +103,20 @@ def delete_code_server(
     claims: dict[str, Any],
     code_server_id: int,
 ) -> CodeServerDeleteResponse:
-    _require_kubernetes_enabled()
-    row = _get_owned(session, claims, code_server_id)
+    require_kubernetes_enabled()
+    user = require_user_entity(session, claims)
+    row = code_servers.find_by_id(session, code_server_id)
+    if row is None:
+        raise NotFoundError("Workspace not found")
+    association = associations.for_workspace(session, code_server_id)
+    if association:
+        task_id = association.task_id
+        task_repository.get(session, task_id, lock=True)
+        association = associations.get(session, task_id)
+        if association is None or association.workspace_id != code_server_id:
+            raise NotFoundError("Task workspace has already been deleted or replaced")
+    if not (association and user.is_active and user.role.lower() == "admin"):
+        _ensure_owner(row, user.id or 0)
     namespace = row.namespace
     try:
         message = k8s.delete_code_server_resources(
@@ -106,6 +127,12 @@ def delete_code_server(
         )
     except Exception as exc:
         raise BadRequestError("Kubernetes configuration could not be loaded") from exc
+    if association:
+        task = task_repository.get(session, association.task_id)
+        task.revision += 1
+        task_repository.add_event(session, task, user.id or 0, "workspace_deleted", {"workspace_id": row.id})
+        association.workspace_id = None
+        associations.save(session, association)
     code_servers.delete(session, row)
     return CodeServerDeleteResponse(status="deleted", message=message, namespace=namespace)
 
@@ -116,6 +143,7 @@ def _get_owned(session: Session, claims: dict[str, Any], code_server_id: int) ->
     if not row:
         raise NotFoundError("Development workspace not found")
     _ensure_owner(row, user.id or 0)
+    guard(session, row)
     return row
 
 
@@ -145,7 +173,7 @@ def _refresh_status(session: Session, row: CodeServerEntity) -> None:
         code_servers.save(session, row)
 
 
-def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
+def workspace_dto(row: CodeServerEntity) -> CodeServerDTO:
     return CodeServerDTO(
         id=row.id or 0,
         name=row.name,
@@ -160,14 +188,14 @@ def _to_dto(row: CodeServerEntity) -> CodeServerDTO:
     )
 
 
-def _require_kubernetes_enabled() -> None:
+def require_kubernetes_enabled() -> None:
     if not kubernetes_enabled():
         raise BadRequestError(
             "Development workspaces are available only when Kubernetes is enabled for Triton Control",
         )
 
 
-def _workspace_namespace() -> str:
+def workspace_namespace() -> str:
     control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
     if control_ns:
         return control_ns

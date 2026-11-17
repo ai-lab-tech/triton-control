@@ -84,6 +84,41 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  async claimTask() {
+    const receipt = this.receipt();
+    if (!receipt || receipt.task.revision === undefined || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      await firstValueFrom(this.api.claim(receipt.task.id, receipt.task.revision));
+      await this.loadReceipt(receipt.id);
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not claim this task."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  async openWorkspace() {
+    const receipt = this.receipt();
+    if (!receipt || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id));
+      await this.router.navigate(["/workspaces"], {
+        queryParams: { workspace: result.workspace.id },
+      });
+    } catch (error) {
+      this.error.set(
+        mapApiErrorMessage(
+          error,
+          "Could not open task workspace. Check your assignment and input access.",
+        ),
+      );
+    } finally {
+      this.busy.set(false);
+    }
+  }
   async submit() {
     if (
       this.busy() ||

@@ -679,3 +679,23 @@ class BuildContextReceiptEntity(SQLModel, table=True):
     id: str = Field(primary_key=True)
     payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TaskWorkspaceEntity(SQLModel, table=True):
+    """One active workspace per task; retries preserve its identity and configuration."""
+
+    __tablename__ = "task_workspaces"
+    task_id: UUID = Field(primary_key=True, foreign_key="preparation_tasks.id")
+    workspace_id: int | None = Field(default=None, foreign_key="code_servers.id", unique=True)
+    configuration: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    inputs: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    recovery_reason: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkspaceSnapshotInputsEntity(SQLModel, table=True):
+    """Immutable provider-neutral inputs registered by authorized snapshot capture."""
+
+    __tablename__ = "workspace_snapshot_inputs"
+    snapshot_id: UUID = Field(primary_key=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))

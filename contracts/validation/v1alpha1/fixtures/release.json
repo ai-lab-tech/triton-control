@@ -1,0 +1,65 @@
+{
+  "apiVersion": "serving.triton-control/v1alpha1",
+  "kind": "ServingRelease",
+  "metadata": {
+    "name": "toy",
+    "release": "r1"
+  },
+  "spec": {
+    "image": "registry.example.invalid/synthetic/runtime@sha256:3267996e4f0ac4d86d7385245dc5466ead491ddd20fd60ffc00bd42f7eab4c88",
+    "repository": {
+      "uri": "s3://synthetic-models/toy/r1/",
+      "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+      "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931"
+    },
+    "models": [
+      {
+        "name": "toy",
+        "versions": [
+          "1"
+        ]
+      }
+    ],
+    "resourcesPerReplica": {
+      "requests": {
+        "cpu": "250m",
+        "memory": "128Mi"
+      },
+      "limits": {
+        "cpu": "1",
+        "memory": "256Mi"
+      },
+      "gpuCount": 0
+    },
+    "lineage": {
+      "schema_version": 1,
+      "origin": {
+        "installation_id": "synthetic-fixture",
+        "record_id": "release-one"
+      },
+      "candidate": {
+        "installation_id": "synthetic-fixture",
+        "record_id": "candidate-one"
+      },
+      "candidate_digest": "sha256:492914058ada6ba50ef83ffb35e9f9760248585e87d0bfb1cc9f1c4f957f6c05",
+      "runtime_image": "registry.example.invalid/synthetic/runtime@sha256:3267996e4f0ac4d86d7385245dc5466ead491ddd20fd60ffc00bd42f7eab4c88",
+      "replaces_release": null
+    },
+    "lineageManifest": {
+      "uri": "artifacts/lineage.json",
+      "digest": "sha256:1487f588bec4782a5d90f4c15009be19a321141827dfdb2ed39b9fc1ae01371a"
+    },
+    "validation": {
+      "uri": "evidence.json",
+      "digest": "sha256:c495b5a1abafd700801cc584d50fadde567cd9ae269319b96af6952a6831c69b",
+      "subjects": {
+        "image": "sha256:3267996e4f0ac4d86d7385245dc5466ead491ddd20fd60ffc00bd42f7eab4c88",
+        "inventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+        "preparedInventoryDigest": "sha256:93d80abe6e5e950d82488e0ca6e3384c5ab55a1c53f8dbb74dfdf05bc4d10931",
+        "materializerImage": null,
+        "sourceCode": "sha256:9e55c457c2f0571addca2a220a9240e5a0b0fea7d1df95f93a0b10505da1d9e4",
+        "validationInput": "sha256:d4096bc0a883fb2b6168e79be90459489389009678e428423857e0a53816dc69"
+      }
+    }
+  }
+}
