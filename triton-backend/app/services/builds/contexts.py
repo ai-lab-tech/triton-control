@@ -94,6 +94,8 @@ def begin_upload(session: Session, claims: dict[str, Any], context_id: str) -> t
         raise ConflictError("Build context is no longer accepting uploads")
     if row.manifest is not None:
         raise ConflictError("Build context already uploaded; poll its operation")
+    if row.upload_token is None and row.upload_until and row.upload_until <= stamp:
+        raise ConflictError("Build context upload deadline exceeded; retry the failed operation")
     if row.upload_token and row.upload_until and row.upload_until > stamp:
         raise ConflictError("A build context upload is already in progress")
     token = uuid4().hex

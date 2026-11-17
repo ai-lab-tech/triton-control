@@ -46,12 +46,22 @@ def _allowed(path: str, allowed: tuple[str, ...]) -> bool:
     return any(root == "." or path == root or path.startswith(root + "/") for root in allowed)
 
 
+def _credential_assignment(instruction: str, words: list[str]) -> bool:
+    """Check assignment names, including every key in modern multi-key ENV syntax."""
+    if instruction not in {"ENV", "ARG"} or not words:
+        return False
+    # Legacy ENV uses `key value`; modern ENV and ARG use `key=value`.
+    names = [word.split("=", 1)[0] for word in words] if "=" in words[0] else words[:1]
+    return any(re.search(r"(?:^|_)(password|secret|token|access_key|private_key)(?:_|$)",
+                         name, re.IGNORECASE) for name in names)
+
+
 def _dockerfile(data: bytes, declared: tuple[str, ...]) -> None:
     try:
         text = data.decode("utf-8")
         if re.search(r"^\s*#\s*(syntax|escape)\s*=", text, re.MULTILINE | re.IGNORECASE):
             raise BadRequestError("Custom Dockerfile frontends and escapes are not supported")
-        text = text.replace("\\\n", " ")
+        text = text.replace("\r\n", "\n").replace("\\\n", " ")
         stages: set[str] = set()
         found: set[str] = set()
         count = 0
@@ -62,9 +72,7 @@ def _dockerfile(data: bytes, declared: tuple[str, ...]) -> None:
             words = shlex.split(line)
             if not words:
                 continue
-            if words[0].upper() in {"ENV", "ARG"} and re.search(
-                r"(?i)(?:^|_)(password|secret|token|access_key|private_key)(?:_|=|\s|$)", " ".join(words[1:])
-            ):
+            if _credential_assignment(words[0].upper(), words[1:]):
                 raise BadRequestError("Credential arguments must not be embedded in the Dockerfile")
             if words[0].upper() in {"COPY", "ADD"}:
                 for word in words[1:]:
@@ -180,6 +188,8 @@ def prepare(
     ignore = request.dockerfile + ".dockerignore"
     if ignore not in entries:
         ignore = ".dockerignore"
+    if ignore in entries and (not _allowed(ignore, request.allowed_paths) or secret_path(ignore)):
+        raise BadRequestError("The active Dockerignore file must be included in allowed_paths")
     patterns: list[str] = []
     if ignore in entries:
         if entries[ignore].size > MAX_CONTROL_BYTES:

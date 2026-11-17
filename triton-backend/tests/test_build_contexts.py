@@ -116,17 +116,53 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(BadRequestError):
             self.prepare(missing)
 
-    def test_dockerfile_requires_exact_base_images_and_no_inline_credentials(self):
+    def test_dockerfile_rejects_unpinned_images_and_inline_credentials(self):
         for text in ("FROM alpine:latest", "FROM ${BASE}", "FROM scratch", "FROM " + IMAGE + "\nENV PASSWORD=x",
                      "# syntax=docker/dockerfile:latest\nFROM " + IMAGE,
                      "FROM " + IMAGE + "\nCOPY --from=alpine:latest /file /file"):
             raw = archive({"Dockerfile": text.encode(), "requirements.txt": b"x"})
             with self.subTest(text=text), self.assertRaises(BadRequestError):
                 self.prepare(raw)
+    def test_dockerfile_accepts_previous_stage_reference(self):
         raw = archive({"Dockerfile": f"FROM {IMAGE} AS build\nFROM build\n".encode(), "requirements.txt": b"x"})
         self.prepare(raw)
+    def test_dockerfile_accepts_scratch_without_external_images(self):
         raw = archive({"Dockerfile": b"FROM scratch\n", "requirements.txt": b"x"})
         self.prepare(raw, request(raw).model_copy(update={"base_images": ()}))
+
+    def test_each_env_assignment_is_checked_for_credentials(self):
+        for instruction in ("ENV NORMAL=1 PASSWORD=fixture", "ENV NORMAL=1 API_TOKEN=fixture",
+                            'ENV NORMAL="two words" SECRET_KEY=fixture', "ENV PASSWORD fixture",
+                            "ARG ACCESS_KEY=fixture"):
+            raw = archive({"Dockerfile": f"FROM {IMAGE}\n{instruction}\n".encode(), "requirements.txt": b"x"})
+
+            with self.subTest(instruction=instruction), self.assertRaisesRegex(BadRequestError, "Credential arguments"):
+                self.prepare(raw)
+
+    def test_env_values_do_not_trigger_credential_name_check(self):
+        raw = archive({"Dockerfile": f'FROM {IMAGE}\nENV MESSAGE="password reset"\n'.encode(),
+                       "requirements.txt": b"x"})
+
+        manifest, _ = self.prepare(raw)
+
+        self.assertIn("Dockerfile", {item.path for item in manifest.files})
+
+    def test_active_ignore_cannot_be_removed_by_allowlist(self):
+        raw = archive({"Dockerfile": f"FROM {IMAGE}\n".encode(), "requirements.txt": b"test",
+                       ".dockerignore": b"requirements.txt\n", "Dockerfile.dockerignore": b"app.py\n",
+                       "app.py": b"x"})
+        req = request(raw).model_copy(update={"allowed_paths": ("Dockerfile", ".dockerignore",
+                                                               "requirements.txt", "app.py")})
+
+        with self.assertRaisesRegex(BadRequestError, "active Dockerignore"):
+            self.prepare(raw, req)
+
+    def test_dockerfile_crlf_continuations_preserve_pinned_base(self):
+        raw = archive({"Dockerfile": f"FROM {IMAGE} \\\r\n AS build\r\n".encode(), "requirements.txt": b"x"})
+
+        manifest, _ = self.prepare(raw)
+
+        self.assertEqual(manifest.base_images, (IMAGE,))
 
     def test_selected_private_key_content_rejected(self):
         raw = archive({"Dockerfile": f"FROM {IMAGE}\n".encode(), "requirements.txt": b"x",
@@ -281,6 +317,36 @@ class ContextTests(unittest.TestCase):
         with self.assertRaises(ForbiddenError):
             self.submit()
         self.submit(claims={"email": "admin@test"})
+
+    def test_expired_idle_upload_window_is_rejected_before_worker_runs(self):
+        context_id = self.submit().id
+        with Session(self.engine) as session:
+            row = repo.get(session, context_id)
+            row.upload_until = datetime.utcnow() - timedelta(seconds=1)
+            session.add(row)
+            session.commit()
+
+        with Session(self.engine) as session, self.assertRaisesRegex(ConflictError, "upload deadline exceeded"):
+            contexts.begin_upload(session, self.claims, context_id)
+
+        self.assertEqual(self.store.writes, 0)
+
+    def test_explicit_retry_reopens_expired_idle_upload_window(self):
+        context_id = self.submit().id
+        with Session(self.engine) as session:
+            row = repo.get(session, context_id)
+            row.upload_until = datetime.utcnow() - timedelta(seconds=1)
+            session.add(row)
+            session.commit()
+        self.run_worker(context_id)
+
+        with Session(self.engine) as session:
+            self.service.retry(session, self.claims, context_id)
+        self.upload(context_id)
+        ready = self.run_worker(context_id)
+
+        self.assertTrue(ready.ready)
+        self.assertEqual(self.store.writes, 1)
 
     def test_concurrent_upload_reservation_and_stale_token_fencing(self):
         context_id = self.submit().id

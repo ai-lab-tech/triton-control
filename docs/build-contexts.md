@@ -93,7 +93,9 @@ and collection for the future button remain S06-D responsibilities.
 
 The body must match its declared archive size/hash. Upload reading has a 120-second
 deadline, an exclusive five-minute fenced upload reservation and a 30-minute
-initial/retry upload window. Only one upload can own a context at a time. Failed
+initial/retry upload window. Expired idle upload windows reject new uploads even
+when the worker has not yet marked the operation failed; use an explicit retry
+after failure. Only one upload can own a context at a time. Failed
 or disconnected body uploads release the reservation without publishing a context.
 Idempotency is actor/kind/target/key scoped through the shared operation service.
 
@@ -106,8 +108,10 @@ The Docker SDK matcher applies `.dockerignore` in order, including glob/negation
 patterns and parent-directory matching. A selected Dockerfile-specific
 `<dockerfile>.dockerignore` takes precedence over the root file. Patterns are
 bounded to 1000 entries/256 characters each; control files are at most 64 KiB.
-The selected Dockerfile and active ignore file remain available if in the explicit
-allowlist. Missing/ignored dependency files or Dockerfile block publication.
+The selected Dockerfile and active ignore file must be in the explicit allowlist
+and remain available in the prepared archive. Omitting the active ignore file is
+rejected so the executor cannot fall back to different root ignore rules.
+Missing/ignored dependency files or Dockerfile block publication.
 
 A mandatory exclusion policy removes `.git`, `.aws`, `.ssh`, `.kube`, `.docker`,
 `.azure`, `.config`, `.gnupg` trees, `.env`/`.env.*`, common credential files and

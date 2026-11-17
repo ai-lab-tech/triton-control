@@ -78,3 +78,17 @@ class BuildContextSettingsTests(unittest.TestCase):
                 self.assertEqual(config["s3_ca_certificate"], "fixture-ca")
             mk.return_value.close.assert_called_once()
         self.assertNotIn("fixture", json.dumps(expected))
+
+    def test_cleanup_checks_deadline_between_each_object_delete(self):
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{
+            "Versions": [{"Key": "builds/context/a", "VersionId": "1"},
+                         {"Key": "builds/context/b", "VersionId": "2"}],
+        }]
+        checkpoint = MagicMock(side_effect=[None, None, TimeoutError("deadline")])
+        store = provider.ContextStore(client, "contexts")
+
+        with self.assertRaises(TimeoutError):
+            store.delete_prefix("builds/context/", checkpoint)
+
+        client.delete_object.assert_called_once_with(Bucket="contexts", Key="builds/context/a", VersionId="1")

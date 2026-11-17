@@ -5,7 +5,7 @@ import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, BinaryIO, Iterator
+from typing import Any, BinaryIO, Callable, Iterator
 from urllib.parse import urlparse
 
 from botocore.config import Config
@@ -77,7 +77,9 @@ class ContextStore:
         except (BotoCoreError, ClientError):
             raise ServiceUnavailableError("Build context storage unavailable") from None
 
-    def verify(self, key: str, version: str, manifest: ContextManifest, checkpoint: Any = lambda: None) -> None:
+    def verify(
+        self, key: str, version: str, manifest: ContextManifest, checkpoint: Callable[[], None] = lambda: None,
+    ) -> None:
         body = None
         started = time.monotonic()
         last_check = 0.0
@@ -110,7 +112,7 @@ class ContextStore:
             if body is not None:
                 body.close()
 
-    def recover(self, key: str, manifest: ContextManifest, checkpoint: Any = lambda: None) -> str | None:
+    def recover(self, key: str, manifest: ContextManifest, checkpoint: Callable[[], None] = lambda: None) -> str | None:
         """Observe an uncertain PUT by its already-persisted unique attempt key."""
         try:
             result = self.client.list_object_versions(Bucket=self.bucket, Prefix=key, MaxKeys=10)
@@ -124,7 +126,7 @@ class ContextStore:
         except (BotoCoreError, ClientError):
             raise ServiceUnavailableError("Build context recovery unavailable") from None
 
-    def delete_prefix(self, prefix: str, checkpoint: Any = lambda: None) -> None:
+    def delete_prefix(self, prefix: str, checkpoint: Callable[[], None] = lambda: None) -> None:
         # Include noncurrent versions and delete markers; deleting only the current
         # key would retain the bytes indefinitely in a versioned bucket.
         try:
@@ -132,6 +134,7 @@ class ContextStore:
             for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix, PaginationConfig={"PageSize": 100}):
                 checkpoint()
                 for obj in [*page.get("Versions", []), *page.get("DeleteMarkers", [])]:
+                    checkpoint()
                     self.client.delete_object(Bucket=self.bucket, Key=obj["Key"], VersionId=obj["VersionId"])
         except (BotoCoreError, ClientError):
             raise ServiceUnavailableError("Build context cleanup unavailable") from None
