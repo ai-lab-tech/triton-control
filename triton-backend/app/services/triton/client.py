@@ -158,6 +158,19 @@ class TritonService:
             "error": "; ".join(errors) if errors else None,
         }
 
+    @staticmethod
+    def _allowed_metrics_url(requested_url: str) -> str:
+        """Select an exact URL from trusted deployment configuration.
+
+        This constrains ports, paths and queries while allowing explicitly
+        configured private Kubernetes endpoints. Redirects must stay disabled.
+        """
+        for configured_url in os.getenv("TRITON_METRICS_ALLOWED_URLS", "").split(","):
+            allowed_url = configured_url.strip()
+            if allowed_url and requested_url == allowed_url:
+                return allowed_url
+        raise ValueError("Metrics endpoint is not in TRITON_METRICS_ALLOWED_URLS")
+
     async def collect_metrics_snapshot(self, metrics_url: str | None) -> Dict[str, Any]:
         """Fetch and parse Triton Prometheus metrics for host utilization."""
         if not metrics_url:
@@ -170,7 +183,9 @@ class TritonService:
             }
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get_client().get(
+                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+            )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             metrics = self._parse_prometheus_metrics(text)
@@ -196,7 +211,9 @@ class TritonService:
             return {"series": {}, "error": "Metrics endpoint is not configured."}
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get_client().get(
+                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+            )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             return {
@@ -407,7 +424,7 @@ class TritonService:
             return {}
 
         labels: dict[str, str] = {}
-        for key, value in re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"])*)"', match.group(1)):
+        for key, value in re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"', match.group(1)):
             labels[key] = value.replace(r"\"", '"').replace(r"\\", "\\")
         return labels
 
