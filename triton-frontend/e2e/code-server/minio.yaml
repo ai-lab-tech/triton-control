@@ -10,8 +10,17 @@ spec:
     metadata:
       labels: { app: plugin-smoke-minio }
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
         - name: minio
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           image: plugin-smoke-minio:local
           imagePullPolicy: Never
           args: [server, /data]

@@ -9,11 +9,11 @@ from sqlmodel import Session
 from app.core.identity import claims_from_user
 from app.db.entities import CodeServerEntity
 from app.exceptions import ConflictError, ForbiddenError
-from app.repositories import handoffs, task_workspaces, users
+from app.repositories import experiment_snapshots, handoffs, task_workspaces, users
 from app.repositories import preparation as tasks
 from app.schemas.handoffs import ResolvedInput, ResolvedRepository
 from app.schemas.lineage import InventoryV1
-from app.schemas.task_workspaces import WorkspaceInput, WorkspaceInputs
+from app.schemas.task_workspaces import SnapshotFile, WorkspaceInput, WorkspaceInputs
 from app.services import handoff_sources, preparation
 from app.services.lineage import inventory_digest
 
@@ -29,7 +29,8 @@ def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recove
             raise ForbiddenError("Admin recovery requires a current administrator")
     elif not (eligible and task.assignee_user_id == actor):
         raise ForbiddenError("Only the current eligible assignee may open this task workspace")
-    if preparation.get_task(session, claims, task_id).missing_inputs:
+    snapshot = experiment_snapshots.find(session, task.source_snapshot_id) if task.source_snapshot_id else None
+    if preparation.get_task(session, claims, task_id).missing_inputs and snapshot is None:
         raise ConflictError("Complete the handoff evaluation inputs before opening a workspace")
     return actor
 
@@ -65,10 +66,18 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
         raise ConflictError("Workspace source inventory does not match the captured snapshot")
     if sum(item.artifact.file.size for item in inputs.files) > 3 * 1024**3:
         raise ConflictError("Workspace inputs exceed the 3 GiB staging limit")
+    if len(inputs.model_dump_json().encode()) > 512 * 1024:
+        raise ConflictError("Workspace input manifest exceeds the 512 KiB limit")
+    snapshots = [item.artifact for item in inputs.files if isinstance(item.artifact, SnapshotFile)]
+    if snapshots:
+        from app.services.snapshots.inputs import authorize_files
+        authorize_files(session, snapshots, inputs.snapshot)
     # S3 profiles currently grant installation-wide member/admin access. Never
     # derive an artifact permission from team membership, nor accept an arbitrary URL.
     for item in inputs.files:
         artifact = item.artifact
+        if isinstance(artifact, SnapshotFile):
+            continue
         config, bucket, key = handoff_sources.authorize(session, artifact.source)
         if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
             raise ForbiddenError("Captured source is no longer available through its authorized profile")

@@ -116,7 +116,7 @@ jobs:
         working-directory: triton-backend
         env:
           PODS_TEST_KUBECONFIG: ${{ runner.temp }}/pods-kubeconfig
-        run: python -m unittest tests.test_pods_kubernetes -v
+        run: python -m unittest tests.test_pods_kubernetes tests.test_experiment_snapshots_kubernetes -v
       - name: Remove test cluster
         if: always()
         run: kind delete cluster --name pods-contract
@@ -162,6 +162,12 @@ jobs:
         env:
           BUILD_QUALIFICATION_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: python -m unittest tests.test_build_qualification -v
+
+      - name: Verify experiment snapshots and recovery with PostgreSQL
+        working-directory: triton-backend
+        env:
+          SNAPSHOTS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
+        run: python -m unittest tests.test_experiment_snapshots_postgres -v
 
       - name: Verify local bindings and concurrent policy updates with PostgreSQL
         working-directory: triton-backend
@@ -295,7 +301,7 @@ jobs:
           LINEAGE_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
-          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_lineage tests.test_lineage_postgres -v
+          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
       - name: Verify build context staging, concurrency and versioned retention
         working-directory: triton-backend
         env:

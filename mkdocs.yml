@@ -19,6 +19,7 @@ nav:
     - Preparation Tasks: preparation-tasks.md
     - Validation Contracts: validation-contracts.md
     - Scientist Handoffs: scientist-handoffs.md
+    - Experiment Snapshots: experiment-snapshots.md
     - Candidate Import: candidate-import.md
     - Build Contexts: build-contexts.md
     - Workspaces: development-workspaces.md

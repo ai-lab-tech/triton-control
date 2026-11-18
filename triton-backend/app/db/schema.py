@@ -28,6 +28,7 @@ def create_tables(engine: Engine) -> None:
             for table in (
                 "preparation_task_events", "preparation_attempts", "preparation_handoffs",
                 "candidate_imports", "build_context_receipts", "workspace_snapshot_inputs",
+                "preparation_snapshots",
             ):
                 connection.execute(text(f"DROP TRIGGER IF EXISTS immutable_history ON {table}"))
                 connection.execute(text(f"""
@@ -38,6 +39,7 @@ def create_tables(engine: Engine) -> None:
             for table in (
                 "preparation_task_events", "preparation_attempts", "preparation_handoffs",
                 "candidate_imports", "build_context_receipts", "workspace_snapshot_inputs",
+                "preparation_snapshots",
             ):
                 for action in ("UPDATE", "DELETE"):
                     connection.execute(text(f"""
