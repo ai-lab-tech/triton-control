@@ -2665,6 +2665,54 @@
         }
       }
     },
+    "/api/preparation/tasks/{task_id}/workspace-sizing": {
+      "get": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Workspace Sizing",
+        "operationId": "workspace_sizing_api_preparation_tasks__task_id__workspace_sizing_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSizing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preparation-tasks": {
       "get": {
         "tags": [
@@ -11210,39 +11258,25 @@
       },
       "PreparationLimits": {
         "properties": {
-          "max_object_gib": {
-            "type": "integer",
-            "maximum": 4096.0,
-            "minimum": 1.0,
-            "title": "Max Object Gib",
-            "default": 10
-          },
-          "max_repository_gib": {
-            "type": "integer",
-            "maximum": 4096.0,
-            "minimum": 1.0,
-            "title": "Max Repository Gib",
-            "default": 15
-          },
-          "max_workspace_gib": {
+          "max_input_gib": {
             "type": "integer",
             "maximum": 8192.0,
             "minimum": 1.0,
-            "title": "Max Workspace Gib",
+            "title": "Max Input Gib",
             "default": 15
           },
-          "capture_timeout_seconds": {
+          "max_workspace_storage_gib": {
             "type": "integer",
-            "maximum": 604800.0,
-            "minimum": 60.0,
-            "title": "Capture Timeout Seconds",
-            "default": 3600
+            "maximum": 16384.0,
+            "minimum": 6.0,
+            "title": "Max Workspace Storage Gib",
+            "default": 50
           },
-          "download_timeout_seconds": {
+          "transfer_timeout_seconds": {
             "type": "integer",
             "maximum": 604800.0,
             "minimum": 60.0,
-            "title": "Download Timeout Seconds",
+            "title": "Transfer Timeout Seconds",
             "default": 3600
           }
         },
@@ -14078,6 +14112,41 @@
           "message"
         ],
         "title": "WorkspaceArgoUpgradeResponse"
+      },
+      "WorkspaceSizing": {
+        "properties": {
+          "input_bytes": {
+            "type": "integer",
+            "title": "Input Bytes"
+          },
+          "recommended_gib": {
+            "type": "integer",
+            "title": "Recommended Gib"
+          },
+          "maximum_gib": {
+            "type": "integer",
+            "title": "Maximum Gib"
+          },
+          "existing_storage_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Storage Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_bytes",
+          "recommended_gib",
+          "maximum_gib"
+        ],
+        "title": "WorkspaceSizing"
       }
     },
     "securitySchemes": {

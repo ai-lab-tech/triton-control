@@ -57,7 +57,7 @@ def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3
 def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
             allow_empty: bool = False, checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedInput:
     limits = effective(session)
-    max_bytes = limits.max_object_gib * 1024**3
+    max_bytes = limits.max_input_gib * 1024**3
     config, bucket, key = authorize(session, source)
     client: Any = None
     started = time.monotonic()
@@ -77,14 +77,14 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
         size = head["ContentLength"]
         if size < (0 if allow_empty else 1) or size > max_bytes:
             raise BadRequestError(
-                f"Handoff input exceeds the configured {limits.max_object_gib} GiB object limit or is empty"
+                f"Handoff input exceeds the configured {limits.max_input_gib} GiB total input limit or is empty"
             )
         checkpoint(0)
         response = client.get_object(Bucket=bucket, Key=key, VersionId=version)
         body = response["Body"]
         measured, checksum = 0, hashlib.sha256()
         while True:
-            if time.monotonic() > (deadline if deadline is not None else started + limits.capture_timeout_seconds):
+            if time.monotonic() > (deadline if deadline is not None else started + limits.transfer_timeout_seconds):
                 raise BadRequestError("Handoff input capture exceeded its time limit")
             chunk = body.read(1024 * 1024)
             if not chunk:
@@ -133,7 +133,7 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
     if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
         raise ForbiddenError("Captured source profile changed")
     if (not artifact.version_id or artifact.version_id == "null"
-            or not 0 <= artifact.file.size <= limits.max_object_gib * 1024**3):
+            or not 0 <= artifact.file.size <= limits.max_input_gib * 1024**3):
         raise BadRequestError("Workspace input requires a bounded, versioned artifact")
     if shutil.disk_usage(destination.parent).free < artifact.file.size + 64 * 1024**2:
         raise BadRequestError("Insufficient backend temporary storage; increase the backend staging disk")
@@ -149,7 +149,7 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
         started = time.monotonic()
         with destination.open("wb") as output:
             while True:
-                if time.monotonic() - started > limits.download_timeout_seconds:
+                if time.monotonic() - started > limits.transfer_timeout_seconds:
                     raise BadRequestError("Workspace input download exceeded its time limit")
                 chunk = body.read(1024 * 1024)
                 if not chunk:

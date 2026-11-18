@@ -74,8 +74,8 @@ def resolve(session: Session, source: S3RepositoryInput, *,
             checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedRepository:
     config, bucket, key = handoff_sources.authorize(session, source)
     limits = effective(session)
-    deadline = time.monotonic() + limits.capture_timeout_seconds
-    max_bytes = limits.max_repository_gib * 1024**3
+    deadline = time.monotonic() + limits.transfer_timeout_seconds
+    max_bytes = limits.max_input_gib * 1024**3
     client: Any = None
     try:
         client = build_s3_client(config, client_config=Config(

@@ -120,7 +120,7 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
             checkpoint(0)
         artifacts = source.files if isinstance(source, ResolvedRepository) else [source]
         total_bytes = sum(item.file.size for item in [*artifacts, dataset, baseline] if item is not None)
-        if total_bytes > effective(session).max_workspace_gib * 1024**3:
+        if total_bytes > effective(session).max_input_gib * 1024**3:
             raise BadRequestError("Combined inputs exceed the configured workspace input size limit")
         teams.get(session, teams.INSTALLATION_TEAM_ID, lock=True)
         _actor(session, claims)

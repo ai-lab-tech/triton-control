@@ -4,6 +4,13 @@ import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { BASE_PATH, CodeServerDTO } from "../../api/generated";
 
+export interface WorkspaceSizing {
+  input_bytes: number;
+  recommended_gib: number;
+  maximum_gib: number;
+  existing_storage_size: string | null;
+}
+
 export interface CaptureOperation {
   id: string;
   state: string;
@@ -111,10 +118,15 @@ export class HandoffsApiService {
       },
     );
   }
-  openWorkspace(taskId: string) {
+  workspaceSizing(taskId: string) {
+    return this.http.get<WorkspaceSizing>(
+      this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace-sizing",
+    );
+  }
+  openWorkspace(taskId: string, storageGiB?: number) {
     return this.http.post<{ task_id: string; workspace: CodeServerDTO }>(
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace",
-      {},
+      storageGiB === undefined ? {} : { workspace: { storage_size: `${storageGiB}Gi` } },
     );
   }
   profiles() {

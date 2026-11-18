@@ -195,38 +195,24 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "maxObjectGiB",
-        "maxRepositoryGiB",
-        "maxWorkspaceGiB",
-        "captureTimeoutSeconds",
-        "downloadTimeoutSeconds"
+        "maxInputGiB",
+        "maxWorkspaceStorageGiB",
+        "transferTimeoutSeconds"
       ],
       "properties": {
-        "maxObjectGiB": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4096,
-          "default": 10
-        },
-        "maxRepositoryGiB": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4096,
-          "default": 15
-        },
-        "maxWorkspaceGiB": {
+        "maxInputGiB": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8192,
           "default": 15
         },
-        "captureTimeoutSeconds": {
+        "maxWorkspaceStorageGiB": {
           "type": "integer",
-          "minimum": 60,
-          "maximum": 604800,
-          "default": 3600
+          "minimum": 6,
+          "maximum": 16384,
+          "default": 50
         },
-        "downloadTimeoutSeconds": {
+        "transferTimeoutSeconds": {
           "type": "integer",
           "minimum": 60,
           "maximum": 604800,

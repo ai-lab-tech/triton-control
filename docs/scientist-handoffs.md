@@ -50,8 +50,8 @@ same submission revision to recover it; use **New revision** for changed inputs.
 Keep the captured object versions in S3 while the task needs them.
 
 Repository capture permits up to 998 files. Size and time budgets are configurable
-in [Model preparation settings](model-preparation-settings.md): defaults are 10 GiB
-per file, 15 GiB per repository and combined task inputs, and one hour. Inventory metadata is capped at
+in [Model preparation settings](model-preparation-settings.md): defaults are 15 GiB
+for combined task inputs and one hour for capture/download. Inventory metadata is capped at
 512 KiB so it fits workspace configuration limits. Empty files are preserved;
 empty S3 directory markers are ignored. Unsafe paths and file/directory collisions
 are rejected. The selected folder must contain at least one `model-name/config.pbtxt`.

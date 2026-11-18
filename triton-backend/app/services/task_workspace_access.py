@@ -64,7 +64,7 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
     source_inventory = InventoryV1(files=tuple(item.artifact.file for item in inputs.files if item.role == "source"))
     if inventory_digest(source_inventory) != inputs.snapshot.inventory:
         raise ConflictError("Workspace source inventory does not match the captured snapshot")
-    if sum(item.artifact.file.size for item in inputs.files) > effective(session).max_workspace_gib * 1024**3:
+    if sum(item.artifact.file.size for item in inputs.files) > effective(session).max_input_gib * 1024**3:
         raise ConflictError("Workspace inputs exceed the configured staging limit")
     # S3 profiles currently grant installation-wide member/admin access. Never
     # derive an artifact permission from team membership, nor accept an arbitrary URL.

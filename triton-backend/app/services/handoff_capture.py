@@ -85,7 +85,7 @@ class CaptureAdapter:
                 raise ForbiddenError("Capture owner is unavailable")
             claims = claims_from_user(actor, {})
             # A whole-capture budget includes all three source roles.
-            deadline = time.monotonic() + effective(session).capture_timeout_seconds
+            deadline = time.monotonic() + effective(session).transfer_timeout_seconds
 
             def bounded_checkpoint(size: int) -> None:
                 if time.monotonic() > deadline:

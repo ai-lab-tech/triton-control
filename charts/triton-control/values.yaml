@@ -454,8 +454,6 @@ buildQualification:
 # Deployment defaults. Admin Settings > Model preparation can override these values.
 # Reserve backend temp disk and Kubernetes node storage separately for large inputs.
 modelPreparation:
-  maxObjectGiB: 10
-  maxRepositoryGiB: 15
-  maxWorkspaceGiB: 15
-  captureTimeoutSeconds: 3600
-  downloadTimeoutSeconds: 3600
+  maxInputGiB: 15
+  maxWorkspaceStorageGiB: 50
+  transferTimeoutSeconds: 3600

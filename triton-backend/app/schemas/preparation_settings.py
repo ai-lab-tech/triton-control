@@ -1,23 +1,15 @@
-"""Installation limits for model capture and verified workspace inputs."""
+"""Installation ceilings for model preparation and workspace allocation."""
 
-from typing import Literal, Self
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PreparationLimits(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    max_object_gib: int = Field(default=10, strict=True, ge=1, le=4096)
-    max_repository_gib: int = Field(default=15, strict=True, ge=1, le=4096)
-    max_workspace_gib: int = Field(default=15, strict=True, ge=1, le=8192)
-    capture_timeout_seconds: int = Field(default=3600, strict=True, ge=60, le=604800)
-    download_timeout_seconds: int = Field(default=3600, strict=True, ge=60, le=604800)
-
-    @model_validator(mode="after")
-    def consistent_limits(self) -> Self:
-        if not self.max_object_gib <= self.max_repository_gib <= self.max_workspace_gib:
-            raise ValueError("Require object limit <= repository limit <= workspace input limit")
-        return self
+    max_input_gib: int = Field(default=15, strict=True, ge=1, le=8192)
+    max_workspace_storage_gib: int = Field(default=50, strict=True, ge=6, le=16384)
+    transfer_timeout_seconds: int = Field(default=3600, strict=True, ge=60, le=604800)
 
 
 class PreparationSettings(BaseModel):

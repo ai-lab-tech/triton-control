@@ -18,6 +18,7 @@ import {
   HandoffReceipt,
   SourceInput,
   SourceProfile,
+  WorkspaceSizing,
 } from "./handoffs-api.service";
 
 @Component({
@@ -46,6 +47,8 @@ export class HandoffPageComponent {
   readonly receipt = signal<HandoffReceipt | null>(null);
   readonly busy = signal(false);
   readonly error = signal("");
+  readonly workspaceSizing = signal<WorkspaceSizing | null>(null);
+  storageGiB: number | null = null;
   readonly detail = signal(false);
   readonly capture = signal<CaptureOperation | null>(null);
   private captureTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,6 +77,8 @@ export class HandoffPageComponent {
       const id = params.get("handoffId");
       this.detail.set(!!id);
       this.receipt.set(null);
+      this.workspaceSizing.set(null);
+      this.storageGiB = null;
       this.error.set("");
       if (id) void this.loadReceipt(id);
       else if (this.canSubmit()) void this.loadProfiles();
@@ -110,13 +115,42 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  async prepareWorkspace() {
+    const receipt = this.receipt();
+    if (!receipt || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      const sizing = await firstValueFrom(this.api.workspaceSizing(receipt.task.id));
+      this.workspaceSizing.set(sizing);
+      this.storageGiB = sizing.recommended_gib;
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not calculate workspace storage."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  validWorkspaceSize(): boolean {
+    const sizing = this.workspaceSizing();
+    return (
+      !!sizing &&
+      (sizing.existing_storage_size !== null ||
+        (this.storageGiB !== null &&
+          Number.isInteger(this.storageGiB) &&
+          this.storageGiB >= sizing.recommended_gib &&
+          this.storageGiB <= sizing.maximum_gib))
+    );
+  }
   async openWorkspace() {
     const receipt = this.receipt();
     if (!receipt || this.busy()) return;
     this.busy.set(true);
     this.error.set("");
     try {
-      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id));
+      const sizing = this.workspaceSizing();
+      if (sizing && !this.validWorkspaceSize()) return;
+      const storage = sizing && !sizing.existing_storage_size ? this.storageGiB! : undefined;
+      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id, storage));
       await this.router.navigate(["/workspaces"], {
         queryParams: { workspace: result.workspace.id },
       });

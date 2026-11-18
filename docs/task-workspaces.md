@@ -122,3 +122,13 @@ unique temporary namespaces and tests corrupt-input startup blocking, actual
 read-only mount enforcement, a writable conversion directory and pod recreation.
 It uses a small HTTP fixture, not a real Triton inference workload. CI runs both
 suites in the existing PostgreSQL/Kubernetes job.
+
+### Automatic writable storage
+
+On the handoff receipt, **Open task workspace** shows the actual input bytes and
+recommended disk size before creation. The recommendation includes a working copy
+of the inputs plus automatic space for conversion and outputs. Engineers can
+request more space within the administrator maximum. See
+[model preparation settings](model-preparation-settings.md#storage-capacity) for
+the sizing formula, defaults, and Helm configuration. Existing workspaces retain
+their original allocation when reopened.

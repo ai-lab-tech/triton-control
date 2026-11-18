@@ -154,6 +154,54 @@ describe("HandoffPageComponent", () => {
     await pending;
     expect(fixture.componentInstance.receipt()?.task.assignee_user_id).toBe(2);
   });
+  it("previews actual input storage before creating with the chosen capacity", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    // Act
+    const preview = page.prepareWorkspace();
+    http.expectOne("/api/preparation/tasks/task-1/workspace-sizing").flush({
+      input_bytes: 16 * 1073741824,
+      recommended_gib: 24,
+      maximum_gib: 50,
+      existing_storage_size: null,
+    });
+    await preview;
+    // Assert
+    expect(page.storageGiB).toBe(24);
+    http.expectNone("/api/preparation/tasks/task-1/workspace");
+    // Act
+    page.storageGiB = 30;
+    const pending = page.openWorkspace();
+    const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
+    const body = request.request.body;
+    request.flush({ workspace: { id: 42 } });
+    await pending;
+    // Assert
+    expect(body).toEqual({ workspace: { storage_size: "30Gi" } });
+  });
+  it("blocks workspace creation when the estimate exceeds the admin maximum", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    page.workspaceSizing.set({
+      input_bytes: 40 * 1073741824,
+      recommended_gib: 60,
+      maximum_gib: 50,
+      existing_storage_size: null,
+    });
+    page.storageGiB = 60;
+    // Act
+    await page.openWorkspace();
+    // Assert
+    expect(page.validWorkspaceSize()).toBeFalse();
+    http.expectNone("/api/preparation/tasks/task-1/workspace");
+  });
   it("opens the task workspace and navigates to its exact instance", async () => {
     const fixture = await setup("receipt-1");
     http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);

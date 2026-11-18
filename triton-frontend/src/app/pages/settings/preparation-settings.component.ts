@@ -9,12 +9,11 @@ import { BASE_PATH } from "../../api/generated";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
 interface Limits {
-  max_object_gib: number;
-  max_repository_gib: number;
-  max_workspace_gib: number;
-  capture_timeout_seconds: number;
-  download_timeout_seconds: number;
+  max_input_gib: number;
+  max_workspace_storage_gib: number;
+  transfer_timeout_seconds: number;
 }
+
 interface Settings {
   limits: Limits;
   defaults: Limits;
@@ -54,7 +53,15 @@ interface Settings {
             />
           </mat-form-field>
         }
-        <p>Object limit ≤ repository limit ≤ total workspace input limit.</p>
+        <p>
+          Writable workspace storage is calculated from actual task inputs plus the larger of the
+          minimum extra space or percentage allowance, rounded up to GiB. The storage maximum is a
+          cap, not space allocated to every task.
+        </p>
+        <p>
+          The total input limit covers the model, evaluation dataset and baseline together. The
+          transfer timeout applies to capture/verification and each file download.
+        </p>
         <p>
           Allow sufficient backend temporary disk, Kubernetes node disk and writable workspace
           storage for these sizes. Increasing a limit does not add physical disk capacity. Lowering
@@ -86,13 +93,16 @@ export class PreparationSettingsComponent {
   readonly source = signal<"deployment" | "admin">("deployment");
   draft: Limits | null = null;
   readonly fields: { key: keyof Limits; label: string; min: number; max: number }[] = [
-    { key: "max_object_gib", label: "Maximum individual file (GiB)", min: 1, max: 4096 },
-    { key: "max_repository_gib", label: "Maximum repository (GiB)", min: 1, max: 4096 },
-    { key: "max_workspace_gib", label: "Maximum combined task inputs (GiB)", min: 1, max: 8192 },
-    { key: "capture_timeout_seconds", label: "Capture time limit (seconds)", min: 60, max: 604800 },
+    { key: "max_input_gib", label: "Maximum total task inputs (GiB)", min: 1, max: 8192 },
     {
-      key: "download_timeout_seconds",
-      label: "Input download time limit (seconds)",
+      key: "max_workspace_storage_gib",
+      label: "Maximum writable workspace storage (GiB)",
+      min: 6,
+      max: 16384,
+    },
+    {
+      key: "transfer_timeout_seconds",
+      label: "Transfer time limit (seconds)",
       min: 60,
       max: 604800,
     },
@@ -104,11 +114,7 @@ export class PreparationSettingsComponent {
     const d = this.draft;
     return (
       !!d &&
-      this.fields.every(
-        (f) => Number.isInteger(d[f.key]) && d[f.key] >= f.min && d[f.key] <= f.max,
-      ) &&
-      d.max_object_gib <= d.max_repository_gib &&
-      d.max_repository_gib <= d.max_workspace_gib
+      this.fields.every((f) => Number.isInteger(d[f.key]) && d[f.key] >= f.min && d[f.key] <= f.max)
     );
   }
   private accept(settings: Settings): void {

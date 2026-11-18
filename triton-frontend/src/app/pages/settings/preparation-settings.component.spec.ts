@@ -5,11 +5,9 @@ import { PreparationSettingsComponent } from "./preparation-settings.component";
 
 const url = "/api/settings/model-preparation";
 const limits = {
-  max_object_gib: 10,
-  max_repository_gib: 15,
-  max_workspace_gib: 15,
-  capture_timeout_seconds: 3600,
-  download_timeout_seconds: 3600,
+  max_input_gib: 15,
+  max_workspace_storage_gib: 50,
+  transfer_timeout_seconds: 3600,
 };
 
 describe("PreparationSettingsComponent", () => {
@@ -31,9 +29,9 @@ describe("PreparationSettingsComponent", () => {
     const component = fixture.componentInstance;
     component.draft = {
       ...limits,
-      max_object_gib: 24,
-      max_repository_gib: 32,
-      max_workspace_gib: 40,
+      max_input_gib: 40,
+      max_workspace_storage_gib: 100,
+      transfer_timeout_seconds: 7200,
     };
     // Act
     const pending = component.save();
@@ -42,7 +40,11 @@ describe("PreparationSettingsComponent", () => {
     put.flush({ limits: body, defaults: limits, source: "admin" });
     await pending;
     // Assert
-    expect(body.max_object_gib).toBe(24);
+    expect(body).toEqual({
+      max_input_gib: 40,
+      max_workspace_storage_gib: 100,
+      transfer_timeout_seconds: 7200,
+    });
     expect(component.source()).toBe("admin");
     expect(component.message()).toContain("saved");
   });
@@ -53,7 +55,7 @@ describe("PreparationSettingsComponent", () => {
     http.expectOne(url).flush({ limits, defaults: limits, source: "deployment" });
     await fixture.whenStable();
     const component = fixture.componentInstance;
-    component.draft = { ...limits, max_object_gib: 20.5 };
+    component.draft = { ...limits, max_input_gib: 20.5 };
     // Act
     await component.save();
     // Assert
@@ -65,7 +67,7 @@ describe("PreparationSettingsComponent", () => {
     // Arrange
     const fixture = TestBed.createComponent(PreparationSettingsComponent);
     http.expectOne(url).flush({
-      limits: { ...limits, capture_timeout_seconds: 7200 },
+      limits: { ...limits, transfer_timeout_seconds: 7200 },
       defaults: limits,
       source: "admin",
     });
@@ -78,6 +80,6 @@ describe("PreparationSettingsComponent", () => {
     await pending;
     // Assert
     expect(fixture.componentInstance.source()).toBe("deployment");
-    expect(fixture.componentInstance.draft?.capture_timeout_seconds).toBe(3600);
+    expect(fixture.componentInstance.draft?.transfer_timeout_seconds).toBe(3600);
   });
 });

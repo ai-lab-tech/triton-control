@@ -25,24 +25,41 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         result = settings.read(self.session, self.admin)
         # Assert
         self.assertEqual(result.limits.model_dump(), {
-            "max_object_gib": 10, "max_repository_gib": 15, "max_workspace_gib": 15,
-            "capture_timeout_seconds": 3600, "download_timeout_seconds": 3600,
+            "max_input_gib": 15, "max_workspace_storage_gib": 50, "transfer_timeout_seconds": 3600,
         })
         self.assertEqual(result.source, "deployment")
 
     def test_admin_override_and_reset_restore_helm_defaults(self):
         # Arrange
-        self.enterContext(patch.dict(os.environ, {"PREPARATION_MAX_OBJECT_GIB": "12"}))
-        requested = PreparationLimits(max_object_gib=24, max_repository_gib=32, max_workspace_gib=40)
+        self.enterContext(patch.dict(os.environ, {"PREPARATION_MAX_INPUT_GIB": "12",
+                                                 "PREPARATION_TRANSFER_TIMEOUT_SECONDS": "7200"}))
+        requested = PreparationLimits(max_input_gib=40, max_workspace_storage_gib=100,
+                                      transfer_timeout_seconds=1800)
         # Act
         saved = settings.update(self.session, self.admin, requested)
         loaded = settings.effective(self.session)
         reset = settings.update(self.session, self.admin, None)
         # Assert
         self.assertEqual(saved.source, "admin")
-        self.assertEqual(loaded.max_object_gib, 24)
+        self.assertEqual(loaded, requested)
         self.assertEqual(reset.source, "deployment")
-        self.assertEqual(reset.limits.max_object_gib, 12)
+        self.assertEqual(reset.limits.max_input_gib, 12)
+        self.assertEqual(reset.limits.transfer_timeout_seconds, 7200)
+
+    def test_legacy_saved_override_is_read_and_reset_without_old_fields(self):
+        # Arrange
+        from app.repositories import preparation_config
+        preparation_config.save(self.session, {
+            "max_object_gib": 10, "max_repository_gib": 20, "max_workspace_gib": 30,
+            "capture_timeout_seconds": 7200, "download_timeout_seconds": 1800,
+        })
+        # Act
+        result = settings.read(self.session, self.admin)
+        # Assert
+        self.assertEqual(result.limits.model_dump(), {
+            "max_input_gib": 30, "max_workspace_storage_gib": 50, "transfer_timeout_seconds": 1800,
+        })
+        self.assertEqual(result.source, "admin")
 
     def test_member_cannot_read_or_change_settings(self):
         # Arrange
@@ -56,10 +73,10 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
 
     def test_inconsistent_limits_and_invalid_environment_fail_closed(self):
         # Arrange
-        self.enterContext(patch.dict(os.environ, {"PREPARATION_MAX_OBJECT_GIB": "nonsense"}))
+        self.enterContext(patch.dict(os.environ, {"PREPARATION_MAX_INPUT_GIB": "nonsense"}))
         # Act / Assert
         with self.assertRaises(ValidationError):
-            PreparationLimits(max_object_gib=20, max_repository_gib=10)
+            PreparationLimits(max_input_gib=0)
         with self.assertRaises(ServiceUnavailableError):
             settings.effective(self.session)
 
@@ -72,13 +89,13 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         with self.assertRaises(BadRequestError) as error:
             handoff_sources.resolve(self.session, S3Input(profile_id=1, path="model.onnx"))
         # Assert
-        self.assertIn("10 GiB", str(error.exception))
+        self.assertIn("15 GiB", str(error.exception))
         client.get_object.assert_not_called()
 
     def test_admin_can_allow_twenty_gib_with_bounded_stream_reads(self):
         # Arrange: simulate 20 GiB without allocating/hash-processing 20 GiB in a unit test.
         settings.update(self.session, self.admin, PreparationLimits(
-            max_object_gib=24, max_repository_gib=32, max_workspace_gib=40,
+            max_input_gib=40,
         ))
         chunk = b"x" * 1024**2
         remaining = 20 * 1024

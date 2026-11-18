@@ -215,7 +215,7 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
                 # Act
                 guard = (patch.object(repositories, "MAX_FILES", 1) if limit == "MAX_FILES" else
                          patch.object(repositories, "effective", return_value=PreparationLimits().model_copy(
-                             update={"max_repository_gib": 0})))
+                             update={"max_input_gib": 0})))
                 with guard, self.assertRaises(BadRequestError):
                     repositories.resolve(self.session, self.repository_request().source)
                 # Assert

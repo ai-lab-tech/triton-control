@@ -63,6 +63,53 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         history = preparation.list_events(self.session, self.engineer, self.task.id)
         self.assertEqual(sum(item.action == "workspace_requested" for item in history), 1)
 
+    def test_size_preview_does_not_allocate_and_matches_creation(self):
+        # Arrange
+        client = self.http_client()
+        # Act
+        response = client.get(f"/api/preparation/tasks/{self.task.id}/workspace-sizing")
+        # Assert
+        self.assertEqual(response.status_code, 200)
+        sizing = response.json()
+        self.assertEqual(sizing["recommended_gib"], 6)
+        self.assertIsNone(repository.get(self.session, self.task.id))
+        self.apply.assert_not_called()
+        # Act
+        self.open()
+        # Assert
+        self.assertEqual(self.apply.call_args.args[0].storage_size, "6Gi")
+
+    def test_size_preview_requires_assignment(self):
+        # Arrange
+        # Act / Assert
+        with self.assertRaises(ForbiddenError):
+            task_workspaces.workspace_sizing(self.session, self.submitter, self.task.id)
+        self.apply.assert_not_called()
+
+    def test_storage_cap_rejects_before_reserving_workspace(self):
+        # Arrange
+        request = OpenTaskWorkspace(workspace={"storage_size": "51Gi"})
+        # Act / Assert
+        with self.assertRaises(BadRequestError):
+            self.open(request=request)
+        self.assertIsNone(repository.get(self.session, self.task.id))
+        self.apply.assert_not_called()
+
+    def test_reopen_preserves_allocation_after_settings_change(self):
+        # Arrange
+        first = self.open()
+        from app.schemas.preparation_settings import PreparationLimits
+        limits = PreparationLimits(max_workspace_storage_gib=10)
+        self.enterContext(patch.object(task_workspaces, "effective", return_value=limits))
+        # Act
+        second = self.open(request=OpenTaskWorkspace(workspace={"storage_size": "6Gi"}))
+        sizing = task_workspaces.workspace_sizing(self.session, self.engineer, self.task.id)
+        # Assert
+        self.assertEqual(first.workspace.id, second.workspace.id)
+        self.assertEqual(sizing.existing_storage_size, "6Gi")
+        self.assertEqual(repository.get(self.session, self.task.id).configuration["storage_size"], "6Gi")
+        self.apply.assert_called_once()
+
     def test_missing_inputs_block_start(self):
         incomplete = self.submit(self.request(revision="incomplete"))
         self.task = self.claim(incomplete.task)

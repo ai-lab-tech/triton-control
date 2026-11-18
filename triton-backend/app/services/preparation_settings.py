@@ -24,16 +24,28 @@ def defaults() -> PreparationLimits:
         raise ServiceUnavailableError("Invalid model preparation deployment limits") from None
 
 
+def saved_limits(values: dict[str, Any]) -> PreparationLimits:
+    """Read overrides saved before the policy was simplified; writes use only the new schema."""
+    if "max_input_gib" not in values and "max_workspace_gib" in values:
+        values = {
+            "max_input_gib": values["max_workspace_gib"],
+            "max_workspace_storage_gib": values.get("max_workspace_storage_gib", 50),
+            "transfer_timeout_seconds": min(values.get("capture_timeout_seconds", 3600),
+                                            values.get("download_timeout_seconds", 3600)),
+        }
+    return PreparationLimits.model_validate(values)
+
+
 def effective(session: Session) -> PreparationLimits:
     row = preparation_config.get(session)
-    return PreparationLimits.model_validate(row.limits) if row else defaults()
+    return saved_limits(row.limits) if row else defaults()
 
 
 def read(session: Session, claims: dict[str, Any]) -> PreparationSettings:
     require_admin(claims)
     row = preparation_config.get(session)
     base = defaults()
-    return PreparationSettings(limits=PreparationLimits.model_validate(row.limits) if row else base,
+    return PreparationSettings(limits=saved_limits(row.limits) if row else base,
                                defaults=base, source="admin" if row else "deployment")
 
 
