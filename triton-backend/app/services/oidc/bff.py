@@ -37,6 +37,8 @@ from app.services.oidc.provider import (
 from app.services.oidc.tls import get_oidc_tls_verify
 
 logger = get_logger(__name__)
+# Provider exceptions can contain credentials or callback parameters. Log only
+# static categories here, without exception messages, tracebacks or request URLs.
 
 
 def _with_default_return_url(url: str) -> str:
@@ -80,19 +82,19 @@ async def login(request: Request, session: Session) -> object:
         redirect_uri = effective_redirect_uri(request, settings.redirect_uri)
         return await oauth.keycloak.authorize_redirect(request, redirect_uri=redirect_uri)
     except OAuthError:
-        logger.exception("OIDC authorization failed")
+        logger.error("OIDC authorization failed")
         return JSONResponse({"error": "oauth_error", "detail": "OIDC authorization failed"}, status_code=400)
     except httpx.HTTPError:
-        logger.exception("OIDC login request failed")
+        logger.error("OIDC login request failed")
         return JSONResponse(
             {"error": "oidc_unreachable", "detail": "Could not reach OIDC provider"},
             status_code=502,
         )
     except RuntimeError:
-        logger.exception("OIDC configuration failed")
+        logger.error("OIDC configuration failed")
         return JSONResponse({"error": "config_error", "detail": "OIDC configuration failed"}, status_code=500)
     except Exception:
-        logger.exception("Unexpected error during OIDC login")
+        logger.error("Unexpected error during OIDC login")
         return JSONResponse({"error": "login_failed", "detail": "OIDC login failed"}, status_code=500)
 
 
@@ -134,19 +136,19 @@ async def auth_callback(request: Request, session: Session) -> object:
 
         return RedirectResponse(url=_with_default_return_url(get_frontend_redirect_url(request)))
     except OAuthError:
-        logger.exception("OIDC authorization failed")
+        logger.error("OIDC authorization failed")
         return JSONResponse({"error": "oauth_error", "detail": "OIDC authorization failed"}, status_code=400)
     except httpx.HTTPError:
-        logger.exception("OIDC callback request failed")
+        logger.error("OIDC callback request failed")
         return JSONResponse(
             {"error": "oidc_unreachable", "detail": "Could not reach OIDC provider"},
             status_code=502,
         )
     except RuntimeError:
-        logger.exception("OIDC configuration failed")
+        logger.error("OIDC configuration failed")
         return JSONResponse({"error": "config_error", "detail": "OIDC configuration failed"}, status_code=500)
     except Exception:
-        logger.exception("Unexpected error during OIDC callback")
+        logger.error("Unexpected error during OIDC callback")
         return JSONResponse({"error": "callback_failed", "detail": "OIDC callback failed"}, status_code=500)
 
 

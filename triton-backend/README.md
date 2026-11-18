@@ -189,3 +189,12 @@ instances and newly deployed instances before restarting the backend. An unset
 or empty list blocks all metrics fetches and reports a metrics error. Triton
 health checks and inference requests are unaffected. Private Kubernetes service
 addresses are supported when explicitly listed; there is no wildcard bypass.
+
+Metrics label tokens are parsed sequentially and limited to 64 KiB of UTF-8.
+Malformed, duplicate or oversized label sets yield no labels; valid quoted values
+support escaped quotes, backslashes and newlines. This bounds parsing work even
+when a configured metrics endpoint returns malformed data.
+
+OIDC login and callback failures return stable error codes and log fixed error
+categories. Provider exception text, chained tracebacks and callback parameters
+are excluded from these log messages because they may contain credentials.

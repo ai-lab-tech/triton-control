@@ -18,7 +18,6 @@ Supported operations:
 
 import asyncio
 import os
-import re
 import ssl
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -29,6 +28,7 @@ import httpx
 
 from app.core import installation_policy
 from app.core.tls import create_default_context_with_extra_ca
+from app.services.triton.prometheus_labels import parse_labels
 
 
 class TritonService:
@@ -419,14 +419,7 @@ class TritonService:
 
     @staticmethod
     def _parse_prometheus_labels(metric_token: str) -> Dict[str, str]:
-        match = re.search(r"\{(.*)\}", metric_token)
-        if not match:
-            return {}
-
-        labels: dict[str, str] = {}
-        for key, value in re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"', match.group(1)):
-            labels[key] = value.replace(r"\"", '"').replace(r"\\", "\\")
-        return labels
+        return parse_labels(metric_token)
 
     @staticmethod
     def inference_metrics_delta(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
