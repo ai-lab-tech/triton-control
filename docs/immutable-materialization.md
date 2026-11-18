@@ -40,9 +40,17 @@ plans/images cannot adopt an old result. A recreated Pod initializes a new
 `emptyDir` from the same pinned versions and must produce the same prepared
 inventory. This is filesystem recovery, not a database operation or migration.
 
-Limits: 10,000 files, 10 GiB total/source file, depth 32, 1 MiB per rewritten
-configuration, bounded reads and a 600-second materialization phase budget.
-Source and prepared copies share a 32 GiB volume. No archives, symlinks, hardlinks,
+Callers must supply an authorized `CaptureLimits` budget to both the renderer and
+materializer. Byte/file ceilings and the timeout are required explicitly; there is
+no hidden 10 GiB or 600-second runtime default. The renderer rejects over-budget
+source/prepared inventories before creating resources and passes the exact limits
+in `limits.json` to the init container. Consumers should derive the byte ceiling
+and timeout from their effective installation policy, not from source metadata.
+The volume size and init ephemeral-storage request are calculated as source bytes
+plus prepared bytes plus 1 GiB metadata headroom. A 20 GiB source and 20 GiB prepared
+repository therefore request about 41 GiB, rather than a fixed 32 GiB volume.
+
+No archives, symlinks, hardlinks,
 special files, arbitrary scripts or model code are accepted/executed by the
 initializer. Model backend execution remains the serving runtime's responsibility.
 
@@ -80,8 +88,21 @@ the expected prepared inventory before validation:
 
 ```bash
 triton-materialize prepare --source ./captured-source \
-  --normalization ./normalization.json --output ./prepared-repository > preparation.json
+  --normalization ./normalization.json --limits ./limits.json \
+  --output ./prepared-repository > preparation.json
 ```
+
+The limits document requires `max_bytes`, `max_file_bytes` and `deadline_seconds`.
+For example, an authorized 40 GiB budget with a one-hour timeout:
+
+```json
+{"max_bytes": 42949672960, "max_file_bytes": 42949672960, "deadline_seconds": 3600}
+```
+
+Optional path/count/configuration limits retain the neutral capture contract's
+bounded defaults. `run` also requires `--limits`; the Kubernetes renderer supplies
+that document automatically. This is internal policy transport, not new environment
+variables or Helm settings.
 
 Supply a new output directory outside the source. On failure discard that offline
 output; only `run` publishes atomically. Publish the captured source to versioned
@@ -98,7 +119,9 @@ are sorted by path, consistent with the existing neutral-import identity rules.
 ## Shared Kubernetes renderer
 
 `app.services.materialization.kubernetes.manifests(release, plan, policy, binding,
-name=..., namespace=...)` renders an immutable plan ConfigMap and a Pod. It binds
+name=..., namespace=..., limits=...)` renders an immutable plan ConfigMap and a Pod.
+ConfigMap names include a hash of the full workload name, plan and limits. Long
+names and changed plans do not collide with existing immutable ConfigMaps. It binds
 the release's source/prepared inventory and helper identity to the plan and
 requires matching qualification for the chosen Linux architecture. Both validation
 and future production consumers call this same function. There is deliberately
@@ -147,12 +170,17 @@ python scripts/qualify_materializer.py --output /path/to/evidence
 ```
 
 This creates/deletes only its own test namespace. It runs unit failure/recovery
-fixtures and actual init containers with a read-only S3 protocol fixture. A Python
+fixtures and actual init containers with a read-only S3 protocol fixture. The
+actual pinned image is also rerun against the same volume without storage access,
+against a corrupted retained file and against a changed helper declaration.
+Interrupted-download recovery is exercised on that same volume. Each reported
+check maps to successful named image tests; host unit tests alone cannot qualify it. A Python
 probe replaces Triton to test byte/layout equality and an actual `EROFS` write
 failure; **it does not claim inference correctness or model readiness**. Separate
 MinIO integration tests exercise genuine S3 version retention and the neutral
 import adapter. Qualification output is emitted only when all required tests
-pass with none skipped. The report's canonical JSON digest is referenced by
+pass with none skipped. Fixture revision `materializer-qualification/v2` requires
+renewed qualification; older records are rejected. The report's canonical JSON digest is referenced by
 `qualification.json`; keep both in an immutable evidence store and review them
 before provisioning the policy. Changes to image, architecture, transform version
 or fixture policy require renewed qualification; old validation is not silently
@@ -164,3 +192,9 @@ The ephemeral CI image/fixture is not a published production image or human
 approval. Requalify your retained registry image before use. The real S3 tests
 run in the existing isolated PostgreSQL/MinIO job; no new application database
 tables or upgrade migrations are introduced.
+
+## Remaining integration work
+
+This change supplies the shared primitive. S07-B and S12-B still need to wire it
+into validation and production execution. The corresponding end-to-end acceptance
+criterion in concept issue #55 remains open until both consumers are integrated.

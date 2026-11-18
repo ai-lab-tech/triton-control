@@ -8,12 +8,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from pydantic import ValidationError
 
 from app.core.canonical import inventory_digest
+from app.exceptions import BadRequestError
 from app.schemas.materialization import MaterializationPlan, StorageBinding
 from app.schemas.serving_metadata import ServingRelease
 from app.services.candidates.artifacts import CaptureLimits
@@ -23,7 +25,7 @@ from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
 from app.services.materialization.runtime import materialize, receipt_for
 from app.services.materialization.s3 import VersionedS3
-from tests.materialization_fixtures import FILES, IMAGE, DirectoryFixture, plan, policy
+from tests.materialization_fixtures import FILES, IMAGE, LIMITS, DirectoryFixture, plan, policy
 
 
 class MaterializationTests(unittest.TestCase):
@@ -34,11 +36,17 @@ class MaterializationTests(unittest.TestCase):
         self.source = DirectoryFixture()
 
     def run_materializer(self, source=None, specification=None):
-        return materialize(specification or self.plan, source or self.source, self.root, expected_image=IMAGE)
+        return materialize(
+            specification or self.plan, source or self.source, self.root, expected_image=IMAGE, limits=LIMITS
+        )
 
-    def test_exact_source_prepared_inventories_receipt_and_restart(self):
+    def test_exact_source_prepared_inventories_and_receipt(self):
+        # Arrange
+        expected = receipt_for(self.plan)
+        # Act
         receipt = self.run_materializer()
-        self.assertEqual(receipt, receipt_for(self.plan))
+        # Assert
+        self.assertEqual(receipt, expected)
         self.assertEqual(
             inventory_digest(inventory(self.root / "ready/models", CaptureLimits())), receipt.prepared_inventory_digest
         )
@@ -47,13 +55,21 @@ class MaterializationTests(unittest.TestCase):
             (self.root / "ready/models/iris/1/model.json").read_bytes(), b'{"model":"/models/iris/1/weights"}\n'
         )
         self.assertFalse((self.root / "ready/models/receipt.json").exists())
+
+    def test_restart_reuses_verified_bytes_without_source_access(self):
+        # Arrange
+        receipt = self.run_materializer()
         unavailable = MagicMock()
-        unavailable.download.side_effect = AssertionError("complete retries must verify retained bytes")
-        self.assertEqual(self.run_materializer(unavailable), receipt)
+        unavailable.download.side_effect = OSError("storage unavailable")
+        # Act
+        restarted = self.run_materializer(unavailable)
+        # Assert
+        self.assertEqual(restarted, receipt)
         unavailable.download.assert_not_called()
 
     def test_corrupt_missing_and_extra_files_never_publish(self):
         for scenario in ("corrupt", "missing", "extra", "symlink", "hardlink"):
+            # Arrange
 
             def download(spec, destination, limits):
                 self.source.download(spec, destination, limits)
@@ -71,64 +87,89 @@ class MaterializationTests(unittest.TestCase):
                     os.link(target, destination / "hardlink")
 
             source = MagicMock(download=download)
-            with self.subTest(scenario=scenario), self.assertRaises((MaterializationError, ValueError)):
+            # Act / Assert
+            with (
+                self.subTest(scenario=scenario),
+                self.assertRaises((MaterializationError, BadRequestError, ValueError)),
+            ):
                 self.run_materializer(source)
             self.assertFalse((self.root / "ready").exists())
             self.assertFalse(list(self.root.glob(".staging-*")))
 
-    def test_interrupted_download_and_abandoned_staging_are_recoverable(self):
+    def test_interrupted_download_never_publishes_partial_bytes(self):
+        # Arrange
         def interrupted(spec, destination, limits):
             (destination / "partial").write_bytes(b"partial")
             raise OSError("connection lost")
 
+        source = MagicMock(download=interrupted)
+        # Act / Assert
         with self.assertRaises(OSError):
-            self.run_materializer(MagicMock(download=interrupted))
+            self.run_materializer(source)
+        self.assertFalse((self.root / "ready").exists())
+        self.assertFalse(list(self.root.glob(".staging-*")))
+
+    def test_abandoned_staging_is_removed_before_recovery(self):
+        # Arrange
         abandoned = self.root / ".staging-crashed"
-        abandoned.mkdir()
+        abandoned.mkdir(parents=True)
         (abandoned / "partial").write_bytes(b"partial")
-        self.run_materializer()
+        # Act
+        receipt = self.run_materializer()
+        # Assert
         self.assertFalse(abandoned.exists())
+        self.assertEqual(receipt, receipt_for(self.plan))
 
     def test_changed_prepared_inventory_or_normalization_blocks_finalization(self):
         for update in ("prepared", "normalization"):
+            # Arrange
             payload = self.plan.model_dump(mode="json")
             if update == "prepared":
                 payload["prepared_inventory"]["files"][0]["digest"] = "sha256:" + "0" * 64
             else:
                 payload["normalization"]["rewrites"][0]["relative"] = "absent"
             changed = MaterializationPlan.model_validate(payload)
+            # Act / Assert
             with self.subTest(update=update), self.assertRaises(MaterializationError):
                 self.run_materializer(specification=changed)
             self.assertFalse((self.root / "ready").exists())
 
     def test_changed_helper_is_rejected_before_reading_or_writing(self):
+        # Arrange
         source = MagicMock()
+        # Act / Assert
         with self.assertRaises(MaterializationError):
-            materialize(self.plan, source, self.root, expected_image="other@sha256:" + "0" * 64)
+            materialize(self.plan, source, self.root, expected_image="other@sha256:" + "0" * 64, limits=LIMITS)
         source.download.assert_not_called()
         self.assertFalse(self.root.exists())
 
     def test_retained_receipt_and_bytes_are_reverified(self):
+        # Arrange
         self.run_materializer()
         target = self.root / "ready/models/iris/1/weights/model.bin"
         target.chmod(0o644)
         target.write_bytes(b"corrupt retained bytes")
+        # Act / Assert
         with self.assertRaises(MaterializationError):
             self.run_materializer()
 
     def test_concurrent_materializer_does_not_write_or_remove_other_staging(self):
+        # Arrange
         self.root.mkdir()
         lock = (self.root / ".materializer.lock").open("w")
         self.addCleanup(lock.close)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         source = MagicMock()
+        # Act / Assert
         with self.assertRaises(BlockingIOError):
             self.run_materializer(source)
         source.download.assert_not_called()
 
     def test_unexpected_destination_or_symlink_is_not_followed(self):
+        # Arrange
         self.root.mkdir()
         (self.root / "ready").symlink_to(self.root.parent)
+        # Act / Assert
         with self.assertRaises((OSError, ValueError)):
             self.run_materializer()
 
@@ -142,28 +183,35 @@ class MaterializationTests(unittest.TestCase):
             lambda d: d["normalization"]["rewrites"][0].update(target="../../escape"),
             lambda d: d["normalization"]["rewrites"][0].update(target="iris/not-in-inventory"),
         ):
+            # Arrange
             payload = self.plan.model_dump(mode="json")
             mutate(payload)
+            # Act / Assert
             with self.assertRaises(ValidationError):
                 MaterializationPlan.model_validate(payload)
 
     def test_s3_requires_exact_version_content_and_key_set(self):
+        # Arrange
         client = MagicMock()
         listing = [{"Key": "repository/" + path} for path in FILES]
         client.get_paginator.return_value.paginate.return_value = [{"Contents": listing}]
 
         def get(**kwargs):
-            self.assertEqual(kwargs["VersionId"], "v1")
             data = FILES[kwargs["Key"].removeprefix("repository/")]
             return {"Body": io.BytesIO(data), "VersionId": "v1", "ContentLength": len(data)}
 
         client.get_object.side_effect = get
+        # Act
         receipt = self.run_materializer(VersionedS3(client, "bucket", "repository"))
+        # Assert
         self.assertEqual(receipt, receipt_for(self.plan))
         self.assertFalse(client.put_object.called)
+        self.assertEqual(len(client.get_object.call_args_list), len(FILES))
+        self.assertTrue(all(call.kwargs["VersionId"] == "v1" for call in client.get_object.call_args_list))
 
     def test_s3_wrong_returned_version_and_extra_files_fail(self):
         for scenario in ("version", "extra", "missing", "unsafe"):
+            # Arrange
             client = MagicMock()
             listing = [{"Key": "repository/" + path} for path in FILES]
             if scenario == "extra":
@@ -179,22 +227,32 @@ class MaterializationTests(unittest.TestCase):
                 "VersionId": "different",
                 "ContentLength": len(data),
             }
-            with self.subTest(scenario=scenario), self.assertRaises(Exception):
+            # Act / Assert
+            with (
+                self.subTest(scenario=scenario),
+                self.assertRaises((MaterializationError, BadRequestError, ValueError)),
+            ):
                 self.run_materializer(VersionedS3(client, "bucket", "repository"))
             self.assertFalse((self.root / "ready").exists())
 
-    def test_offline_preparation_and_schema_export(self):
+    def test_offline_preparation_matches_runtime_inventory(self):
+        # Arrange
         source = Path(self.temporary) / "source"
         source.mkdir()
         self.source.download(self.plan, source, CaptureLimits())
         spec = Path(self.temporary) / "normalization.json"
         spec.write_text(self.plan.normalization.model_dump_json())
+        budget = Path(self.temporary) / "limits.json"
+        budget.write_text(json.dumps(asdict(LIMITS)))
+        # Act
         result = subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "app.services.materialization.cli",
                 "prepare",
+                "--limits",
+                str(budget),
                 "--source",
                 str(source),
                 "--normalization",
@@ -206,10 +264,18 @@ class MaterializationTests(unittest.TestCase):
             text=True,
             check=True,
         )
+        # Assert
         self.assertEqual(
             json.loads(result.stdout)["prepared_inventory_digest"], inventory_digest(self.plan.prepared_inventory)
         )
-        subprocess.run([sys.executable, "scripts/export_materialization_schema.py", "--check"], check=True)
+
+    def test_exported_schema_matches_contract(self):
+        # Arrange
+        command = [sys.executable, "scripts/export_materialization_schema.py", "--check"]
+        # Act
+        result = subprocess.run(command, capture_output=True, text=True)
+        # Assert
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
 
 class MaterializerPodTests(unittest.TestCase):
@@ -234,14 +300,20 @@ class MaterializerPodTests(unittest.TestCase):
         return ServingRelease.model_validate(payload)
 
     def test_shared_path_uses_init_readonly_models_and_no_mutable_runtime(self):
+        # Arrange
+        release, desired, qualified = self.release(), plan(), policy()
+        binding = StorageBinding(bucket="models", prefix="repository", secret_name="read-only-models")
+        # Act
         docs = manifests(
-            self.release(),
-            plan(),
-            policy(),
-            StorageBinding(bucket="models", prefix="repository", secret_name="read-only-models"),
+            release,
+            desired,
+            qualified,
+            binding,
             name="iris",
             namespace="test",
+            limits=LIMITS,
         )
+        # Assert
         spec = docs[1]["spec"]
         self.assertEqual(spec["initContainers"][0]["image"], IMAGE)
         runtime = spec["containers"][0]
@@ -254,24 +326,32 @@ class MaterializerPodTests(unittest.TestCase):
         self.assertNotIn("pip install", json.dumps(docs))
         self.assertNotIn("repository-poll", json.dumps(docs))
 
-    def test_no_missing_digest_unqualified_helper_or_cross_binding(self):
+    def test_qualification_subject_mismatch_is_rejected(self):
         for field in ("image", "platform"):
-            payload = policy().model_dump(mode="json")
-            payload[field] = IMAGE.replace("fixture.invalid", "other.invalid") if field == "image" else "linux/arm64"
+            # Arrange
             from app.schemas.materialization import MaterializerPolicy
 
-            with self.assertRaises(MaterializationError):
-                require_qualified(MaterializerPolicy.model_validate(payload))
-        result = policy().model_dump(mode="json")
-        result["qualification"]["checks"]["readonly_mount"] = False
+            payload = policy().model_dump(mode="json")
+            payload[field] = IMAGE.replace("fixture.invalid", "other.invalid") if field == "image" else "linux/arm64"
+            request = MaterializerPolicy.model_validate(payload)
+            # Act / Assert
+            with self.subTest(field=field), self.assertRaises(MaterializationError):
+                require_qualified(request)
+
+    def test_failed_qualification_is_rejected(self):
+        # Arrange
+        from app.schemas.materialization import MaterializerPolicy
+
+        payload = policy().model_dump(mode="json")
+        payload["qualification"]["checks"]["readonly_mount"] = False
+        request = MaterializerPolicy.model_validate(payload)
+        # Act / Assert
         with self.assertRaises(MaterializationError):
-            require_qualified(MaterializerPolicy.model_validate(result))
+            require_qualified(request)
+
+    def test_cross_binding_is_rejected(self):
+        # Arrange
+        binding = StorageBinding(bucket="other", prefix="repository", secret_name="read-only")
+        # Act / Assert
         with self.assertRaises(MaterializationError):
-            manifests(
-                self.release(),
-                plan(),
-                policy(),
-                StorageBinding(bucket="other", prefix="repository", secret_name="read-only"),
-                name="iris",
-                namespace="test",
-            )
+            manifests(self.release(), plan(), policy(), binding, name="iris", namespace="test", limits=LIMITS)

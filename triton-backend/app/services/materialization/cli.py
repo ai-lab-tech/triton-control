@@ -9,7 +9,8 @@ from typing import Any
 
 from app.core.canonical import canonical_bytes, inventory_digest
 from app.schemas.materialization import MaterializationPlan, Normalization, StorageBinding
-from app.services.candidates.artifacts import CaptureLimits, DirectorySource
+from app.services.candidates.artifacts import DirectorySource
+from app.services.materialization.budgets import configured_limits
 from app.services.materialization.filesystem import inventory
 from app.services.materialization.normalization import normalize
 from app.services.materialization.runtime import materialize
@@ -37,17 +38,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Immutable repository materializer v1")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run")
-    for option in ("plan", "output", "expected-image", "bucket", "prefix"):
+    for option in ("plan", "output", "expected-image", "bucket", "prefix", "limits"):
         run.add_argument("--" + option, required=True)
     run.add_argument("--endpoint")
     run.add_argument("--allow-http", action="store_true")
     run.add_argument("--ca-bundle")
     prepare = commands.add_parser("prepare")
-    for option in ("source", "normalization", "output"):
+    for option in ("source", "normalization", "output", "limits"):
         prepare.add_argument("--" + option, required=True)
     args = parser.parse_args()
     try:
-        limits = CaptureLimits(deadline_seconds=600)
+        limits = configured_limits(read_document(args.limits))
         if args.command == "prepare":
             spec = Normalization.model_validate(read_document(args.normalization))
             output = Path(args.output)

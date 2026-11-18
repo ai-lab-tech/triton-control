@@ -4,11 +4,14 @@ This module renders resources, not approval or production execution. The caller
 must authorize a local storage binding and verify release evidence independently.
 """
 
+from dataclasses import asdict
 from typing import Any
 
-from app.core.canonical import canonical_bytes, inventory_digest
+from app.core.canonical import canonical_bytes, digest, inventory_digest
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.serving_metadata import Name, ServingRelease
+from app.services.candidates.artifacts import CaptureLimits
+from app.services.materialization.budgets import check_plan, storage_bytes
 from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
 
@@ -21,12 +24,14 @@ def manifests(
     *,
     name: str,
     namespace: str,
+    limits: CaptureLimits,
 ) -> list[dict[str, Any]]:
     from pydantic import TypeAdapter
 
     TypeAdapter(Name).validate_python(name)
     TypeAdapter(Name).validate_python(namespace)
     require_qualified(policy)
+    check_plan(plan, limits)
     repository = release.spec.repository
     if (
         plan.materializer_image != policy.image
@@ -40,7 +45,10 @@ def manifests(
     data = canonical_bytes(plan.model_dump(mode="json"))
     if len(data) > 512 * 1024:
         raise MaterializationError("Materialization plan exceeds Kubernetes document limit")
-    config_name = name[:46].rstrip("-") + "-materialization"
+    budget_data = canonical_bytes(asdict(limits))
+    identity = digest({"name": name, "plan": plan.model_dump(mode="json"), "limits": asdict(limits)})
+    config_name = name[:30].rstrip("-") + "-materialization-" + identity.removeprefix("sha256:")[:16]
+    repository_storage = str(storage_bytes(plan))
     env: list[dict[str, Any]] = [
         {
             "name": "AWS_ACCESS_KEY_ID",
@@ -57,6 +65,8 @@ def manifests(
         "run",
         "--plan",
         "/plan/plan.json",
+        "--limits",
+        "/plan/limits.json",
         "--output",
         "/materialized",
         "--expected-image",
@@ -71,7 +81,7 @@ def manifests(
     if binding.allow_http:
         args.append("--allow-http")
     volumes: list[dict[str, Any]] = [
-        {"name": "model-repository", "emptyDir": {"sizeLimit": "32Gi"}},
+        {"name": "model-repository", "emptyDir": {"sizeLimit": repository_storage}},
         {"name": "materialization-plan", "configMap": {"name": config_name}},
         {"name": "runtime-tmp", "emptyDir": {"sizeLimit": "1Gi"}},
     ]
@@ -86,16 +96,16 @@ def manifests(
     security = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
     resources = release.spec.resources_per_replica
     requests: dict[str, str] = resources.requests.model_dump()
-    limits: dict[str, str] = resources.limits.model_dump()
+    runtime_limits: dict[str, str] = resources.limits.model_dump()
     if resources.gpu_count:
-        requests["nvidia.com/gpu"] = limits["nvidia.com/gpu"] = str(resources.gpu_count)
+        requests["nvidia.com/gpu"] = runtime_limits["nvidia.com/gpu"] = str(resources.gpu_count)
     return [
         {
             "apiVersion": "v1",
             "kind": "ConfigMap",
             "immutable": True,
             "metadata": {"name": config_name, "namespace": namespace},
-            "data": {"plan.json": data.decode()},
+            "data": {"plan.json": data.decode(), "limits.json": budget_data.decode()},
         },
         {
             "apiVersion": "v1",
@@ -120,7 +130,7 @@ def manifests(
                         "env": env,
                         "volumeMounts": init_mounts,
                         "resources": {
-                            "requests": {"cpu": "100m", "memory": "128Mi"},
+                            "requests": {"cpu": "100m", "memory": "128Mi", "ephemeral-storage": repository_storage},
                             "limits": {"cpu": "1", "memory": "512Mi"},
                         },
                     }
@@ -132,7 +142,7 @@ def manifests(
                         "command": ["tritonserver"],
                         "args": ["--model-repository=/models", "--model-control-mode=none", "--strict-readiness=true"],
                         "securityContext": security,
-                        "resources": {"requests": requests, "limits": limits},
+                        "resources": {"requests": requests, "limits": runtime_limits},
                         "volumeMounts": [
                             {
                                 "name": "model-repository",

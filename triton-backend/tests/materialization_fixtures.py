@@ -6,7 +6,10 @@ from pathlib import Path
 from app.core.canonical import digest
 from app.schemas.lineage import FileEntry, InventoryV1
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, Normalization, ObjectVersion
+from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.qualification import REQUIRED_CHECKS
+
+LIMITS = CaptureLimits(max_bytes=40 * 1024**3, max_file_bytes=40 * 1024**3, deadline_seconds=3600)
 
 FILES = {
     "config.pbtxt": b'name: "iris"\nbackend: "vllm"\n',
@@ -56,7 +59,7 @@ def policy(image=IMAGE, platform="linux/amd64"):
         qualification={
             "image": image,
             "platform": platform,
-            "fixture_revision": "materializer-qualification/v1",
+            "fixture_revision": "materializer-qualification/v2",
             "checks": dict.fromkeys(REQUIRED_CHECKS, True),
             "evidence": {"uri": "fixture-only.json", "digest": digest({"synthetic": True})},
         },

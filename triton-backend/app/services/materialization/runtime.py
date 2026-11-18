@@ -10,6 +10,7 @@ from typing import Protocol
 from app.core.canonical import canonical_bytes, digest, inventory_digest
 from app.schemas.materialization import MaterializationPlan, MaterializationReceipt
 from app.services.candidates.artifacts import CaptureLimits, _open_directory
+from app.services.materialization.budgets import check_plan
 from app.services.materialization.filesystem import inventory
 from app.services.materialization.normalization import MaterializationError, normalize
 
@@ -51,11 +52,11 @@ def verify_ready(root: Path, plan: MaterializationPlan, limits: CaptureLimits) -
 
 
 def materialize(
-    plan: MaterializationPlan, source: Source, root: Path, *, expected_image: str, limits: CaptureLimits | None = None
+    plan: MaterializationPlan, source: Source, root: Path, *, expected_image: str, limits: CaptureLimits
 ) -> MaterializationReceipt:
     if expected_image != plan.materializer_image:
         raise MaterializationError("Configured helper digest differs from the materialization plan")
-    limits = limits or CaptureLimits(deadline_seconds=600)
+    check_plan(plan, limits)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = _open_directory(root)
     lock = os.open(".materializer.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600, dir_fd=fd)
