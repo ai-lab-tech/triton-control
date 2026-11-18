@@ -7,12 +7,19 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.entities import CodeServerEntity, TaskWorkspaceEntity
 from app.exceptions import ConflictError, ForbiddenError, NotFoundError, ServiceUnavailableError
 from app.repositories import developments
 from app.repositories import preparation as tasks
 from app.repositories import task_workspaces as repository
-from app.schemas.task_workspaces import OpenTaskWorkspace, TaskWorkspaceDTO, WorkspaceInputs, WorkspaceSizing
+from app.schemas.task_workspaces import (
+    OpenTaskWorkspace,
+    SnapshotFile,
+    TaskWorkspaceDTO,
+    WorkspaceInputs,
+    WorkspaceSizing,
+)
 from app.services import handoff_sources, task_workspace_sizing
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
@@ -31,12 +38,14 @@ def document(task_id: UUID, inputs: WorkspaceInputs, download_timeout: int = 360
         "conversion_directory": "/workspace/conversion",
         "files": [{"path": item.role + "/" + item.artifact.file.path,
                    "size": item.artifact.file.size, "digest": item.artifact.file.digest,
-                   "version_id": item.artifact.version_id} for item in inputs.files],
+                   **({"snapshot_id": str(item.artifact.snapshot_id)} if isinstance(item.artifact, SnapshotFile)
+                      else {"version_id": item.artifact.version_id})} for item in inputs.files],
     }
 
 
 def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
                    request: OpenTaskWorkspace) -> TaskWorkspaceDTO:
+    installation_policy.require("development_tools")
     workspaces.require_kubernetes_enabled()
     if claims.get("token_use"):
         raise ForbiddenError("Interactive credentials are required to open task workspaces")
@@ -122,6 +131,7 @@ def _provision_workspace(
     task_id: UUID, inputs: WorkspaceInputs,
 ) -> None:
     """Record complete apply independently of the observed Kubernetes pod status."""
+    installation_policy.require("development_tools")
     if not workspace.applied_resources or workspace.status not in {"ready", "creating"}:
         configured = apply_registry_settings(request.workspace, session)
         workspace.applied_resources = []
@@ -159,6 +169,7 @@ def workspace_sizing(session: Session, claims: dict[str, Any], task_id: UUID) ->
 
 
 def get_workspace(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskWorkspaceDTO:
+    installation_policy.require("development_tools")
     association = repository.get(session, task_id)
     if association is None or association.workspace_id is None:
         raise NotFoundError("No workspace has been opened for this task")
@@ -167,6 +178,7 @@ def get_workspace(session: Session, claims: dict[str, Any], task_id: UUID) -> Ta
 
 
 def input_file(session: Session, namespace: str, name: str, token: str, index: int) -> Path:
+    installation_policy.require("development_tools")
     workspace = profiles.authenticate_workspace(session, namespace, name, token)
     access.guard(session, workspace)
     association = repository.for_workspace(session, workspace.id or 0)
@@ -180,7 +192,12 @@ def input_file(session: Session, namespace: str, name: str, token: str, index: i
     with tempfile.NamedTemporaryFile(prefix="task-input-", delete=False) as handle:
         destination = Path(handle.name)
     try:
-        handoff_sources.download(session, inputs.files[index].artifact, destination)
+        artifact = inputs.files[index].artifact
+        if isinstance(artifact, SnapshotFile):
+            from app.services.snapshots.inputs import download
+            download(session, artifact, destination)
+        else:
+            handoff_sources.download(session, artifact, destination)
         session.expire_all()
         access.guard(session, workspace)
         return destination

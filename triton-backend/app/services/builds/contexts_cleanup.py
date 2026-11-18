@@ -7,12 +7,14 @@ from typing import Callable
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.repositories import build_contexts as repo
 from app.repositories import builds, operations
 from app.services.builds.contexts_storage import storage
 
 
 def cleanup(sessions: Callable[[], Session], limit: int = 100) -> dict[str, int]:
+    installation_policy.require("development_jobs")
     removed = failed = 0
     with sessions() as session:
         ids = repo.due(session, operations.now(session), limit)

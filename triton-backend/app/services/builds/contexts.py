@@ -11,12 +11,14 @@ from uuid import uuid4
 from pydantic import ValidationError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.entities import BuildContextEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import build_contexts as repo
 from app.repositories import operations, teams
 from app.schemas.build_contexts import BuildContextRequest, BuildContextResponse, ContextManifest
 from app.schemas.operations import OperationRequest, ReconcileResult
+from app.services.builds import access
 from app.services.builds import contexts_storage as provider
 from app.services.builds.contexts_archive import prepare
 from app.services.builds.qualification import require_qualified
@@ -56,6 +58,7 @@ def checked(session: Session, claims: dict[str, Any], context_id: str, action: A
     op = service.checked(session, claims, context_id, action)
     if op.kind != KIND:
         raise ForbiddenError("Not a build context operation")
+    access.task_scope(claims, op.payload["request"].get("task_id"))
     return op
 
 
@@ -73,10 +76,13 @@ def response(session: Session, op: OperationEntity) -> BuildContextResponse:
 def submit(
     session: Session, claims: dict[str, Any], request: BuildContextRequest, key: str,
 ) -> BuildContextResponse:
+    installation_policy.require("development_jobs")
     if claims.get("token_use"):
         raise ForbiddenError("Delegated deployment tokens cannot stage build contexts")
-    result = service.submit(session, claims, OperationRequest(kind=KIND, target=TARGET,
-                                                            payload=request.model_dump(mode="json")), key)
+    access.task_scope(claims, request.task_id)
+    result = service.submit(session, claims, OperationRequest(
+        kind=KIND, target=TARGET, payload=request.model_dump(mode="json", exclude_none=True),
+    ), key)
     return response(session, operations.get(session, result.id))
 
 
@@ -85,6 +91,7 @@ def read(session: Session, claims: dict[str, Any], context_id: str) -> BuildCont
 
 
 def begin_upload(session: Session, claims: dict[str, Any], context_id: str) -> tuple[str, BuildContextRequest, int]:
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "submit")
     ensure(session, op)
     op = operations.get(session, context_id, lock=True)
@@ -129,6 +136,7 @@ def abort_upload(session: Session, context_id: str, token: str) -> None:
 def finish_upload(
     session: Session, claims: dict[str, Any], context_id: str, token: str, source: BinaryIO,
 ) -> BuildContextResponse:
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "submit")
     request = BuildContextRequest.model_validate(op.payload["request"])
     settings = provider.policy()
@@ -180,7 +188,7 @@ class ContextAdapter:
         settings = provider.policy()
         if request.archive_bytes > settings.max_context_bytes:
             raise BadRequestError("Build archive exceeds installation byte limit")
-        return {"request": request.model_dump(mode="json"), "policy_hash": settings.fingerprint(),
+        return {"request": request.model_dump(mode="json", exclude_none=True), "policy_hash": settings.fingerprint(),
                 "retention_seconds": provider.retention_seconds()}
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:
@@ -208,6 +216,7 @@ class ContextAdapter:
         session.add(row)
 
     def reconcile(self, op: OperationEntity, context: ExecutionContext) -> ReconcileResult:
+        installation_policy.require("development_jobs")
         with context.sessions() as session:
             row = ensure(session, op)
             binding = dict(row.storage_binding)
@@ -273,6 +282,7 @@ def consume_for_build(
     S06-C must keep the context retained for its complete Job/retry lifetime.
     This hook does not create Jobs or assert site-secret provisioning is valid.
     """
+    installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "execute")
     settings = provider.policy()
     require_qualified(session, settings, fixture_revision, mode="development")

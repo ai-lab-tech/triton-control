@@ -1,0 +1,94 @@
+<h1>Build serving image</h1>
+<p>
+  Engineering task: <code>{{ taskId() }}</code>
+</p>
+<p>
+  A successful build creates a candidate runtime image. Validate that exact digest with the model
+  before release; build success does not grant production readiness or approval.
+</p>
+@if (accessMessage()) {
+  <p role="note">{{ accessMessage() }}</p>
+}
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+}
+@if (options(); as policy) {
+  <form (ngSubmit)="submit()">
+    <h2>Build from a verified context</h2>
+    <p>
+      In your assigned task workspace, select “Triton Control: Build serving image” to choose a
+      folder and Dockerfile and upload a frozen snapshot. You can also reuse its verified context ID
+      below.
+    </p>
+    <label
+      >Verified context ID
+      <input name="context" [(ngModel)]="contextId" required pattern="[a-f0-9]{32}" maxlength="32"
+    /></label>
+    <label
+      >Permitted destination repository
+      <select name="repository" [(ngModel)]="repository" required>
+        @for (repo of policy.repositories; track repo) {
+          <option [value]="repo">{{ repo }}</option>
+        }
+      </select></label
+    >
+    <p>Each attempt gets its own destination tag. Use the reported digest for validation.</p>
+    <button type="submit" [disabled]="busy()">Build serving image</button>
+  </form>
+}
+<button type="button" (click)="refresh()" [disabled]="busy()">Refresh builds</button>
+@for (build of builds(); track build.id) {
+  <article>
+    <h2>{{ label(build) }}</h2>
+    <p>
+      Build <code>{{ build.id }}</code>
+    </p>
+    <p>{{ build.operation.message }}</p>
+    @if (!["succeeded", "failed", "cancelled"].includes(build.operation.state)) {
+      <button
+        type="button"
+        (click)="action(build, 'cancel')"
+        [disabled]="busy() || build.operation.cancel_requested"
+      >
+        Cancel build
+      </button>
+    }
+    @if (build.operation.state === "failed" && build.attempts.at(-1)?.cleaned && options()) {
+      <button type="button" (click)="action(build, 'retry')" [disabled]="busy()">
+        Retry as new attempt
+      </button>
+    }
+    @for (attempt of build.attempts; track attempt.number) {
+      <section>
+        <h3>Attempt {{ attempt.number }} · {{ attempt.state }}</h3>
+        <p>
+          Context: <code>{{ attempt.context_id }}</code>
+        </p>
+        @if (image(attempt); as exact) {
+          <p>
+            Candidate runtime image: <code>{{ exact }}</code>
+          </p>
+        }
+        <button type="button" (click)="showLogs(build, attempt.number)">
+          View attempt {{ attempt.number }} logs
+        </button>
+      </section>
+    }
+  </article>
+} @empty {
+  <p>No accessible builds on this page.</p>
+}
+<button type="button" [disabled]="offset() === 0 || busy()" (click)="page(-50)">Previous</button>
+<button type="button" [disabled]="builds().length < 50 || busy()" (click)="page(50)">Next</button>
+@if (log(); as item) {
+  <section aria-live="polite">
+    <h2>Logs: {{ logTitle() }}</h2>
+    @if (item.expired) {
+      <p>Log retention expired. Build digest and attempt history remain available.</p>
+    }
+    @if (item.truncated) {
+      <p>Output truncated.</p>
+    }
+    <pre>{{ item.output }}</pre>
+  </section>
+}

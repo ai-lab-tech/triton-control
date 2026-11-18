@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,6 +16,7 @@ Image = Annotated[str, Field(max_length=512, pattern=r"^[a-z0-9][a-z0-9.:/_-]*@s
 class BuildContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal[1] = 1
+    task_id: UUID | None = None
     archive_digest: Digest
     archive_bytes: Annotated[int, Field(strict=True, ge=1024, le=1073741824)]
     dockerfile: Path = "Dockerfile"

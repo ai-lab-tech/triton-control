@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+from app.core import installation_policy
 from app.db.database import session_factory
 from app.repositories import mlflow
 from app.services.mlflow import installer, kubernetes
@@ -12,6 +13,7 @@ _task: asyncio.Task[None] | None = None
 
 
 def reconcile() -> None:
+    installation_policy.require("development_tools")
     with session_factory() as session:
         entity = mlflow.get(session)
         if entity is None or entity.status == "deleting":
@@ -35,6 +37,7 @@ async def _run() -> None:
 
 
 def start() -> None:
+    installation_policy.require("development_tools")
     global _task
     if _task is None or _task.done():
         _task = asyncio.create_task(_run())

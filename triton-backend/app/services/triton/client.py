@@ -18,7 +18,6 @@ Supported operations:
 
 import asyncio
 import os
-import re
 import ssl
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -27,7 +26,9 @@ from urllib.parse import quote
 
 import httpx
 
+from app.core import installation_policy
 from app.core.tls import create_default_context_with_extra_ca
+from app.services.triton.prometheus_labels import parse_labels
 
 
 class TritonService:
@@ -157,6 +158,19 @@ class TritonService:
             "error": "; ".join(errors) if errors else None,
         }
 
+    @staticmethod
+    def _allowed_metrics_url(requested_url: str) -> str:
+        """Select an exact URL from trusted deployment configuration.
+
+        This constrains ports, paths and queries while allowing explicitly
+        configured private Kubernetes endpoints. Redirects must stay disabled.
+        """
+        for configured_url in os.getenv("TRITON_METRICS_ALLOWED_URLS", "").split(","):
+            allowed_url = configured_url.strip()
+            if allowed_url and requested_url == allowed_url:
+                return allowed_url
+        raise ValueError("Metrics endpoint is not in TRITON_METRICS_ALLOWED_URLS")
+
     async def collect_metrics_snapshot(self, metrics_url: str | None) -> Dict[str, Any]:
         """Fetch and parse Triton Prometheus metrics for host utilization."""
         if not metrics_url:
@@ -169,7 +183,9 @@ class TritonService:
             }
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get_client().get(
+                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+            )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             metrics = self._parse_prometheus_metrics(text)
@@ -195,7 +211,9 @@ class TritonService:
             return {"series": {}, "error": "Metrics endpoint is not configured."}
 
         try:
-            response = await self._get_client().get(metrics_url)
+            response = await self._get_client().get(
+                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+            )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             return {
@@ -401,14 +419,7 @@ class TritonService:
 
     @staticmethod
     def _parse_prometheus_labels(metric_token: str) -> Dict[str, str]:
-        match = re.search(r"\{(.*)\}", metric_token)
-        if not match:
-            return {}
-
-        labels: dict[str, str] = {}
-        for key, value in re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"])*)"', match.group(1)):
-            labels[key] = value.replace(r"\"", '"').replace(r"\\", "\\")
-        return labels
+        return parse_labels(metric_token)
 
     @staticmethod
     def inference_metrics_delta(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
@@ -594,6 +605,7 @@ class TritonService:
 
     async def load_model(self, model_name: str) -> None:
         """Trigger explicit model load via Triton's repository API."""
+        installation_policy.require("model_write")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/load"
 
@@ -602,6 +614,7 @@ class TritonService:
 
     async def unload_model(self, model_name: str) -> None:
         """Trigger explicit model unload via Triton's repository API."""
+        installation_policy.require("model_write")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/repository/models/{encoded_model_name}/unload"
 
@@ -610,6 +623,7 @@ class TritonService:
 
     async def infer_model(self, model_name: str, version: str, payload: Any) -> httpx.Response:
         """Send an inference request to a specific Triton model version."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
@@ -620,6 +634,7 @@ class TritonService:
 
     async def infer_model_raw(self, model_name: str, version: str, payload: bytes, content_type: str) -> httpx.Response:
         """Send an inference request to Triton without JSON re-serialization."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         encoded_version = quote(version, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/versions/{encoded_version}/infer"
@@ -634,6 +649,7 @@ class TritonService:
 
     async def generate_model_raw(self, model_name: str, payload: bytes, content_type: str) -> httpx.Response:
         """Send a generate request to a Triton text-generation model."""
+        installation_policy.require("interactive_inference")
         encoded_model_name = quote(model_name, safe="")
         url = f"{self.triton_url}/v2/models/{encoded_model_name}/generate"
 

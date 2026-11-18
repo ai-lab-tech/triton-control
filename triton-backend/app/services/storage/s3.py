@@ -25,10 +25,11 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlmodel import Session
 
-from app.core.access_control import require_member_or_admin
+from app.core import installation_policy
+from app.core.access_control import require_admin, require_member_or_admin
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.core.identity import require_user_entity
-from app.exceptions import BadGatewayError, BadRequestError, NotFoundError, UnsupportedMediaTypeError
+from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError, NotFoundError, UnsupportedMediaTypeError
 from app.mappers import s3_entity_to_dto
 from app.repositories import instances, s3_profiles
 from app.schemas import (
@@ -127,6 +128,9 @@ def update_instance_s3(
     instance_id: int,
     request: UpdateInstanceS3Request,
 ) -> InstanceS3ConfigDTO:
+    if installation_policy.mode() == "production":
+        return _rotate_instance_credentials(session, claims, instance_id, request)
+    installation_policy.require("trust_admin")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
@@ -194,6 +198,39 @@ def update_instance_s3(
             instance.s3_secret_key_hash = hash_secret(secret_key)
             instance.s3_secret_key_enc = encrypt_secret(secret_key)
 
+    instances.save(session, instance)
+    return s3_entity_to_dto(instance)
+
+
+def _rotate_instance_credentials(
+    session: Session, claims: dict[str, Any], instance_id: int, request: UpdateInstanceS3Request,
+) -> InstanceS3ConfigDTO:
+    """Refresh copied credentials without permitting any storage or trust changes."""
+    require_admin(claims)
+    require_user_entity(session, claims)
+    if not request.enabled or not request.s3_profile_id or request.model_fields_set - {"enabled", "s3_profile_id"}:
+        raise ForbiddenError("Production rotation accepts only enabled=true and s3_profile_id")
+    instance = get_instance_or_404(session, instance_id, claims)
+    profile = s3_profiles.get(session, request.s3_profile_id)
+    if profile is None:
+        raise NotFoundError("S3 profile not found")
+    session.refresh(profile, with_for_update=True)
+    session.refresh(instance, with_for_update=True)
+    prefix = (profile.prefix or "").strip("/")
+    instance_prefix = (instance.s3_prefix or "").strip("/")
+    if (not instance.s3_enabled
+            or instance.s3_endpoint != profile.endpoint
+            or instance.s3_bucket != profile.bucket
+            or (instance.s3_region or "us-east-1") != (profile.region or "us-east-1")
+            or (prefix and instance_prefix != prefix and not instance_prefix.startswith(prefix + "/"))
+            or not instance.s3_verify_ssl
+            or instance.s3_use_https != _is_https_endpoint(profile.endpoint)
+            or (instance.s3_ca_certificate or "") != (profile.ca_certificate or "")
+            or instance.s3_address_style != ("path" if profile.force_path_style else "virtual")):
+        raise ForbiddenError("Profile must match the existing instance storage scope and trust settings")
+    instance.s3_access_key = profile.access_key
+    instance.s3_secret_key_hash = profile.secret_key_hash
+    instance.s3_secret_key_enc = profile.secret_key_enc
     instances.save(session, instance)
     return s3_entity_to_dto(instance)
 
@@ -352,6 +389,7 @@ def put_instance_s3_content(
     content: str | bytes,
     content_type: str | None = None,
 ) -> S3FileWriteResponse:
+    installation_policy.require("artifact_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:
@@ -405,6 +443,7 @@ def delete_instance_s3_content(
     instance_id: int,
     path: str,
 ) -> S3DeleteResponse:
+    installation_policy.require("artifact_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:

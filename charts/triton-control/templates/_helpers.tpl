@@ -47,3 +47,21 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
+
+{{/* Installation mode is a literal startup value, never a request/database override. */}}
+{{- define "triton-control.installationMode" -}}
+{{- $mode := "development" -}}
+{{- $seen := false -}}
+{{- range .Values.app.env -}}
+{{- if eq .name "TRITON_CONTROL_MODE" -}}
+{{- if $seen -}}{{ fail "Configure TRITON_CONTROL_MODE only once" }}{{- end -}}
+{{- if .valueFrom -}}{{ fail "TRITON_CONTROL_MODE must be a literal Helm value" }}{{- end -}}
+{{- $mode = .value -}}
+{{- $seen = true -}}
+{{- end -}}
+{{- end -}}
+{{- if not (has $mode (list "development" "production")) -}}
+{{- fail "TRITON_CONTROL_MODE must be development or production" -}}
+{{- end -}}
+{{- $mode -}}
+{{- end -}}

@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.entities import HandoffEntity, HandoffNotificationEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import handoffs as repository
@@ -93,6 +94,7 @@ def _previous(session: Session, claims: dict[str, Any], request: HandoffRequest)
 def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
            checkpoint: Callable[[int], None] | None = None,
            publish: Callable[[Session, UUID], None] | None = None) -> HandoffReceipt:
+    installation_policy.require("development_jobs")
     try:
         _actor(session, claims)
         _previous(session, claims, request)

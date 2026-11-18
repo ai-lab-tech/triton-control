@@ -26,6 +26,7 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_admin
 from app.core.identity import is_pending_role
 from app.core.user_auth import hash_password, issue_access_token, verify_password
@@ -90,6 +91,7 @@ def has_active_local_admin_login(session: Session) -> bool:
 def login(request: LoginRequest, session: Session) -> LoginResponse:
     ensure_local_auth_allowed(session)
     if not oidc_enabled(session) and user_count(session) == 0:
+        installation_policy.require("trust_admin")
         email = request.email
         validate_password(request.password)
 

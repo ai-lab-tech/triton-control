@@ -173,3 +173,28 @@ by administrators are available to members; existing personal profiles remain
 available to their owners and can be maintained by administrators. Browser profile
 responses omit secret keys. Authenticated managed workspaces still receive the
 credentials required for S3 uploads through their dedicated profile endpoint.
+
+### Metrics endpoint allowlist
+
+Set `TRITON_METRICS_ALLOWED_URLS` in the backend environment to a comma-separated
+list of exact trusted metrics URLs, for example
+`http://triton-service.namespace.svc.cluster.local:18002/metrics,https://metrics.example.com/triton`.
+Both utilization and inference metrics requests select their destination from
+this server-side list. URL ports, paths and query strings must match exactly;
+redirects are never followed. Only list endpoints under your control, including
+DNS names whose resolution you trust.
+
+**Upgrade requirement:** populate this list with the metrics URLs of existing
+instances and newly deployed instances before restarting the backend. An unset
+or empty list blocks all metrics fetches and reports a metrics error. Triton
+health checks and inference requests are unaffected. Private Kubernetes service
+addresses are supported when explicitly listed; there is no wildcard bypass.
+
+Metrics label tokens are parsed sequentially and limited to 64 KiB of UTF-8.
+Malformed, duplicate or oversized label sets yield no labels; valid quoted values
+support escaped quotes, backslashes and newlines. This bounds parsing work even
+when a configured metrics endpoint returns malformed data.
+
+OIDC login and callback failures return stable error codes and log fixed error
+categories. Provider exception text, chained tracebacks and callback parameters
+are excluded from these log messages because they may contain credentials.

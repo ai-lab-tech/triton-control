@@ -1,3 +1,4 @@
+import { InstallationService } from "../shared/installation/installation.service";
 import { HandoffNotificationsComponent } from "../pages/handoffs/handoff-notifications.component";
 import { Component, computed, effect, inject, signal } from "@angular/core";
 
@@ -53,6 +54,7 @@ type NavItem = {
   templateUrl: "./shell.component.html",
 })
 export class ShellComponent {
+  readonly installation = inject(InstallationService);
   private readonly auth = inject(AuthStore);
   private readonly oidc = inject(AuthService);
   private readonly store = inject(Store);
@@ -62,7 +64,9 @@ export class ShellComponent {
   readonly role = this.auth.role;
   readonly isAdmin = this.auth.isAdmin;
   readonly isLoggedIn = this.auth.isLoggedIn;
-  readonly canWriteInstances = this.auth.canWriteInstances;
+  readonly canWriteInstances = computed(
+    () => this.auth.canWriteInstances() && this.installation.allows("direct_deployment"),
+  );
   readonly kubernetesEnabled = signal(false);
   readonly kubernetesCapabilityLoaded = signal(false);
 
@@ -99,7 +103,12 @@ export class ShellComponent {
         disabledReason: kubernetesActionDisabledReason,
       },
     ];
-    return items;
+    return items.filter((item) => {
+      if (["/workspaces", "/workflows", "/mlflow"].includes(item.path))
+        return this.installation.allows("development_tools");
+      if (item.path === "/deployments/new") return this.installation.allows("direct_deployment");
+      return true;
+    });
   });
 
   readonly kubernetesActionDisabledReason = computed(() => {

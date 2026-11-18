@@ -21,10 +21,10 @@ from uuid import UUID, uuid4
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 
+from app.core.canonical import canonical_bytes, inventory_digest
 from app.exceptions import BadRequestError, ConflictError, ServiceUnavailableError
 from app.schemas.candidate_import import ArtifactLocation
 from app.schemas.lineage import FileEntry, InventoryV1
-from app.services.lineage import canonical_bytes, inventory_digest
 
 CHUNK_SIZE = 1024 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024**2
@@ -245,6 +245,10 @@ class S3Source(ArtifactSource):
             safe_path(prefix.removesuffix("/"), CaptureLimits())
         self.prefix = prefix.removesuffix("/") + "/" if prefix else ""
 
+    def includes(self, path: str) -> bool:
+        """Select relative object paths before applying retained-file budgets."""
+        return True
+
     def _listing(self, limits: CaptureLimits, budget: _Budget) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         budget.nodes = 0
@@ -257,6 +261,8 @@ class S3Source(ArtifactSource):
                 if not key.startswith(self.prefix):
                     raise BadRequestError("S3 source returned an unrelated key")
                 relative = key[len(self.prefix) :]
+                if not self.includes(relative):
+                    continue
                 if not relative and item["Size"] == 0:
                     continue
                 if relative.endswith("/") and item["Size"] == 0:

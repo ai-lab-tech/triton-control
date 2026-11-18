@@ -10,13 +10,15 @@ Identity resolution (raw claims → persisted user + enriched claims) lives in `
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import re
+from typing import Any, Dict, cast
 
 import anyio
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core import identity as _identity
+from app.core import installation_policy
 from app.core.token_extractor import bearer, extract_claims
 from app.db.database import session_factory
 from app.exceptions import AppError, ForbiddenError, UnauthorizedError
@@ -27,8 +29,26 @@ async def _get_claims_with_access_policy(
     creds: HTTPAuthorizationCredentials = Depends(bearer),
     allow_pending: bool = False,
 ) -> Dict[str, Any]:
+    workload = request.headers.get("X-Triton-Build-Workspace")
+    if workload is not None:
+        # This credential is accepted only at the reviewed build HTTP boundary.
+        allowed_path = (r"/api/(?:builds(?:/options|/[a-f0-9]{32}(?:/logs|/cancel|/retry)?)?"
+                        r"|build-contexts(?:/[a-f0-9]{32}(?:/archive)?)?)")
+        if not re.fullmatch(allowed_path, request.url.path):
+            raise HTTPException(status_code=403, detail="Workspace credential cannot access this API")
+        def authenticate_build() -> Dict[str, Any]:
+            try:
+                with session_factory() as session:
+                    return cast(Dict[str, Any], request.app.state.workspace_build_authenticator(
+                        session, workload, creds.credentials if creds else "",
+                    ))
+            except AppError as exc:
+                raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        return await anyio.to_thread.run_sync(authenticate_build)
     source_claims = await extract_claims(request, creds)
     if source_claims.get("token_use") in {"mlflow_workflow", "workspace_deployment", "workflow_deployment"}:
+        if installation_policy.mode() == "production":
+            raise HTTPException(status_code=403, detail="Development delegation is disabled in production")
         path, method = request.url.path, request.method
         mlflow_path = path == "/api/deployments/mlflow" or path.startswith("/api/deployments/mlflow/")
         permitted = (

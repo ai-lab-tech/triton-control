@@ -20,7 +20,7 @@ function retryDelay(value, attempt, now) {
 /** Download with bounded retries for throttling, server errors and network failures. */
 export async function downloadWithRetry(
   urls,
-  { fetchImpl = fetch, sleep = setTimeout, now = Date.now } = {},
+  { fetchImpl = fetch, sleep = setTimeout, now = Date.now, retryNotFound = false } = {},
 ) {
   const errors = [];
   for (const url of urls) {
@@ -31,7 +31,12 @@ export async function downloadWithRetry(
         if (response.ok) return Buffer.from(await response.arrayBuffer());
         errors.push(`${url} -> ${response.status} ${response.statusText}`);
         await response.body?.cancel();
-        if (response.status !== 429 && response.status < 500) break;
+        if (
+          response.status !== 429 &&
+          response.status < 500 &&
+          !(retryNotFound && response.status === 404)
+        )
+          break;
         delay = retryDelay(response.headers.get("retry-after"), attempt, now);
       } catch (error) {
         errors.push(`${url} -> ${error instanceof Error ? error.message : String(error)}`);

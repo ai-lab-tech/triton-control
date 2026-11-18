@@ -16,6 +16,7 @@ from starlette.background import BackgroundTask
 from starlette.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketDisconnect
 
+from app.core import installation_policy
 from app.exceptions import BadGatewayError
 from app.services.workflows import auth, mlflow_delegation
 from app.services.workflows.config import get_config
@@ -51,6 +52,7 @@ _RESPONSE_SKIP_HEADERS = _HOP_BY_HOP_HEADERS | {
 
 
 async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None = None) -> Response:
+    installation_policy.require("development_tools")
     config = get_config()
     if not config.enabled or not config.server_url:
         raise BadGatewayError("Argo Workflows is not configured")
@@ -133,6 +135,7 @@ async def proxy_http(path: str, request: Request, claims: dict[str, Any] | None 
 
 
 async def proxy_websocket(path: str, websocket: WebSocket) -> None:
+    installation_policy.require("development_tools")
     config = get_config()
     if not config.enabled or not config.server_url:
         await websocket.close(code=1013)

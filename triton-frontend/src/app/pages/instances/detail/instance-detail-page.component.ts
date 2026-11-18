@@ -1,3 +1,4 @@
+import { InstallationService } from "../../../shared/installation/installation.service";
 import { DeploymentOperationComponent } from "../../../shared/deployment-operation.component";
 import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { HttpClient } from "@angular/common/http";
@@ -85,6 +86,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   templateUrl: "./instance-detail-page.component.html",
 })
 export class InstanceDetailPageComponent implements OnInit {
+  readonly installation = inject(InstallationService);
   private readonly http = inject(HttpClient);
   private readonly apiBase = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
   readonly s3Profiles = signal<{ id: number; name: string; used_by_mlflow?: boolean }[]>([]);
@@ -184,7 +186,12 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly tritonSaving = toSignal(this.store.select(selectDetailTritonSaving), {
     initialValue: false,
   });
-  readonly canWriteInstances = computed(() => this.auth.canWriteInstances() && !this.loadError());
+  readonly canWriteInstances = computed(
+    () =>
+      this.auth.canWriteInstances() &&
+      this.installation.allows("direct_deployment") &&
+      !this.loadError(),
+  );
 
   readonly metadataJson = computed(() => {
     const metadata = this.instance()?.serverMetadata;
@@ -636,6 +643,7 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   canInferModel(state: string, version: string): boolean {
+    if (!this.installation.allows("interactive_inference")) return false;
     const normalizedState = (state ?? "").trim().toUpperCase();
     const hasVersion = (version ?? "").trim().length > 0;
     if (!hasVersion) {
@@ -645,6 +653,7 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   canOpenProfile(_modelName: string, _state: string, version: string): boolean {
+    if (!this.installation.allows("development_jobs")) return false;
     return !!version.trim();
   }
 

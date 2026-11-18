@@ -8,15 +8,16 @@ from uuid import UUID
 from pydantic import ValidationError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.entities import BuildAttemptEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import build_contexts, builds, operations, preparation, users
 from app.schemas.build_policy import BuildPolicy
-from app.schemas.builds import BuildAttemptResponse, BuildLogsResponse, BuildRequest, BuildResponse
+from app.schemas.builds import BuildAttemptResponse, BuildLogsResponse, BuildOptions, BuildRequest, BuildResponse
 from app.schemas.operations import OperationRequest, ReconcileResult
 from app.services import preparation as tasks
-from app.services.builds import contexts, contexts_storage, jobs_kubernetes
+from app.services.builds import access, contexts, contexts_storage, jobs_kubernetes
 from app.services.builds.qualification import require_qualified
 from app.services.operations import Action, ExecutionContext, dto, service
 
@@ -35,6 +36,7 @@ def qualified(session: Session) -> BuildPolicy:
 
 
 def claims_guard(claims: dict[str, Any]) -> None:
+    access.development_only()
     if claims.get("token_use"):
         raise ForbiddenError("Delegated deployment tokens cannot access runtime builds")
 
@@ -42,6 +44,7 @@ def claims_guard(claims: dict[str, Any]) -> None:
 def checked(session: Session, claims: dict[str, Any], build_id: str, action: Action = "read") -> OperationEntity:
     claims_guard(claims)
     op = service.checked(session, claims, build_id, action)
+    access.task_scope(claims, op.target)
     if op.kind != KIND:
         raise ForbiddenError("Not an image build operation")
     return op
@@ -54,11 +57,17 @@ def response(session: Session, op: OperationEntity) -> BuildResponse:
 
 
 def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key: str) -> BuildResponse:
+    installation_policy.require("development_jobs")
     claims_guard(claims)
+    access.task_scope(claims, request.task_id)
     # Validate context ownership and qualification before accepting public API intent.
     settings = qualified(session)
     if request.repository not in settings.allowed_repositories:
         raise ForbiddenError("Destination repository is not allowed")
+    context_op = contexts.checked(session, claims, request.context_id)
+    bound_task = context_op.payload["request"].get("task_id")
+    if bound_task is not None and bound_task != str(request.task_id):
+        raise ForbiddenError("Build context belongs to a different task")
     if not contexts.read(session, claims, request.context_id).ready:
         raise ConflictError("A verified retained build context is required")
     result = service.submit(session, claims, OperationRequest(
@@ -100,6 +109,7 @@ def fence(session: Session, op: OperationEntity) -> None:
 
 
 def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> BuildAttemptEntity:
+    installation_policy.require("development_jobs")
     existing = builds.latest(session, op.id)
     if existing is not None and not existing.retry_requested:
         return existing
@@ -110,6 +120,10 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
     actor = users.find_by_id(session, op.actor_id)
     if actor is None:
         raise ForbiddenError("Build actor no longer exists")
+    context_op = operations.get(session, request.context_id)
+    bound_task = context_op.payload["request"].get("task_id")
+    if bound_task is not None and bound_task != str(request.task_id):
+        raise ForbiddenError("Build context belongs to a different task")
     receipt = contexts.consume_for_build(session, claims_from_user(actor, {}), request.context_id,
                                           os.environ["TRITON_BUILD_FIXTURE_REVISION"], context.checkpoint)
     fence(session, op)
@@ -178,6 +192,7 @@ class BuildAdapter:
         session.add(row)
 
     def reconcile(self, op: OperationEntity, context: ExecutionContext) -> ReconcileResult:
+        installation_policy.require("development_jobs")
         with context.sessions() as session:
             row = builds.latest(session, op.id)
             stopping = op.cancel_requested or preparation.get(session, UUID(op.target)).state == "cancelled"
@@ -207,6 +222,7 @@ def reconcile_attempt(
     session: Session, op: OperationEntity, row: BuildAttemptEntity, context: ExecutionContext,
     provider: jobs_kubernetes.Jobs,
 ) -> ReconcileResult:
+    installation_policy.require("development_jobs")
     context.checkpoint()
     fence(session, op)
     if row.finished_at is not None:
@@ -258,7 +274,44 @@ def reconcile_attempt(
             raise ForbiddenError("Build policy changed before execution")
         provider.resume(row, resource)
     session.rollback()
-    return ReconcileResult(message="Build executor running")
+    # Progress is informational; success/digest still require the owned executor result.
+    phase = "queued"
+    if observation.running:
+        phase = "pushing" if "Pushing image to " in observation.logs else "building"
+    return ReconcileResult(message="Build executor " + phase, result={"phase": phase})
 
 
 adapter = BuildAdapter()
+
+
+def options(session: Session, claims: dict[str, Any], task_id: UUID) -> BuildOptions:
+    claims_guard(claims)
+    access.task_scope(claims, task_id)
+    actor_id, _, _ = tasks.authorize_task_access(session, claims, task_id)
+    actor = users.find_by_id(session, actor_id)
+    if actor is None:
+        raise ForbiddenError("Build actor unavailable")
+    adapter.authorize(session, actor, str(task_id), "submit")
+    settings = qualified(session)
+    return BuildOptions(task_id=task_id, repositories=settings.allowed_repositories,
+                        max_context_bytes=settings.max_context_bytes)
+
+
+def list_for_task(session: Session, claims: dict[str, Any], task_id: UUID,
+                  limit: int = 50, offset: int = 0) -> list[BuildResponse]:
+    claims_guard(claims)
+    access.task_scope(claims, task_id)
+    actor, admin, eligible = tasks.authorize_task_access(session, claims, task_id)
+    if not (admin or eligible):
+        raise ForbiddenError("Current task engineering membership required")
+    return [response(session, row) for row in builds.for_task(session, str(task_id), None if admin else actor,
+                                                             limit, offset)]
+
+
+def retry(session: Session, claims: dict[str, Any], build_id: str) -> BuildResponse:
+    op = checked(session, claims, build_id, "retry")
+    request = BuildRequest.model_validate(op.payload["request"])
+    if not contexts.read(session, claims, request.context_id).ready:
+        raise ConflictError("Context expired; submit a new snapshot")
+    service.retry(session, claims, build_id)
+    return read(session, claims, build_id)

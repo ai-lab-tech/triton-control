@@ -9,6 +9,7 @@ from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.core.identity import claims_from_user
 from app.db.entities import CodeServerEntity
@@ -22,6 +23,7 @@ from app.services.storage.s3_profiles import profile_dtos
 def authenticate_workspace(
     session: Session, namespace: str, statefulset_name: str, token: str,
 ) -> CodeServerEntity:
+    installation_policy.require("development_tools")
     if not token or len(token) > 256:
         raise UnauthorizedError("Workspace authentication required")
     workspace = developments.find_by_workload(session, namespace, statefulset_name)
@@ -39,8 +41,8 @@ def authenticate_workspace(
     owner = users.find_by_id(session, workspace.owner_user_id)
     if not owner or not owner.is_active:
         raise ForbiddenError("Workspace owner is not active")
-    # Resolve the current owner/role on every request. This token is accepted only
-    # by this read-only endpoint; it cannot authenticate to other application APIs.
+    # Resolve the current owner/role on every request. Callers must enforce their
+    # endpoint scope; the build boundary additionally binds this identity to its task.
     require_member_or_admin(claims_from_user(owner, {}))
     from app.services.task_workspace_access import guard
     guard(session, workspace)
@@ -50,5 +52,6 @@ def authenticate_workspace(
 def workspace_profiles(
     session: Session, namespace: str, statefulset_name: str, token: str,
 ) -> list[S3ProfileDTO]:
+    installation_policy.require("development_tools")
     authenticate_workspace(session, namespace, statefulset_name, token)
     return profile_dtos(session, include_secret=True)

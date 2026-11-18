@@ -1,3 +1,4 @@
+import { InstallationService } from "../../shared/installation/installation.service";
 import { S3ProfileLabelComponent } from "../../shared/s3-profile-label.component";
 import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
@@ -46,6 +47,7 @@ type S3Profile = {
   templateUrl: "./s3-profiles-page.component.html",
 })
 export class S3ProfilesPageComponent {
+  readonly installation = inject(InstallationService);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthStore);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
@@ -66,7 +68,7 @@ export class S3ProfilesPageComponent {
   }
 
   canManage(): boolean {
-    return this.auth.isAdmin();
+    return this.auth.isAdmin() && this.installation.allows("credential_admin");
   }
 
   usesHttpsS3(): boolean {
@@ -98,12 +100,18 @@ export class S3ProfilesPageComponent {
   }
 
   newProfile(): void {
+    if (!this.installation.allows("trust_admin")) return;
     this.selectedId = "";
     this.draft = this.emptyDraft();
   }
 
   async saveProfile(): Promise<void> {
-    if (!this.canManage() || this.saving()) return;
+    if (
+      !this.canManage() ||
+      this.saving() ||
+      (!this.selectedId && !this.installation.allows("trust_admin"))
+    )
+      return;
     this.saving.set(true);
     const payload = {
       name: this.draft.name.trim(),
@@ -119,7 +127,12 @@ export class S3ProfilesPageComponent {
     try {
       const saved = this.selectedId
         ? await firstValueFrom(
-            this.http.put<S3Profile>(this.apiUrl(`/api/s3-profiles/${this.selectedId}`), payload),
+            this.http.put<S3Profile>(
+              this.apiUrl(`/api/s3-profiles/${this.selectedId}`),
+              this.installation.snapshot()?.mode === "production"
+                ? { access_key: payload.access_key, secret_key: payload.secret_key }
+                : payload,
+            ),
           )
         : await firstValueFrom(this.http.post<S3Profile>(this.apiUrl("/api/s3-profiles"), payload));
       this.setMessage("S3 profile saved.", "success");
@@ -139,7 +152,7 @@ export class S3ProfilesPageComponent {
     try {
       await firstValueFrom(this.http.delete(this.apiUrl(`/api/s3-profiles/${this.selectedId}`)));
       this.setMessage("S3 profile deleted.", "success");
-      this.newProfile();
+      this.selectProfile("");
       await this.loadProfiles();
     } catch (error) {
       this.setMessage(mapApiErrorMessage(error, "Failed to delete S3 profile."), "error");

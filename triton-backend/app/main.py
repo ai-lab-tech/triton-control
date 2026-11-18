@@ -41,11 +41,14 @@ from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.build_api import router as build_router
 from app.api.build_context_api import router as build_context_router
+from app.api.capabilities_api import router as capabilities_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
 from app.api.development_api import router as code_server_router
 from app.api.error_log_api import router as error_log_router
+from app.api.experiment_snapshots_api import router as experiment_snapshots_router
 from app.api.handoffs_api import router as handoffs_router
+from app.api.installation_policy import InstallationPolicyMiddleware
 from app.api.instance_api import router as instance_router
 from app.api.local_bindings_api import router as local_bindings_router
 from app.api.mlflow_api import router as mlflow_router
@@ -63,11 +66,13 @@ from app.api.task_workspaces_api import router as task_workspaces_router
 from app.api.team_api import router as team_router
 from app.api.user_api import router as user_router
 from app.api.workflows_api import router as workflows_router
+from app.core import installation_policy
 from app.core.logging import configure_logging, get_log_level_name, is_verbose_logging
 from app.core.security import get_claims, get_claims_allow_pending
 from app.db.database import init_db, session_factory
 from app.repositories.deployment_intents import KIND as DEPLOYMENT_OPERATION_KIND
 from app.services import error_logs
+from app.services.builds.access import authenticate as authenticate_build_workspace
 from app.services.builds.contexts import KIND as BUILD_CONTEXT_KIND
 from app.services.builds.contexts import adapter as build_context_adapter
 from app.services.builds.contexts_cleanup import RetentionWorker
@@ -77,6 +82,7 @@ from app.services.deployment.operations import adapter as deployment_adapter
 from app.services.development.deployment_access import authenticate_token as authenticate_workspace_deployment
 from app.services.handoff_capture import KIND as HANDOFF_CAPTURE_KIND
 from app.services.handoff_capture import adapter as handoff_capture_adapter
+from app.services.installation_policy import verify_cutover
 from app.services.mlflow import migration as mlflow_migration
 from app.services.operations import OperationWorker
 from app.services.operations import service as operation_service
@@ -119,6 +125,7 @@ app = FastAPI(
 )
 
 app.state.workspace_deployment_authenticator = authenticate_workspace_deployment
+app.state.workspace_build_authenticator = authenticate_build_workspace
 
 
 @app.exception_handler(RequestValidationError)
@@ -187,6 +194,8 @@ cors_origins = _parse_csv(
     )
 )
 
+app.add_middleware(InstallationPolicyMiddleware, routes=app.router.routes)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -202,11 +211,21 @@ capture_worker = OperationWorker(operation_service, kinds=[HANDOFF_CAPTURE_KIND]
 @app.on_event("startup")
 async def on_startup() -> None:
     """Initialize database tables on startup."""
+    installation_policy.mode()  # Validate before DB access or worker startup.
     init_db()
+    with session_factory() as session:
+        verify_cutover(session)
     instance_health_refresher.start()
+    if installation_policy.mode() == "production":
+        return
     perf_job_reconciler.start()
     if DEPLOYMENT_OPERATION_KIND not in operation_service.adapters:
         operation_service.register(DEPLOYMENT_OPERATION_KIND, deployment_adapter)
+    from app.services.snapshots.service import KIND as SNAPSHOT_KIND
+    from app.services.snapshots.service import SnapshotAdapter
+    if SNAPSHOT_KIND not in operation_service.adapters:
+        operation_service.register(SNAPSHOT_KIND, SnapshotAdapter())
+
     if BUILD_CONTEXT_KIND not in operation_service.adapters:
         operation_service.register(BUILD_CONTEXT_KIND, build_context_adapter)
     if HANDOFF_CAPTURE_KIND not in operation_service.adapters:
@@ -232,6 +251,7 @@ async def on_shutdown() -> None:
     await TritonService.close_all_clients()
 
 
+app.include_router(capabilities_router)
 app.include_router(oidc_router)
 app.include_router(registry_router)
 app.include_router(preparation_settings_router)
@@ -254,6 +274,7 @@ app.include_router(code_server_router)
 app.include_router(perf_analyzer_router, dependencies=[Depends(get_claims)])
 app.include_router(mlflow_router)
 app.include_router(instance_router, dependencies=[Depends(get_claims)])
+app.include_router(experiment_snapshots_router, dependencies=[Depends(get_claims)])
 app.include_router(model_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_router, dependencies=[Depends(get_claims)])
 app.include_router(s3_profile_router, dependencies=[Depends(get_claims)])

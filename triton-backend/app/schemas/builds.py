@@ -45,3 +45,9 @@ class BuildLogsResponse(BaseModel):
     truncated: bool
     expired: bool
     retained: bool
+
+
+class BuildOptions(BaseModel):
+    task_id: UUID
+    repositories: tuple[str, ...]
+    max_context_bytes: int

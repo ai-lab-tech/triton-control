@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
+from app.core import installation_policy
 from app.core.crypto import decrypt_secret
 from app.core.identity import require_user_entity
 from app.db.entities import S3ProfileEntity, WorkflowS3CredentialEntity
@@ -25,6 +26,7 @@ from app.services.workflows.config import get_config
 
 
 def list_credentials(session: Session, claims: dict[str, object]) -> list[WorkflowS3CredentialDTO]:
+    installation_policy.require("development_tools")
     user = require_user_entity(session, claims)
     rows = workflow_s3_credentials.list_for_owner(session, user.id or 0)
     return [_to_dto(row) for row in rows]
@@ -35,6 +37,7 @@ def create_credential(
     session: Session,
     claims: dict[str, object],
 ) -> WorkflowS3CredentialDTO:
+    installation_policy.require("development_tools")
     user = require_user_entity(session, claims)
     profile = None
     if request.s3_profile_id is not None:
@@ -99,6 +102,7 @@ def create_credential(
 def delete_credential(
     session: Session, credential_id: int, claims: dict[str, object],
 ) -> WorkflowS3CredentialDeleteResponse:
+    installation_policy.require("development_tools")
     row = workflow_s3_credentials.find_by_id(session, credential_id)
     user = require_user_entity(session, claims)
     if not row or (row.created_by_user_id != user.id and user.role != "admin"):
@@ -224,6 +228,7 @@ def _k8s_error(exc: Exception) -> str:
 
 def sync_profile_credentials(session: Session, profile_id: int) -> None:
     """Serialize synchronization and read the latest committed profile values."""
+    installation_policy.require("development_tools")
     profile = session.exec(select(S3ProfileEntity).where(
         S3ProfileEntity.id == profile_id,
     ).with_for_update().execution_options(populate_existing=True)).first()
@@ -254,6 +259,7 @@ def sync_profile_credentials(session: Session, profile_id: int) -> None:
 
 
 def retry_sync(session: Session, claims: dict[str, object], credential_id: int) -> WorkflowS3CredentialDTO:
+    installation_policy.require("development_tools")
     user = require_user_entity(session, claims)
     row = workflow_s3_credentials.find_by_id(session, credential_id)
     if not row or not row.s3_profile_id or (row.created_by_user_id != user.id and user.role != "admin"):

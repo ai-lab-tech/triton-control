@@ -1,3 +1,4 @@
+{{- $development := eq (include "triton-control.installationMode" .) "development" -}}
 {{- if and .Values.tritonDeployments.ingressTlsSecretName .Values.tritonDeployments.certManagerClusterIssuer }}
 {{- fail "Set either tritonDeployments.ingressTlsSecretName or tritonDeployments.certManagerClusterIssuer, not both" }}
 {{- end }}
@@ -76,6 +77,7 @@ spec:
             - name: TRITON_BUILD_CONTEXT_RETENTION_DAYS
               value: {{ .Values.buildQualification.contextRetentionDays | quote }}
             {{- end }}
+            {{- if $development }}
             - name: PERF_ANALYZER_IMAGE
               value: {{ .Values.perfAnalyzer.image | quote }}
             - name: PERF_ANALYZER_DEADLINE_SECONDS
@@ -96,6 +98,7 @@ spec:
               value: {{ .Values.mlflow.gatewayImage | quote }}
             - name: ARGO_WORKFLOWS_WORKFLOW_SERVICE_ACCOUNT
               value: {{ .Values.argoWorkflows.controller.workflowDefaults.spec.serviceAccountName | quote }}
+            {{- end }}
             - name: TRITON_DEPLOY_BASE_DOMAIN
               value: {{ .Values.tritonDeployments.baseDomain | default "" | quote }}
             - name: TRITON_DEPLOY_INGRESS_ENABLED
@@ -120,6 +123,7 @@ spec:
               value: {{ .Values.tritonDeployments.s3SyncStagingEmptyDirSize | quote }}
             - name: TRITON_DEPLOY_PROBES_JSON
               value: {{ .Values.tritonDeployments.probes | toJson | quote }}
+            {{- if $development }}
             - name: DEVELOPMENT_PROFILE_API_URL
               value: {{ printf "http://%s.%s.svc.cluster.local:%v" (include "triton-control.fullname" .) .Release.Namespace .Values.service.backendPort | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION
@@ -130,6 +134,11 @@ spec:
               value: {{ .Values.development.mlflow.version | quote }}
             - name: DEVELOPMENT_MLFLOW_TRITON_CONTROL_VERSION
               value: {{ .Values.development.mlflow.tritonControlVersion | quote }}
+            {{- end }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             {{- with .Values.app.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -140,6 +149,7 @@ spec:
                   name: {{ include "triton-control.postgresqlSecretName" . }}
                   key: database-url
             {{- end }}
+            {{- if $development }}
             - name: ARGO_WORKFLOWS_ENABLED
               value: {{ .Values.argoWorkflows.enabled | quote }}
             - name: ARGO_WORKFLOWS_NAMESPACE
@@ -150,6 +160,7 @@ spec:
               value: {{ default (printf "http://argo-workflows-server.%s.svc.cluster.local:%v" .Release.Namespace .Values.argoWorkflows.server.servicePort) .Values.argoIntegration.serverUrl | quote }}
             - name: ARGO_WORKFLOWS_BASE_PATH
               value: {{ .Values.argoIntegration.basePath | quote }}
+            {{- end }}
           envFrom:
             {{- if .Values.app.existingSecret }}
             - secretRef:

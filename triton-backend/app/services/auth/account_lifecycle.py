@@ -341,6 +341,8 @@ def _rate_limited(session: Session, email: str, client_key: str) -> bool:
     limit = max(1, int(os.getenv("EMAIL_RECOVERY_RATE_LIMIT", "5")))
     now = datetime.utcnow()
     window = now.replace(minute=0, second=0, microsecond=0)
+    # Stable rate-limit bucket identifiers, not password-verification hashes.
+    # Password storage uses hash_password (salted PBKDF2) in the completion flows.
     email_digest = hashlib.sha256(email.encode("utf-8")).hexdigest()
     email_count = account_lifecycle.increment_rate_bucket(session, f"email:{email_digest}", window)
     client_digest = hashlib.sha256(client_key.encode("utf-8")).hexdigest()
