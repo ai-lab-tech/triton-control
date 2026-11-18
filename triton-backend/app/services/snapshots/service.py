@@ -244,6 +244,88 @@ def _workspace(session: Session, claims: dict[str, Any], request: PreparationReq
     )
 
 
+def _capture_gaps(
+    request: PreparationRequest, before: RuntimeObservation, intended_models: list[str],
+    inventory: InventoryV1, workspace: InventoryV1,
+) -> set[str]:
+    gaps = {"runtime_state_unverified", "running_model_bytes_unverified"}
+    if request.runtime_changes == "requires_rebuild":
+        gaps.add("runtime_changes_require_build")
+    if not before.managed:
+        gaps.add("external_runtime_unobserved")
+    if not before.images or any(not image.observed for image in before.images):
+        gaps.add("running_image_identity_unknown")
+    if not before.images or any(not image.platform for image in before.images):
+        gaps.add("runtime_platform_unknown")
+    if len({image.observed for image in before.images}) > 1:
+        gaps.add("runtime_images_differ")
+    if set(model.name for model in request.models) != set(intended_models):
+        gaps.add("intended_models_differ")
+    if request.workspace:
+        gaps.add("workspace_changes_not_tested")
+    if not request.expected_behavior:
+        gaps.add("expected_behavior")
+    if not request.acceptance_criteria:
+        gaps.add("acceptance_criteria")
+    if not request.evaluation_files:
+        gaps.add("evaluation_inputs_missing")
+    paths = {entry.path for entry in inventory.files}
+    for model in request.models:
+        if f"{model.name}/config.pbtxt" not in paths or any(
+            not any(path.startswith(f"{model.name}/{version}/") for path in paths) for version in model.versions
+        ):
+            gaps.add("model_artifacts_missing")
+    available = {
+        entry.path.removeprefix(".workspace/"): entry for entry in (*inventory.files, *workspace.files)
+    }
+    if any(
+        entry.path not in available
+        or (entry.size, entry.digest) != (available[entry.path].size, available[entry.path].digest)
+        for entry in request.evaluation_files
+    ):
+        gaps.add("evaluation_files_unverified")
+    return gaps
+
+
+def _commit_snapshot(
+    session: Session, claims: dict[str, Any], operation: OperationEntity,
+    request: PreparationRequest, manifest: SnapshotManifest, location: ArtifactLocation,
+) -> ReconcileResult:
+    gaps = list(manifest.gaps)
+    # Serialize the final fence and task/snapshot/operation transaction.
+    current = operation_repo.owned(session, operation.id, operation.worker or "", operation.generation)
+    _selectors(session, claims, _instance(session, claims, int(operation.target)), request)
+    if current.cancel_requested:
+        raise ConflictError("Capture was cancelled before publication")
+    task = preparation.create_task(
+        session,
+        claims,
+        TaskCreate(title=request.title, source_snapshot_id=UUID(operation.id), missing_inputs=sorted(gaps)),
+        commit=False,
+    )
+    repository.add(
+        session,
+        PreparationSnapshotEntity(
+            id=UUID(operation.id),
+            operation_id=operation.id,
+            instance_id=int(operation.target),
+            actor_id=operation.actor_id,
+            task_id=task.id,
+            manifest_digest=digest(manifest.model_dump(mode="json")),
+            manifest=manifest.model_dump(mode="json"),
+            artifacts=location.model_dump(mode="json"),
+        ),
+    )
+    from app.services.snapshots.inputs import register
+    register(session, repository.get(session, UUID(operation.id)))
+    current.state = "succeeded"
+    current.result = {"snapshot_id": operation.id, "task_id": str(task.id), "gaps": sorted(gaps)}
+    current.worker, current.lease_until = None, None
+    session.add(current)
+    session.commit()
+    return ReconcileResult(state="succeeded", result=current.result)
+
+
 def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileResult:
     request = PreparationRequest.model_validate(operation.payload)
     installation = os.getenv("TRITON_INSTALLATION_ID", "").strip()
@@ -267,27 +349,6 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 store_prefix = store.prefix + "/"
                 if model_prefix.startswith(store_prefix) or store_prefix.startswith(model_prefix):
                     raise BadRequestError("Snapshot staging must not overlap selected model sources")
-        gaps = {"runtime_state_unverified", "running_model_bytes_unverified"}
-        if request.runtime_changes == "requires_rebuild":
-            gaps.add("runtime_changes_require_build")
-        if not before.managed:
-            gaps.add("external_runtime_unobserved")
-        if not before.images or any(not image.observed for image in before.images):
-            gaps.add("running_image_identity_unknown")
-        if not before.images or any(not image.platform for image in before.images):
-            gaps.add("runtime_platform_unknown")
-        if len({image.observed for image in before.images}) > 1:
-            gaps.add("runtime_images_differ")
-        if set(model.name for model in request.models) != set(instance.model_names):
-            gaps.add("intended_models_differ")
-        if request.workspace:
-            gaps.add("workspace_changes_not_tested")
-        if not request.expected_behavior:
-            gaps.add("expected_behavior")
-        if not request.acceptance_criteria:
-            gaps.add("acceptance_criteria")
-        if not request.evaluation_files:
-            gaps.add("evaluation_inputs_missing")
         with tempfile.TemporaryDirectory(prefix="experiment-snapshot-") as directory:
             staging = Path(directory)
             inventory = InventoryV1(files=())
@@ -296,21 +357,7 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 inventory = captured.inventory
             workspace = _workspace(session, claims, request, staging)
             scan_credentials(staging, [entry.path for entry in inventory.files])
-            for model in request.models:
-                paths = {entry.path for entry in inventory.files}
-                if f"{model.name}/config.pbtxt" not in paths or any(
-                    not any(path.startswith(f"{model.name}/{version}/") for path in paths) for version in model.versions
-                ):
-                    gaps.add("model_artifacts_missing")
-            available = {
-                entry.path.removeprefix(".workspace/"): entry for entry in (*inventory.files, *workspace.files)
-            }
-            if any(
-                entry.path not in available
-                or (entry.size, entry.digest) != (available[entry.path].size, available[entry.path].digest)
-                for entry in request.evaluation_files
-            ):
-                gaps.add("evaluation_files_unverified")
+            gaps = _capture_gaps(request, before, instance.model_names, inventory, workspace)
             heartbeat.check()
             # Re-read the full selected inventory after workspace capture. Do not
             # mix an earlier model view with a later workspace/runtime view.
@@ -362,38 +409,7 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 **location.reference, "storage_binding": store_identity,
             }})
             heartbeat.check()
-            # Serialize the final fence and task/snapshot/operation transaction.
-            current = operation_repo.owned(session, operation.id, operation.worker or "", operation.generation)
-            _selectors(session, claims, _instance(session, claims, int(operation.target)), request)
-            if current.cancel_requested:
-                raise ConflictError("Capture was cancelled before publication")
-            task = preparation.create_task(
-                session,
-                claims,
-                TaskCreate(title=request.title, source_snapshot_id=UUID(operation.id), missing_inputs=sorted(gaps)),
-                commit=False,
-            )
-            repository.add(
-                session,
-                PreparationSnapshotEntity(
-                    id=UUID(operation.id),
-                    operation_id=operation.id,
-                    instance_id=int(operation.target),
-                    actor_id=operation.actor_id,
-                    task_id=task.id,
-                    manifest_digest=digest(manifest.model_dump(mode="json")),
-                    manifest=manifest.model_dump(mode="json"),
-                    artifacts=location.model_dump(mode="json"),
-                ),
-            )
-            from app.services.snapshots.inputs import register
-            register(session, repository.get(session, UUID(operation.id)))
-            current.state = "succeeded"
-            current.result = {"snapshot_id": operation.id, "task_id": str(task.id), "gaps": sorted(gaps)}
-            current.worker, current.lease_until = None, None
-            session.add(current)
-            session.commit()
-            return ReconcileResult(state="succeeded", result=current.result)
+            return _commit_snapshot(session, claims, operation, request, manifest, location)
 
 
 def operation_actor_email(context: ExecutionContext, operation: OperationEntity) -> str:

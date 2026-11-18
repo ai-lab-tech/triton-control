@@ -56,16 +56,35 @@ def binding(session: Session) -> tuple[dict[str, Any], Any]:
     return {"endpoint": config["s3_endpoint"], "bucket": bucket, "prefix": prefix.removesuffix("/")}, config
 
 
-def authorize(session: Session, artifact: SnapshotFile, snapshot: Snapshot | None = None) -> PreparationSnapshotEntity:
-    row = experiment_snapshots.get(session, artifact.snapshot_id)
+def _authorized_snapshot(
+    session: Session, snapshot_id: UUID, snapshot: Snapshot | None = None,
+) -> tuple[PreparationSnapshotEntity, SnapshotManifest]:
+    row = experiment_snapshots.get(session, snapshot_id)
     manifest = SnapshotManifest.model_validate(row.manifest)
     if snapshot is not None and manifest.source_snapshot != snapshot:
         raise ForbiddenError("Workspace snapshot identity differs from its receipt")
-    if artifact.file not in (*manifest.inventory.files, *manifest.workspace_inventory.files):
-        raise ForbiddenError("Workspace file is not part of its captured snapshot")
     current, _ = binding(session)
     if row.artifacts["reference"].get("storage_binding") != current:
         raise ForbiddenError("Snapshot storage binding changed or was not recorded; recapture explicitly")
+    return row, manifest
+
+
+def authorize_files(session: Session, artifacts: list[SnapshotFile], snapshot: Snapshot) -> None:
+    """Validate one immutable inventory per request; never cache live authorization."""
+    if not artifacts:
+        return
+    snapshot_id = artifacts[0].snapshot_id
+    _, manifest = _authorized_snapshot(session, snapshot_id, snapshot)
+    files = {file.path: file for file in (*manifest.inventory.files, *manifest.workspace_inventory.files)}
+    for artifact in artifacts:
+        if artifact.snapshot_id != snapshot_id or files.get(artifact.file.path) != artifact.file:
+            raise ForbiddenError("Workspace file is not part of its captured snapshot")
+
+
+def authorize(session: Session, artifact: SnapshotFile, snapshot: Snapshot | None = None) -> PreparationSnapshotEntity:
+    row, manifest = _authorized_snapshot(session, artifact.snapshot_id, snapshot)
+    if artifact.file not in (*manifest.inventory.files, *manifest.workspace_inventory.files):
+        raise ForbiddenError("Workspace file is not part of its captured snapshot")
     return row
 
 

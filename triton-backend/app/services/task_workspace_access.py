@@ -68,13 +68,15 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
         raise ConflictError("Workspace inputs exceed the 3 GiB staging limit")
     if len(inputs.model_dump_json().encode()) > 512 * 1024:
         raise ConflictError("Workspace input manifest exceeds the 512 KiB limit")
+    snapshots = [item.artifact for item in inputs.files if isinstance(item.artifact, SnapshotFile)]
+    if snapshots:
+        from app.services.snapshots.inputs import authorize_files
+        authorize_files(session, snapshots, inputs.snapshot)
     # S3 profiles currently grant installation-wide member/admin access. Never
     # derive an artifact permission from team membership, nor accept an arbitrary URL.
     for item in inputs.files:
         artifact = item.artifact
         if isinstance(artifact, SnapshotFile):
-            from app.services.snapshots.inputs import authorize
-            authorize(session, artifact, inputs.snapshot)
             continue
         config, bucket, key = handoff_sources.authorize(session, artifact.source)
         if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):

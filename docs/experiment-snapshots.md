@@ -108,8 +108,9 @@ available and uses conditional reads/rechecks otherwise. The controlled S3
 **destination** always requires actual, non-null version IDs.
 
 The model allowlist includes only intended models and selected numeric versions;
-other models/versions and recognized credential paths are excluded before object
-reads. The workspace reader verifies StatefulSet → Pod UID ownership, executes a
+other models/versions and recognized credential paths are excluded before retained-file
+count/byte limits and object reads. Enumeration still has a separate bound, including
+excluded keys, so an oversized listing cannot consume unbounded work. The workspace reader verifies StatefulSet → Pod UID ownership, executes a
 fixed isolated-Python read-only program in the owned workspace, opens selected
 files with `O_NOFOLLOW`, rejects links/hardlinks/special files and compares
 before/after content/signatures. It requires Python 3.9+ in that workspace image.
@@ -182,7 +183,9 @@ The workspace restores the captured model inventory under `/inputs/verified/sour
 and selected project files under `/inputs/verified/source/.workspace/`. Downloads
 read only the retained directory snapshot or exact retained S3 versions and verify
 each size and digest. They never reread the live experiment. Assignment and storage
-binding are rechecked on access; changing the configured staging root, endpoint,
+binding are rechecked on access. Each authorization parses the snapshot manifest
+once and indexes its files by path; no authorization is cached across requests.
+Changing the configured staging root, endpoint,
 bucket or prefix revokes access rather than redirecting old receipts. Directory
 reads reject links. Capturing an experiment does not start a workspace automatically.
 

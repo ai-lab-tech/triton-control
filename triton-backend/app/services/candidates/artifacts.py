@@ -245,6 +245,10 @@ class S3Source(ArtifactSource):
             safe_path(prefix.removesuffix("/"), CaptureLimits())
         self.prefix = prefix.removesuffix("/") + "/" if prefix else ""
 
+    def includes(self, path: str) -> bool:
+        """Select relative object paths before applying retained-file budgets."""
+        return True
+
     def _listing(self, limits: CaptureLimits, budget: _Budget) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         budget.nodes = 0
@@ -257,6 +261,8 @@ class S3Source(ArtifactSource):
                 if not key.startswith(self.prefix):
                     raise BadRequestError("S3 source returned an unrelated key")
                 relative = key[len(self.prefix) :]
+                if not self.includes(relative):
+                    continue
                 if not relative and item["Size"] == 0:
                     continue
                 if relative.endswith("/") and item["Size"] == 0:

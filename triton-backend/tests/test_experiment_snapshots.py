@@ -357,23 +357,58 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
 
 
 class WorkspaceReaderTests(unittest.TestCase):
-    def test_selected_uncommitted_files_and_links_limits_and_mutation(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "project").mkdir()
-            (root / "project/model.py").write_text("uncommitted")
-            (root / "unrelated.txt").write_text("not selected")
-            rows = workspace_reader.read(directory, ("project/model.py",), 100, 100)
-            self.assertEqual([row["path"] for row in rows], ["project/model.py"])
-            self.assertEqual(base64.b64decode(rows[0]["data"]), b"uncommitted")
-            (root / "project/link").symlink_to(root / "unrelated.txt")
-            with self.assertRaises(OSError):
-                workspace_reader.read(directory, ("project/link",), 100, 100)
-            with self.assertRaises(ValueError):
-                workspace_reader.read(directory, ("project/model.py",), 1, 1)
-            with patch("app.services.snapshots.workspace_reader.os.fstat", side_effect=OSError("changed")):
-                with self.assertRaises(OSError):
-                    workspace_reader.read(directory, ("project/model.py",), 100, 100)
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (self.root / "project").mkdir()
+        (self.root / "project/model.py").write_text("uncommitted")
+
+    def test_selected_uncommitted_file_excludes_unrelated_files(self):
+        # Arrange
+        (self.root / "unrelated.txt").write_text("not selected")
+
+        # Act
+        rows = workspace_reader.read(str(self.root), ("project/model.py",), 100, 100)
+
+        # Assert
+        self.assertEqual([row["path"] for row in rows], ["project/model.py"])
+        self.assertEqual(base64.b64decode(rows[0]["data"]), b"uncommitted")
+
+    def test_symlink_is_rejected(self):
+        # Arrange
+        (self.root / "project/link").symlink_to(self.root / "project/model.py")
+
+        # Act / Assert
+        with self.assertRaises(OSError):
+            workspace_reader.read(str(self.root), ("project/link",), 100, 100)
+
+    def test_oversized_file_is_rejected(self):
+        # Arrange
+        maximum = 1
+
+        # Act / Assert
+        with self.assertRaises(ValueError):
+            workspace_reader.read(str(self.root), ("project/model.py",), maximum, maximum)
+
+    def test_file_mutation_during_read_is_rejected(self):
+        # Arrange
+        original_fstat = os.fstat
+        calls = 0
+
+        def mutate_before_second_stat(fd):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                (self.root / "project/model.py").write_text("changed during capture")
+            return original_fstat(fd)
+
+        self.enterContext(patch.object(workspace_reader.os, "fstat", side_effect=mutate_before_second_stat))
+
+        # Act
+        with self.assertRaises(ValueError) as error:
+            workspace_reader.read(str(self.root), ("project/model.py",), 100, 100)
+
+        # Assert
+        self.assertEqual(str(error.exception), "changed")
 
     def test_remote_response_selection_and_secret_paths_are_verified(self):
         with tempfile.TemporaryDirectory() as directory:
