@@ -321,3 +321,5 @@ npm run test:smoke
 - Frontend details: `triton-frontend/README.md`
 - Helm chart details: `charts/triton-control/README.md`
 - Backend TLS setup: `triton-backend/tls/README.md`
+
+Installation modes and production cutover: [installation policy](docs/installation-policy.md).

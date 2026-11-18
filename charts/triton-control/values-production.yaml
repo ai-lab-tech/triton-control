@@ -1,0 +1,9 @@
+# Separate backend/UI installation. Review docs/installation-policy.md before cutover.
+app:
+  env:
+    - name: TRITON_CONTROL_MODE
+      value: production
+argoWorkflows:
+  enabled: false
+buildQualification:
+  policy: null

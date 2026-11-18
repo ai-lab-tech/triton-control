@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.db.entities import MlflowEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -30,6 +31,7 @@ _MLFLOW_NAMESPACE = "triton-control"
 
 def get_mlflow_status(session: Session) -> MlflowStatusResponse:
     """Return persisted singleton MLflow installation state."""
+    installation_policy.require("development_tools")
     entity = mlflow.get(session)
     if entity is None:
         return MlflowStatusResponse(
@@ -62,6 +64,7 @@ def get_mlflow_status(session: Session) -> MlflowStatusResponse:
 
 def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict[str, Any]) -> MlflowInstallResponse:
     """Install MLflow resources and return applied Kubernetes resources."""
+    installation_policy.require("development_tools")
     if not _install_lock.acquire(blocking=False):
         raise ConflictError("MLflow installation is already in progress")
 
@@ -120,6 +123,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict
 
 def uninstall_mlflow(session: Session) -> MlflowDeleteResponse:
     """Delete singleton MLflow workload and clear installation record."""
+    installation_policy.require("development_tools")
     entity = mlflow.get(session)
     if entity is None:
         raise BadRequestError("MLflow is not installed")
@@ -146,6 +150,7 @@ def uninstall_mlflow(session: Session) -> MlflowDeleteResponse:
 
 def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
     """Protect an existing MLflow installation and configure existing workspaces."""
+    installation_policy.require("development_tools")
     if not _install_lock.acquire(blocking=False):
         raise ConflictError("MLflow installation is already in progress")
     try:
@@ -173,6 +178,7 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
 
 def get_proxy_server_url(session: Session) -> str:
     """Return internal MLflow server URL for proxying."""
+    installation_policy.require("development_tools")
     entity = mlflow.get(session)
     if entity is None:
         raise BadRequestError("MLflow is not installed")

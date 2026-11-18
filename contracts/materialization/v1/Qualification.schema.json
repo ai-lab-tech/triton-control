@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "uri": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "minLength": 1,
+              "pattern": "^(s3|https)://[A-Za-z0-9][A-Za-z0-9./:_-]*$",
+              "type": "string"
+            },
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+              "type": "string"
+            }
+          ],
+          "title": "Uri"
+        }
+      },
+      "required": [
+        "uri",
+        "digest"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "checks": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "title": "Checks",
+      "type": "object"
+    },
+    "evidence": {
+      "$ref": "#/$defs/Reference"
+    },
+    "fixture_revision": {
+      "const": "materializer-qualification/v2",
+      "title": "Fixture Revision",
+      "type": "string"
+    },
+    "image": {
+      "maxLength": 512,
+      "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+      "title": "Image",
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "title": "Platform",
+      "type": "string"
+    }
+  },
+  "required": [
+    "image",
+    "platform",
+    "fixture_revision",
+    "checks",
+    "evidence"
+  ],
+  "title": "Qualification",
+  "type": "object"
+}

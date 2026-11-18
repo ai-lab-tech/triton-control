@@ -10,6 +10,7 @@ from typing import Any
 from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
+from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError, ForbiddenError, UnauthorizedError
@@ -21,10 +22,12 @@ TOKEN_PREFIX = "workspace-deployment:"  # nosec B105 -- token format marker
 
 
 def create_token(namespace: str, workspace_name: str) -> str:
+    installation_policy.require("development_tools")
     return f"{TOKEN_PREFIX}{namespace}:{workspace_name}:{secrets.token_urlsafe(32)}"
 
 
 def authenticate_token(token: str) -> dict[str, Any]:
+    installation_policy.require("development_tools")
     parts = token.split(":")
     if len(token) > 512 or len(parts) != 4 or not all(parts[1:]) or not token.startswith(TOKEN_PREFIX):
         raise UnauthorizedError("Workspace deployment authentication invalid")

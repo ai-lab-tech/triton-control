@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.database import session_factory
 from app.exceptions import BadRequestError
 from app.repositories import instances
@@ -41,6 +42,7 @@ def _apply_deployment_with_examples(
     service_name: str, secret_name: str, image: str,
 ) -> None:
     """Capture optional repository metadata outside the request and continue on failure."""
+    installation_policy.require("direct_deployment")
     if request.example_request is None:
         try:
             with session_factory() as session:
@@ -65,6 +67,7 @@ def create_deployment(
     claims: dict[str, Any],
     schedule_task: Callable[..., None] | None = None,
 ) -> DeploymentResponse:
+    installation_policy.require("direct_deployment")
     request = resolve_hostname(request, session)
     validate_policy(request, creating=True)
     validate_endpoint_policy(request, session)
@@ -120,6 +123,7 @@ def create_deployment(
 
 
 def delete_deployment_instance(session: Session, claims: dict[str, Any], instance_id: int) -> DeploymentDeleteResponse:
+    installation_policy.require("direct_deployment")
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.is_self_deployed:
         raise BadRequestError("Instance is not managed by Kubernetes deployment")

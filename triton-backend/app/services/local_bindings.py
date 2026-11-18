@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from pydantic import SecretStr, TypeAdapter, ValidationError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.crypto import decrypt_secret
 from app.core.identity import require_user_entity
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
@@ -148,6 +149,7 @@ def _resolve(session: Session, binding: S3Binding | CredentialBinding, purpose: 
 
 
 def update_policy(session: Session, claims: dict[str, Any], request: PolicyUpdate) -> PolicyResponse:
+    installation_policy.require("trust_admin")
     _actor(session, claims, admin=True)
     _mode()
     groups: tuple[tuple[Purpose, Iterable[S3Binding | CredentialBinding]], ...] = (
@@ -174,7 +176,11 @@ def put_credential(
     # The repository checks scope under its write lock, including concurrent recreation.
     scope = request.model_dump(mode="json", exclude={"password"})
     encrypted = encrypt_registry_secret(request.password.get_secret_value())
-    repository.save_credential(session, name, request.provider, scope, encrypted)
+    if (installation_policy.mode() == "production" and isinstance(request, RegistryCredential)
+            and request.permission != "pull"):
+        raise ForbiddenError("Production cannot provision build push credentials")
+    repository.save_credential(session, name, request.provider, scope, encrypted,
+                               require_existing=installation_policy.mode() == "production")
     return CredentialResponse(name=name, provider=request.provider, configured=True)
 
 

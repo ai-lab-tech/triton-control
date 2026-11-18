@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.db.entities import CodeServerEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
@@ -23,6 +24,7 @@ from app.services.task_workspace_access import guard
 
 
 def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServerDTO]:
+    installation_policy.require("development_tools")
     user = require_user_entity(session, claims)
     rows = code_servers.list_for_owner(session, user.id or 0)
     visible = []
@@ -41,6 +43,7 @@ def create_code_server(
     session: Session,
     claims: dict[str, Any],
 ) -> CodeServerDTO:
+    installation_policy.require("development_tools")
     require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     owner_id = user.id or 0
@@ -88,6 +91,7 @@ def create_code_server(
 
 
 def get_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerDTO:
+    installation_policy.require("development_tools")
     row = _get_owned(session, claims, code_server_id)
     _refresh_status(session, row)
     return workspace_dto(row)
@@ -95,6 +99,7 @@ def get_code_server(session: Session, claims: dict[str, Any], code_server_id: in
 
 def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
     """Return an owned Development entity for internal proxy use."""
+    installation_policy.require("development_tools")
     return _get_owned(session, claims, code_server_id)
 
 
@@ -103,6 +108,7 @@ def delete_code_server(
     claims: dict[str, Any],
     code_server_id: int,
 ) -> CodeServerDeleteResponse:
+    installation_policy.require("development_tools")
     require_kubernetes_enabled()
     user = require_user_entity(session, claims)
     row = code_servers.find_by_id(session, code_server_id)

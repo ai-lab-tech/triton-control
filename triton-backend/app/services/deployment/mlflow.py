@@ -7,6 +7,7 @@ from typing import Any
 import anyio
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.exceptions import AppError, NotFoundError
 from app.repositories import instances
@@ -26,6 +27,7 @@ def _owned(session: Session, claims: dict[str, Any], name: str) -> Any:
 
 
 async def describe(row: Any) -> dict[str, Any]:
+    installation_policy.require("development_tools")
     state = "starting"
     detail = row.health_error or "Waiting for Triton model readiness"
     if row.url and row.mlflow_model_name:
@@ -61,10 +63,12 @@ async def describe(row: Any) -> dict[str, Any]:
 
 
 async def get(session: Session, claims: dict[str, Any], name: str) -> dict[str, Any]:
+    installation_policy.require("development_tools")
     return await describe(_owned(session, claims, name))
 
 
 async def list_all(session: Session, claims: dict[str, Any]) -> list[dict[str, Any]]:
+    installation_policy.require("development_tools")
     owner = require_user_entity(session, claims)
     rows = instances.list_mlflow_for_owner(session, owner.id or 0)
     if claims.get("token_use") == "mlflow_workflow":
@@ -73,5 +77,6 @@ async def list_all(session: Session, claims: dict[str, Any]) -> list[dict[str, A
 
 
 def delete(session: Session, claims: dict[str, Any], name: str) -> DeploymentDeleteResponse:
+    installation_policy.require("development_tools")
     row = _owned(session, claims, name)
     return deployment.delete_deployment_instance(session, claims, row.id)

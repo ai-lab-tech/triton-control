@@ -35,7 +35,7 @@
               </button>
             }
           </div>
-          <div class="brand-sub">Inference fleet cockpit</div>
+          <div class="brand-sub" role="status">{{ installation.label() }}</div>
         </div>
       </div>
 
@@ -111,7 +111,7 @@
                 <span>User Management</span>
               </button>
             }
-            @if (isLoggedIn() && canWriteInstances()) {
+            @if (isLoggedIn() && isAdmin() && installation.allows("credential_admin")) {
               <button type="button" class="account-item" (click)="go('/s3-profiles')">
                 <span class="material-icons">key</span>
                 <span>S3 Profiles</span>
@@ -170,7 +170,9 @@
         <span class="spacer"></span>
 
         @if (isLoggedIn()) {
-          <app-handoff-notifications />
+          @if (installation.allows("development_jobs")) {
+            <app-handoff-notifications />
+          }
           <div class="user-chip">
             <span class="avatar">{{ initials() }}</span>
             <span class="user-name">{{ userName() }}</span>

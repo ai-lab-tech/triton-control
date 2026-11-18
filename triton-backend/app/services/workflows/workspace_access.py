@@ -15,6 +15,7 @@ from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from starlette.responses import Response, StreamingResponse
 
+from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError
@@ -60,6 +61,7 @@ def cli_workflow_route(method: str, path: str) -> tuple[str, str]:
 
 
 def authenticate_workspace(namespace: str, name: str, token: str) -> dict[str, Any]:
+    installation_policy.require("development_tools")
     if not token or len(token) > 256:
         raise UnauthorizedError("Argo workspace authentication required")
     with session_factory() as session:
@@ -171,6 +173,7 @@ async def filter_list_response(response: Response, claims: dict[str, Any]) -> Re
 
 
 def upgrade_workspaces() -> int:
+    installation_policy.require("development_tools")
     from app.services.development import kubernetes as workspace_k8s
 
     with session_factory() as session:

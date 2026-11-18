@@ -1,3 +1,4 @@
+import { InstallationService } from "../../shared/installation/installation.service";
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { filter, interval } from "rxjs";
@@ -43,6 +44,7 @@ import { type Instance } from "./instances.data";
   templateUrl: "./instances-page.component.html",
 })
 export class InstancesPageComponent implements OnInit {
+  readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
@@ -70,7 +72,9 @@ export class InstancesPageComponent implements OnInit {
   readonly loading = toSignal(this.store.select(selectInstancesListLoading), {
     initialValue: false,
   });
-  readonly canDeleteInstances = this.auth.isAdmin;
+  readonly canDeleteInstances = computed(
+    () => this.auth.isAdmin() && this.installation.allows("direct_deployment"),
+  );
 
   readonly filteredInstances = computed(() => {
     const q = this._query().trim().toLowerCase();

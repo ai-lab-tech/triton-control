@@ -1,0 +1,200 @@
+{
+  "$defs": {
+    "FileEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "digest"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "InventoryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FileEntry"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "InventoryV1",
+      "type": "object"
+    },
+    "Normalization": {
+      "additionalProperties": false,
+      "properties": {
+        "rewrites": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Rewrite"
+          },
+          "maxItems": 1000,
+          "title": "Rewrites",
+          "type": "array"
+        },
+        "version": {
+          "default": "identity/v1",
+          "enum": [
+            "identity/v1",
+            "triton-layout/v1"
+          ],
+          "title": "Version",
+          "type": "string"
+        },
+        "wrap_model": {
+          "anyOf": [
+            {
+              "maxLength": 63,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wrap Model"
+        }
+      },
+      "title": "Normalization",
+      "type": "object"
+    },
+    "ObjectVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "version_id": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f]+$",
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "version_id"
+      ],
+      "title": "ObjectVersion",
+      "type": "object"
+    },
+    "Rewrite": {
+      "additionalProperties": false,
+      "description": "Explicit quoted string substitution; never execute config/model code.",
+      "properties": {
+        "file": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "File",
+          "type": "string"
+        },
+        "occurrences": {
+          "default": 1,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Occurrences",
+          "type": "integer"
+        },
+        "relative": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Relative",
+          "type": "string"
+        },
+        "target": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "relative",
+        "target"
+      ],
+      "title": "Rewrite",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "materializer_image": {
+      "maxLength": 512,
+      "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+      "title": "Materializer Image",
+      "type": "string"
+    },
+    "normalization": {
+      "$ref": "#/$defs/Normalization"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/ObjectVersion"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "title": "Objects",
+      "type": "array"
+    },
+    "prepared_inventory": {
+      "$ref": "#/$defs/InventoryV1"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_inventory": {
+      "$ref": "#/$defs/InventoryV1"
+    }
+  },
+  "required": [
+    "materializer_image",
+    "source_inventory",
+    "prepared_inventory",
+    "objects"
+  ],
+  "title": "MaterializationPlan",
+  "type": "object"
+}

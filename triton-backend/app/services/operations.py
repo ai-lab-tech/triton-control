@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.db.database import session_factory
 from app.db.entities import OperationEntity, UserEntity
@@ -61,6 +62,9 @@ class OperationService:
         self, session: Session, actor: UserEntity | None, kind: str, target: str, action: Action,
         operation: OperationEntity | None = None,
     ) -> None:
+        # All currently registered adapters execute development work. Production
+        # reconciliation must use its independently approved admission contract.
+        installation_policy.require("development_jobs")
         if actor is None or actor.id is None or not actor.is_active:
             raise ForbiddenError("Active user required")
         session.refresh(actor)
@@ -147,6 +151,8 @@ class OperationWorker:
         self.thread: Thread | None = None
 
     def run_once(self) -> bool:
+        if not installation_policy.allowed("development_jobs"):
+            return False
         if not self.service.adapters:
             return False
         with self.sessions() as session:

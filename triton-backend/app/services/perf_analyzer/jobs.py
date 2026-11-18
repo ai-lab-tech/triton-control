@@ -11,6 +11,7 @@ from uuid import uuid4
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.db.database import session_factory
 from app.db.entities import ModelPerfJobEntity, PerfAnalyzerRunEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -33,6 +34,7 @@ def dto(run: ModelPerfJobEntity) -> ModelPerfRunResponse:
 def start(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, request: StartModelPerfRequest,
 ) -> ModelPerfRunResponse:
+    installation_policy.require("development_jobs")
     instance = get_instance_or_404(session, instance_id, claims)
     request = apply_registry_settings(request, session)
     if results.get(session):
@@ -90,6 +92,7 @@ def start(
 def get_run(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, run_id: str,
 ) -> ModelPerfRunResponse:
+    installation_policy.require("development_jobs")
     get_instance_or_404(session, instance_id, claims)
     run = session.get(ModelPerfJobEntity, run_id)
     if not run or run.instance_id != instance_id or run.model_name != model_name:
@@ -102,6 +105,7 @@ def get_run(
 def status(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, version: str,
 ) -> ModelPerfStatusResponse:
+    installation_policy.require("development_jobs")
     get_instance_or_404(session, instance_id, claims)
     current = repo.active(session, instance_id, model_name)
     if current:
@@ -120,6 +124,7 @@ def status(
 def stop(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, run_id: str,
 ) -> ModelPerfRunResponse:
+    installation_policy.require("development_jobs")
     get_instance_or_404(session, instance_id, claims)
     run = repo.lock_run(session, run_id)
     if not run or run.instance_id != instance_id or run.model_name != model_name:
@@ -151,6 +156,7 @@ def finish(session: Session, run: ModelPerfJobEntity, state: str, message: str) 
 
 def reconcile(session: Session, run_id: str) -> None:
     """Keep the row lock through external operations, including resume and stop."""
+    installation_policy.require("development_jobs")
     run = repo.lock_run(session, run_id, skip_locked=True)
     if run is None:
         session.rollback()
@@ -181,6 +187,7 @@ def reconcile(session: Session, run_id: str) -> None:
 
 
 def reconcile_active(session: Session, run: ModelPerfJobEntity, api: Jobs) -> None:
+    installation_policy.require("development_jobs")
     job, pods = api.read(run), api.pods(run)
     if run.state == "stopping":
         if not run.stop_output_saved:
@@ -254,6 +261,7 @@ def reconcile_active(session: Session, run: ModelPerfJobEntity, api: Jobs) -> No
 
 
 def prepare_instance_deletion(session: Session, instance_id: int) -> None:
+    installation_policy.require("development_jobs")
     instance = repo.lock_instance(session, instance_id)
     instance.perf_deleting = True
     session.add(instance)
@@ -274,6 +282,7 @@ def prepare_instance_deletion(session: Session, instance_id: int) -> None:
 
 
 def retire_legacy(session: Session) -> None:
+    installation_policy.require("development_jobs")
     legacy = results.get(session)
     if not legacy:
         return
@@ -296,6 +305,7 @@ class PerfJobReconciler:
         self.thread: Thread | None = None
 
     def start(self) -> None:
+        installation_policy.require("development_jobs")
         if self.thread and self.thread.is_alive():
             return
         self.event.clear()

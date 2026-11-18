@@ -7,6 +7,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/materialization/**"
       - "contracts/validation/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
@@ -22,6 +23,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/materialization/**"
       - "contracts/validation/**"
       - "examples/workflows/**"
       - "code-server-extensions/**"
@@ -36,6 +38,32 @@ permissions:
   contents: read
 
 jobs:
+  materializer-kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: helm/kind-action@v1.12.0
+        with:
+          install_only: true
+          version: v0.33.0
+      - name: Install qualification tools
+        run: pip install -e './triton-backend[dev]'
+      - name: Qualify the actual pinned helper and read-only Kubernetes mount
+        env:
+          PYTHON_BASE_IMAGE: python@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+          MATERIALIZER_EVIDENCE_DIR: ${{ runner.temp }}/materializer-evidence
+        run: bash triton-backend/scripts/ci_materializer.sh
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: materializer-qualification-linux-amd64
+          path: ${{ runner.temp }}/materializer-evidence
+          if-no-files-found: error
+
   serving-metadata-contracts:
     runs-on: ubuntu-latest
     steps:
@@ -146,6 +174,15 @@ jobs:
         env:
           LOCAL_BINDINGS_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: python -m unittest tests.test_local_bindings_postgres -v
+
+      - name: Verify production cutover and credential concurrency
+        working-directory: triton-backend
+        env:
+          INSTALLATION_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
+          INSTALLATION_TEST_KUBERNETES: "1"
+        run: |
+          export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
+          python -m unittest tests.test_installation_policy_postgres tests.test_installation_policy_kubernetes -v
 
   handoff-source-minio:
     runs-on: ubuntu-latest
@@ -264,7 +301,7 @@ jobs:
           LINEAGE_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
-          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
+          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
       - name: Verify build context staging, concurrency and versioned retention
         working-directory: triton-backend
         env:

@@ -22,6 +22,7 @@ from typing import Any
 from fastapi import Response
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.exceptions import BadGatewayError, BadRequestError, NotFoundError
 from app.schemas import ModelRepositoryActionResponse, TritonRepositoryModelDTO
@@ -94,6 +95,7 @@ async def load_model(
     model_name: str,
 ) -> ModelRepositoryActionResponse:
     """Trigger explicit load for a model via Triton's repository API."""
+    installation_policy.require("model_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
@@ -115,6 +117,7 @@ async def unload_model(
     model_name: str,
 ) -> ModelRepositoryActionResponse:
     """Trigger explicit unload for a model via Triton's repository API."""
+    installation_policy.require("model_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
 
@@ -139,6 +142,7 @@ async def infer_model(
     content_type: str,
 ) -> Response:
     """Proxy a Triton inference request for a specific model version."""
+    installation_policy.require("interactive_inference")
     if not payload_bytes:
         raise BadRequestError("Request body is required")
 

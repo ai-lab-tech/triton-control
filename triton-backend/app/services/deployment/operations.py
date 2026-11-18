@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.core.operation_secrets import decode, encode, fingerprint
 from app.db.entities import DeploymentIntentEntity, OperationEntity, UserEntity
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 def development_only() -> None:
+    installation_policy.require("direct_deployment")
     if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
         raise ForbiddenError("Interactive deployment creation is available only in development")
 
@@ -176,6 +178,7 @@ def status(session: Session, claims: dict[str, Any], instance_id: int) -> Operat
 
 def prepare_deletion(session: Session, instance_id: int) -> bool:
     """New managed instances use owned cleanup, never legacy namespace deletion."""
+    installation_policy.require("direct_deployment")
     intent = intents.for_instance(session, instance_id)
     if intent is None:
         return False
@@ -221,6 +224,7 @@ class DeploymentAdapter:
         intents.renew_deadline(session, row.id, timeout_seconds())
 
     def reconcile(self, operation: OperationEntity, context: ExecutionContext) -> ReconcileResult:
+        installation_policy.require("direct_deployment")
         provider = DeploymentProvider()
         try:
             with context.sessions() as session:
@@ -298,6 +302,7 @@ class DeploymentAdapter:
         self, provider: DeploymentProvider, operation: OperationEntity, intent: DeploymentIntentEntity,
         manifests: list[dict[str, Any]], guard: Any, session: Session,
     ) -> ReconcileResult:
+        installation_policy.require("direct_deployment")
         anchor: dict[str, Any] = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {
             "name": f"tc-operation-{operation.id}", "namespace": intent.namespace, "labels": {OWNER: operation.id},
         }, "data": {"operation": operation.id}}

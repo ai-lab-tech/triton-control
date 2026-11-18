@@ -13,6 +13,7 @@ from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from starlette.responses import Response
 
+from app.core import installation_policy
 from app.db.database import session_factory
 from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.repositories import developments, users
@@ -33,6 +34,7 @@ def tracking_uri(kind: str, namespace: str, name: str) -> str:
 
 
 def authenticate_workload(kind: str, namespace: str, name: str, token: str) -> dict[str, Any]:
+    installation_policy.require("development_tools")
     if not token or len(token) > 256:
         raise UnauthorizedError("MLflow workload authentication required")
     owner_id = None

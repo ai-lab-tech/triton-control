@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import Request
 from sqlmodel import Session
 
+from app.core import installation_policy
 from app.core.access_control import require_admin
 from app.exceptions import BadRequestError
 from app.schemas import OidcSettingsDTO, UpdateOidcSettingsRequest
@@ -39,6 +40,7 @@ async def put_oidc_settings(
     session: Session,
     claims: dict[str, Any],
 ) -> object:
+    installation_policy.require("trust_admin")
     require_admin(claims)
     if is_env_config_source():
         raise BadRequestError(
