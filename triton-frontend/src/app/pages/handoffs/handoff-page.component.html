@@ -1,5 +1,5 @@
 <section class="handoff-page">
-  <header>
+  <header class="page-heading">
     <div>
       <p class="eyebrow">MODEL PREPARATION</p>
       <h1>{{ detail() ? "Handoff receipt" : "Submit model for preparation" }}</h1>
@@ -7,7 +7,7 @@
         {{
           detail()
             ? "Exact source inputs and engineering task reference."
-            : "Send an exact model and evaluation requirements to the installation’s engineering group."
+            : "Bring your model. Give engineering the context to prepare it for serving."
         }}
       </p>
     </div>
@@ -36,134 +36,188 @@
       Submitting and inspecting handoffs requires member or administrator access.
     </p>
   } @else if (!detail()) {
-    <form #form="ngForm" (ngSubmit)="submit()" class="panel">
-      <fieldset [disabled]="busy()">
-        <legend>1. Model source</legend>
-        <p>
-          Choose a stored S3 profile and either a model file or an unpacked Triton repository
-          folder. Paths are relative to the profile’s prefix. Bucket versioning must be enabled.
-        </p>
-        <mat-form-field appearance="outline" class="wide">
-          <mat-label>Previous handoff ID (optional)</mat-label>
-          <input matInput name="previousHandoff" [(ngModel)]="previousHandoffId" />
-          <mat-hint
-            >When revising a handoff, link its ID and use a new submission revision.</mat-hint
-          >
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>Model source type</mat-label>
-          <mat-select name="sourceKind" [(ngModel)]="sourceKind">
-            <mat-option value="s3">Single file or archive</mat-option>
-            <mat-option value="s3_repository">Triton repository folder</mat-option>
-          </mat-select>
-        </mat-form-field>
-        @if (sourceKind === "s3_repository") {
-          <p>
-            Select the folder containing model-name/config.pbtxt and model version folders.
-            Repositories from MLflow, HF Builder or manual creation use the same layout. Upload the
-            complete folder to S3 first; no ZIP is needed. Finish uploading before submitting. Every
-            file is captured with its exact version and checksum.
+    <div class="submission-layout">
+      <form #form="ngForm" (ngSubmit)="submit()" class="submission-form">
+        <fieldset [disabled]="busy()" class="form-card">
+          <legend><span class="step-number" aria-hidden="true">01</span> Model source</legend>
+          <p class="section-intro">Choose the model you want engineering to work with.</p>
+          <div class="fields">
+            <mat-form-field appearance="outline">
+              <mat-label>Handoff title</mat-label>
+              <input
+                matInput
+                name="title"
+                [(ngModel)]="title"
+                required
+                maxlength="200"
+                placeholder="e.g. Iris classifier"
+              />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Model source type</mat-label>
+              <mat-select name="sourceKind" [(ngModel)]="sourceKind">
+                <mat-option value="s3">Single file or archive</mat-option>
+                <mat-option value="s3_repository">Triton repository folder</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>S3 profile</mat-label>
+              <mat-select name="profile" [(ngModel)]="profileId" required>
+                @for (profile of profiles(); track profile.id) {
+                  <mat-option [value]="profile.id"
+                    >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
+                  >
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Model object path</mat-label>
+              <input
+                matInput
+                name="source"
+                [(ngModel)]="sourcePath"
+                required
+                maxlength="1024"
+                [placeholder]="
+                  sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
+                "
+              />
+              <mat-hint>Relative to your S3 profile’s prefix.</mat-hint>
+            </mat-form-field>
+          </div>
+          <div class="source-note">
+            <span class="material-icons" aria-hidden="true">verified_user</span>
+            <p>
+              <strong>Exact inputs, preserved.</strong> Enable bucket versioning and finish
+              uploading before submitting. Source versions and checksums are recorded with your
+              handoff.
+            </p>
+          </div>
+          @if (sourceKind === "s3_repository") {
+            <p class="repository-note">
+              Use the folder containing <code>model-name/config.pbtxt</code> and its version
+              folders. MLflow, HF Builder and manually created repositories are supported. No ZIP
+              needed.
+            </p>
+          }
+          @if (!profiles().length && !error()) {
+            <p class="notice">
+              No source profiles available. Ask an administrator to configure an S3 profile.
+            </p>
+          }
+          <details class="revision-details" [open]="!!previousHandoffId">
+            <summary>Revision details <span>For retries or updated models</span></summary>
+            <div class="fields">
+              <mat-form-field appearance="outline">
+                <mat-label>Submission revision</mat-label>
+                <input matInput name="revision" [(ngModel)]="revision" required maxlength="256" />
+                <mat-hint>Keep for retries. Change for updated inputs.</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Previous handoff ID (optional)</mat-label>
+                <input matInput name="previousHandoff" [(ngModel)]="previousHandoffId" />
+                <mat-hint>Link the original handoff when submitting a revision.</mat-hint>
+              </mat-form-field>
+            </div>
+          </details>
+        </fieldset>
+        <fieldset [disabled]="busy()" class="form-card">
+          <legend>
+            <span class="step-number" aria-hidden="true">02</span> Evaluation requirements
+          </legend>
+          <p class="section-intro">
+            Help engineering understand what a successful model looks like.
           </p>
-        }
-        <div class="fields">
-          <mat-form-field appearance="outline"
-            ><mat-label>Handoff title</mat-label
-            ><input matInput name="title" [(ngModel)]="title" required maxlength="200"
-          /></mat-form-field>
-          <mat-form-field appearance="outline"
-            ><mat-label>S3 profile</mat-label
-            ><mat-select name="profile" [(ngModel)]="profileId" required>
-              @for (profile of profiles(); track profile.id) {
-                <mat-option [value]="profile.id"
-                  >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
-                >
-              }
-            </mat-select></mat-form-field
-          >
-          <mat-form-field appearance="outline"
-            ><mat-label>Model object path</mat-label
-            ><input
+          <div class="fields">
+            <mat-form-field appearance="outline">
+              <mat-label>Evaluation dataset object path (optional)</mat-label>
+              <input
+                matInput
+                name="dataset"
+                [(ngModel)]="datasetPath"
+                maxlength="1024"
+                placeholder="datasets/evaluation.csv"
+              />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Baseline object path (optional)</mat-label>
+              <input
+                matInput
+                name="baseline"
+                [(ngModel)]="baselinePath"
+                maxlength="1024"
+                placeholder="baselines/results.json"
+              />
+            </mat-form-field>
+          </div>
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>Expected behavior (optional)</mat-label>
+            <textarea
               matInput
-              name="source"
-              [(ngModel)]="sourcePath"
-              required
-              maxlength="1024"
-              [placeholder]="
-                sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
-              "
-          /></mat-form-field>
-          <mat-form-field appearance="outline"
-            ><mat-label>Submission revision</mat-label
-            ><input
+              name="behavior"
+              [(ngModel)]="expectedBehavior"
+              rows="3"
+              maxlength="8000"
+              placeholder="Describe expected outputs and representative examples."
+            ></textarea>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>Acceptance criteria (optional)</mat-label>
+            <textarea
               matInput
-              name="revision"
-              [(ngModel)]="revision"
-              required
-              maxlength="256"
-            /><mat-hint
-              >Keep for retries. Change when submitting updated inputs.</mat-hint
-            ></mat-form-field
-          >
-        </div>
-        @if (!profiles().length && !error()) {
-          <p class="notice">
-            No source profiles available. Ask an administrator to configure an S3 profile.
+              name="criteria"
+              [(ngModel)]="criteria"
+              rows="3"
+              maxlength="8000"
+              placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
+            ></textarea>
+          </mat-form-field>
+          <p class="evaluation-note">
+            <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
+            later with a new revision. Missing inputs block release readiness.
           </p>
-        }
-      </fieldset>
-      <fieldset [disabled]="busy()">
-        <legend>2. Evaluation requirements</legend>
-        <p>
-          You may submit incomplete inputs. Missing information stays visible and blocks release
-          readiness.
-        </p>
-        <div class="fields">
-          <mat-form-field appearance="outline"
-            ><mat-label>Evaluation dataset object path (optional)</mat-label
-            ><input matInput name="dataset" [(ngModel)]="datasetPath" maxlength="1024"
-          /></mat-form-field>
-          <mat-form-field appearance="outline"
-            ><mat-label>Baseline object path (optional)</mat-label
-            ><input matInput name="baseline" [(ngModel)]="baselinePath" maxlength="1024"
-          /></mat-form-field>
+        </fieldset>
+        <footer class="submission-footer">
+          <p>Ready for the next step?<span>Send to the installation’s engineering group.</span></p>
+          <button
+            mat-flat-button
+            type="submit"
+            [disabled]="busy() || form.invalid || !profiles().length"
+          >
+            {{ busy() ? "Submitting…" : "Submit to engineering" }}
+            <span class="material-icons" aria-hidden="true">arrow_forward</span>
+          </button>
+        </footer>
+      </form>
+      <aside class="handoff-guide" aria-label="About model preparation">
+        <div class="guide-heading">
+          <span class="material-icons guide-icon" aria-hidden="true">account_tree</span>
+          <p>FROM MODEL TO HANDOFF</p>
+          <h2>A clear start for engineering.</h2>
+          <p class="guide-description">
+            Your model and its requirements, together in one preparation task.
+          </p>
         </div>
-        <mat-form-field appearance="outline" class="wide"
-          ><mat-label>Expected behavior (optional)</mat-label
-          ><textarea
-            matInput
-            name="behavior"
-            [(ngModel)]="expectedBehavior"
-            rows="3"
-            maxlength="8000"
-            placeholder="Describe expected outputs and representative examples."
-          ></textarea>
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="wide"
-          ><mat-label>Acceptance criteria (optional)</mat-label
-          ><textarea
-            matInput
-            name="criteria"
-            [(ngModel)]="criteria"
-            rows="3"
-            maxlength="8000"
-            placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
-          ></textarea>
-        </mat-form-field>
-      </fieldset>
-      <footer>
-        <p>
-          The engineering group receives an in-app notification. This creates a preparation task; it
-          does not deploy or approve a release.
-        </p>
-        <button
-          mat-flat-button
-          type="submit"
-          [disabled]="busy() || form.invalid || !profiles().length"
-        >
-          {{ busy() ? "Submitting…" : "Submit to engineering" }}
-        </button>
-      </footer>
-    </form>
+        <ol class="handoff-steps">
+          <li>
+            <strong>Submit your model</strong>
+            <p>Exact source versions are captured and verified.</p>
+          </li>
+          <li>
+            <strong>Engineering takes over</strong>
+            <p>The group is notified and an engineer can claim the task.</p>
+          </li>
+          <li>
+            <strong>Prepare for serving</strong>
+            <p>The assigned engineer works with verified inputs in the task workspace.</p>
+          </li>
+        </ol>
+        <div class="guide-footnote">
+          <span class="material-icons" aria-hidden="true">shield</span>
+          <p>Submission starts preparation. Deployment and release approval are separate steps.</p>
+        </div>
+      </aside>
+    </div>
   }
   @if (receipt(); as item) {
     <article class="panel">
