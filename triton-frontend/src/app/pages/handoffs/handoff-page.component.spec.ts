@@ -328,6 +328,7 @@ describe("HandoffPageComponent", () => {
     expect(page.busy()).toBeFalse();
     expect(fixture.nativeElement.textContent).toContain("Model capture: pending");
     expect(fixture.nativeElement.textContent).toContain("Cancel capture");
+    expect(fixture.nativeElement.querySelector("form")).toBeNull();
     expect(navigate).toHaveBeenCalledWith(
       [],
       jasmine.objectContaining({ queryParams: { capture: "job-1" } }),

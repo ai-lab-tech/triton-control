@@ -2,7 +2,7 @@
   display: block;
 }
 .handoff-page {
-  max-width: 1100px;
+  max-width: 1240px;
   margin: auto;
   color: #243247;
 }
@@ -138,5 +138,310 @@ code {
   }
   dd {
     margin-bottom: 12px;
+  }
+}
+
+// Submission styles stay local to this page; receipt and shared form behavior are unchanged.
+.page-heading {
+  padding: 12px 0 10px;
+  h1 {
+    font-size: clamp(26px, 2.4vw, 34px);
+    font-weight: 650;
+    letter-spacing: -0.9px;
+  }
+  .eyebrow {
+    margin: 0 0 12px;
+  }
+  .subtitle {
+    margin: 0;
+    max-width: 660px;
+  }
+}
+.submission-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  align-items: start;
+  gap: 28px;
+}
+.submission-form {
+  min-width: 0;
+  --mat-form-field-outlined-container-shape: 10px;
+  --mat-form-field-outlined-outline-color: #cbd5e1;
+  --mat-form-field-outlined-focus-outline-color: #0f766e;
+  --mat-form-field-outlined-focus-label-text-color: #0f766e;
+  --mat-form-field-container-text-size: 14px;
+  --mat-form-field-outlined-label-text-size: 14px;
+  .form-card {
+    background: #fff;
+    border: 1px solid #dce5ee;
+    border-radius: 16px;
+    padding: 26px 28px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 18px #24324705;
+  }
+  legend {
+    float: left;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    letter-spacing: -0.25px;
+    padding: 0;
+    margin-bottom: 12px;
+  }
+  .section-intro {
+    clear: both;
+    font-size: 13px;
+    margin: 0 0 24px;
+  }
+  .fields {
+    gap: 8px 20px;
+    margin: 0;
+  }
+  .wide {
+    margin-bottom: 4px;
+  }
+  textarea {
+    line-height: 1.6;
+  }
+}
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e6f4f1;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 750;
+}
+.source-note {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  margin: 8px 0 18px;
+  background: #f2f8f7;
+  border: 1px solid #dcece8;
+  border-radius: 10px;
+  color: #42645e;
+  .material-icons {
+    font-size: 19px;
+    color: #0f766e;
+    margin-top: 2px;
+  }
+  p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+  strong {
+    color: #24574d;
+  }
+}
+.repository-note {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #64748b;
+}
+.revision-details {
+  border-top: 1px solid #e8edf2;
+  padding-top: 18px;
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: #334155;
+    span {
+      font-weight: 400;
+      color: #64748b;
+      margin-left: 8px;
+    }
+    &:focus-visible {
+      outline: 2px solid #0f766e;
+      outline-offset: 5px;
+      border-radius: 3px;
+    }
+  }
+  .fields {
+    margin-top: 22px;
+  }
+}
+.evaluation-note {
+  display: flex;
+  gap: 8px;
+  align-items: start;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 2px 0 0;
+  .material-icons {
+    font-size: 18px;
+  }
+}
+.submission-footer {
+  border: 0;
+  padding: 4px 0 12px;
+  gap: 16px;
+  p {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+  }
+  p span {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: #64748b;
+    margin-top: 3px;
+  }
+  button {
+    --mat-button-filled-container-color: #0f766e;
+    --mat-button-filled-label-text-color: #fff;
+    --mat-button-filled-container-shape: 10px;
+    min-height: 46px;
+    padding-inline: 20px;
+    .material-icons {
+      font-size: 18px;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+  }
+}
+.handoff-guide {
+  border: 1px solid #dce5ee;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+.guide-heading {
+  background: #153e3b;
+  color: #fff;
+  padding: 26px 24px;
+  > p:not(.guide-description) {
+    font-size: 10px;
+    letter-spacing: 1.3px;
+    font-weight: 650;
+    color: #b3dbd2;
+    margin: 20px 0 12px;
+  }
+  h2 {
+    margin: 0 0 12px;
+    font-size: 25px;
+    letter-spacing: -0.5px;
+    font-weight: 550;
+    line-height: 1.25;
+  }
+  .guide-description {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c6ded9;
+    margin: 0;
+  }
+}
+.guide-icon {
+  padding: 10px;
+  border: 1px solid #588079;
+  border-radius: 12px;
+  color: #bce9dd;
+}
+.handoff-steps {
+  margin: 24px;
+  padding: 0;
+  list-style: none;
+  counter-reset: handoff-step;
+  li {
+    position: relative;
+    padding: 0 0 24px 35px;
+    counter-increment: handoff-step;
+  }
+  li::before {
+    content: counter(handoff-step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    background: #edf6f3;
+    border: 1px solid #d5e8e1;
+    border-radius: 50%;
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 27px;
+    bottom: 5px;
+    width: 1px;
+    background: #e2e8f0;
+  }
+  li:last-child {
+    padding-bottom: 0;
+  }
+  strong {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  p {
+    font-size: 12px;
+    line-height: 1.65;
+    color: #64748b;
+    margin: 6px 0 0;
+  }
+}
+.guide-footnote {
+  margin: 0 24px 24px;
+  border-top: 1px solid #e8edf2;
+  padding-top: 18px;
+  display: flex;
+  gap: 8px;
+  color: #64748b;
+  .material-icons {
+    font-size: 17px;
+    margin-top: 2px;
+  }
+  p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+}
+@media (max-width: 1050px) {
+  .submission-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .handoff-guide {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .guide-footnote {
+    grid-column: 1 / -1;
+    margin-top: 20px;
+  }
+}
+@media (max-width: 700px) {
+  .handoff-guide {
+    display: block;
+  }
+  .submission-form .form-card {
+    padding: 20px 18px;
+  }
+  .submission-form .fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .revision-details summary span {
+    display: block;
+    margin: 6px 0 0 16px;
+  }
+  .submission-footer button {
+    width: 100%;
   }
 }
