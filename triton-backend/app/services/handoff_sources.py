@@ -1,9 +1,10 @@
 """Authorized, bounded capture of exact versioned S3 object identities."""
 
 import hashlib
+import shutil
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from unicodedata import normalize
 
 from botocore.config import Config
@@ -14,10 +15,8 @@ from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError
 from app.repositories import s3_profiles
 from app.schemas.handoffs import ResolvedInput, S3Input, S3RepositoryInput
 from app.schemas.lineage import FileEntry
+from app.services.preparation_settings import effective
 from app.services.storage.s3_client import S3Config, build_s3_client
-
-MAX_BYTES = 1024 * 1024 * 1024
-MAX_SECONDS = 120
 
 
 def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3Config, str, str]:
@@ -56,7 +55,9 @@ def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3
 
 
 def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
-            allow_empty: bool = False) -> ResolvedInput:
+            allow_empty: bool = False, checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedInput:
+    limits = effective(session)
+    max_bytes = limits.max_input_gib * 1024**3
     config, bucket, key = authorize(session, source)
     client: Any = None
     started = time.monotonic()
@@ -68,26 +69,31 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
         args: dict[str, Any] = {"Bucket": bucket, "Key": key}
         if source.version_id:
             args["VersionId"] = source.version_id
+        checkpoint(0)
         head = client.head_object(**args)
         version = head.get("VersionId")
         if not version or version == "null":
             raise BadRequestError("Enable S3 bucket versioning before submitting immutable handoff inputs")
         size = head["ContentLength"]
-        if size < (0 if allow_empty else 1) or size > MAX_BYTES:
-            raise BadRequestError("Handoff input must contain between 1 byte and 1 GiB")
+        if size < (0 if allow_empty else 1) or size > max_bytes:
+            raise BadRequestError(
+                f"Handoff input exceeds the configured {limits.max_input_gib} GiB total input limit or is empty"
+            )
+        checkpoint(0)
         response = client.get_object(Bucket=bucket, Key=key, VersionId=version)
         body = response["Body"]
         measured, checksum = 0, hashlib.sha256()
         while True:
-            if time.monotonic() > (deadline if deadline is not None else started + MAX_SECONDS):
+            if time.monotonic() > (deadline if deadline is not None else started + limits.transfer_timeout_seconds):
                 raise BadRequestError("Handoff input capture exceeded its time limit")
             chunk = body.read(1024 * 1024)
             if not chunk:
                 break
             measured += len(chunk)
-            if measured > MAX_BYTES or measured > size:
+            if measured > max_bytes or measured > size:
                 raise BadRequestError("Handoff input exceeded its size limit")
             checksum.update(chunk)
+            checkpoint(len(chunk))
         actual = "sha256:" + checksum.hexdigest()
         if measured != size or response.get("VersionId") != version:
             raise BadRequestError("Handoff input changed during capture")
@@ -122,11 +128,15 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
 
 def download(session: Session, artifact: ResolvedInput, destination: Path) -> None:
     """Read only the captured version; verify before exposing any bytes to a workspace."""
+    limits = effective(session)
     config, bucket, key = authorize(session, artifact.source)
     if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
         raise ForbiddenError("Captured source profile changed")
-    if not artifact.version_id or artifact.version_id == "null" or not 0 <= artifact.file.size <= MAX_BYTES:
+    if (not artifact.version_id or artifact.version_id == "null"
+            or not 0 <= artifact.file.size <= limits.max_input_gib * 1024**3):
         raise BadRequestError("Workspace input requires a bounded, versioned artifact")
+    if shutil.disk_usage(destination.parent).free < artifact.file.size + 64 * 1024**2:
+        raise BadRequestError("Insufficient backend temporary storage; increase the backend staging disk")
     client: Any = None
     body: Any = None
     try:
@@ -139,7 +149,7 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
         started = time.monotonic()
         with destination.open("wb") as output:
             while True:
-                if time.monotonic() - started > MAX_SECONDS:
+                if time.monotonic() - started > limits.transfer_timeout_seconds:
                     raise BadRequestError("Workspace input download exceeded its time limit")
                 chunk = body.read(1024 * 1024)
                 if not chunk:

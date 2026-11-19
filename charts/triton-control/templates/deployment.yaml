@@ -63,6 +63,12 @@ spec:
               readOnly: true
           {{- end }}
           env:
+            - name: PREPARATION_MAX_INPUT_GIB
+              value: {{ .Values.modelPreparation.maxInputGiB | quote }}
+            - name: PREPARATION_MAX_WORKSPACE_STORAGE_GIB
+              value: {{ .Values.modelPreparation.maxWorkspaceStorageGiB | quote }}
+            - name: PREPARATION_TRANSFER_TIMEOUT_SECONDS
+              value: {{ .Values.modelPreparation.transferTimeoutSeconds | quote }}
             {{- if .Values.buildQualification.policy }}
             - name: TRITON_BUILD_POLICY_FILE
               value: /etc/triton-control/build-context/policy.json

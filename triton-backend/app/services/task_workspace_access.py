@@ -16,6 +16,7 @@ from app.schemas.lineage import InventoryV1
 from app.schemas.task_workspaces import SnapshotFile, WorkspaceInput, WorkspaceInputs
 from app.services import handoff_sources, preparation
 from app.services.lineage import inventory_digest
+from app.services.preparation_settings import effective
 
 
 def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recovery: bool = False,
@@ -64,8 +65,8 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
     source_inventory = InventoryV1(files=tuple(item.artifact.file for item in inputs.files if item.role == "source"))
     if inventory_digest(source_inventory) != inputs.snapshot.inventory:
         raise ConflictError("Workspace source inventory does not match the captured snapshot")
-    if sum(item.artifact.file.size for item in inputs.files) > 3 * 1024**3:
-        raise ConflictError("Workspace inputs exceed the 3 GiB staging limit")
+    if sum(item.artifact.file.size for item in inputs.files) > effective(session).max_input_gib * 1024**3:
+        raise ConflictError("Workspace inputs exceed the configured staging limit")
     if len(inputs.model_dump_json().encode()) > 512 * 1024:
         raise ConflictError("Workspace input manifest exceeds the 512 KiB limit")
     snapshots = [item.artifact for item in inputs.files if isinstance(item.artifact, SnapshotFile)]

@@ -77,22 +77,66 @@ describe("HandoffPageComponent", () => {
     page.previousHandoffId = "previous-receipt";
     const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
     let pending = page.submit();
-    const first = http.expectOne("/api/preparation/handoffs");
+    const first = http.expectOne("/api/preparation/handoff-captures");
     const identity = first.request.body.origin;
+    const key = first.request.headers.get("Idempotency-Key");
     expect(first.request.body.dataset).toBeNull();
     expect(first.request.body.previous_handoff_id).toBe("previous-receipt");
     first.flush({ detail: "Please retry" }, { status: 503, statusText: "Unavailable" });
     await pending;
     expect(page.busy()).toBeFalse();
     pending = page.submit();
-    const retry = http.expectOne("/api/preparation/handoffs");
+    const retry = http.expectOne("/api/preparation/handoff-captures");
     expect(retry.request.body.origin).toEqual(identity);
+    expect(retry.request.headers.get("Idempotency-Key")).toBe(key);
     expect(retry.request.body.revision).toBe("1");
     expect(retry.request.body.previous_handoff_id).toBe("previous-receipt");
-    retry.flush(receipt);
+    retry.flush({
+      id: "capture-1",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: receipt.id },
+    });
     await pending;
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
   });
+  it("starts an unchanged new submission with a fresh key after cancellation", async () => {
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    const page = fixture.componentInstance;
+    page.title = "Iris";
+    page.profileId = 1;
+    page.sourcePath = "iris.onnx";
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    let pending = page.submit();
+    const first = http.expectOne("/api/preparation/handoff-captures");
+    const key = first.request.headers.get("Idempotency-Key");
+    const body = first.request.body;
+    first.flush({ id: "old-job", state: "pending", message: "", result: {} });
+    await pending;
+    pending = page.captureAction("cancel");
+    http
+      .expectOne("/api/operations/old-job/cancel")
+      .flush({ id: "old-job", state: "cancelled", message: "", result: {} });
+    await pending;
+    fixture.detectChanges();
+    const link = Array.from(fixture.nativeElement.querySelectorAll("a")) as HTMLAnchorElement[];
+    link.find((item) => item.textContent?.trim() === "New submission")!.click();
+    pending = page.submit();
+    const fresh = http.expectOne("/api/preparation/handoff-captures");
+    expect(fresh.request.body).toEqual(body);
+    expect(fresh.request.headers.get("Idempotency-Key")).not.toBe(key);
+    fresh.flush({
+      id: "new-job",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: "receipt-1" },
+    });
+    await pending;
+  });
+
   it("renders missing inputs and the exact pinned object version", async () => {
     const fixture = await setup("receipt-1");
     http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
@@ -112,7 +156,7 @@ describe("HandoffPageComponent", () => {
     await fixture.componentInstance.submit();
     fixture.detectChanges();
     http.expectNone("/api/s3-profiles");
-    http.expectNone("/api/preparation/handoffs");
+    http.expectNone("/api/preparation/handoff-captures");
     expect(fixture.nativeElement.textContent).toContain("requires member or administrator access");
   });
   it("keeps access errors visible without rendering receipt content", async () => {
@@ -148,6 +192,54 @@ describe("HandoffPageComponent", () => {
     });
     await pending;
     expect(fixture.componentInstance.receipt()?.task.assignee_user_id).toBe(2);
+  });
+  it("previews actual input storage before creating with the chosen capacity", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    // Act
+    const preview = page.prepareWorkspace();
+    http.expectOne("/api/preparation/tasks/task-1/workspace-sizing").flush({
+      input_bytes: 16 * 1073741824,
+      recommended_gib: 24,
+      maximum_gib: 50,
+      existing_storage_size: null,
+    });
+    await preview;
+    // Assert
+    expect(page.storageGiB).toBe(24);
+    http.expectNone("/api/preparation/tasks/task-1/workspace");
+    // Act
+    page.storageGiB = 30;
+    const pending = page.openWorkspace();
+    const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
+    const body = request.request.body;
+    request.flush({ workspace: { id: 42 } });
+    await pending;
+    // Assert
+    expect(body).toEqual({ workspace: { storage_size: "30Gi" } });
+  });
+  it("blocks workspace creation when the estimate exceeds the admin maximum", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    page.workspaceSizing.set({
+      input_bytes: 40 * 1073741824,
+      recommended_gib: 60,
+      maximum_gib: 50,
+      existing_storage_size: null,
+    });
+    page.storageGiB = 60;
+    // Act
+    await page.openWorkspace();
+    // Assert
+    expect(page.validWorkspaceSize()).toBeFalse();
+    http.expectNone("/api/preparation/tasks/task-1/workspace");
   });
   it("opens the task workspace and navigates to its exact instance", async () => {
     const fixture = await setup("receipt-1");
@@ -191,9 +283,14 @@ describe("HandoffPageComponent", () => {
 
     // Act
     const pending = page.submit();
-    const submission = http.expectOne("/api/preparation/handoffs");
+    const submission = http.expectOne("/api/preparation/handoff-captures");
     const body = submission.request.body;
-    submission.flush(receipt);
+    submission.flush({
+      id: "capture-1",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: receipt.id },
+    });
     await pending;
 
     // Assert
@@ -246,5 +343,35 @@ describe("HandoffPageComponent", () => {
     ]) {
       expect(text).toContain(expected);
     }
+  });
+  it("shows queued capture progress and allows cancellation without holding the submission request", async () => {
+    // Arrange
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    const page = fixture.componentInstance;
+    page.title = "Large model";
+    page.profileId = 1;
+    page.sourcePath = "model.onnx";
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    // Act
+    const pending = page.submit();
+    const request = http.expectOne("/api/preparation/handoff-captures");
+    const key = request.request.headers.get("Idempotency-Key");
+    request.flush({ id: "job-1", state: "pending", message: "Queued", result: {} });
+    await pending;
+    fixture.detectChanges();
+    // Assert
+    expect(key?.length).toBe(64);
+    expect(page.busy()).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain("Model capture: pending");
+    expect(fixture.nativeElement.textContent).toContain("Cancel capture");
+    expect(fixture.nativeElement.querySelector("form")).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(
+      [],
+      jasmine.objectContaining({ queryParams: { capture: "job-1" } }),
+    );
+    fixture.destroy();
   });
 });

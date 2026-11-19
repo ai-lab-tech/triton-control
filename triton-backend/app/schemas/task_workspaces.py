@@ -59,3 +59,10 @@ class OpenTaskWorkspace(Request):
 class TaskWorkspaceDTO(Request):
     task_id: UUID
     workspace: CodeServerDTO
+
+
+class WorkspaceSizing(Request):
+    input_bytes: int
+    recommended_gib: int
+    maximum_gib: int
+    existing_storage_size: str | None = None

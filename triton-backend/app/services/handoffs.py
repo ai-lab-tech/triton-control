@@ -1,13 +1,13 @@
 """Explicit handoffs: one atomic receipt, task, event and recipient notifications."""
 
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
 from app.core import installation_policy
 from app.db.entities import HandoffEntity, HandoffNotificationEntity
-from app.exceptions import ConflictError, ForbiddenError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import handoffs as repository
 from app.repositories import teams
 from app.schemas.handoffs import (
@@ -24,6 +24,7 @@ from app.schemas.lineage import InventoryV1, Origin, Snapshot
 from app.schemas.preparation import TaskCreate
 from app.services import handoff_repositories, handoff_sources, preparation
 from app.services.lineage import digest, inventory_digest
+from app.services.preparation_settings import effective
 
 
 def _actor(session: Session, claims: dict[str, Any]) -> int:
@@ -90,7 +91,9 @@ def _previous(session: Session, claims: dict[str, Any], request: HandoffRequest)
         raise ConflictError("A revised handoff requires a new submission revision")
 
 
-def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) -> HandoffReceipt:
+def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
+           checkpoint: Callable[[int], None] | None = None,
+           publish: Callable[[Session, UUID], None] | None = None) -> HandoffReceipt:
     installation_policy.require("development_jobs")
     try:
         _actor(session, claims)
@@ -107,12 +110,20 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
             return _reuse(session, claims, existing, selectors)
         # No database write/row lock across provider reads. Each mutable object is
         # resolved once to a non-null version ID; retries return the stored receipt.
+        options: dict[str, Any] = {"checkpoint": checkpoint} if checkpoint else {}
         source = (
-            handoff_repositories.resolve(session, request.source) if isinstance(request.source, S3RepositoryInput)
-            else handoff_sources.resolve(session, request.source)
+            handoff_repositories.resolve(session, request.source, **options)
+            if isinstance(request.source, S3RepositoryInput)
+            else handoff_sources.resolve(session, request.source, **options)
         )
-        dataset = handoff_sources.resolve(session, request.dataset) if request.dataset else None
-        baseline = handoff_sources.resolve(session, request.baseline) if request.baseline else None
+        dataset = handoff_sources.resolve(session, request.dataset, **options) if request.dataset else None
+        baseline = handoff_sources.resolve(session, request.baseline, **options) if request.baseline else None
+        if checkpoint:
+            checkpoint(0)
+        artifacts = source.files if isinstance(source, ResolvedRepository) else [source]
+        total_bytes = sum(item.file.size for item in [*artifacts, dataset, baseline] if item is not None)
+        if total_bytes > effective(session).max_input_gib * 1024**3:
+            raise BadRequestError("Combined inputs exceed the configured workspace input size limit")
         teams.get(session, teams.INSTALLATION_TEAM_ID, lock=True)
         _actor(session, claims)
         _previous(session, claims, request)
@@ -172,6 +183,8 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest) ->
             },
         )
         repository.add(session, row, teams.eligible_user_ids(session, teams.INSTALLATION_TEAM_ID))
+        if publish:
+            publish(session, row.id)
         session.commit()
         return _receipt(session, claims, row)
     except Exception:

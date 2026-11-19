@@ -49,8 +49,9 @@ hash. Later edits or added files do not change an existing receipt. Retry with t
 same submission revision to recover it; use **New revision** for changed inputs.
 Keep the captured object versions in S3 while the task needs them.
 
-Repository capture is limited to 998 files, 1 GiB total and a 120-second capture
-budget, with bounded individual network timeouts. Inventory metadata is capped at
+Repository capture permits up to 998 files. Size and time budgets are configurable
+in [Model preparation settings](model-preparation-settings.md): defaults are 15 GiB
+for combined task inputs and one hour for capture/download. Inventory metadata is capped at
 512 KiB so it fits workspace configuration limits. Empty files are preserved;
 empty S3 directory markers are ignored. Unsafe paths and file/directory collisions
 are rejected. The selected folder must contain at least one `model-name/config.pbtxt`.
@@ -62,6 +63,9 @@ Dataset and baseline inputs still refer to individual S3 objects. These fields m
 be omitted at submission, but all evaluation inputs are required before opening a
 task workspace. See [task workspaces](task-workspaces.md) and
 [engineering responsibility](user-management.md).
+
+The submission UI uses a durable background capture, with progress, cancellation
+and retry. See [large-model submission](model-preparation-settings.md#large-model-submission).
 
 ## Source and routing contract
 
@@ -86,7 +90,7 @@ entire submission.
 Each object is resolved using HEAD and then read using its exact non-null S3
 VersionId. SHA-256 is measured from streamed bytes, not inferred from ETags. Bucket
 versioning is required; the service rejects unversioned/suspended null versions.
-Each input is bounded to 1 GiB and 120 seconds, read in 1 MiB chunks with bounded
+Each input uses the configured model preparation size and time limits, read in 1 MiB chunks with bounded
 connection/read timeouts. An expected digest mismatch rejects the submission.
 Inputs are referenced by exact versions; this story does not copy or retain their
 bytes. Storage retention must preserve those versions. Snapshot staging of live

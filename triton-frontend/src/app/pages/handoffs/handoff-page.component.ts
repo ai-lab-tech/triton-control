@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { Component, inject, signal } from "@angular/core";
+import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { DOCUMENT, DatePipe, DecimalPipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
@@ -13,10 +13,12 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import {
+  CaptureOperation,
   HandoffsApiService,
   HandoffReceipt,
   SourceInput,
   SourceProfile,
+  WorkspaceSizing,
 } from "./handoffs-api.service";
 
 @Component({
@@ -45,7 +47,14 @@ export class HandoffPageComponent {
   readonly receipt = signal<HandoffReceipt | null>(null);
   readonly busy = signal(false);
   readonly error = signal("");
+  readonly workspaceSizing = signal<WorkspaceSizing | null>(null);
+  storageGiB: number | null = null;
   readonly detail = signal(false);
+  readonly capture = signal<CaptureOperation | null>(null);
+  private captureTimer: ReturnType<typeof setTimeout> | undefined;
+  private destroyed = false;
+  private captureGeneration = 0;
+  private submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
   title = "";
   profileId: number | null = null;
   sourcePath = "";
@@ -58,11 +67,19 @@ export class HandoffPageComponent {
   criteria = "";
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+      clearTimeout(this.captureTimer);
+    });
+    const captureId = this.route.snapshot.queryParamMap.get("capture");
+    if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
     this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
       this.detail.set(!!id);
       this.receipt.set(null);
+      this.workspaceSizing.set(null);
+      this.storageGiB = null;
       this.error.set("");
       if (id) void this.loadReceipt(id);
       else if (this.canSubmit()) void this.loadProfiles();
@@ -99,13 +116,42 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  async prepareWorkspace() {
+    const receipt = this.receipt();
+    if (!receipt || this.busy()) return;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      const sizing = await firstValueFrom(this.api.workspaceSizing(receipt.task.id));
+      this.workspaceSizing.set(sizing);
+      this.storageGiB = sizing.recommended_gib;
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not calculate workspace storage."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+  validWorkspaceSize(): boolean {
+    const sizing = this.workspaceSizing();
+    return (
+      !!sizing &&
+      (sizing.existing_storage_size !== null ||
+        (this.storageGiB !== null &&
+          Number.isInteger(this.storageGiB) &&
+          this.storageGiB >= sizing.recommended_gib &&
+          this.storageGiB <= sizing.maximum_gib))
+    );
+  }
   async openWorkspace() {
     const receipt = this.receipt();
     if (!receipt || this.busy()) return;
     this.busy.set(true);
     this.error.set("");
     try {
-      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id));
+      const sizing = this.workspaceSizing();
+      if (sizing && !this.validWorkspaceSize()) return;
+      const storage = sizing && !sizing.existing_storage_size ? this.storageGiB! : undefined;
+      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id, storage));
       await this.router.navigate(["/workspaces"], {
         queryParams: { workspace: result.workspace.id },
       });
@@ -120,10 +166,18 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  newSubmission(): void {
+    ++this.captureGeneration;
+    clearTimeout(this.captureTimer);
+    this.submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    this.capture.set(null);
+    this.error.set("");
+  }
   async submit() {
     if (
       this.busy() ||
       !this.canSubmit() ||
+      this.capture() !== null ||
       this.profileId === null ||
       !this.title.trim() ||
       !this.sourcePath.trim() ||
@@ -138,27 +192,41 @@ export class HandoffPageComponent {
     this.busy.set(true);
     this.error.set("");
     try {
-      const receipt = await firstValueFrom(
-        this.api.submit({
-          schema_version: 1,
-          origin: {
-            installation_id: this.document.location.origin,
-            record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
+      const operation = await firstValueFrom(
+        this.api.submit(
+          {
+            schema_version: 1,
+            origin: {
+              installation_id: this.document.location.origin,
+              record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
+            },
+            previous_handoff_id: this.previousHandoffId.trim() || null,
+            revision: this.revision.trim(),
+            title: this.title.trim(),
+            source:
+              this.sourceKind === "s3_repository"
+                ? {
+                    kind: "s3_repository",
+                    profile_id: this.profileId!,
+                    path: this.sourcePath.trim(),
+                  }
+                : source(this.sourcePath),
+            dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
+            baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
+            expected_behavior: this.expectedBehavior.trim() || null,
+            acceptance_criteria: this.criteria.trim() || null,
           },
-          previous_handoff_id: this.previousHandoffId.trim() || null,
-          revision: this.revision.trim(),
-          title: this.title.trim(),
-          source:
-            this.sourceKind === "s3_repository"
-              ? { kind: "s3_repository", profile_id: this.profileId!, path: this.sourcePath.trim() }
-              : source(this.sourcePath),
-          dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
-          baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
-          expected_behavior: this.expectedBehavior.trim() || null,
-          acceptance_criteria: this.criteria.trim() || null,
-        }),
+          this.submissionId,
+        ),
       );
-      await this.router.navigate(["/preparation/handoffs", receipt.id]);
+      this.capture.set(operation);
+      await this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { capture: operation.id },
+        queryParamsHandling: "merge",
+        replaceUrl: true,
+      });
+      await this.acceptCapture(operation);
     } catch (error) {
       this.error.set(
         mapApiErrorMessage(error, "Could not submit handoff. Retry with the same revision."),
@@ -167,6 +235,46 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  private async acceptCapture(operation: CaptureOperation): Promise<void> {
+    if (this.destroyed) return;
+    this.capture.set(operation);
+    if (operation.state === "succeeded" && operation.result.handoff_id) {
+      await this.router.navigate(["/preparation/handoffs", operation.result.handoff_id]);
+      this.capture.set(null);
+    } else if (!["failed", "cancelled"].includes(operation.state)) {
+      this.captureTimer = setTimeout(() => {
+        void this.monitorCapture(operation.id);
+      }, 3000);
+    }
+  }
+  async monitorCapture(id: string): Promise<void> {
+    clearTimeout(this.captureTimer);
+    const generation = ++this.captureGeneration;
+    try {
+      const operation = await firstValueFrom(this.api.capture(id));
+      if (generation === this.captureGeneration) await this.acceptCapture(operation);
+    } catch (error) {
+      if (!this.destroyed)
+        this.error.set(
+          mapApiErrorMessage(error, "Could not read capture progress. Reload to resume."),
+        );
+    }
+  }
+  async captureAction(action: "cancel" | "retry"): Promise<void> {
+    const current = this.capture();
+    if (!current || this.busy()) return;
+    this.busy.set(true);
+    ++this.captureGeneration;
+    clearTimeout(this.captureTimer);
+    try {
+      await this.acceptCapture(await firstValueFrom(this.api.captureAction(current.id, action)));
+    } catch (error) {
+      this.error.set(mapApiErrorMessage(error, "Could not update capture."));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   verifiedInputs(item: HandoffReceipt) {
     const sources =
       "files" in item.source

@@ -31,11 +31,36 @@
       {{ detail() ? "Loading handoff…" : "Verifying source versions and checksums. Please wait…" }}
     </p>
   }
+  @if (capture(); as operation) {
+    <section class="notice" aria-live="polite">
+      <strong>Model capture: {{ operation.state }}</strong>
+      <p>{{ operation.message || "Queued for source verification" }}</p>
+      <p>
+        {{ (operation.result.bytes_verified || 0) / 1073741824 | number: "1.0-2" }} GiB verified
+        this attempt.
+      </p>
+      <p>You can leave this page. Save its URL to resume progress after reopening.</p>
+      @if (operation.state === "failed") {
+        <button mat-stroked-button (click)="captureAction('retry')" [disabled]="busy()">
+          Retry capture
+        </button>
+      } @else if (operation.state !== "succeeded" && operation.state !== "cancelled") {
+        <button mat-stroked-button (click)="captureAction('cancel')" [disabled]="busy()">
+          Cancel capture
+        </button>
+      }
+      @if (operation.state === "failed" || operation.state === "cancelled") {
+        <a mat-stroked-button routerLink="/preparation/handoffs/new" (click)="newSubmission()"
+          >New submission</a
+        >
+      }
+    </section>
+  }
   @if (!canSubmit()) {
     <p class="notice">
       Submitting and inspecting handoffs requires member or administrator access.
     </p>
-  } @else if (!detail()) {
+  } @else if (!detail() && !capture()) {
     <div class="submission-layout">
       <form #form="ngForm" (ngSubmit)="submit()" class="submission-form">
         <fieldset [disabled]="busy()" class="form-card">
@@ -255,7 +280,7 @@
           }
           <button
             mat-flat-button
-            (click)="openWorkspace()"
+            (click)="prepareWorkspace()"
             [disabled]="
               busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
             "
@@ -263,6 +288,42 @@
             Open task workspace
           </button>
         </div>
+        @if (workspaceSizing(); as sizing) {
+          <p>Actual task inputs: {{ sizing.input_bytes / 1073741824 | number: "1.0-2" }} GiB.</p>
+          @if (sizing.existing_storage_size; as existing) {
+            <p>Existing workspace storage: {{ existing }}. Reopening keeps this allocation.</p>
+          } @else {
+            <p>
+              Recommended writable storage: {{ sizing.recommended_gib }} GiB, including working
+              space. Administrator maximum: {{ sizing.maximum_gib }} GiB. Verified inputs use
+              separate storage.
+            </p>
+            <mat-form-field appearance="outline">
+              <mat-label>Writable workspace storage (GiB)</mat-label>
+              <input
+                matInput
+                type="number"
+                step="1"
+                [min]="sizing.recommended_gib"
+                [max]="sizing.maximum_gib"
+                [(ngModel)]="storageGiB"
+                [disabled]="busy()"
+              />
+            </mat-form-field>
+            @if (sizing.recommended_gib > sizing.maximum_gib) {
+              <p role="alert">
+                This task exceeds the workspace storage maximum. Contact an administrator.
+              </p>
+            }
+          }
+          <button
+            mat-flat-button
+            (click)="openWorkspace()"
+            [disabled]="busy() || !validWorkspaceSize()"
+          >
+            {{ sizing.existing_storage_size ? "Reopen workspace" : "Create workspace" }}
+          </button>
+        }
         <p>
           Only the current assignee can open the workspace. Inputs are verified and read-only; use
           /workspace/conversion for your changes. Reopening reuses the existing workspace.

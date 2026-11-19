@@ -32,8 +32,10 @@ def configure(manifests: list[dict[str, Any]], document: dict[str, Any], namespa
         + container["args"][0]
     )
     spec["automountServiceAccountToken"] = False
+    # Account for exact staged bytes plus filesystem overhead, rather than a fixed 4 GiB volume.
+    storage_bytes = sum(item["size"] for item in document["files"]) + 1024**3
     spec["volumes"].extend([
-        {"name": "task-inputs", "emptyDir": {"sizeLimit": "4Gi"}},
+        {"name": "task-inputs", "emptyDir": {"sizeLimit": str(storage_bytes)}},
         {"name": "task-stager", "configMap": {"name": configmap_name(name)}},
     ])
     spec["initContainers"] = [{
@@ -49,7 +51,7 @@ def configure(manifests: list[dict[str, Any]], document: dict[str, Any], namespa
             }}},
         ],
         "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
-        "resources": {"requests": {"cpu": "100m", "memory": "64Mi"},
+        "resources": {"requests": {"cpu": "100m", "memory": "64Mi", "ephemeral-storage": str(storage_bytes)},
                       "limits": {"cpu": "1", "memory": "256Mi"}},
         "volumeMounts": [
             {"name": "task-inputs", "mountPath": "/inputs"},

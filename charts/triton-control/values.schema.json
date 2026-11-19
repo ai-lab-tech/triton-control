@@ -190,6 +190,35 @@
           "default": ""
         }
       }
+    },
+    "modelPreparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxInputGiB",
+        "maxWorkspaceStorageGiB",
+        "transferTimeoutSeconds"
+      ],
+      "properties": {
+        "maxInputGiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192,
+          "default": 15
+        },
+        "maxWorkspaceStorageGiB": {
+          "type": "integer",
+          "minimum": 6,
+          "maximum": 16384,
+          "default": 50
+        },
+        "transferTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 604800,
+          "default": 3600
+        }
+      }
     }
   }
 }

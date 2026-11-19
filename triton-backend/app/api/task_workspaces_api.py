@@ -11,7 +11,7 @@ from starlette.background import BackgroundTask
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
-from app.schemas.task_workspaces import OpenTaskWorkspace, TaskWorkspaceDTO
+from app.schemas.task_workspaces import OpenTaskWorkspace, TaskWorkspaceDTO, WorkspaceSizing
 from app.services import task_workspaces
 
 router = APIRouter(prefix="/api/preparation", tags=["task-workspaces"])
@@ -39,3 +39,10 @@ def input_file(namespace: str, name: str, index: int, authorization: str = Heade
     path = task_workspaces.input_file(session, namespace, name, token if scheme.lower() == "bearer" else "", index)
     return FileResponse(path, media_type="application/octet-stream", headers={"Cache-Control": "no-store"},
                         background=BackgroundTask(path.unlink, missing_ok=True))
+
+
+@router.get("/tasks/{task_id}/workspace-sizing", response_model=WorkspaceSizing)
+@translate_app_errors
+def workspace_sizing(task_id: UUID, session: Session = Depends(get_session),
+                     claims: dict[str, Any] = Depends(get_claims)) -> WorkspaceSizing:
+    return task_workspaces.workspace_sizing(session, claims, task_id)

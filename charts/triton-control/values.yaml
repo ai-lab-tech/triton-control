@@ -450,3 +450,10 @@ buildQualification:
   contextRetentionDays: 7
   # policy.namespace is persistent; disposable qualification uses its own temporary namespace.
   policy: null
+
+# Deployment defaults. Admin Settings > Model preparation can override these values.
+# Reserve backend temp disk and Kubernetes node storage separately for large inputs.
+modelPreparation:
+  maxInputGiB: 15
+  maxWorkspaceStorageGiB: 50
+  transferTimeoutSeconds: 3600

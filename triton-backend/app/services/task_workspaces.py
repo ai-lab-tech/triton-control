@@ -13,17 +13,26 @@ from app.exceptions import ConflictError, ForbiddenError, NotFoundError, Service
 from app.repositories import developments
 from app.repositories import preparation as tasks
 from app.repositories import task_workspaces as repository
-from app.schemas.task_workspaces import OpenTaskWorkspace, SnapshotFile, TaskWorkspaceDTO, WorkspaceInputs
-from app.services import handoff_sources
+from app.schemas.task_workspaces import (
+    OpenTaskWorkspace,
+    SnapshotFile,
+    TaskWorkspaceDTO,
+    WorkspaceInputs,
+    WorkspaceSizing,
+)
+from app.services import handoff_sources, task_workspace_sizing
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
 from app.services.development import profiles, workspaces
+from app.services.preparation_settings import effective
 from app.services.registry_settings import apply_registry_settings
 
 
-def document(task_id: UUID, inputs: WorkspaceInputs) -> dict[str, Any]:
+def document(task_id: UUID, inputs: WorkspaceInputs, download_timeout: int = 3600) -> dict[str, Any]:
     return {
         "schema_version": 1, "task_id": str(task_id),
+        "max_input_bytes": sum(item.artifact.file.size for item in inputs.files),
+        "download_timeout_seconds": download_timeout,
         "snapshot": inputs.snapshot.model_dump(mode="json"),
         "expected_behavior": inputs.expected_behavior, "acceptance_criteria": inputs.acceptance_criteria,
         "conversion_directory": "/workspace/conversion",
@@ -45,6 +54,21 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         actor = access.authorize(session, claims, task_id, recovery=recovery, lock=True)
         inputs = access.load_inputs(session, task_id)
         access.authorize_inputs(session, inputs)
+        association = repository.get(session, task_id)
+        explicit = "storage_size" in request.workspace.model_fields_set
+        existing_size = (association.configuration.get("storage_size")
+                         if association is not None and association.workspace_id is not None else None)
+        if existing_size is not None and (not explicit or request.workspace.storage_size == existing_size):
+            # Reopening must retain the originally allocated volume, even after policy changes.
+            size = existing_size
+        else:
+            size = task_workspace_sizing.storage_size(
+                sum(item.artifact.file.size for item in inputs.files), effective(session),
+                request.workspace.storage_size if explicit else None,
+            )
+        request = request.model_copy(update={"workspace": request.workspace.model_copy(
+            update={"storage_size": size},
+        )})
         workspace = _reserve_workspace(session, task_id, actor, request, inputs)
         # Persist intent before any Kubernetes writes. The same task/name is reused
         # after a crash; no background process-local scheduling state is required.
@@ -115,7 +139,7 @@ def _provision_workspace(
             workspace.applied_resources = k8s.apply_code_server_resources(
                 configured, namespace=workspace.namespace, statefulset_name=workspace.statefulset_name,
                 service_name=workspace.service_name, secret_name=workspace.secret_name,
-                task_document=document(task_id, inputs),
+                task_document=document(task_id, inputs, effective(session).transfer_timeout_seconds),
             )
         except Exception:
             workspace.status = "blocked"
@@ -126,6 +150,22 @@ def _provision_workspace(
         workspace.status = "creating"
         workspace.status_message = "Verifying task inputs before starting the editor."
         repository.save_workspace(session, workspace)
+
+
+def workspace_sizing(session: Session, claims: dict[str, Any], task_id: UUID) -> WorkspaceSizing:
+    if claims.get("token_use"):
+        raise ForbiddenError("Interactive credentials are required to size task workspaces")
+    access.authorize(session, claims, task_id)
+    inputs = access.load_inputs(session, task_id)
+    access.authorize_inputs(session, inputs)
+    limits = effective(session)
+    total = sum(item.artifact.file.size for item in inputs.files)
+    association = repository.get(session, task_id)
+    existing = (association.configuration.get("storage_size")
+                if association is not None and association.workspace_id is not None else None)
+    return WorkspaceSizing(input_bytes=total,
+                           recommended_gib=task_workspace_sizing.recommended_gib(total),
+                           maximum_gib=limits.max_workspace_storage_gib, existing_storage_size=existing)
 
 
 def get_workspace(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskWorkspaceDTO:

@@ -198,6 +198,100 @@
         ]
       }
     },
+    "/api/settings/model-preparation": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_settings_model_preparation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_settings_model_preparation_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreparationLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_settings_model_preparation_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/local-bindings/policy": {
       "get": {
         "tags": [
@@ -2766,6 +2860,54 @@
         }
       }
     },
+    "/api/preparation/tasks/{task_id}/workspace-sizing": {
+      "get": {
+        "tags": [
+          "task-workspaces"
+        ],
+        "summary": "Workspace Sizing",
+        "operationId": "workspace_sizing_api_preparation_tasks__task_id__workspace_sizing_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSizing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preparation-tasks": {
       "get": {
         "tags": [
@@ -3363,6 +3505,63 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskDTO"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation/handoff-captures": {
+      "post": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Capture",
+        "operationId": "capture_api_preparation_handoff_captures_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoffRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
                 }
               }
             }
@@ -11516,6 +11715,34 @@
         ],
         "title": "PreparationAccepted"
       },
+      "PreparationLimits": {
+        "properties": {
+          "max_input_gib": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 1.0,
+            "title": "Max Input Gib",
+            "default": 15
+          },
+          "max_workspace_storage_gib": {
+            "type": "integer",
+            "maximum": 16384.0,
+            "minimum": 6.0,
+            "title": "Max Workspace Storage Gib",
+            "default": 50
+          },
+          "transfer_timeout_seconds": {
+            "type": "integer",
+            "maximum": 604800.0,
+            "minimum": 60.0,
+            "title": "Transfer Timeout Seconds",
+            "default": 3600
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PreparationLimits"
+      },
       "PreparationRequest": {
         "properties": {
           "schema_version": {
@@ -11663,6 +11890,31 @@
           "models"
         ],
         "title": "PreparationRequest"
+      },
+      "PreparationSettings": {
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/PreparationLimits"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/PreparationLimits"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "deployment",
+              "admin"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limits",
+          "defaults",
+          "source"
+        ],
+        "title": "PreparationSettings"
       },
       "Quantities": {
         "properties": {
@@ -14806,6 +15058,41 @@
           "files"
         ],
         "title": "WorkspaceInput"
+      },
+      "WorkspaceSizing": {
+        "properties": {
+          "input_bytes": {
+            "type": "integer",
+            "title": "Input Bytes"
+          },
+          "recommended_gib": {
+            "type": "integer",
+            "title": "Recommended Gib"
+          },
+          "maximum_gib": {
+            "type": "integer",
+            "title": "Maximum Gib"
+          },
+          "existing_storage_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Storage Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_bytes",
+          "recommended_gib",
+          "maximum_gib"
+        ],
+        "title": "WorkspaceSizing"
       }
     },
     "securitySchemes": {

@@ -1,3 +1,4 @@
+import { PreparationSettingsComponent } from "./preparation-settings.component";
 import { InstallationService } from "../../shared/installation/installation.service";
 import { RegistrySettingsComponent } from "./registry-settings.component";
 import { Component, inject, signal } from "@angular/core";
@@ -58,6 +59,7 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
   standalone: true,
   imports: [
     RegistrySettingsComponent,
+    PreparationSettingsComponent,
     FormsModule,
     MatCardModule,
     MatButtonModule,

@@ -770,3 +770,10 @@ class BuildEvidenceReferenceEntity(SQLModel, table=True):
     operation_id: str = Field(primary_key=True)
     attempt: int = Field(primary_key=True)
     release_digest: str = Field(primary_key=True)
+
+
+class PreparationConfigEntity(SQLModel, table=True):
+    """Optional singleton overrides for deployment-provided preparation limits."""
+    __tablename__ = "preparation_config"
+    id: int = Field(default=1, primary_key=True)
+    limits: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))

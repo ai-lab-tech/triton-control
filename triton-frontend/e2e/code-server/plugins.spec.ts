@@ -620,7 +620,7 @@ test.describe.serial("code-server plugin workflows", () => {
             name: `build-smoke-${phase}`,
             image: workspaceImage,
             theme: "Default Dark+",
-            storage_size: "1Gi",
+            // Omit storage_size so task inputs determine the required capacity.
             memory: "1Gi",
             cpu: "250m",
           },

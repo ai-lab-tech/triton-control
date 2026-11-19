@@ -67,7 +67,8 @@ captured S3 versions through a token-authenticated backend endpoint. The backend
 checks the current profile endpoint, bucket and prefix, downloads to a private
 temporary file and checks size, version and SHA-256 before serving bytes. The
 init container verifies the streamed bytes again. No archives are extracted.
-Each input is limited to 1 GiB and the input set to 3 GiB.
+Input size and download budgets follow [Model preparation settings](model-preparation-settings.md).
+The verified-input volume is sized from the actual captured bytes plus overhead.
 
 All files must pass before the init container atomically publishes
 `/inputs/verified`. Kubernetes mounts `/inputs` read-only in the editor, which
@@ -121,3 +122,13 @@ unique temporary namespaces and tests corrupt-input startup blocking, actual
 read-only mount enforcement, a writable conversion directory and pod recreation.
 It uses a small HTTP fixture, not a real Triton inference workload. CI runs both
 suites in the existing PostgreSQL/Kubernetes job.
+
+### Automatic writable storage
+
+On the handoff receipt, **Open task workspace** shows the actual input bytes and
+recommended disk size before creation. The recommendation includes a working copy
+of the inputs plus automatic space for conversion and outputs. Engineers can
+request more space within the administrator maximum. See
+[model preparation settings](model-preparation-settings.md#storage-capacity) for
+the sizing formula, defaults, and Helm configuration. Existing workspaces retain
+their original allocation when reopened.

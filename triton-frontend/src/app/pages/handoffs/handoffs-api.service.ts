@@ -1,7 +1,22 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { BASE_PATH, CodeServerDTO } from "../../api/generated";
 
+export interface WorkspaceSizing {
+  input_bytes: number;
+  recommended_gib: number;
+  maximum_gib: number;
+  existing_storage_size: string | null;
+}
+
+export interface CaptureOperation {
+  id: string;
+  state: string;
+  message: string;
+  result: { handoff_id?: string; bytes_verified?: number };
+}
 export interface SourceInput {
   kind: "s3";
   profile_id: number;
@@ -70,8 +85,27 @@ export interface SourceProfile {
 export class HandoffsApiService {
   private readonly http = inject(HttpClient);
   private readonly base = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
-  submit(request: HandoffRequest) {
-    return this.http.post<HandoffReceipt>(this.base + "/api/preparation/handoffs", request);
+  submit(request: HandoffRequest, submissionId: string) {
+    return this.http.post<CaptureOperation>(
+      this.base + "/api/preparation/handoff-captures",
+      request,
+      {
+        headers: {
+          "Idempotency-Key": bytesToHex(
+            sha256(new TextEncoder().encode(`${submissionId}:${JSON.stringify(request)}`)),
+          ),
+        },
+      },
+    );
+  }
+  capture(id: string) {
+    return this.http.get<CaptureOperation>(this.base + "/api/operations/" + encodeURIComponent(id));
+  }
+  captureAction(id: string, action: "cancel" | "retry") {
+    return this.http.post<CaptureOperation>(
+      this.base + "/api/operations/" + encodeURIComponent(id) + "/" + action,
+      {},
+    );
   }
   get(id: string) {
     return this.http.get<HandoffReceipt>(
@@ -86,10 +120,15 @@ export class HandoffsApiService {
       },
     );
   }
-  openWorkspace(taskId: string) {
+  workspaceSizing(taskId: string) {
+    return this.http.get<WorkspaceSizing>(
+      this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace-sizing",
+    );
+  }
+  openWorkspace(taskId: string, storageGiB?: number) {
     return this.http.post<{ task_id: string; workspace: CodeServerDTO }>(
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace",
-      {},
+      storageGiB === undefined ? {} : { workspace: { storage_size: `${storageGiB}Gi` } },
     );
   }
   profiles() {

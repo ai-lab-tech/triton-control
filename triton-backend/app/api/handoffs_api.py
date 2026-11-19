@@ -3,16 +3,24 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.schemas.handoffs import HandoffReceipt, HandoffRequest, NotificationDTO
-from app.services import handoffs
+from app.schemas.operations import OperationResponse
+from app.services import handoff_capture, handoffs
 
 router = APIRouter(prefix="/api/preparation", tags=["handoffs"])
+
+
+@router.post("/handoff-captures", response_model=OperationResponse, status_code=202)
+@translate_app_errors
+def capture(request: HandoffRequest, idempotency_key: str = Header(alias="Idempotency-Key"),
+            session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims)) -> OperationResponse:
+    return handoff_capture.submit(session, claims, request, idempotency_key)
 
 
 @router.post("/handoffs", response_model=HandoffReceipt)
