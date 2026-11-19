@@ -10,7 +10,7 @@ from sqlmodel import Session
 from app.core import installation_policy
 from app.core.identity import require_user_entity
 from app.exceptions import AppError, NotFoundError
-from app.repositories import instances
+from app.repositories import deployment_intents, instances
 from app.schemas import DeploymentDeleteResponse
 from app.services.deployment import access, deployment
 from app.services.triton.client import TritonService
@@ -26,7 +26,7 @@ def _owned(session: Session, claims: dict[str, Any], name: str) -> Any:
     return row
 
 
-async def describe(row: Any) -> dict[str, Any]:
+async def describe(row: Any, lineage: Any = None) -> dict[str, Any]:
     installation_policy.require("development_tools")
     state = "starting"
     detail = row.health_error or "Waiting for Triton model readiness"
@@ -55,6 +55,7 @@ async def describe(row: Any) -> dict[str, Any]:
         "name": row.name,
         "instance_id": row.id,
         "model_uri": row.mlflow_model_uri,
+        "lineage": lineage,
         "model_name": row.mlflow_model_name,
         "status": state,
         "status_detail": detail,
@@ -62,9 +63,15 @@ async def describe(row: Any) -> dict[str, Any]:
     }
 
 
+def _lineage(session: Session, instance_id: int) -> Any:
+    intent = deployment_intents.for_instance(session, instance_id)
+    return intent.response.get("lineage") if intent else None
+
+
 async def get(session: Session, claims: dict[str, Any], name: str) -> dict[str, Any]:
     installation_policy.require("development_tools")
-    return await describe(_owned(session, claims, name))
+    row = _owned(session, claims, name)
+    return await describe(row, _lineage(session, row.id))
 
 
 async def list_all(session: Session, claims: dict[str, Any]) -> list[dict[str, Any]]:
@@ -73,7 +80,7 @@ async def list_all(session: Session, claims: dict[str, Any]) -> list[dict[str, A
     rows = instances.list_mlflow_for_owner(session, owner.id or 0)
     if claims.get("token_use") == "mlflow_workflow":
         rows = [row for row in rows if row.name == claims.get("allowed_deployment_name")]
-    return [await describe(row) for row in rows]
+    return [await describe(row, _lineage(session, row.id or 0)) for row in rows]
 
 
 def delete(session: Session, claims: dict[str, Any], name: str) -> DeploymentDeleteResponse:

@@ -76,6 +76,9 @@ def _reuse(
         captured = getattr(receipt, name)
         if captured is not None:
             original[name] = _selection(captured.source, captured.endpoint, captured.bucket, captured.key)
+    if receipt.request.lineage:
+        # Authorized storage relocation must not create a new source identity.
+        original["source"] = selectors["source"]
     if digest(original) != digest(selectors):
         raise ConflictError("Handoff source and revision already contain different content; submit a new revision")
     return receipt
@@ -101,8 +104,14 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
         content = digest(request.model_dump(mode="json"))
         selectors = _selectors(session, request)
         selected = selectors["source"]
+        lineage_identity = digest({"provider": "mlflow", "origin": request.origin.model_dump(),
+                                   "revision": request.revision}) if request.lineage else None
+        if lineage_identity:
+            existing_lineage = repository.find_identity(session, lineage_identity)
+            if existing_lineage:
+                return _reuse(session, claims, existing_lineage, selectors)
         version = request.source.version_id if isinstance(request.source, S3Input) else None
-        existing = repository.find_source(
+        existing = None if lineage_identity else repository.find_source(
             session, request.origin.installation_id, request.revision,
             selected["endpoint"], selected["bucket"], selected["key"], version, request.source.kind,
         )
@@ -132,9 +141,19 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
                 config, bucket, key = handoff_sources.authorize(session, item.source)
                 if (config["s3_endpoint"], bucket, key) != (item.endpoint, item.bucket, item.key):
                     raise ConflictError("Source profile changed during submission; retry")
+        if lineage_identity:
+            existing_lineage = repository.find_identity(session, lineage_identity)
+            if existing_lineage:
+                receipt = _reuse(session, claims, existing_lineage, selectors)
+                session.commit()
+                return receipt
+        if request.lineage and request.lineage.candidate:
+            measured = inventory_digest(InventoryV1(files=tuple(item.file for item in artifacts)))
+            if measured != request.lineage.candidate.output_inventory:
+                raise BadRequestError("Captured repository does not match the declared candidate inventory")
         # Concurrent unpinned submissions must reuse the first committed capture,
         # even if the object changed between their HEAD requests.
-        existing = repository.find_source(
+        existing = None if lineage_identity else repository.find_source(
             session, request.origin.installation_id, request.revision,
             source.endpoint, source.bucket, source.key, version, request.source.kind,
         ) or repository.find_source(
@@ -146,7 +165,7 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
             receipt = _reuse(session, claims, existing, selectors)
             session.commit()
             return receipt
-        identity = digest({
+        identity = lineage_identity or digest({
             "installation_id": request.origin.installation_id, "revision": request.revision,
             "kind": request.source.kind, "endpoint": source.endpoint, "bucket": source.bucket, "key": source.key,
             "version_id": source.version_id if isinstance(source, ResolvedInput) else None,
@@ -160,8 +179,9 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
             commit=False,
         )
         snapshot = Snapshot(
-            origin=Origin(installation_id=request.origin.installation_id, record_id=str(snapshot_id)),
-            kind="manual",
+            origin=request.lineage.origin if request.lineage else Origin(
+                installation_id=request.origin.installation_id, record_id=str(snapshot_id)),
+            kind="mlflow" if request.lineage else "manual",
             inventory=inventory_digest(InventoryV1(files=(source.file,) if isinstance(source, ResolvedInput)
                                                  else tuple(item.file for item in source.files))),
         )

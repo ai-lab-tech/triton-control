@@ -119,6 +119,27 @@ class DeploymentOperationTests(unittest.TestCase):
         with Session(self.engine) as session:
             return self.service.read(session, self.claims, operation_id)
 
+    def test_lineage_survives_persistence_export_and_retries(self):
+        import json
+        from pathlib import Path
+        from app.schemas.control_lineage import ControlLineage
+        from app.services.deployment.mlflow import _lineage, _owned
+        from app.exceptions import NotFoundError
+        fixture = json.loads((Path(__file__).resolve().parents[2] /
+                              "contracts/lineage/v1/control-lineage.fixture.json").read_text())["lineage"]
+        request = self.request.model_copy(update={
+            "model_uri": "s3://models/repository/iris", "model_name": "iris", "repository_prefix": "repository",
+            "lineage": ControlLineage.model_validate(fixture),
+        })
+        response = self.submit(request=request)
+        self.assertEqual(response.lineage.model_dump(mode="json"), fixture)
+        with Session(self.engine) as session:
+            self.assertEqual(_lineage(session, response.instance_id), fixture)
+            with self.assertRaises(NotFoundError):
+                _owned(session, {"email": "ben@test.invalid", "role": "member"}, "iris")
+        self.assertEqual(self.submit(request=request).operation_id, response.operation_id)
+        self.assertEqual(deploy.input_data(self.request).get("lineage", "absent"), "absent")
+
     def test_admission_is_atomic_secret_safe_and_replay_ignores_changed_defaults(self):
         result = self.submit()
         self.assertEqual(self.provider.writes, 0)

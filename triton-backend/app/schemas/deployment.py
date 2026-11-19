@@ -21,6 +21,7 @@ from packaging.requirements import Requirement
 from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel
 
+from app.schemas.control_lineage import ControlLineage
 from app.schemas.deployment_access import DeploymentAccessRequest
 
 MAX_EXAMPLE_BYTES = 256 * 1024
@@ -57,6 +58,7 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
     s3_profile_id: Optional[int] = Field(default=None, gt=0)
     repository_prefix: Optional[str] = None
     model_uri: Optional[str] = None
+    lineage: ControlLineage | None = None
     s3_region: str = "us-east-1"
     s3_ca_certificate: Optional[str] = None
     image: str
@@ -78,6 +80,8 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
 
     @model_validator(mode="after")
     def validate_repository_modes(self) -> CreateDeploymentRequest:
+        if self.lineage is not None and not self.model_uri:
+            raise ValueError("MLflow lineage requires a model URI deployment")
         if self.example_request is not None:
             if not self.example_model_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", self.example_model_name):
                 raise ValueError("A valid example_model_name is required with example_request")
@@ -239,6 +243,7 @@ def requirement_arguments(line: str) -> list[str]:
 class DeploymentResponse(SQLModel):
     """Accepted creation, with compatible resource references and durable status."""
 
+    lineage: ControlLineage | None = None
     instance_id: int
     namespace: str
     deployment_name: str
