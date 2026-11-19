@@ -77,6 +77,9 @@ export class ShellComponent {
       ...(this.canWriteInstances()
         ? [{ label: "Submit model", icon: "assignment_add", path: "/preparation/handoffs/new" }]
         : []),
+      ...(this.installation.allows("development_jobs")
+        ? [{ label: "Engineering queue", icon: "assignment", path: "/preparation" }]
+        : []),
       { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
         label: "Workspaces",

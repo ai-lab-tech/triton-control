@@ -1,3 +1,5 @@
+import { EngineeringQueueComponent } from "./pages/preparation/engineering-queue.component";
+import { PreparationDetailComponent } from "./pages/preparation/preparation-detail.component";
 import { installationGuard } from "./shared/installation/installation.guard";
 import { InstallationRestrictedComponent } from "./shared/installation/installation-restricted.component";
 import { TaskBuildsPageComponent } from "./pages/builds/task-builds-page.component";
@@ -41,6 +43,16 @@ export const APP_ROUTES: Routes = [
     canActivate: [authGuard],
     canActivateChild: [installationGuard],
     children: [
+      {
+        path: "preparation",
+        data: { capability: "development_jobs" },
+        component: EngineeringQueueComponent,
+      },
+      {
+        path: "preparation/tasks/:taskId",
+        data: { capability: "development_jobs" },
+        component: PreparationDetailComponent,
+      },
       { path: "installation-restricted", component: InstallationRestrictedComponent },
       {
         path: "preparation/tasks/:taskId/builds",
