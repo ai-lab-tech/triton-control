@@ -50,9 +50,10 @@ def _entries(session: Session, claims: dict[str, Any], rows: list[TaskDTO]) -> l
     return result
 
 
-def queue(session: Session, claims: dict[str, Any], limit: int = 50, offset: int = 0) -> list[QueueEntry]:
+def queue(session: Session, claims: dict[str, Any], limit: int = 50, offset: int = 0, *,
+          view: str | None = None, search: str = "") -> list[QueueEntry]:
     installation_policy.require("development_jobs")
-    return _entries(session, claims, preparation.list_tasks(session, claims, limit, offset))
+    return _entries(session, claims, preparation.list_tasks(session, claims, limit, offset, view=view, search=search))
 
 
 def overview(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskOverview:

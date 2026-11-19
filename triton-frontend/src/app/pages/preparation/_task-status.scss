@@ -1,0 +1,28 @@
+.status,
+.task-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--mist-100);
+  color: var(--ink-700);
+  &::before {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+  &[data-state="claimed"] {
+    background: #ccfbf1;
+    color: #115e59;
+  }
+  &[data-state="awaiting_information"] {
+    background: #fef3c7;
+    color: #854d0e;
+  }
+}

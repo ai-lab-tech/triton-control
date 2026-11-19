@@ -1,0 +1,160 @@
+@use "./task-status";
+:host {
+  display: block;
+  max-width: 1280px;
+  margin: auto;
+  padding: clamp(12px, 3vw, 28px);
+}
+
+header,
+.toolbar,
+.controls,
+form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+header,
+.toolbar {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+h1 {
+  margin: 0;
+}
+
+.queue-surface {
+  overflow: hidden;
+}
+.toolbar {
+  padding: 16px 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--mist-200);
+}
+.controls[role="group"] {
+  background: var(--mist-100);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 0;
+}
+button[aria-pressed="true"] {
+  background: var(--ink-800);
+  color: white;
+}
+input {
+  min-width: 0;
+  width: 12rem;
+  font: inherit;
+  border: 1px solid var(--mist-200);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+th,
+td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--mist-200);
+  overflow-wrap: anywhere;
+}
+thead {
+  background: var(--mist-100);
+  font-size: 0.8rem;
+  color: var(--ink-700);
+}
+tbody th {
+  width: 42%;
+}
+tbody th a:hover,
+tbody th a:focus-visible {
+  text-decoration: underline;
+}
+tbody tr:hover {
+  background: #f8fafc;
+}
+small {
+  display: block;
+  font-weight: normal;
+  margin-top: 4px;
+  color: var(--ink-500);
+}
+.row-action {
+  text-align: end;
+  white-space: nowrap;
+}
+.empty,
+[role="alert"],
+[role="status"] p {
+  margin: 0;
+  padding: 1rem 1.25rem;
+}
+.empty {
+  padding-block: 3rem;
+  text-align: center;
+}
+.mobile-label {
+  display: none;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+@media (max-width: 760px) {
+  .toolbar {
+    align-items: flex-start;
+    gap: 14px;
+  }
+  form {
+    width: 100%;
+  }
+  input {
+    flex: 1;
+  }
+  thead {
+    position: absolute;
+    clip-path: inset(50%);
+    width: 1px;
+    overflow: hidden;
+  }
+  tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--mist-200);
+  }
+  tbody th,
+  tbody td {
+    width: auto;
+    padding: 0;
+    border: 0;
+  }
+  tbody th {
+    grid-column: 1/-1;
+  }
+  .owner {
+    grid-column: 1;
+    font-size: 0.875rem;
+  }
+  .row-action {
+    grid-column: 2;
+    grid-row: 2/4;
+    align-self: center;
+  }
+  .mobile-label {
+    display: inline;
+    color: var(--ink-500);
+  }
+}

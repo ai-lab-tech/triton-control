@@ -21,7 +21,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
   standalone: true,
   imports: [DatePipe, JsonPipe, FormsModule, RouterLink, MatButtonModule],
   templateUrl: "./preparation-detail.component.html",
-  styleUrl: "./preparation.scss",
+  styleUrls: ["./preparation.scss", "./preparation-detail.component.scss"],
 })
 export class PreparationDetailComponent {
   private readonly api = inject(PreparationApiService);
@@ -57,6 +57,21 @@ export class PreparationDetailComponent {
         void this.load();
       });
   }
+  label(value: string): string {
+    if (value === "claimed") return "Assigned";
+    if (value.startsWith("missing_input:")) {
+      return this.label(value.slice("missing_input:".length)) + " missing";
+    }
+    const text = value.replaceAll("_", " ");
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  sourceLabel(kind: string): string {
+    if (kind === "s3_repository") return "S3 repository";
+    if (kind === "s3") return "S3 object";
+    return this.label(kind);
+  }
+
   async load() {
     const generation = ++this.generation;
     const id = this.id;

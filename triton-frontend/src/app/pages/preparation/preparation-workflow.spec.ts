@@ -91,11 +91,11 @@ describe("Engineering preparation workflow", () => {
   it("shows incomplete tasks and refreshes the winning assignment after a claim conflict", async () => {
     // Arrange
     const fixture = TestBed.createComponent(EngineeringQueueComponent);
-    http.expectOne("/api/preparation-tasks/queue?limit=50&offset=0").flush([entry]);
+    http.expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=all").flush([entry]);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain("test_data");
+    expect(fixture.nativeElement.textContent).toContain("Test data");
     expect(fixture.nativeElement.textContent).toContain("Scientist");
     // Act
     const pending = fixture.componentInstance.claim(entry);
@@ -105,7 +105,7 @@ describe("Engineering preparation workflow", () => {
     await Promise.resolve();
     await Promise.resolve();
     http
-      .expectOne("/api/preparation-tasks/queue?limit=50&offset=0")
+      .expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=all")
       .flush([
         { ...entry, assignee_name: "Other engineer", actions: { ...entry.actions, claim: false } },
       ]);
@@ -115,6 +115,37 @@ describe("Engineering preparation workflow", () => {
     expect(fixture.nativeElement.textContent).toContain("Other engineer");
     expect(fixture.nativeElement.textContent).toContain("Already assigned");
     expect(fixture.nativeElement.textContent).not.toContain("Claim task");
+  });
+  it("confirms a claim even when the task leaves the unassigned view", async () => {
+    const fixture = TestBed.createComponent(EngineeringQueueComponent);
+    http.expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=all").flush([entry]);
+    await fixture.whenStable();
+    fixture.componentInstance.selectView("unassigned");
+    http.expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=unassigned").flush([entry]);
+    await fixture.whenStable();
+
+    const pending = fixture.componentInstance.claim(entry);
+    const task = { ...entry.task, state: "claimed", assignee_user_id: 2, revision: 2 };
+    http.expectOne("/api/preparation-tasks/task-1/claim").flush(task);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=unassigned").flush([]);
+    await pending;
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain("Assigned to you (Engineer)");
+    expect(fixture.nativeElement.textContent).toContain("Open task");
+    expect(fixture.nativeElement.textContent).toContain("No unassigned preparation tasks.");
+
+    fixture.componentInstance.selectView("mine");
+    http
+      .expectOne("/api/preparation-tasks/queue?limit=50&offset=0&view=mine")
+      .flush([
+        { ...entry, task, assignee_name: "Engineer", actions: { ...entry.actions, claim: false } },
+      ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("tbody").textContent).toContain("Engineer");
   });
   it("inspects retained candidates and attempts without presenting task status as deployment status", async () => {
     // Arrange
@@ -152,8 +183,10 @@ describe("Engineering preparation workflow", () => {
     expect(text).toContain("candidate-1");
     expect(text).toContain("candidate-2");
     expect(text).toContain("conversion");
-    expect(text).toContain("queued");
-    expect(text).toContain("Deployment status is not recorded");
+    expect(text).toContain("Queued");
+    expect(text).toContain(
+      "These records do not establish production validation or deployment approval.",
+    );
     expect(text).not.toContain("Open task workspace");
     // Act
     const pending = fixture.componentInstance.loadBuilds();

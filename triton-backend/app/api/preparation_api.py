@@ -1,6 +1,6 @@
 """Preparation HTTP boundary; handoff submission belongs to S03-A."""
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -39,8 +39,10 @@ def list_tasks(
 @router.get("/queue", response_model=list[QueueEntry])
 @translate_app_errors
 def queue(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0, le=1000000),
+          view: Literal["all", "mine", "unassigned"] | None = None,
+          search: str = Query(default="", max_length=200),
           session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims)) -> list[QueueEntry]:
-    return engineering_queue.queue(session, claims, limit, offset)
+    return engineering_queue.queue(session, claims, limit, offset, view=view, search=search)
 
 
 @router.get("/{task_id}/overview", response_model=TaskOverview)

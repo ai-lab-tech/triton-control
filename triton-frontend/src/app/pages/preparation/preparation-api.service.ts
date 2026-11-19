@@ -99,9 +99,9 @@ export interface SnapshotRequest {
 export class PreparationApiService {
   private readonly http = inject(HttpClient);
   private readonly base = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
-  queue(offset = 0) {
+  queue(offset = 0, view = "all", search = "") {
     return this.http.get<QueueEntry[]>(`${this.base}/api/preparation-tasks/queue`, {
-      params: { limit: 50, offset },
+      params: { limit: 50, offset, view, ...(search ? { search } : {}) },
     });
   }
   overview(id: string) {

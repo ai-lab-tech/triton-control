@@ -100,10 +100,11 @@ def authorize_task_access(
     return actor, admin, eligible
 
 
-def list_tasks(session: Session, claims: dict[str, Any], limit: int = 100, offset: int = 0) -> list[TaskDTO]:
+def list_tasks(session: Session, claims: dict[str, Any], limit: int = 100, offset: int = 0, *,
+               view: str | None = None, search: str = "") -> list[TaskDTO]:
     actor, admin, _ = _actor(session, claims)
     team_ids = [] if admin else list(repository.eligible_members(session, actor_id=actor))
-    rows = repository.queue(session, actor, team_ids, admin=admin, limit=limit, offset=offset)
+    rows = repository.queue(session, actor, team_ids, admin=admin, limit=limit, offset=offset, view=view, search=search)
     eligible = repository.eligible_members(session, {row.assigned_team_id for row in rows})
     handoffs = {row.task_id: row for row in handoff_repository.for_tasks(session, [row.id for row in rows])}
     return [_task_dto(row, eligible.get(row.assigned_team_id, set()), handoffs.get(row.id)) for row in rows]
