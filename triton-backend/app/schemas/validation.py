@@ -3,9 +3,10 @@
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Annotated, Literal, Protocol, Self
+from typing import Annotated, Literal, Protocol
 
 from pydantic import AfterValidator, AwareDatetime, BeforeValidator, Field, StrictBool, model_validator
+from typing_extensions import Self
 
 from app.schemas.lineage import Digest
 from app.schemas.serving_metadata import (

@@ -1,8 +1,9 @@
 """Pure, versioned immutable repository materialization contracts."""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 
 from pydantic import Field, StrictBool, model_validator
+from typing_extensions import Self
 
 from app.schemas.lineage import Contract, Digest, InventoryV1
 from app.schemas.serving_metadata import Image, Name, Path, Reference

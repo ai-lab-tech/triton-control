@@ -1,10 +1,11 @@
 """Neutral prepared repository import contracts; no I/O."""
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import Field, model_validator
+from typing_extensions import Self
 
 from app.schemas.lineage import (
     Contract,

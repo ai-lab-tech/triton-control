@@ -1,9 +1,10 @@
 """Portable MLflow references. Provenance is not a production approval."""
 
 import re
-from typing import Literal, Self
+from typing import Literal
 
 from pydantic import field_validator, model_validator
+from typing_extensions import Self
 
 from app.schemas.lineage import Contract, Digest, Identity, Origin, ServingCandidateV1
 

@@ -4,9 +4,10 @@ import hashlib
 import json
 import re
 from ipaddress import ip_network
-from typing import Literal, Self
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing_extensions import Self
 
 
 class BuildPolicy(BaseModel):

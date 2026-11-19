@@ -1,8 +1,9 @@
 """Installation-local allowlists. No credentials in policy or admission results."""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from typing_extensions import Self
 
 from app.schemas.serving_metadata import (
     Count,
