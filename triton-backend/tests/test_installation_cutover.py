@@ -156,6 +156,20 @@ class CutoverTests(unittest.TestCase):
                 session.commit()
                 self.assertNotIn("queued development operations", cutover_blockers(session))
 
+    def test_unfinished_captures_block_cutover_but_terminal_history_does_not(self):
+        from app.repositories.operations import HANDOFF_CAPTURE_KIND
+        from app.db.entities import OperationEntity
+        with Session(self.engine) as session:
+            operation = OperationEntity(id="capture", actor_id=1, kind=HANDOFF_CAPTURE_KIND,
+                                        target="model-preparation", idempotency_key="key",
+                                        payload_hash="hash", payload={})
+            for state in ("pending", "running", "succeeded", "failed", "cancelled"):
+                operation.state = state
+                session.add(operation)
+                session.commit()
+                self.assertEqual("queued development operations" in cutover_blockers(session),
+                                 state in {"pending", "running"})
+
     def test_production_shutdown_finishes_all_cleanup(self):
         import asyncio
         from app import main

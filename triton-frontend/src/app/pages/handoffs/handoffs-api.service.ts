@@ -85,13 +85,15 @@ export interface SourceProfile {
 export class HandoffsApiService {
   private readonly http = inject(HttpClient);
   private readonly base = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
-  submit(request: HandoffRequest) {
+  submit(request: HandoffRequest, submissionId: string) {
     return this.http.post<CaptureOperation>(
       this.base + "/api/preparation/handoff-captures",
       request,
       {
         headers: {
-          "Idempotency-Key": bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(request)))),
+          "Idempotency-Key": bytesToHex(
+            sha256(new TextEncoder().encode(`${submissionId}:${JSON.stringify(request)}`)),
+          ),
         },
       },
     );

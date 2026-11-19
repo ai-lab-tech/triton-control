@@ -54,6 +54,7 @@ export class HandoffPageComponent {
   private captureTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
   private captureGeneration = 0;
+  private submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
   title = "";
   profileId: number | null = null;
   sourcePath = "";
@@ -165,6 +166,13 @@ export class HandoffPageComponent {
       this.busy.set(false);
     }
   }
+  newSubmission(): void {
+    ++this.captureGeneration;
+    clearTimeout(this.captureTimer);
+    this.submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    this.capture.set(null);
+    this.error.set("");
+  }
   async submit() {
     if (
       this.busy() ||
@@ -185,24 +193,31 @@ export class HandoffPageComponent {
     this.error.set("");
     try {
       const operation = await firstValueFrom(
-        this.api.submit({
-          schema_version: 1,
-          origin: {
-            installation_id: this.document.location.origin,
-            record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
+        this.api.submit(
+          {
+            schema_version: 1,
+            origin: {
+              installation_id: this.document.location.origin,
+              record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
+            },
+            previous_handoff_id: this.previousHandoffId.trim() || null,
+            revision: this.revision.trim(),
+            title: this.title.trim(),
+            source:
+              this.sourceKind === "s3_repository"
+                ? {
+                    kind: "s3_repository",
+                    profile_id: this.profileId!,
+                    path: this.sourcePath.trim(),
+                  }
+                : source(this.sourcePath),
+            dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
+            baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
+            expected_behavior: this.expectedBehavior.trim() || null,
+            acceptance_criteria: this.criteria.trim() || null,
           },
-          previous_handoff_id: this.previousHandoffId.trim() || null,
-          revision: this.revision.trim(),
-          title: this.title.trim(),
-          source:
-            this.sourceKind === "s3_repository"
-              ? { kind: "s3_repository", profile_id: this.profileId!, path: this.sourcePath.trim() }
-              : source(this.sourcePath),
-          dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
-          baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
-          expected_behavior: this.expectedBehavior.trim() || null,
-          acceptance_criteria: this.criteria.trim() || null,
-        }),
+          this.submissionId,
+        ),
       );
       this.capture.set(operation);
       await this.router.navigate([], {

@@ -10,6 +10,8 @@ from sqlmodel import Session, col, select
 from app.db.entities import OperationEntity
 from app.exceptions import ConflictError, NotFoundError
 
+HANDOFF_CAPTURE_KIND = "handoff.capture"
+
 TERMINAL = {"succeeded", "failed", "cancelled"}
 
 

@@ -57,6 +57,54 @@ class CaptureTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(provider.call_count, 1)
         self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
 
+    def test_blocking_provider_read_keeps_lease_across_multiple_renewals(self):
+        from datetime import timedelta
+        from threading import Event
+        queued = self.capture()
+        stamp = [datetime.utcnow()]
+        renewed = Event()
+        original = operations.heartbeat
+
+        def heartbeat(*args, **kwargs):
+            original(*args, **kwargs)
+            renewed.set()
+
+        def slow_resolve(session, source, **options):
+            # No streaming callback runs while a provider read is blocked.
+            for _ in range(3):
+                renewed.clear()
+                stamp[0] += timedelta(seconds=20)
+                self.assertTrue(renewed.wait(2), "Lease was not renewed during the blocked read")
+            options["checkpoint"](5)
+            return self.resolved(session, source)
+
+        with patch.object(operations, "now", lambda _: stamp[0]), \
+                patch.object(operations, "heartbeat", side_effect=heartbeat), \
+                patch.object(handoff_capture, "HEARTBEAT_SECONDS", 0.01), \
+                patch.object(handoff_sources, "resolve", side_effect=slow_resolve):
+            self.worker.run_once()
+        result = self.service.read(self.session, self.submitter, queued.id)
+        self.assertEqual(result.state, "succeeded")
+        self.assertEqual(len(self.session.exec(select(HandoffEntity)).all()), 1)
+        self.assertEqual(self.session.get(OperationEntity, queued.id).attempts, 1)
+
+    def test_heartbeat_failure_is_propagated_before_publication(self):
+        from threading import Event
+        from unittest.mock import MagicMock
+        failed = Event()
+        context = MagicMock()
+
+        def revoked():
+            failed.set()
+            raise ForbiddenError("Access revoked")
+
+        context.checkpoint.side_effect = revoked
+        with patch.object(handoff_capture, "HEARTBEAT_SECONDS", 0.01):
+            with handoff_capture.keep_lease(context) as finish:
+                self.assertTrue(failed.wait(2))
+                with self.assertRaises(ForbiddenError):
+                    finish()
+
     def test_cancellation_before_work_has_no_receipt(self):
         # Arrange
         queued = self.capture()

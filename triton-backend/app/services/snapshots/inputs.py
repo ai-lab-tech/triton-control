@@ -22,6 +22,7 @@ from app.schemas.lineage import Snapshot
 from app.schemas.task_workspaces import SnapshotFile, WorkspaceInput, WorkspaceInputs
 from app.services import handoff_sources
 from app.services.candidates.artifacts import _open_directory
+from app.services.preparation_settings import effective
 from app.services.storage.s3_client import build_s3_client
 
 
@@ -96,6 +97,7 @@ def download(session: Session, artifact: SnapshotFile, destination: Path) -> Non
     current, config = binding(session)
     if current != reference.get("storage_binding"):
         raise ForbiddenError("Snapshot storage binding changed during download")
+    timeout = effective(session).transfer_timeout_seconds
     started = time.monotonic()
     try:
         with ExitStack() as stack:
@@ -136,7 +138,7 @@ def download(session: Session, artifact: SnapshotFile, destination: Path) -> Non
             with destination.open("wb") as output:
                 while chunk := stream.read(1024**2):
                     measured += len(chunk)
-                    if measured > artifact.file.size or time.monotonic() - started > 120:
+                    if measured > artifact.file.size or time.monotonic() - started > timeout:
                         raise ConflictError("Snapshot file exceeds its captured size or download deadline")
                     checksum.update(chunk)
                     output.write(chunk)

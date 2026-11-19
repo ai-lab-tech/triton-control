@@ -117,6 +117,20 @@ class SnapshotWorkspaceTests(SnapshotFixture, unittest.TestCase):
         client.get_object.assert_called_once_with(Bucket="retained", Key=key, VersionId="pinned")
         self.assertTrue(client.get_object.return_value["Body"].closed)
 
+    def test_snapshot_download_uses_configured_transfer_timeout(self):
+        from app.schemas.preparation_settings import PreparationLimits
+        from app.services import preparation_settings
+        client, artifact, destination, data, _ = self.s3_download_fixture()
+        preparation_settings.update(self.session, self.admin, PreparationLimits(transfer_timeout_seconds=3600))
+        with patch.object(inputs.time, "monotonic", side_effect=[0, 121]):
+            inputs.download(self.session, artifact, destination)
+        self.assertEqual(destination.read_bytes(), data)
+        preparation_settings.update(self.session, self.admin, PreparationLimits(transfer_timeout_seconds=60))
+        client.get_object.return_value["Body"] = io.BytesIO(data)
+        with patch.object(inputs.time, "monotonic", side_effect=[0, 61]):
+            with self.assertRaisesRegex(ConflictError, "deadline"):
+                inputs.download(self.session, artifact, destination)
+
     def test_s3_download_rejects_wrong_version(self):
         # Arrange
         client, artifact, destination, data, _ = self.s3_download_fixture()

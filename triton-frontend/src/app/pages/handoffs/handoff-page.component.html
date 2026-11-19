@@ -50,7 +50,7 @@
         </button>
       }
       @if (operation.state === "failed" || operation.state === "cancelled") {
-        <a mat-stroked-button routerLink="/preparation/handoffs/new" (click)="capture.set(null)"
+        <a mat-stroked-button routerLink="/preparation/handoffs/new" (click)="newSubmission()"
           >New submission</a
         >
       }

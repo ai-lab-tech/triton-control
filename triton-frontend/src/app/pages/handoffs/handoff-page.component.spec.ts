@@ -79,6 +79,7 @@ describe("HandoffPageComponent", () => {
     let pending = page.submit();
     const first = http.expectOne("/api/preparation/handoff-captures");
     const identity = first.request.body.origin;
+    const key = first.request.headers.get("Idempotency-Key");
     expect(first.request.body.dataset).toBeNull();
     expect(first.request.body.previous_handoff_id).toBe("previous-receipt");
     first.flush({ detail: "Please retry" }, { status: 503, statusText: "Unavailable" });
@@ -87,6 +88,7 @@ describe("HandoffPageComponent", () => {
     pending = page.submit();
     const retry = http.expectOne("/api/preparation/handoff-captures");
     expect(retry.request.body.origin).toEqual(identity);
+    expect(retry.request.headers.get("Idempotency-Key")).toBe(key);
     expect(retry.request.body.revision).toBe("1");
     expect(retry.request.body.previous_handoff_id).toBe("previous-receipt");
     retry.flush({
@@ -98,6 +100,43 @@ describe("HandoffPageComponent", () => {
     await pending;
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
   });
+  it("starts an unchanged new submission with a fresh key after cancellation", async () => {
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    const page = fixture.componentInstance;
+    page.title = "Iris";
+    page.profileId = 1;
+    page.sourcePath = "iris.onnx";
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    let pending = page.submit();
+    const first = http.expectOne("/api/preparation/handoff-captures");
+    const key = first.request.headers.get("Idempotency-Key");
+    const body = first.request.body;
+    first.flush({ id: "old-job", state: "pending", message: "", result: {} });
+    await pending;
+    pending = page.captureAction("cancel");
+    http
+      .expectOne("/api/operations/old-job/cancel")
+      .flush({ id: "old-job", state: "cancelled", message: "", result: {} });
+    await pending;
+    fixture.detectChanges();
+    const link = Array.from(fixture.nativeElement.querySelectorAll("a")) as HTMLAnchorElement[];
+    link.find((item) => item.textContent?.trim() === "New submission")!.click();
+    pending = page.submit();
+    const fresh = http.expectOne("/api/preparation/handoff-captures");
+    expect(fresh.request.body).toEqual(body);
+    expect(fresh.request.headers.get("Idempotency-Key")).not.toBe(key);
+    fresh.flush({
+      id: "new-job",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: "receipt-1" },
+    });
+    await pending;
+  });
+
   it("renders missing inputs and the exact pinned object version", async () => {
     const fixture = await setup("receipt-1");
     http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
