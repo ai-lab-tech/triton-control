@@ -1,7 +1,7 @@
 .s3-browser {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: var(--page-gap);
 }
 
 .s3-header {
@@ -38,7 +38,7 @@
 }
 
 .browser-card {
-  padding: 1rem;
+  padding: var(--card-padding);
 }
 
 .explorer {
@@ -404,4 +404,9 @@
   .s3-header {
     justify-items: start;
   }
+}
+
+.editor-footer {
+  padding: 0.5rem 0.8rem;
+  border-top: 1px solid var(--mist-200);
 }

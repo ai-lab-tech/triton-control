@@ -1,7 +1,7 @@
 ﻿<div class="deployment">
   <div class="header-row">
     <div>
-      <div class="page-title">Add Deployment</div>
+      <h1 class="page-title">Add Deployment</h1>
       <p class="page-subtitle">Deploy Triton on Kubernetes from an S3 model repository.</p>
     </div>
   </div>
@@ -11,133 +11,129 @@
       Previous deployment request: <a [routerLink]="['/instances', id]">View creation status</a>
     </p>
   }
-  <mat-card class="card deployment-card">
-    <div class="section">
-      <div>
-        <div class="section-title">Deployment</div>
-        <div class="section-subtitle">Name and container image.</div>
-      </div>
-      <div class="form-grid split">
-        <div class="form-row">
-          <label class="field-label" for="deployment-name">Deployment name</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-name"
-              matInput
-              [(ngModel)]="deploymentName"
-              placeholder="triton-deployment"
-            />
-          </mat-form-field>
+  <div class="deployment-sections">
+    <div class="card">
+      <div class="section">
+        <div>
+          <div class="section-title">Deployment</div>
+          <div class="section-subtitle">Name and container image.</div>
         </div>
-        <div class="form-row">
-          <label class="field-label" for="deployment-image">Image</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="deployment-image"
-              matInput
-              [(ngModel)]="image"
-              placeholder="nvcr.io/nvidia/tritonserver:26.06-py3"
-            />
-          </mat-form-field>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div>
-        <div class="section-title">Model repository (S3)</div>
-        <div class="section-subtitle">S3 profile and path served by Triton.</div>
-      </div>
-      <div class="form-grid split">
-        <div class="form-row wide s3-deployment-warning">
-          <span class="material-icons" aria-hidden="true">info</span>
-          <div>
-            <div class="warning-title">S3 settings are fixed after deploy</div>
-            <div class="warning-text">
-              These values are written into the Triton pod. To change the pod connection later,
-              recreate the deployment. Instance S3 settings are only for Triton Control's
-              browser/editor access.
-            </div>
-          </div>
-        </div>
-        <div class="form-row wide">
-          <label class="field-label" for="deployment-s3-profile">S3 profile</label>
-          <mat-form-field appearance="outline">
-            <mat-select
-              id="deployment-s3-profile"
-              [(ngModel)]="selectedS3ProfileId"
-              (selectionChange)="s3ProfileChanged()"
-            >
-              <mat-select-trigger>
-                @for (profile of s3Profiles(); track profile.id) {
-                  @if (profile.id.toString() === selectedS3ProfileId) {
-                    <app-s3-profile-label [profile]="profile" />
-                  }
-                }
-              </mat-select-trigger>
-              <mat-option value="">Select an S3 profile</mat-option>
-              @for (profile of s3Profiles(); track profile.id) {
-                <mat-option [value]="profile.id.toString()"
-                  ><app-s3-profile-label [profile]="profile"
-                /></mat-option>
-              }
-            </mat-select>
-            <mat-hint>Choose an admin-configured S3 profile.</mat-hint>
-          </mat-form-field>
-        </div>
-        @if (selectedS3ProfileId) {
-          <div class="form-row wide">
-            <label class="field-label" for="deployment-s3-prefix"
-              >Repository prefix
-              <span class="field-hint">Optional S3 path prefix inside the profile bucket</span>
-            </label>
+        <div class="form-grid split">
+          <div class="form-row">
+            <label class="field-label" for="deployment-name">Deployment name</label>
             <mat-form-field appearance="outline">
               <input
-                id="deployment-s3-prefix"
+                id="deployment-name"
                 matInput
-                [(ngModel)]="s3Prefix"
-                placeholder="team/model-repository"
+                [(ngModel)]="deploymentName"
+                placeholder="triton-deployment"
               />
             </mat-form-field>
           </div>
-          <div class="form-row wide s3-destination">
-            <span class="material-icons" aria-hidden="true">folder_open</span>
+          <div class="form-row">
+            <label class="field-label" for="deployment-image">Image</label>
+            <mat-form-field appearance="outline">
+              <input
+                id="deployment-image"
+                matInput
+                [(ngModel)]="image"
+                placeholder="nvcr.io/nvidia/tritonserver:26.06-py3"
+              />
+            </mat-form-field>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div>
+          <div class="section-title">Model repository (S3)</div>
+          <div class="section-subtitle">S3 profile and path served by Triton.</div>
+        </div>
+        <div class="form-grid split">
+          <div class="form-row wide s3-deployment-warning">
+            <span class="material-icons" aria-hidden="true">info</span>
             <div>
-              <div class="destination-title">Serving repository</div>
-              <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
+              <div class="warning-title">S3 settings are fixed after deploy</div>
+              <div class="warning-text">
+                These values are written into the Triton pod. To change the pod connection later,
+                recreate the deployment. Instance S3 settings are only for Triton Control's
+                browser/editor access.
+              </div>
             </div>
           </div>
-        }
+          <div class="form-row wide">
+            <label class="field-label" for="deployment-s3-profile">S3 profile</label>
+            <mat-form-field appearance="outline">
+              <mat-select
+                id="deployment-s3-profile"
+                [(ngModel)]="selectedS3ProfileId"
+                (selectionChange)="s3ProfileChanged()"
+              >
+                <mat-select-trigger>
+                  @for (profile of s3Profiles(); track profile.id) {
+                    @if (profile.id.toString() === selectedS3ProfileId) {
+                      <app-s3-profile-label [profile]="profile" />
+                    }
+                  }
+                </mat-select-trigger>
+                <mat-option value="">Select an S3 profile</mat-option>
+                @for (profile of s3Profiles(); track profile.id) {
+                  <mat-option [value]="profile.id.toString()"
+                    ><app-s3-profile-label [profile]="profile"
+                  /></mat-option>
+                }
+              </mat-select>
+              <mat-hint>Choose an admin-configured S3 profile.</mat-hint>
+            </mat-form-field>
+          </div>
+          @if (selectedS3ProfileId) {
+            <div class="form-row wide">
+              <label class="field-label" for="deployment-s3-prefix"
+                >Repository prefix
+                <span class="field-hint">Optional S3 path prefix inside the profile bucket</span>
+              </label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="deployment-s3-prefix"
+                  matInput
+                  [(ngModel)]="s3Prefix"
+                  placeholder="team/model-repository"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row wide s3-destination">
+              <span class="material-icons" aria-hidden="true">folder_open</span>
+              <div>
+                <div class="destination-title">Serving repository</div>
+                <code>{{ s3Destination() || "s3://endpoint/bucket/prefix" }}</code>
+              </div>
+            </div>
+          }
+        </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div>
-        <div class="section-title">Model loading</div>
-        <div class="section-subtitle">Models load from the selected repository.</div>
-      </div>
-      <div class="form-grid split">
-        <div class="form-row wide backend-toggle">
-          <mat-checkbox
-            id="deployment-backend-vllm"
-            [ngModel]="usesSyncedRepository()"
-            (ngModelChange)="setSyncedLlmBackend($event)"
-          >
-            Enable vLLM / TensorRT-LLM model backend
-          </mat-checkbox>
-          <div class="field-hint">Use when deploying vLLM or TensorRT-LLM models.</div>
+      <div class="section">
+        <div>
+          <div class="section-title">Model loading</div>
+          <div class="section-subtitle">Models load from the selected repository.</div>
+        </div>
+        <div class="form-grid split">
+          <div class="form-row wide backend-toggle">
+            <mat-checkbox
+              id="deployment-backend-vllm"
+              [ngModel]="usesSyncedRepository()"
+              (ngModelChange)="setSyncedLlmBackend($event)"
+            >
+              Enable vLLM / TensorRT-LLM model backend
+            </mat-checkbox>
+            <div class="field-hint">Use when deploying vLLM or TensorRT-LLM models.</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="advanced-section">
-      <div class="advanced-head">
-        <div class="advanced-title-row">
-          <span class="material-icons">settings_suggest</span>
-          <div class="advanced-title">Advanced infrastructure</div>
-        </div>
-        <div class="advanced-subtitle">Optional settings.</div>
-      </div>
+    <details class="card advanced-card">
+      <summary class="app-disclosure section-title">Advanced infrastructure</summary>
       <mat-accordion class="optional-sections">
         <mat-expansion-panel>
           <mat-expansion-panel-header>
@@ -402,9 +398,9 @@
           </div>
         </mat-expansion-panel>
       </mat-accordion>
-    </div>
+    </details>
 
-    <div class="actions">
+    <div class="actions form-actions">
       <button mat-stroked-button type="button" [routerLink]="['/instances']">Cancel</button>
       <button
         mat-flat-button
@@ -427,5 +423,5 @@
         {{ message() }}
       </div>
     }
-  </mat-card>
+  </div>
 </div>

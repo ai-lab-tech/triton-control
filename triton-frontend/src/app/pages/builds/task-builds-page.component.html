@@ -1,4 +1,4 @@
-<h1>Build serving image</h1>
+<h1 class="page-title">Build serving image</h1>
 <p>
   Engineering task: <code>{{ taskId() }}</code>
 </p>
@@ -33,9 +33,11 @@
       </select></label
     >
     <p>Each attempt gets its own destination tag. Use the reported digest for validation.</p>
-    <button mat-flat-button color="primary" type="submit" [disabled]="busy()">
-      Build serving image
-    </button>
+    <div class="form-actions">
+      <button mat-flat-button color="primary" type="submit" [disabled]="busy()">
+        Build serving image
+      </button>
+    </div>
   </form>
 }
 <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">

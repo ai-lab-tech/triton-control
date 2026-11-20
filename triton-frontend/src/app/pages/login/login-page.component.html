@@ -152,16 +152,6 @@
           </button>
         } @else if (!needsBootstrap() && !registerMode()) {
           <button
-            mat-flat-button
-            color="primary"
-            class="action-btn action-btn-primary"
-            (click)="loginWithPassword()"
-            [disabled]="loading()"
-          >
-            <span class="material-icons">login</span>
-            Log in with password
-          </button>
-          <button
             mat-stroked-button
             class="action-btn action-btn-secondary"
             (click)="enableRegisterMode()"
@@ -176,6 +166,16 @@
               Forgot password
             </a>
           }
+          <button
+            mat-flat-button
+            color="primary"
+            class="action-btn action-btn-primary"
+            (click)="loginWithPassword()"
+            [disabled]="loading()"
+          >
+            <span class="material-icons">login</span>
+            Log in with password
+          </button>
         } @else if (!needsBootstrap() && registerMode()) {
           <button
             mat-flat-button

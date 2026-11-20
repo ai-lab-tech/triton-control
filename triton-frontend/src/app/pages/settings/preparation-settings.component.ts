@@ -24,8 +24,9 @@ interface Settings {
   selector: "app-preparation-settings",
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  styleUrl: "./settings-form.scss",
   template: `
-    <h2>Model preparation</h2>
+    <h2 class="card-title">Model preparation</h2>
     <p>
       Limits apply to model submission and verified task inputs. Large files are verified in a
       background job.
@@ -37,55 +38,67 @@ interface Settings {
     <p>Saved settings override Helm defaults. Reset to use the deployment values again.</p>
     @if (draft; as values) {
       <form #form="ngForm" (ngSubmit)="save()">
-        @for (field of fields; track field.key) {
-          <mat-form-field appearance="outline">
-            <mat-label>{{ field.label }}</mat-label>
-            <input
-              matInput
-              type="number"
-              step="1"
-              required
-              [min]="field.min"
-              [max]="field.max"
-              [name]="field.key"
-              [(ngModel)]="values[field.key]"
-              [disabled]="busy()"
-            />
-          </mat-form-field>
-        }
-        <p>
-          Writable workspace storage is calculated from actual task inputs plus the larger of the
-          minimum extra space or percentage allowance, rounded up to GiB. The storage maximum is a
-          cap, not space allocated to every task.
-        </p>
-        <p>
-          The total input limit covers the model, evaluation dataset and baseline together. The
-          transfer timeout applies to capture/verification and each file download.
-        </p>
-        <p>
-          Allow sufficient backend temporary disk, Kubernetes node disk and writable workspace
-          storage for these sizes. Increasing a limit does not add physical disk capacity. Lowering
-          limits can block access to larger existing inputs.
-        </p>
-        <button
-          mat-flat-button
-          type="submit"
-          [disabled]="busy() || form.invalid || !valid()"
-          color="primary"
-        >
-          Save limits
-        </button>
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="reset()"
-          [disabled]="busy() || source() !== 'admin'"
-        >
-          Reset to deployment defaults
-        </button>
+        <div class="limits-grid">
+          @for (field of fields; track field.key) {
+            <div>
+              <label [for]="field.key">{{ field.label }}</label
+              ><mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <input
+                  [id]="field.key"
+                  matInput
+                  type="number"
+                  step="1"
+                  required
+                  [min]="field.min"
+                  [max]="field.max"
+                  [name]="field.key"
+                  [(ngModel)]="values[field.key]"
+                  [disabled]="busy()"
+                />
+              </mat-form-field>
+            </div>
+          }
+        </div>
+        <details>
+          <summary class="app-disclosure">How preparation limits apply</summary>
+          <p>
+            Writable workspace storage is calculated from actual task inputs plus the larger of the
+            minimum extra space or percentage allowance, rounded up to GiB. The storage maximum is a
+            cap, not space allocated to every task.
+          </p>
+          <p>
+            The total input limit covers the model, evaluation dataset and baseline together. The
+            transfer timeout applies to capture/verification and each file download.
+          </p>
+          <p>
+            Allow sufficient backend temporary disk, Kubernetes node disk and writable workspace
+            storage for these sizes. Increasing a limit does not add physical disk capacity.
+            Lowering limits can block access to larger existing inputs.
+          </p>
+        </details>
+        <div class="actions form-actions">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="reset()"
+            [disabled]="busy() || source() !== 'admin'"
+          >
+            Reset to deployment defaults
+          </button>
+          <button
+            mat-flat-button
+            type="submit"
+            [disabled]="busy() || form.invalid || !valid()"
+            color="primary"
+          >
+            Save limits
+          </button>
+        </div>
       </form>
     }
-    <p role="status">{{ message() }}</p>
+    @if (message()) {
+      <p role="status">{{ message() }}</p>
+    }
   `,
 })
 export class PreparationSettingsComponent {

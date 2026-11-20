@@ -1,7 +1,7 @@
 .instances {
   display: flex;
   flex-direction: column;
-  gap: 1.8rem;
+  gap: var(--page-gap);
 }
 
 .deployment-progress-panel {
@@ -94,8 +94,8 @@
 }
 
 .instance-card {
-  padding: 1.2rem;
-  border-radius: 18px;
+  padding: var(--card-padding);
+  border-radius: var(--radius-lg);
   border: 1px solid transparent;
   transition:
     border 0.2s ease,
@@ -108,14 +108,16 @@
 }
 
 .instance-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  overflow-wrap: anywhere;
   gap: 1rem;
 }
 
 .instance-name {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;

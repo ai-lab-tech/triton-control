@@ -1,7 +1,7 @@
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--page-gap);
 }
 
 .stats {
@@ -13,16 +13,14 @@
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr);
-  gap: 1.6rem;
+  gap: var(--page-gap);
 }
 
 .card {
-  padding: 1.4rem;
+  padding: var(--card-padding);
 }
 
 .card-title {
-  font-weight: 600;
-  font-size: 1.05rem;
   margin-bottom: 0.4rem;
 }
 
@@ -43,8 +41,6 @@
   display: grid;
   gap: 1.4rem;
   padding: 2rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.82));
-  color: #f8fafc;
 }
 
 .login-header {
@@ -56,7 +52,7 @@
 
 .login-icon {
   font-size: 2.4rem;
-  color: #38bdf8;
+  color: #0f766e;
 }
 
 .login-actions {
@@ -72,12 +68,7 @@
 
 .side {
   display: grid;
-  gap: 1.6rem;
-}
-
-.alert-card {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.92));
-  color: #f8fafc;
+  gap: var(--page-gap);
 }
 
 .alert-item {
@@ -105,7 +96,7 @@
   display: block;
   margin-top: 0.2rem;
   font-size: 0.78rem;
-  color: #cbd5e1;
+  color: var(--ink-500);
 }
 
 .perf-running-item {
@@ -114,7 +105,7 @@
 
 .run-link-btn {
   border-color: rgba(20, 184, 166, 0.4) !important;
-  color: #5eead4 !important;
+  color: #0f766e;
   font-weight: 600;
 }
 

@@ -1,0 +1,53 @@
+:host([hidden]) {
+  display: none;
+}
+:host {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+section.card {
+  border: 0;
+  border-radius: var(--radius-lg);
+  margin: 0;
+  padding: var(--card-padding);
+}
+h2 {
+  margin: 0;
+}
+p {
+  color: var(--ink-700);
+}
+form {
+  max-width: none;
+}
+fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+fieldset > p,
+label:has([name="title"]),
+label:has([name="models"]) {
+  grid-column: 1 / -1;
+}
+fieldset > p {
+  margin: 0;
+}
+label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+input,
+textarea,
+select {
+  min-width: 0;
+  font-weight: 400;
+}
+.form-actions button {
+  margin: 0;
+}

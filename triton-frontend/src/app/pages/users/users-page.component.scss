@@ -1,6 +1,6 @@
 .users {
   display: grid;
-  gap: 1.5rem;
+  gap: var(--page-gap);
   min-width: 0;
 }
 
@@ -27,11 +27,7 @@
 
 .card {
   min-width: 0;
-  padding: clamp(1rem, 3vw, 1.5rem);
-}
-
-.card-title {
-  font-size: 1.05rem;
+  padding: var(--card-padding);
 }
 
 .user-list {

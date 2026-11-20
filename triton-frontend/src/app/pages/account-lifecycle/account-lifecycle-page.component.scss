@@ -3,11 +3,13 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: #f5f7fb;
+  background: #fafafa;
 }
 
 .lifecycle-card {
   width: min(520px, 100%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 mat-card-content {

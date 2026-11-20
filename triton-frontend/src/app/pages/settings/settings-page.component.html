@@ -1,9 +1,11 @@
-<p role="note">
-  {{ installation.label() }}. Trust and endpoint policy changes require independent review in
-  production.
-</p>
 <div class="settings">
-  <div class="page-title">Settings</div>
+  <header>
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle" role="note">
+      {{ installation.label() }}. Trust and endpoint policy changes require independent review in
+      production.
+    </p>
+  </header>
 
   <mat-tab-group class="settings-tabs" animationDuration="200ms">
     <mat-tab label="OIDC">
@@ -23,6 +25,7 @@
             </div>
             <label class="switch">
               <input
+                aria-label="Enable OIDC"
                 id="oidc-enabled"
                 type="checkbox"
                 [checked]="oidcEnabled"
@@ -131,6 +134,7 @@
                 <label class="switch">
                   <input
                     type="checkbox"
+                    aria-label="Verify OIDC TLS certificate"
                     [(ngModel)]="settings.strictDiscoveryDocumentValidation"
                     [disabled]="!canEditOidcSettings()"
                   />
@@ -172,7 +176,7 @@
               }
             </div>
           </div>
-          <div class="actions">
+          <div class="actions form-actions">
             <button
               mat-flat-button
               color="primary"
@@ -588,18 +592,6 @@
             }
           </details>
 
-          <div class="actions">
-            <button
-              mat-flat-button
-              color="primary"
-              type="button"
-              (click)="saveEmailSettings()"
-              [disabled]="!canSaveEmailSettings()"
-            >
-              {{ emailSaving() ? "Saving…" : "Save email settings" }}
-            </button>
-          </div>
-
           @if (emailMessage()) {
             <div
               class="settings-message"
@@ -646,6 +638,17 @@
           }
 
           <p>Status: {{ emailSettings.lastStatus }} {{ emailSettings.lastStatusMessage }}</p>
+          <div class="actions form-actions">
+            <button
+              mat-flat-button
+              color="primary"
+              type="button"
+              (click)="saveEmailSettings()"
+              [disabled]="!canSaveEmailSettings()"
+            >
+              {{ emailSaving() ? "Saving…" : "Save email settings" }}
+            </button>
+          </div>
         </mat-card>
       </div>
     </mat-tab>
@@ -737,7 +740,7 @@
                 <code>TRITON_DEPLOY_BASE_DOMAIN</code> and <code>TRITON_DEPLOY_ALLOW_HTTP</code>.
               </p>
             </details>
-            <div class="actions">
+            <div class="actions form-actions">
               <button
                 mat-flat-button
                 class="endpoint-save"
@@ -773,9 +776,15 @@
         </mat-card-content>
       </mat-card>
     </mat-tab>
-    <mat-tab label="Model preparation"><app-preparation-settings /></mat-tab>
+    <mat-tab label="Model preparation"
+      ><div class="tab-content">
+        <mat-card class="card"><app-preparation-settings /></mat-card></div
+    ></mat-tab>
     @if (installation.allows("trust_admin")) {
-      <mat-tab label="Registry"><app-registry-settings /></mat-tab>
+      <mat-tab label="Registry"
+        ><div class="tab-content">
+          <mat-card class="card"><app-registry-settings /></mat-card></div
+      ></mat-tab>
     }
   </mat-tab-group>
 </div>

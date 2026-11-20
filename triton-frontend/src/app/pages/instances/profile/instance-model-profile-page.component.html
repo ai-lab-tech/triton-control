@@ -11,7 +11,7 @@
         <span aria-current="page">Perf {{ modelName() }}</span>
       </nav>
       <div class="profile-title-row">
-        <div class="page-title">Model Perf</div>
+        <h1 class="page-title">Model Perf</h1>
         <div role="status" aria-live="polite">
           @if (activeRun(); as run) {
             <span class="benchmark-status" [class.benchmark-running]="run.state === 'running'">
@@ -122,7 +122,7 @@
         ></app-instance-model-repository-config>
       </div>
 
-      <div class="actions">
+      <div class="actions form-actions">
         <a mat-stroked-button [routerLink]="['/instances', instanceId()]">
           <span class="material-icons action-glyph" aria-hidden="true">chevron_left</span>
           Back

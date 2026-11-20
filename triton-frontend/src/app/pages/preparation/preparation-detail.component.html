@@ -53,9 +53,11 @@
                   required
                 ></textarea>
               </label>
-              <button mat-stroked-button type="submit" [disabled]="busy() || !validInformation()">
-                Request information
-              </button>
+              <div class="form-actions">
+                <button mat-stroked-button type="submit" [disabled]="busy() || !validInformation()">
+                  Request information
+                </button>
+              </div>
             </form>
           </details>
         }

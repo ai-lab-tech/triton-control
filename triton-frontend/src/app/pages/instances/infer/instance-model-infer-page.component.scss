@@ -1,6 +1,6 @@
 .infer-page {
   display: grid;
-  gap: 1.2rem;
+  gap: var(--page-gap);
 }
 
 .infer-header {
@@ -34,7 +34,7 @@
 .infer-card {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
+  padding: var(--card-padding);
 }
 
 .endpoint-list {
@@ -48,14 +48,6 @@
 }
 
 .endpoint-label,
-.section-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
 .endpoint-value {
   color: #0f172a;
   font-weight: 600;
@@ -100,11 +92,6 @@
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-start;
 }
 
 .actions .material-icons {

@@ -1,6 +1,7 @@
 import { Component, inject } from "@angular/core";
 
 import { FormsModule } from "@angular/forms";
+import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatButtonModule } from "@angular/material/button";
 import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
@@ -12,7 +13,14 @@ import { createInstanceRequested } from "../../../state/instances-list/instances
 @Component({
   selector: "app-new-instance-dialog",
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule],
+  imports: [
+    FormsModule,
+    MatCheckboxModule,
+    MatButtonModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+  ],
   templateUrl: "./new-instance-dialog.component.html",
   styleUrl: "./new-instance-dialog.component.scss",
 })

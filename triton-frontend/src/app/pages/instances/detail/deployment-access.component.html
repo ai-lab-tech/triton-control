@@ -146,7 +146,8 @@
         External access will be disabled. This instance will remain reachable inside the cluster.
       </p>
     }
-    <div class="actions">
+    <div class="actions form-actions">
+      <button mat-button type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
       <button
         mat-flat-button
         class="endpoint-primary"
@@ -157,7 +158,6 @@
       >
         Save endpoint
       </button>
-      <button mat-button type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
     </div>
   </fieldset>
 }

@@ -97,12 +97,11 @@ export class InstancesPageComponent implements OnInit {
     });
   });
 
-  constructor() {}
-
   openNewInstanceDialog(): void {
     if (this.canWriteInstances()) {
       this.dialog.open(NewInstanceDialogComponent, {
-        width: "420px",
+        width: "32rem",
+        maxWidth: "calc(100vw - 2rem)",
         panelClass: "custom-dialog",
       });
     }

@@ -1,6 +1,6 @@
 <div class="dialog">
-  <h2 mat-dialog-title class="dialog-title">Add Triton Instance</h2>
-  <p class="dialog-subtitle">Provide the server name and endpoint to register a new node.</p>
+  <h2 mat-dialog-title class="dialog-title">Connect existing instance</h2>
+  <p class="dialog-subtitle">Register a running Triton server with its endpoint.</p>
 
   <mat-dialog-content class="dialog-form">
     <div class="form-row">
@@ -39,16 +39,7 @@
         Optional Prometheus metrics endpoint for CPU, RAM, and GPU usage.
       </div>
     </div>
-    <div class="toggle-row compact">
-      <div>
-        <div class="toggle-title">SSL</div>
-        <div class="dialog-hint">Validate the Triton endpoint certificate.</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" [(ngModel)]="verifySsl" />
-        <span class="slider"></span>
-      </label>
-    </div>
+    <mat-checkbox [(ngModel)]="verifySsl">Verify endpoint TLS certificate</mat-checkbox>
     @if (verifySsl) {
       <div class="form-row">
         <label class="field-label" for="dialog-ca-certificate">Certificate</label>
@@ -82,8 +73,14 @@
 
   <mat-dialog-actions class="dialog-actions" align="end">
     <button mat-stroked-button type="button" (click)="close()">Cancel</button>
-    <button mat-flat-button color="primary" type="button" (click)="save()" cdkFocusInitial>
-      Add instance
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      (click)="save()"
+      [disabled]="!endpoint.trim()"
+    >
+      Connect instance
     </button>
   </mat-dialog-actions>
 </div>

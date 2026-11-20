@@ -19,16 +19,15 @@ import {
   selector: "app-experiment-preparation",
   standalone: true,
   imports: [FormsModule, RouterLink, MatButtonModule],
-  styleUrl: "./preparation.scss",
-  styles: ["fieldset { border: 0; margin: 0; padding: 0; }"],
+  styleUrls: ["./preparation.scss", "./experiment-preparation.component.scss"],
   template: `
     @if (allowed()) {
-      <button mat-stroked-button (click)="begin()">Prepare for production</button>
       @if (expanded()) {
-        <section>
-          <h2>Prepare for production</h2>
+        <section class="card" aria-labelledby="capture-title">
+          <h2 class="card-title" id="capture-title">Prepare for production</h2>
           <p>
-            Capture an immutable snapshot for engineering. The running experiment stays unchanged.
+            Capture the selected model versions in an immutable snapshot for an engineering
+            preparation task.
           </p>
           @if (error()) {
             <p role="alert">{{ error() }}</p>
@@ -67,6 +66,7 @@ import {
                 /></label>
                 <label
                   >Models and versions (one model:version per line)<textarea
+                    rows="4"
                     name="models"
                     [(ngModel)]="models"
                     required
@@ -108,9 +108,16 @@ import {
                   blockers.
                 </p>
               </fieldset>
-              <button mat-flat-button type="submit" [disabled]="busy() || !valid()" color="primary">
-                {{ pending() ? "Retry capture request" : "Capture snapshot" }}
-              </button>
+              <div class="form-actions">
+                <button
+                  mat-flat-button
+                  type="submit"
+                  [disabled]="busy() || !valid()"
+                  color="primary"
+                >
+                  {{ pending() ? "Retry capture request" : "Capture snapshot" }}
+                </button>
+              </div>
             </form>
           }
         </section>
