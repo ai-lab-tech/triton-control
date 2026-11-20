@@ -223,7 +223,7 @@ deployment handoff, not model loading or GPU inference.
 
 #### Run locally
 
-Requirements: Docker, kind, kubectl, Helm 3, Node.js 22, Python with `boto3`,
+Requirements: Docker 28+ (API 1.48+), kind, kubectl, Helm 3, Node.js 22, Python with `boto3`,
 and internet access for images, code-server, and marketplace downloads.
 Ports 18080 and 19000 must be free.
 

@@ -60,11 +60,16 @@ if [[ ${PLUGIN_SMOKE_SKIP_BUILD:-false} != true ]]; then
 fi
 docker build -t plugin-smoke-workspace:local -f "$SCRIPT_DIR/workspace.Dockerfile" "$SCRIPT_DIR"
 SEAWEEDFS_IMAGE=$(cat "$REPO_ROOT/triton-backend/scripts/seaweedfs-image.txt")
-docker pull "$SEAWEEDFS_IMAGE"
+IMAGE_PLATFORM=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')
+docker pull --platform "$IMAGE_PLATFORM" "$SEAWEEDFS_IMAGE"
 docker tag "$SEAWEEDFS_IMAGE" plugin-smoke-seaweedfs:local
+# Export only the node platform; a multi-platform index can reference blobs
+# absent from Docker's local store and make Kind's --all-platforms import fail.
+docker image save --platform "$IMAGE_PLATFORM" --output "$RUNTIME/images.tar" \
+  triton-control:plugin-smoke plugin-smoke-workspace:local plugin-smoke-seaweedfs:local
 CLUSTER_CREATED=true
 "$KIND" create cluster --name "$CLUSTER" --wait 120s
-"$KIND" load docker-image --name "$CLUSTER" triton-control:plugin-smoke plugin-smoke-workspace:local plugin-smoke-seaweedfs:local
+"$KIND" load image-archive --name "$CLUSTER" "$RUNTIME/images.tar"
 kubectl create namespace plugin-smoke
 # Use a temporary manifest so credentials never become shell command arguments.
 "$PLUGIN_SMOKE_PYTHON" - "$RUNTIME" <<'PY'
