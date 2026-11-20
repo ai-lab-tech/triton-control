@@ -70,6 +70,8 @@ class ControlLineage(Contract):
                                                        record_id=previous.model_uri)) if previous else None
         if expected != self.candidate.previous_serving_candidate:
             raise ValueError("Predecessor references disagree")
-        if not any(a.origin.record_id == self.conversion_run_id for a in self.candidate.attempts):
+        conversion_origin = Origin(installation_id=self.origin.installation_id, record_id=self.conversion_run_id)
+        if not any(a.origin == conversion_origin and a.operation == "conversion"
+                   for a in self.candidate.attempts):
             raise ValueError("Conversion run is missing from the candidate")
         return self

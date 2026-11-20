@@ -81,14 +81,6 @@ class ControlLineageTests(HandoffFixture, unittest.TestCase):
                 handoffs.submit(self.session, self.submitter, self.request_with_lineage())
         self.assertEqual(self.session.exec(select(HandoffEntity)).all(), [])
 
-    def test_schema_rejects_approval_and_inconsistent_origins(self):
-        with self.assertRaises(ValidationError):
-            ControlLineage.model_validate({**FIXTURE["lineage"], "production_approval": True})
-        changed = copy.deepcopy(FIXTURE["lineage"])
-        changed["source"]["installation_id"] = "other"
-        with self.assertRaises(ValidationError):
-            ControlLineage.model_validate(changed)
-
     def test_viewers_delegated_tokens_and_production_cannot_submit(self):
         provider = self.enterContext(patch.object(handoff_repositories, "resolve"))
         for claims in ({"email": "user5@test.invalid", "role": "viewer"},
@@ -100,6 +92,42 @@ class ControlLineageTests(HandoffFixture, unittest.TestCase):
                 handoffs.submit(self.session, self.admin, self.request_with_lineage())
         provider.assert_not_called()
 
+
+class ControlLineageSchemaTests(unittest.TestCase):
+    def test_fixture_is_valid(self):
+        # Arrange
+        payload = copy.deepcopy(FIXTURE["lineage"])
+        # Act
+        lineage = ControlLineage.model_validate(payload)
+        # Assert
+        self.assertEqual(lineage.model_dump(mode="json"), payload)
+
+    def test_rejects_inconsistent_lineage(self):
+        cases = [
+            ("approval", ("production_approval",), True),
+            ("source installation", ("source", "installation_id"), "other"),
+            ("candidate installation", ("candidate", "origin", "installation_id"), "other"),
+            ("conversion installation", ("candidate", "attempts", 0, "origin", "installation_id"), "other"),
+            ("conversion run", ("conversion_run_id",), "missing-run"),
+            ("conversion operation", ("candidate", "attempts", 0, "operation"), "validation"),
+            ("predecessor", ("previous_serving_model", "candidate_origin", "record_id"), "other"),
+        ]
+        for name, path, value in cases:
+            with self.subTest(name=name):
+                # Arrange
+                payload = copy.deepcopy(FIXTURE["lineage"])
+                target = payload
+                for key in path[:-1]:
+                    target = target[key]
+                target[path[-1]] = value
+                # Act / Assert
+                with self.assertRaises(ValidationError):
+                    ControlLineage.model_validate(payload)
+
     def test_shared_schema_stays_current(self):
+        # Arrange
         path = Path(__file__).resolve().parents[2] / "contracts/lineage/v1/control-lineage.schema.json"
-        self.assertEqual(json.loads(path.read_text()), ControlLineage.model_json_schema())
+        # Act
+        schema = ControlLineage.model_json_schema()
+        # Assert
+        self.assertEqual(json.loads(path.read_text()), schema)

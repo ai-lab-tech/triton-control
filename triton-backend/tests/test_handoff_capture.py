@@ -1,5 +1,7 @@
 """Durable handoff jobs: admission, progress, cancellation and atomic publication."""
 
+import hashlib
+import json
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -12,7 +14,7 @@ from app.api.handoffs_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import HandoffEntity, OperationEntity, PreparationTaskEntity
-from app.exceptions import BadRequestError, ForbiddenError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import operations
 from app.services import handoff_capture, handoff_sources
 from app.services.operations import OperationService, OperationWorker
@@ -38,6 +40,37 @@ class CaptureTests(HandoffFixture, unittest.TestCase):
     def resolve(self, session, source, **options):
         options["checkpoint"](5)
         return self.resolved(session, source)
+
+    def reserve_legacy_capture(self):
+        """Reserve the exact payload shape persisted before lineage support."""
+        payload = self.request().model_dump(mode="json", exclude={"lineage"})
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+        return operations.reserve(self.session, OperationEntity(
+            id="legacy-capture", actor_id=4, kind=handoff_capture.KIND,
+            target=handoff_capture.TARGET, idempotency_key="capture-one", payload=payload,
+            payload_hash=hashlib.sha256(canonical.encode()).hexdigest(),
+        ))
+
+    def test_pre_lineage_capture_replay_preserves_operation_and_stored_payload(self):
+        # Arrange
+        original = self.reserve_legacy_capture()
+        payload, payload_hash = dict(original.payload), original.payload_hash
+        # Act
+        repeated = self.capture()
+        stored = self.session.get(OperationEntity, original.id)
+        # Assert
+        self.assertEqual(repeated.id, original.id)
+        self.assertEqual(stored.payload, payload)
+        self.assertEqual(stored.payload_hash, payload_hash)
+        self.assertEqual(len(self.session.exec(select(OperationEntity)).all()), 1)
+
+    def test_pre_lineage_capture_rejects_changed_input_on_replay(self):
+        # Arrange
+        self.reserve_legacy_capture()
+        changed = self.request(title="Changed requirements")
+        # Act / Assert
+        with self.assertRaises(ConflictError):
+            handoff_capture.submit(self.session, self.submitter, changed, "capture-one")
 
     def test_admission_is_fast_and_worker_publishes_once(self):
         # Arrange
