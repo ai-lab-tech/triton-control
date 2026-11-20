@@ -16,6 +16,7 @@ from kubernetes import client, config  # type: ignore[import-untyped]
 
 from app.core.canonical import inventory_digest
 from app.schemas.materialization import StorageBinding
+from app.schemas.serving_metadata import StartupModel
 from app.services.materialization.kubernetes import manifests
 from tests import test_materialization as unit
 from tests.materialization_fixtures import FILES, LIMITS, plan, policy
@@ -93,7 +94,7 @@ class MaterializerKubernetesTests(unittest.TestCase):
             time.sleep(1)
         raise AssertionError("S3 fixture did not start: " + str(pod.status))
 
-    def execute(self, case, *, valid=False, followup=None):
+    def resources(self, case, *, gpu_count=0):
         desired = plan(IMAGE)
         if case == "normalization":
             payload = desired.model_dump(mode="json")
@@ -113,7 +114,13 @@ class MaterializerKubernetesTests(unittest.TestCase):
             }
         )
         release = release.model_copy(update={"spec": release.spec.model_copy(update={"repository": repository})})
-        resources = manifests(
+        models = (StartupModel(name="iris", versions=("1", "2")),)
+        release = release.model_copy(update={"spec": release.spec.model_copy(update={"models": models})})
+        resources = release.spec.resources_per_replica.model_copy(update={"gpu_count": gpu_count})
+        release = release.model_copy(
+            update={"spec": release.spec.model_copy(update={"resources_per_replica": resources})}
+        )
+        return manifests(
             release,
             desired,
             policy(IMAGE, PLATFORM),
@@ -124,7 +131,14 @@ class MaterializerKubernetesTests(unittest.TestCase):
             namespace=self.ns,
             limits=LIMITS,
         )
-        cm, pod = resources
+
+    def execute(self, case, *, valid=False, followup=None):
+        desired = plan(IMAGE)
+        cm, pod = self.resources(case)
+        # These finite fixtures validate only the init container and read-only mounts.
+        pod["spec"]["containers"].pop()
+        for probe in ("startupProbe", "livenessProbe", "readinessProbe"):
+            pod["spec"]["containers"][0].pop(probe, None)
         pod["spec"]["restartPolicy"] = "Never"
         pod["spec"]["terminationGracePeriodSeconds"] = 1
         main = pod["spec"]["containers"][0]
@@ -220,6 +234,61 @@ print(Path('/var/run/triton-materialization/receipt.json').read_text())
         self.assertNotIn("Traceback", logs)
         self.assertFalse(any(c.state.running or c.state.terminated for c in actual.status.container_statuses or []))
         return None
+
+    def launch_probe_fixture(self, mode):
+        cm, pod = self.resources("valid")
+        cm["data"]["fixture.py"] = Path(__file__).with_name("readiness_triton_server.py").read_text()
+        if mode == "receipt":
+            expected = json.loads(cm["data"]["readiness.json"])
+            expected["receipt"]["prepared_inventory_digest"] = "sha256:" + "0" * 64
+            cm["data"]["readiness.json"] = json.dumps(expected)
+        main = pod["spec"]["containers"][0]
+        main.update(image=IMAGE, command=["python", "/fixture/fixture.py"], args=[mode])
+        main["volumeMounts"].append({"name": "materialization-plan", "mountPath": "/fixture", "readOnly": True})
+        self.core.create_namespaced_config_map(self.ns, cm)
+        name = pod["metadata"]["name"]
+        self.core.create_namespaced_pod(self.ns, pod)
+        self.addCleanup(self.core.delete_namespaced_pod, name, self.ns, grace_period_seconds=0)
+        return name
+
+    def test_replica_local_version_receipt_and_slow_load(self):
+        slow, missing, receipt = [self.launch_probe_fixture(mode) for mode in ("slow", "missing", "receipt")]
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            pods = [self.core.read_namespaced_pod(name, self.ns) for name in (slow, missing, receipt)]
+            ready = [any(c.type == "Ready" and c.status == "True" for c in p.status.conditions or []) for p in pods]
+            self.assertFalse(any(ready[1:]))
+            if ready[0]:
+                events = self.core.list_namespaced_event(self.ns).items
+
+                def failed(name, message):
+                    return any(e.involved_object.name == name and message in (e.message or "") for e in events)
+
+                if (
+                    failed(slow, "/versions/2/ready")
+                    and failed(missing, "/versions/2/ready")
+                    and failed(receipt, "receipt differs")
+                ):
+                    self.assertTrue(all(c.restart_count == 0 for p in pods for c in p.status.container_statuses))
+                    return
+            time.sleep(1)
+        self.fail("Expected one recovered replica and independently observed missing-version and receipt failures")
+
+    def test_insufficient_gpu_keeps_pod_pending(self):
+        cm, pod = self.resources("valid", gpu_count=1000000)
+        self.core.create_namespaced_config_map(self.ns, cm)
+        name = pod["metadata"]["name"]
+        self.core.create_namespaced_pod(self.ns, pod)
+        self.addCleanup(self.core.delete_namespaced_pod, name, self.ns, grace_period_seconds=0)
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            actual = self.core.read_namespaced_pod(name, self.ns)
+            for condition in actual.status.conditions or []:
+                if condition.reason == "Unschedulable" and "Insufficient nvidia.com/gpu" in condition.message:
+                    self.assertEqual(actual.status.phase, "Pending")
+                    return
+            time.sleep(1)
+        self.fail("Expected scheduler evidence of insufficient GPU capacity")
 
     def test_pinned_init_readonly_runtime_and_recreated_pod(self):
         # Arrange

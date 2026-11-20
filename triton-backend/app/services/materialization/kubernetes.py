@@ -14,6 +14,8 @@ from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.budgets import check_plan, storage_bytes
 from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
+from app.services.materialization.readiness import probe_timeout_seconds
+from app.services.materialization.runtime import receipt_for
 
 
 def manifests(
@@ -46,7 +48,16 @@ def manifests(
     if len(data) > 512 * 1024:
         raise MaterializationError("Materialization plan exceeds Kubernetes document limit")
     budget_data = canonical_bytes(asdict(limits))
-    identity = digest({"name": name, "plan": plan.model_dump(mode="json"), "limits": asdict(limits)})
+    release_digest = digest(release.model_dump(mode="json", by_alias=True))
+    readiness = {
+        "release": release_digest,
+        "receipt": receipt_for(plan).model_dump(mode="json"),
+        "models": [model.model_dump(mode="json") for model in release.spec.models],
+    }
+    readiness_data = canonical_bytes(readiness)
+    if len(data) + len(readiness_data) + len(budget_data) > 900 * 1024:
+        raise MaterializationError("Release probe expectations exceed Kubernetes document limit")
+    identity = digest({"name": name, "release": release_digest, "plan": readiness["receipt"], "limits": asdict(limits)})
     config_name = name[:30].rstrip("-") + "-materialization-" + identity.removeprefix("sha256:")[:16]
     repository_storage = str(storage_bytes(plan))
     env: list[dict[str, Any]] = [
@@ -105,12 +116,23 @@ def manifests(
             "kind": "ConfigMap",
             "immutable": True,
             "metadata": {"name": config_name, "namespace": namespace},
-            "data": {"plan.json": data.decode(), "limits.json": budget_data.decode()},
+            "data": {
+                "plan.json": data.decode(),
+                "limits.json": budget_data.decode(),
+                "readiness.json": readiness_data.decode(),
+            },
         },
         {
             "apiVersion": "v1",
             "kind": "Pod",
-            "metadata": {"name": name, "namespace": namespace},
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "annotations": {
+                    "triton-control/release-digest": release_digest,
+                    "triton-control/prepared-inventory-digest": repository.prepared_inventory_digest,
+                },
+            },
             "spec": {
                 "automountServiceAccountToken": False,
                 "nodeSelector": {"kubernetes.io/os": "linux", "kubernetes.io/arch": policy.platform.split("/")[1]},
@@ -140,6 +162,24 @@ def manifests(
                         "name": "triton",
                         "image": release.spec.image,
                         "command": ["tritonserver"],
+                        "startupProbe": {
+                            "httpGet": {"path": "/v2/health/live", "port": 8000},
+                            "periodSeconds": 5,
+                            "timeoutSeconds": 2,
+                            "failureThreshold": 360,
+                        },
+                        "readinessProbe": {
+                            "httpGet": {"path": "/v2/health/ready", "port": 8000},
+                            "periodSeconds": 5,
+                            "timeoutSeconds": 2,
+                            "failureThreshold": 1,
+                        },
+                        "livenessProbe": {
+                            "httpGet": {"path": "/v2/health/live", "port": 8000},
+                            "periodSeconds": 10,
+                            "timeoutSeconds": 2,
+                            "failureThreshold": 6,
+                        },
                         "args": ["--model-repository=/models", "--model-control-mode=none", "--strict-readiness=true"],
                         "securityContext": security,
                         "resources": {"requests": requests, "limits": runtime_limits},
@@ -158,7 +198,32 @@ def manifests(
                             },
                             {"name": "runtime-tmp", "mountPath": "/tmp"},  # nosec B108
                         ],
-                    }
+                    },
+                    {
+                        "name": "release-readiness",
+                        "image": policy.image,
+                        "command": ["python", "-c", "import signal; signal.pause()"],
+                        "securityContext": security,
+                        "resources": {
+                            "requests": {"cpu": "10m", "memory": "32Mi"},
+                            "limits": {"cpu": "250m", "memory": "64Mi"},
+                        },
+                        "volumeMounts": [
+                            {"name": "materialization-plan", "mountPath": "/plan", "readOnly": True},
+                            {
+                                "name": "model-repository",
+                                "mountPath": "/var/run/triton-materialization/receipt.json",
+                                "subPath": "ready/receipt.json",
+                                "readOnly": True,
+                            },
+                        ],
+                        "readinessProbe": {
+                            "exec": {"command": ["python", "-m", "app.services.materialization.readiness"]},
+                            "periodSeconds": 5,
+                            "timeoutSeconds": probe_timeout_seconds(sum(len(m.versions) for m in release.spec.models)),
+                            "failureThreshold": 1,
+                        },
+                    },
                 ],
                 "volumes": volumes,
             },

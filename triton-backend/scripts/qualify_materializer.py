@@ -24,6 +24,8 @@ from app.services.materialization.qualification import REQUIRED_CHECKS  # noqa: 
 
 KUBERNETES_TEST = "tests.test_materialization_kubernetes.MaterializerKubernetesTests."
 CHECK_TESTS = {
+    "pod_local_readiness": {"test_replica_local_version_receipt_and_slow_load"},
+    "gpu_capacity": {"test_insufficient_gpu_keeps_pod_pending"},
     "exact_versions": {"test_pinned_init_readonly_runtime_and_recreated_pod", "test_rejects_version"},
     "source_hash": {"test_rejects_corrupt"},
     "prepared_hash": {"test_rejects_prepared_hash"},
@@ -66,6 +68,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromNames(
         [
             "tests.test_materialization",
+            "tests.test_release_readiness",
             "tests.test_materialization_kubernetes",
         ]
     )
@@ -79,7 +82,7 @@ def main() -> int:
         "fixture_revision": FIXTURE_REVISION,
         "tests_run": result.testsRun,
         "checks": checks,
-        "scope": "Synthetic repositories, real init container and read-only mount; not serving correctness or approval",
+        "scope": "Real Kubernetes, synthetic S3 and Triton HTTP fixtures; no inference or GPU performance qualification",
     }
     args.output.mkdir(parents=True, exist_ok=True)
     report = args.output / "report.json"

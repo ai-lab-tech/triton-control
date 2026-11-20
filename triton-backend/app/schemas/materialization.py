@@ -9,7 +9,7 @@ from app.schemas.lineage import Contract, Digest, InventoryV1
 from app.schemas.serving_metadata import Image, Name, Path, Reference
 
 NORMALIZATION_VERSION = "triton-layout/v1"
-FIXTURE_REVISION = "materializer-qualification/v2"
+FIXTURE_REVISION = "materializer-qualification/v3"
 
 
 class Rewrite(Contract):
@@ -107,7 +107,7 @@ class MaterializationReceipt(Contract):
 class Qualification(Contract):
     image: Image
     platform: Literal["linux/amd64", "linux/arm64"]
-    fixture_revision: Literal["materializer-qualification/v2"]
+    fixture_revision: Literal["materializer-qualification/v3"]
     checks: dict[str, StrictBool]
     evidence: Reference
 

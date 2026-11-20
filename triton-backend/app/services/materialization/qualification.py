@@ -5,6 +5,8 @@ from app.services.materialization.normalization import MaterializationError
 
 REQUIRED_CHECKS = frozenset(
     {
+        "pod_local_readiness",
+        "gpu_capacity",
         "exact_versions",
         "source_hash",
         "prepared_hash",

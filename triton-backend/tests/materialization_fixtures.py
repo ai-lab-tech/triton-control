@@ -59,7 +59,7 @@ def policy(image=IMAGE, platform="linux/amd64"):
         qualification={
             "image": image,
             "platform": platform,
-            "fixture_revision": "materializer-qualification/v2",
+            "fixture_revision": "materializer-qualification/v3",
             "checks": dict.fromkeys(REQUIRED_CHECKS, True),
             "evidence": {"uri": "fixture-only.json", "digest": digest({"synthetic": True})},
         },

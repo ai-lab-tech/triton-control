@@ -47,7 +47,7 @@
       "$ref": "#/$defs/Reference"
     },
     "fixture_revision": {
-      "const": "materializer-qualification/v2",
+      "const": "materializer-qualification/v3",
       "title": "Fixture Revision",
       "type": "string"
     },
