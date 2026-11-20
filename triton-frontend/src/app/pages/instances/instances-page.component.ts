@@ -7,6 +7,7 @@ import { FormsModule } from "@angular/forms";
 import { NavigationEnd, Router, RouterLink } from "@angular/router";
 import { MatCardModule } from "@angular/material/card";
 import { MatButtonModule } from "@angular/material/button";
+import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { MatIconModule } from "@angular/material/icon";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
@@ -14,6 +15,8 @@ import { MatSelectModule } from "@angular/material/select";
 import { Store } from "@ngrx/store";
 
 import { environment } from "../../../environments/environment";
+import { AuthService } from "../../shared/auth/auth.service";
+import { NewInstanceDialogComponent } from "./new-instance-dialog/new-instance-dialog.component";
 import { AuthStore } from "../../shared/auth/auth.store";
 import {
   deleteInstanceRequested,
@@ -36,6 +39,7 @@ import { type Instance } from "./instances.data";
     MatCardModule,
     MatButtonModule,
     MatIconModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
@@ -47,6 +51,12 @@ export class InstancesPageComponent implements OnInit {
   readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
   private readonly auth = inject(AuthStore);
+  private readonly authService = inject(AuthService);
+  private readonly dialog = inject(MatDialog);
+  readonly canWriteInstances = computed(
+    () => this.auth.canWriteInstances() && this.installation.allows("direct_deployment"),
+  );
+  readonly kubernetesEnabled = signal(false);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly pollingIntervalMs = environment.instancePollingIntervalMs ?? 10000;
@@ -89,7 +99,20 @@ export class InstancesPageComponent implements OnInit {
 
   constructor() {}
 
+  openNewInstanceDialog(): void {
+    if (this.canWriteInstances()) {
+      this.dialog.open(NewInstanceDialogComponent, {
+        width: "420px",
+        panelClass: "custom-dialog",
+      });
+    }
+  }
+
   ngOnInit(): void {
+    void this.authService
+      .getAuthOptions()
+      .then((options) => this.kubernetesEnabled.set(options.kubernetesEnabled))
+      .catch(() => this.kubernetesEnabled.set(false));
     this.store.dispatch(instancesListPageOpened());
 
     interval(this.pollingIntervalMs)

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, signal, TemplateRef } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
 import { MatCheckboxModule } from "@angular/material/checkbox";
@@ -9,8 +9,6 @@ import { FormsModule } from "@angular/forms";
 import { MatCardModule } from "@angular/material/card";
 import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
-import { MatTableModule } from "@angular/material/table";
-import { MatChipsModule } from "@angular/material/chips";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatSelectModule } from "@angular/material/select";
@@ -52,8 +50,6 @@ import {
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatTableModule,
-    MatChipsModule,
     MatDialogModule,
     MatFormFieldModule,
     MatSelectModule,
@@ -75,22 +71,33 @@ export class UsersPageComponent {
   readonly loading = toSignal(this.store.select(selectUsersLoading), { initialValue: false });
   readonly error = toSignal(this.store.select(selectUsersError), { initialValue: "" });
 
-  readonly displayedColumns = [
-    "name",
-    "email",
-    "role",
-    "engineering",
-    "status",
-    "auth",
-    "instances",
-    "addInstance",
-    "actions",
-  ];
   private readonly engineeringApi = inject(TeamsApiService);
   private engineeringGroupId = "";
   readonly engineeringMembers = signal<TeamMember[]>([]);
   readonly engineeringBusy = signal(true);
   readonly engineeringError = signal("");
+
+  openDetails(template: TemplateRef<unknown>, user: UserRow): void {
+    this.dialog.open(template, {
+      position: { right: "0", top: "0" },
+      width: "min(28rem, 100vw)",
+      maxWidth: "100vw",
+      height: "100dvh",
+      ariaLabel: "Account details for " + user.name,
+    });
+  }
+
+  positionActions(event: MouseEvent, menu: HTMLElement): void {
+    const trigger = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    menu.style.right = Math.max(8, window.innerWidth - trigger.right) + "px";
+    if (window.innerHeight - trigger.bottom >= 180) {
+      menu.style.top = trigger.bottom + "px";
+      menu.style.bottom = "auto";
+    } else {
+      menu.style.bottom = window.innerHeight - trigger.top + "px";
+      menu.style.top = "auto";
+    }
+  }
 
   isEngineer(userId: number): boolean {
     return this.engineeringMembers().some(

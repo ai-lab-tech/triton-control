@@ -67,7 +67,12 @@ interface Settings {
           storage for these sizes. Increasing a limit does not add physical disk capacity. Lowering
           limits can block access to larger existing inputs.
         </p>
-        <button mat-flat-button type="submit" [disabled]="busy() || form.invalid || !valid()">
+        <button
+          mat-flat-button
+          type="submit"
+          [disabled]="busy() || form.invalid || !valid()"
+          color="primary"
+        >
           Save limits
         </button>
         <button

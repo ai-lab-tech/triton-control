@@ -1,6 +1,11 @@
 <nav class="detail-nav" aria-label="Task navigation">
-  <a routerLink="/preparation">← Engineering queue</a>
-  <button mat-button (click)="load()" [disabled]="busy()">Refresh task</button>
+  <a routerLink="/preparation"
+    ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Engineering
+    queue</a
+  >
+  <button mat-stroked-button (click)="load()" [disabled]="busy()">
+    <span class="material-icons action-glyph" aria-hidden="true">refresh</span> Refresh task
+  </button>
 </nav>
 @if (error()) {
   <p role="alert">{{ error() }}</p>
@@ -31,7 +36,7 @@
         }
         @if (item.actions.request_information) {
           <details class="request">
-            <summary>Request information</summary>
+            <summary class="app-disclosure">Request information</summary>
             <form (ngSubmit)="action('request-information')">
               <label
                 >Missing inputs (comma-separated identifiers)<input
@@ -71,7 +76,8 @@
         </dl>
         @if (item.source.instance_id) {
           <a [routerLink]="['/instances', item.source.instance_id]"
-            >Back to original development experiment</a
+            ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back
+            to original development experiment</a
           >
         }
         @if (item.source.handoff_id) {
@@ -98,7 +104,7 @@
             <p>Capture gap: {{ gap }}</p>
           }
           <details>
-            <summary>
+            <summary class="app-disclosure">
               Repository inventory ({{ captured.manifest.inventory.files.length }} files)
             </summary>
             @for (file of captured.manifest.inventory.files; track file.path) {
@@ -108,7 +114,7 @@
             }
           </details>
           <details>
-            <summary>Selected workspace files</summary>
+            <summary class="app-disclosure">Selected workspace files</summary>
             @for (file of captured.manifest.workspace_inventory.files; track file.path) {
               <p>
                 {{ file.path }} · {{ file.size }} bytes<br /><code>{{ file.digest }}</code>
@@ -118,7 +124,7 @@
         }
       </section>
       <details class="records">
-        <summary>Build history</summary>
+        <summary class="app-disclosure">Build history</summary>
         <p>Build status is independent of task status, validation and deployment.</p>
         <a [routerLink]="['/preparation/tasks', item.task.id, 'builds']"
           >Build serving image and inspect logs</a
@@ -142,7 +148,7 @@
         }
       </details>
       <details class="records">
-        <summary>Preparation and validation attempts</summary>
+        <summary class="app-disclosure">Preparation and validation attempts</summary>
         @for (record of attempts(); track record.id) {
           <article>
             <h3>
@@ -178,10 +184,10 @@
         }
       </details>
       <details class="records">
-        <summary>Task history</summary>
+        <summary class="app-disclosure">Task history</summary>
         @for (event of events(); track event.id) {
           <details>
-            <summary>
+            <summary class="app-disclosure">
               {{ event.action }} · {{ event.created_at | date: "medium" }} · revision
               {{ event.revision }}
             </summary>
@@ -203,15 +209,17 @@
       </dl>
       <div class="task-actions">
         @if (item.actions.claim) {
-          <button mat-flat-button (click)="action('claim')" [disabled]="busy()">Claim task</button>
+          <button mat-flat-button (click)="action('claim')" [disabled]="busy()" color="primary">
+            Claim task
+          </button>
         }
         @if (item.actions.release) {
-          <button mat-button (click)="action('release-claim')" [disabled]="busy()">
+          <button mat-stroked-button (click)="action('release-claim')" [disabled]="busy()">
             Release claim
           </button>
         }
         @if (item.actions.open_workspace) {
-          <button mat-flat-button (click)="prepareWorkspace()" [disabled]="busy()">
+          <button mat-flat-button (click)="prepareWorkspace()" [disabled]="busy()" color="primary">
             Open task workspace
           </button>
         }

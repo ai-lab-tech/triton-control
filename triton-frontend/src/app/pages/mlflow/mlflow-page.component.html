@@ -162,6 +162,7 @@
             class="danger"
             (click)="uninstall()"
             [disabled]="uninstalling()"
+            color="warn"
           >
             <span class="material-icons">delete</span>
             {{ uninstalling() ? "Uninstalling..." : "Uninstall" }}

@@ -726,7 +726,7 @@
               </section>
             </div>
             <details class="endpoint-details">
-              <summary>How endpoint settings apply</summary>
+              <summary class="app-disclosure">How endpoint settings apply</summary>
               <p>
                 Domain changes apply to new or renamed endpoints. Existing endpoints keep their
                 hostname and protocol. Basic authentication requires HTTPS.
@@ -744,6 +744,7 @@
                 type="button"
                 (click)="saveDeploymentPolicy()"
                 [disabled]="policyBusy() || !installation.allows('trust_admin')"
+                color="primary"
               >
                 <mat-icon>save</mat-icon>
                 {{ policyBusy() ? "Saving…" : "Save endpoint settings" }}

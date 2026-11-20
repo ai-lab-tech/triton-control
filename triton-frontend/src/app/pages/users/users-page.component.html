@@ -1,14 +1,14 @@
 <div class="users">
   <div class="header-row">
     <div>
-      <div class="page-title">User Management</div>
+      <h1 class="page-title">User Management</h1>
       <p class="page-subtitle">
         Provision access to Triton instances with local credentials or OIDC identities.
       </p>
     </div>
     <div class="header-actions">
       <button mat-flat-button color="primary" (click)="openNewUserDialog()">
-        <span class="material-icons">person_add</span>
+        <span class="material-icons" aria-hidden="true">person_add</span>
         Add user
       </button>
     </div>
@@ -29,17 +29,13 @@
     </mat-card>
   }
 
-  <mat-card class="card table-card">
-    <div class="card-title">Active users</div>
+  <mat-card class="card users-panel">
     @if (loading()) {
       <p>Loading users...</p>
     }
     @if (error()) {
       <p>{{ error() }}</p>
     }
-    <p class="page-subtitle">
-      ML engineers share responsibility for this installation. Access roles remain unchanged.
-    </p>
     @if (engineeringError()) {
       <p role="alert">
         {{ engineeringError() }}
@@ -48,197 +44,226 @@
         </button>
       </p>
     }
-    <table mat-table [dataSource]="users()">
-      <ng-container matColumnDef="name">
-        <th mat-header-cell *matHeaderCellDef>Name</th>
-        <td mat-cell *matCellDef="let row">{{ row.name }}</td>
-      </ng-container>
 
-      <ng-container matColumnDef="email">
-        <th mat-header-cell *matHeaderCellDef>Email</th>
-        <td mat-cell *matCellDef="let row">{{ row.email }}</td>
-      </ng-container>
-
-      <ng-container matColumnDef="role">
-        <th mat-header-cell *matHeaderCellDef>Role</th>
-        <td mat-cell *matCellDef="let row" class="role-cell">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-select
-              [(ngModel)]="pendingRoleByUserId[row.id]"
-              (ngModelChange)="updateRole(row, $event)"
-            >
-              @for (role of roles; track role) {
-                <mat-option [value]="role">{{ role }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="engineering">
-        <th mat-header-cell *matHeaderCellDef>ML engineer</th>
-        <td mat-cell *matCellDef="let row">
-          <mat-checkbox
-            [checked]="isEngineer(row.id)"
-            [disabled]="
-              engineeringBusy() || !!engineeringError() || (!row.isActive && !isEngineer(row.id))
-            "
-            (change)="setEngineer(row, $event.checked); $event.source.checked = isEngineer(row.id)"
-            [aria-label]="'ML engineering responsibility for ' + row.name"
-          ></mat-checkbox>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="auth">
-        <th mat-header-cell *matHeaderCellDef>Auth</th>
-        <td mat-cell *matCellDef="let row">
-          <span class="chip" [attr.data-tone]="row.auth === 'oidc' ? 'ok' : 'warn'">
-            {{ row.auth }}
-          </span>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="status">
-        <th mat-header-cell *matHeaderCellDef>Status</th>
-        <td mat-cell *matCellDef="let row">
-          <span class="chip" [attr.data-tone]="row.isActive ? 'ok' : 'warn'">
-            @if (row.accountStatus === "invitation_pending") {
-              invitation pending
-            } @else if (row.accountStatus === "approval_pending") {
-              approval pending
-            } @else if (row.isActive) {
-              active
-            } @else {
-              inactive
-            }
-          </span>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="instances">
-        <th mat-header-cell *matHeaderCellDef>Instances</th>
-        <td mat-cell *matCellDef="let row">
-          <div class="instance-chips">
-            @for (instance of row.instances; track instance) {
-              <span class="instance-chip">
-                <span class="instance-chip-name">{{ instance }}</span>
+    <table aria-label="Users">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th class="optional">Role</th>
+          <th>Status</th>
+          <th class="optional">Instances</th>
+          <th aria-label="Actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of users(); track row.id) {
+          <tr>
+            <td>
+              <button class="name-link" type="button" (click)="openDetails(details, row)">
+                {{ row.name }}</button
+              ><span class="user-email">{{ row.email }}</span>
+            </td>
+            <td class="optional">{{ row.role }}</td>
+            <td>
+              <span class="chip" [attr.data-tone]="row.isActive ? 'ok' : 'warn'">
+                @if (row.accountStatus === "invitation_pending") {
+                  invitation pending
+                } @else if (row.accountStatus === "approval_pending") {
+                  approval pending
+                } @else if (row.isActive) {
+                  active
+                } @else {
+                  inactive
+                }
+              </span>
+            </td>
+            <td class="optional">{{ row.instances.length }}</td>
+            <td>
+              <div class="row-actions">
+                @if (!row.isActive && row.accountStatus === "approval_pending") {
+                  <button mat-flat-button (click)="approveUser(row)" color="primary">
+                    Approve
+                  </button>
+                }
                 <button
                   mat-icon-button
-                  type="button"
-                  class="chip-action"
-                  aria-label="Unassign {{ instance }}"
-                  (click)="removeInstanceFromUser(row, instance)"
+                  [attr.popovertarget]="'actions-' + row.id"
+                  [attr.aria-label]="'Actions for ' + row.name"
+                  (click)="positionActions($event, menu)"
                 >
-                  <span class="material-icons">close</span>
+                  <span class="material-icons" aria-hidden="true">more_vert</span>
                 </button>
-              </span>
-            }
-            @if (!row.instances.length) {
-              <span class="empty-chip">No instances assigned</span>
-            }
-          </div>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="addInstance">
-        <th mat-header-cell *matHeaderCellDef>Add instance</th>
-        <td mat-cell *matCellDef="let row" class="add-instance-cell">
-          <div class="instance-add">
-            <mat-form-field appearance="outline" subscriptSizing="dynamic">
-              <mat-select
-                [(ngModel)]="pendingInstanceByEmail[row.email]"
-                placeholder="Add instance"
+                <div
+                  #menu
+                  popover="auto"
+                  [id]="'actions-' + row.id"
+                  class="actions-cell app-menu-panel"
+                  (click)="menu.hidePopover()"
+                >
+                  <button class="app-menu-item" type="button" (click)="openDetails(details, row)">
+                    View details
+                  </button>
+                  @if (!row.isActive) {
+                    @if (row.accountStatus === "invitation_pending") {
+                      <button
+                        class="app-menu-item"
+                        type="button"
+                        data-testid="reissue-invitation-action"
+                        (click)="reissueInvitation(row)"
+                        [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                        [attr.title]="lifecycleActionDisabledReason || null"
+                      >
+                        {{ lifecycleActionRunning() ? "Creating link..." : "Reissue invite" }}
+                      </button>
+                      <button
+                        class="app-menu-item app-menu-danger"
+                        type="button"
+                        data-testid="cancel-invitation-action"
+                        (click)="revokeInvitation(row)"
+                        [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                        [attr.title]="lifecycleActionDisabledReason || null"
+                      >
+                        Cancel invitation
+                      </button>
+                    } @else if (row.auth === "local" && row.accountStatus !== "approval_pending") {
+                      <button
+                        class="app-menu-item"
+                        type="button"
+                        (click)="reissueInvitation(row)"
+                        [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                        [attr.title]="lifecycleActionDisabledReason || null"
+                      >
+                        {{ lifecycleActionRunning() ? "Creating link..." : "Send invitation" }}
+                      </button>
+                    }
+                  } @else if (row.auth === "local") {
+                    <button
+                      class="app-menu-item reset-password-action"
+                      type="button"
+                      data-testid="reset-password-action"
+                      (click)="issuePasswordReset(row)"
+                      [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
+                      [attr.title]="lifecycleActionDisabledReason || null"
+                      [attr.aria-busy]="passwordResetUserId() === row.id"
+                    >
+                      @if (passwordResetUserId() === row.id) {
+                        <mat-spinner
+                          class="reset-password-spinner"
+                          diameter="18"
+                          aria-hidden="true"
+                        ></mat-spinner>
+                        <span>Sending reset…</span>
+                      } @else {
+                        <span>Reset password</span>
+                      }
+                    </button>
+                  }
+                  <button
+                    class="app-menu-item app-menu-danger"
+                    type="button"
+                    (click)="deleteUser(row)"
+                  >
+                    <span class="material-icons" aria-hidden="true">delete</span>
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <ng-template #details
+                ><section class="account-panel">
+                  <div class="panel-header">
+                    <h2 [id]="'account-' + row.id">{{ row.name }}</h2>
+                    <button mat-icon-button aria-label="Close account details" mat-dialog-close>
+                      <span class="material-icons">close</span>
+                    </button>
+                  </div>
+                  <p class="user-email">{{ row.email }}</p>
+                  <p>Authentication · {{ row.auth }}</p>
+                  <div class="instance-access-content">
+                    <div class="access-controls">
+                      <div class="role-control">
+                        <span class="field-label">Role</span>
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                          <mat-select
+                            [aria-label]="'Role for ' + row.name"
+                            [(ngModel)]="pendingRoleByUserId[row.id]"
+                            (ngModelChange)="updateRole(row, $event)"
+                          >
+                            @for (role of roles; track role) {
+                              <mat-option [value]="role">{{ role }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      <mat-checkbox
+                        [checked]="isEngineer(row.id)"
+                        [disabled]="
+                          engineeringBusy() ||
+                          !!engineeringError() ||
+                          (!row.isActive && !isEngineer(row.id))
+                        "
+                        (change)="
+                          setEngineer(row, $event.checked);
+                          $event.source.checked = isEngineer(row.id)
+                        "
+                        [aria-label]="'ML engineering responsibility for ' + row.name"
+                        >ML engineer</mat-checkbox
+                      >
+                    </div>
+                    <h3>Assigned instances</h3>
+                    <div class="instance-chips">
+                      @for (instance of row.instances; track instance) {
+                        <span class="instance-chip">
+                          <span class="instance-chip-name">{{ instance }}</span>
+                          <button
+                            type="button"
+                            class="chip-action"
+                            aria-label="Unassign {{ instance }}"
+                            (click)="removeInstanceFromUser(row, instance)"
+                          >
+                            <span class="material-icons" aria-hidden="true">close</span>
+                          </button>
+                        </span>
+                      }
+                      @if (!row.instances.length) {
+                        <span class="empty-chip">No instances assigned</span>
+                      }
+                    </div>
+                    <div class="instance-add">
+                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <mat-select
+                          [(ngModel)]="pendingInstanceByEmail[row.email]"
+                          placeholder="Add instance"
+                          [aria-label]="'Assign an instance to ' + row.name"
+                        >
+                          @for (instance of availableInstances(row); track instance) {
+                            <mat-option [value]="instance">{{ instance }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        (click)="addInstanceToUser(row)"
+                        [disabled]="
+                          !pendingInstanceByEmail[row.email] || !availableInstances(row).length
+                        "
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </section></ng-template
               >
-                @for (instance of availableInstances(row); track instance) {
-                  <mat-option [value]="instance">{{ instance }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-            <button
-              mat-stroked-button
-              type="button"
-              (click)="addInstanceToUser(row)"
-              [disabled]="!pendingInstanceByEmail[row.email] || !availableInstances(row).length"
-            >
-              Add
-            </button>
-          </div>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef>Actions</th>
-        <td mat-cell *matCellDef="let row" class="actions-cell">
-          @if (!row.isActive) {
-            @if (row.accountStatus === "approval_pending") {
-              <button mat-flat-button color="primary" type="button" (click)="approveUser(row)">
-                <span class="material-icons">verified_user</span>
-                Approve
-              </button>
-            } @else if (row.accountStatus === "invitation_pending") {
-              <button
-                mat-stroked-button
-                type="button"
-                data-testid="reissue-invitation-action"
-                (click)="reissueInvitation(row)"
-                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
-                [attr.title]="lifecycleActionDisabledReason || null"
-              >
-                {{ lifecycleActionRunning() ? "Creating link..." : "Reissue invite" }}
-              </button>
-              <button
-                mat-stroked-button
-                type="button"
-                data-testid="cancel-invitation-action"
-                (click)="revokeInvitation(row)"
-                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
-                [attr.title]="lifecycleActionDisabledReason || null"
-              >
-                Cancel invitation
-              </button>
-            } @else if (row.auth === "local") {
-              <button
-                mat-stroked-button
-                type="button"
-                (click)="reissueInvitation(row)"
-                [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
-                [attr.title]="lifecycleActionDisabledReason || null"
-              >
-                {{ lifecycleActionRunning() ? "Creating link..." : "Send invitation" }}
-              </button>
-            }
-          } @else if (row.auth === "local") {
-            <button
-              mat-stroked-button
-              class="reset-password-action"
-              type="button"
-              data-testid="reset-password-action"
-              (click)="issuePasswordReset(row)"
-              [disabled]="!emailLifecycleAvailable() || lifecycleActionRunning()"
-              [attr.title]="lifecycleActionDisabledReason || null"
-              [attr.aria-busy]="passwordResetUserId() === row.id"
-            >
-              @if (passwordResetUserId() === row.id) {
-                <mat-spinner
-                  class="reset-password-spinner"
-                  diameter="18"
-                  aria-hidden="true"
-                ></mat-spinner>
-                <span>Sending reset…</span>
-              } @else {
-                <span>Reset password</span>
-              }
-            </button>
+            </td>
+          </tr>
+        } @empty {
+          @if (!loading() && !error()) {
+            <tr>
+              <td colspan="5">No users found.</td>
+            </tr>
           }
-          <button mat-stroked-button color="warn" type="button" (click)="deleteUser(row)">
-            <span class="material-icons">delete</span>
-            Delete
-          </button>
-        </td>
-      </ng-container>
-
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-    </table>
-  </mat-card>
+        }
+      </tbody>
+    </table></mat-card
+  >
 </div>

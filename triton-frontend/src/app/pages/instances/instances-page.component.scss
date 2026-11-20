@@ -45,7 +45,14 @@
   }
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
 .header-row {
+  flex-wrap: wrap;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;

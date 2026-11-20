@@ -2,7 +2,6 @@ import { InstallationService } from "../shared/installation/installation.service
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BreakpointObserver } from "@angular/cdk/layout";
 import { TestBed } from "@angular/core/testing";
-import { MatDialog } from "@angular/material/dialog";
 import { Router } from "@angular/router";
 import { of, Subject } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
@@ -15,7 +14,6 @@ import { selectDashboardFleetHealthPercentage } from "../state/dashboard/dashboa
 describe("ShellComponent", () => {
   let routerEvents$: Subject<any>;
   let routerMock: jasmine.SpyObj<Router>;
-  let dialogMock: jasmine.SpyObj<MatDialog>;
   let authServiceMock: jasmine.SpyObj<AuthService>;
   let instancesApiMock: jasmine.SpyObj<InstancesService>;
   let authState: InstanceType<typeof AuthStore>;
@@ -28,7 +26,6 @@ describe("ShellComponent", () => {
       events: routerEvents$.asObservable(),
     });
     routerMock.navigateByUrl.and.resolveTo(true);
-    dialogMock = jasmine.createSpyObj<MatDialog>("MatDialog", ["open"]);
     authServiceMock = jasmine.createSpyObj<AuthService>("AuthService", [
       "login",
       "logout",
@@ -59,7 +56,6 @@ describe("ShellComponent", () => {
         provideMockStore(),
         AuthStore,
         { provide: Router, useValue: routerMock },
-        { provide: MatDialog, useValue: dialogMock },
         { provide: AuthService, useValue: authServiceMock },
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: false }) } },
@@ -113,33 +109,6 @@ describe("ShellComponent", () => {
     // Assert
     expect(routerMock.navigateByUrl).toHaveBeenCalledWith("/dashboard");
     expect(component.adminMenuOpen()).toBeFalse();
-  });
-
-  it("OpenNewInstanceDialog_MethodInvoked_OpensDialogWithExpectedConfig", () => {
-    // Arrange
-    const fixture = TestBed.createComponent(ShellComponent);
-    const component = fixture.componentInstance;
-    (component as any).dialog = dialogMock;
-    authState.setAuthenticatedUser({ name: "Member", role: "member", accessAllowed: true });
-
-    // Act
-    component.openNewInstanceDialog();
-
-    // Assert
-    expect(dialogMock.open).toHaveBeenCalled();
-  });
-
-  it("OpenNewInstanceDialog_ViewerRole_DoesNotOpenDialog", () => {
-    // Arrange
-    const fixture = TestBed.createComponent(ShellComponent);
-    const component = fixture.componentInstance;
-    authState.setAuthenticatedUser({ name: "Viewer", role: "viewer", accessAllowed: true });
-
-    // Act
-    component.openNewInstanceDialog();
-
-    // Assert
-    expect(dialogMock.open).not.toHaveBeenCalled();
   });
 
   it("FleetHealth_UserLoggedInAndRowsReturned_ComputesHealthPercentage", () => {
@@ -348,7 +317,6 @@ describe("ShellComponentHandset", () => {
         provideMockStore(),
         AuthStore,
         { provide: Router, useValue: routerMock },
-        { provide: MatDialog, useValue: jasmine.createSpyObj<MatDialog>("MatDialog", ["open"]) },
         { provide: AuthService, useValue: authServiceMock },
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: true }) } },

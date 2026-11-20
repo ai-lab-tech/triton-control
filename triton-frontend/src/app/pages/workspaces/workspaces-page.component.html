@@ -294,6 +294,7 @@
             title="Delete workspace"
             (click)="delete(workspace)"
             [disabled]="deletingId() === workspace.id"
+            color="warn"
           >
             <span class="material-icons">delete</span>
             Delete

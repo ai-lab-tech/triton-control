@@ -1,3 +1,4 @@
+import { MatButtonModule } from "@angular/material/button";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
@@ -16,7 +17,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 @Component({
   selector: "app-task-builds-page",
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MatButtonModule],
   templateUrl: "./task-builds-page.component.html",
   styles: [
     `

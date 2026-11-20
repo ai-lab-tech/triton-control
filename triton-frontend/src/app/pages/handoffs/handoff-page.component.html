@@ -131,7 +131,9 @@
             </p>
           }
           <details class="revision-details" [open]="!!previousHandoffId">
-            <summary>Revision details <span>For retries or updated models</span></summary>
+            <summary class="app-disclosure">
+              Revision details <span>For retries or updated models</span>
+            </summary>
             <div class="fields">
               <mat-form-field appearance="outline">
                 <mat-label>Submission revision</mat-label>
@@ -208,6 +210,7 @@
             mat-flat-button
             type="submit"
             [disabled]="busy() || form.invalid || !profiles().length"
+            color="primary"
           >
             {{ busy() ? "Submitting…" : "Submit to engineering" }}
             <span class="material-icons" aria-hidden="true">arrow_forward</span>
@@ -284,6 +287,7 @@
             [disabled]="
               busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
             "
+            color="primary"
           >
             Open task workspace
           </button>
@@ -320,6 +324,7 @@
             mat-flat-button
             (click)="openWorkspace()"
             [disabled]="busy() || !validWorkspaceSize()"
+            color="primary"
           >
             {{ sizing.existing_storage_size ? "Reopen workspace" : "Create workspace" }}
           </button>

@@ -64,7 +64,10 @@
     </mat-card-content>
 
     <mat-card-actions align="end">
-      <a mat-stroked-button routerLink="/signin">Back to sign in</a>
+      <a mat-stroked-button routerLink="/signin"
+        ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+        sign in</a
+      >
       @if (!completed() && mode === "forgot") {
         <button mat-flat-button color="primary" (click)="requestReset()" [disabled]="loading()">
           Send reset link

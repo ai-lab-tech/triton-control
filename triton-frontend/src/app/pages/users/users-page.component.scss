@@ -1,41 +1,102 @@
 .users {
-  display: flex;
-  flex-direction: column;
-  gap: 1.8rem;
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
 }
 
-.header-row {
+.header-row,
+.user-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1.5rem;
   flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.header-actions {
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
+.page-title,
+.card-title,
+.user-identity h3 {
+  margin: 0;
+}
+
+.header-actions .material-icons,
+.actions-cell .material-icons {
+  margin-inline-end: 0.35rem;
+  vertical-align: middle;
 }
 
 .card {
-  padding: 1.5rem;
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 1.5rem);
 }
 
-.form-grid {
+.card-title {
+  font-size: 1.05rem;
+}
+
+.user-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
-  align-items: start;
+  gap: 0;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-.span-two {
-  grid-column: span 2;
+.user-row {
+  min-width: 0;
+  padding: 1rem 0;
+  border-top: 1px solid #e2e8f0;
 }
 
-.form-row {
+.user-identity {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.user-identity h3 {
+  font-size: 1rem;
+}
+
+.user-email,
+.empty-chip {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.user-badges,
+.access-controls,
+.role-control,
+.instance-chips,
+.instance-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.access-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: 1rem;
+}
+
+.access-controls mat-checkbox {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+}
+
+.role-control {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.role-control mat-form-field {
+  width: 100%;
 }
 
 .field-label {
@@ -44,131 +105,171 @@
   color: #334155;
 }
 
-.form-actions {
-  display: flex;
-  gap: 0.8rem;
-  align-items: center;
+.instance-access {
+  margin-top: 0.85rem;
 }
 
-.form-grid .mat-mdc-form-field {
-  width: 100%;
-}
-
-table {
-  width: 100%;
-}
-
-.mat-mdc-row,
-.mat-mdc-header-row {
-  align-items: center;
-}
-
-.mat-mdc-cell,
-.mat-mdc-header-cell {
-  vertical-align: middle;
-}
-
-.mat-mdc-cell {
-  align-items: center;
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-.role-cell,
-.add-instance-cell {
-  vertical-align: middle !important;
-}
-
-.mat-mdc-chip-set {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.instance-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.instance-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 1.4rem 0.2rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(20, 184, 166, 0.12);
-  color: #0f766e;
+.instance-access summary {
+  width: fit-content;
+  max-width: 100%;
+  color: #334155;
+  cursor: pointer;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
-.chip-action {
-  position: absolute;
-  top: 0;
-  right: 0;
-  transform: translate(40%, -65%);
-  width: 20px;
-  height: 20px;
+.instance-count {
+  margin-inline-start: 0.35rem;
+  padding: 0.1rem 0.45rem;
   border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.instance-access-content {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.instance-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 0.25rem;
+  padding-inline-start: 0.65rem;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.instance-chip-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chip-action {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
-  box-shadow: none;
-  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chip-action:hover {
+  background: rgba(15, 118, 110, 0.12);
 }
 
 .chip-action .material-icons {
-  font-size: 0.95rem;
-}
-
-.empty-chip {
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
-  color: #64748b;
-  font-size: 0.85rem;
+  font-size: 1rem;
 }
 
 .instance-add {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
-
-.instance-add .mat-mdc-form-field {
-  min-width: 200px;
-  margin: 0;
-}
-
 .instance-add button {
-  height: 56px;
-  padding: 0 1.4rem;
-  border-radius: 999px;
+  height: var(--control-height);
 }
-
-.role-cell .mat-mdc-form-field {
-  margin: 0;
-}
-
-.actions-cell {
-  white-space: nowrap;
-  justify-content: center;
-}
-
-.reset-password-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-width: 9.5rem;
+.instance-add mat-form-field {
+  min-width: 0;
+  width: 100%;
 }
 
 .reset-password-spinner {
   --mdc-circular-progress-active-indicator-color: currentColor;
+  display: inline-block;
+  margin-inline-end: 0.4rem;
+  vertical-align: middle;
 }
 
-@media (max-width: 900px) {
-  .span-two {
-    grid-column: auto;
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+th,
+td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+th {
+  font-size: 0.8rem;
+  color: #475569;
+}
+.name-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #0f766e;
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.user-email {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.row-actions,
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.actions-cell[popover] {
+  position: fixed;
+  margin: 0;
+  left: auto;
+  display: none;
+}
+.actions-cell:popover-open {
+  display: grid;
+}
+.account-panel {
+  --control-height: 44px;
+  --mat-form-field-container-height: var(--control-height);
+  --mat-form-field-container-vertical-padding: 10px;
+  padding: clamp(1rem, 4vw, 1.5rem);
+  color: #1e293b;
+}
+.panel-header {
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.panel-header h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.account-panel h3 {
+  font-size: 1rem;
+  margin: 0.5rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+@media (max-width: 760px) {
+  .optional {
+    display: none;
+  }
+  .users-panel {
+    padding: 0.5rem;
+  }
+  .row-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .access-controls {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -39,9 +39,12 @@
         </div>
       </div>
 
-      <nav class="nav">
-        <div class="nav-section">Core</div>
-        @for (item of navItems(); track item.path) {
+      <nav class="nav" aria-label="Main navigation">
+        @for (item of navItems(); track item.path; let index = $index) {
+          @if (item.section && item.section !== navItems()[index - 1]?.section) {
+            <hr class="nav-divider" />
+            <div class="nav-section">{{ item.section }}</div>
+          }
           @if (item.disabledReason) {
             <span
               mat-list-item
@@ -49,7 +52,7 @@
               [attr.aria-disabled]="true"
               [attr.data-label]="item.disabledReason"
             >
-              <span class="disabled-nav-content">
+              <span class="nav-item-content">
                 <span
                   class="material-icons nav-icon disabled-nav-icon"
                   [style.color]="'rgba(174, 187, 204, 0.74)'"
@@ -64,29 +67,19 @@
               mat-list-item
               [routerLink]="item.path"
               routerLinkActive="active"
+              ariaCurrentWhenActive="page"
               (click)="closeNavOnMobile()"
               [attr.data-label]="item.label"
+              [attr.aria-label]="item.label"
             >
-              <span class="material-icons nav-icon">{{ item.icon }}</span>
-              <span class="nav-label">{{ item.label }}</span>
+              <span class="nav-item-content">
+                <span class="material-icons nav-icon">{{ item.icon }}</span>
+                <span class="nav-label">{{ item.label }}</span>
+              </span>
             </a>
           }
         }
       </nav>
-
-      @if (canWriteInstances()) {
-        <div class="sidenav-actions">
-          <button
-            type="button"
-            class="sidenav-add-instance"
-            (click)="openNewInstanceDialog(); closeNavOnMobile()"
-            [attr.data-label]="'Add Instance'"
-          >
-            <span class="material-icons">add</span>
-            <span class="sidenav-action-label">Add Instance</span>
-          </button>
-        </div>
-      }
 
       <div class="sidenav-footer">
         <div class="fleet-chip" [attr.data-label]="fleetHealthLabel()">
@@ -98,37 +91,41 @@
 
       <div class="sidenav-account" (click)="$event.stopPropagation()">
         @if (adminMenuOpen()) {
-          <div class="account-menu">
+          <div class="account-menu app-menu-panel">
             @if (!isLoggedIn()) {
-              <button type="button" class="account-item" (click)="login()">
+              <button type="button" class="account-item app-menu-item" (click)="login()">
                 <span class="material-icons">login</span>
                 <span>Log in</span>
               </button>
             }
             @if (isLoggedIn() && isAdmin()) {
-              <button type="button" class="account-item" (click)="go('/users')">
+              <button type="button" class="account-item app-menu-item" (click)="go('/users')">
                 <span class="material-icons">group</span>
                 <span>User Management</span>
               </button>
             }
             @if (isLoggedIn() && isAdmin() && installation.allows("credential_admin")) {
-              <button type="button" class="account-item" (click)="go('/s3-profiles')">
+              <button type="button" class="account-item app-menu-item" (click)="go('/s3-profiles')">
                 <span class="material-icons">key</span>
                 <span>S3 Profiles</span>
               </button>
             }
             @if (isLoggedIn() && isAdmin()) {
-              <button type="button" class="account-item" (click)="go('/settings')">
+              <button type="button" class="account-item app-menu-item" (click)="go('/settings')">
                 <span class="material-icons">tune</span>
                 <span>Settings</span>
               </button>
-              <button type="button" class="account-item" (click)="go('/error-logs')">
+              <button type="button" class="account-item app-menu-item" (click)="go('/error-logs')">
                 <span class="material-icons">bug_report</span>
                 <span>Error Logs</span>
               </button>
             }
             @if (isLoggedIn()) {
-              <button type="button" class="account-item logout" (click)="logout()">
+              <button
+                type="button"
+                class="account-item app-menu-item app-menu-danger"
+                (click)="logout()"
+              >
                 <span class="material-icons">logout</span>
                 <span>Log out</span>
               </button>

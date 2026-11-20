@@ -5,7 +5,7 @@
   <mat-dialog-content class="dialog-form">
     <div class="form-row">
       <label class="field-label" for="dialog-server-name">Server name</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input
           id="dialog-server-name"
           matInput
@@ -16,7 +16,7 @@
     </div>
     <div class="form-row">
       <label class="field-label" for="dialog-endpoint">Endpoint</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input
           id="dialog-endpoint"
           matInput
@@ -27,7 +27,7 @@
     </div>
     <div class="form-row">
       <label class="field-label" for="dialog-metrics-endpoint">Metrics endpoint</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input
           id="dialog-metrics-endpoint"
           matInput
@@ -52,7 +52,7 @@
     @if (verifySsl) {
       <div class="form-row">
         <label class="field-label" for="dialog-ca-certificate">Certificate</label>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <textarea
             id="dialog-ca-certificate"
             matInput

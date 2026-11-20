@@ -4,7 +4,10 @@
     @if (instance()) {
       <div>Last known state. Updates and actions are temporarily unavailable.</div>
     }
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }
 @if (instance(); as instance) {
@@ -569,6 +572,7 @@
                     class="s3-disable-btn"
                     (click)="disableS3Config()"
                     [disabled]="s3Saving()"
+                    color="warn"
                   >
                     <span class="material-icons">link_off</span>
                     Delete S3 Connection
@@ -717,10 +721,11 @@
         <div class="s3-dialog-actions">
           <button mat-stroked-button type="button" (click)="closeS3Dialog()">Cancel</button>
           <button
-            mat-stroked-button
+            mat-flat-button
             type="button"
             (click)="saveS3Config()"
             [disabled]="s3Saving() || !canSaveS3Config()"
+            color="primary"
           >
             <span class="material-icons">save</span>
             {{ s3Saving() ? "Saving..." : "Save S3 settings" }}
@@ -823,10 +828,11 @@
         <div class="s3-dialog-actions">
           <button mat-stroked-button type="button" (click)="closeTritonDialog()">Cancel</button>
           <button
-            mat-stroked-button
+            mat-flat-button
             type="button"
             (click)="saveTritonConnection()"
             [disabled]="tritonSaving() || !tritonEndpoint.trim()"
+            color="primary"
           >
             <span class="material-icons">save</span>
             {{ tritonSaving() ? "Saving..." : "Save connection" }}
@@ -848,6 +854,9 @@
   <div class="empty">
     <span class="material-icons">dns</span>
     <div>Instance not found.</div>
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }

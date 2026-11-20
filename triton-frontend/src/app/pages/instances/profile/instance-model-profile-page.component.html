@@ -124,7 +124,7 @@
 
       <div class="actions">
         <a mat-stroked-button [routerLink]="['/instances', instanceId()]">
-          <span class="material-icons">arrow_back</span>
+          <span class="material-icons action-glyph" aria-hidden="true">chevron_left</span>
           Back
         </a>
         @if (activeRun(); as run) {
@@ -169,6 +169,9 @@
   <div class="empty">
     <span class="material-icons">speed</span>
     <div>Model profile target not found.</div>
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }

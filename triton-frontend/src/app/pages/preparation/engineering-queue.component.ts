@@ -16,8 +16,11 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
     <header>
       <h1 class="page-title">Engineering queue</h1>
       <div class="controls">
-        <button mat-button (click)="load(true)" [disabled]="busy()">Refresh</button>
-        <a mat-stroked-button routerLink="/preparation/handoffs/new">Submit model</a>
+        <button mat-stroked-button (click)="load(true)" [disabled]="busy()">
+          <span class="material-icons queue-action-icon" aria-hidden="true">refresh</span>
+          Refresh
+        </button>
+        <a mat-flat-button routerLink="/preparation/handoffs/new" color="primary">Submit model</a>
       </div>
     </header>
     <div class="queue-surface card">
@@ -49,7 +52,14 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
         @if (claimed(); as entry) {
           <p>
             Assigned to you ({{ assignee(entry) }}).
-            <a [routerLink]="['/preparation/tasks', entry.task.id]">Open task</a>
+            <a
+              class="task-link"
+              [routerLink]="['/preparation/tasks', entry.task.id]"
+              [attr.aria-label]="'Open task: ' + entry.task.title"
+            >
+              Open task
+              <span class="material-icons task-chevron" aria-hidden="true">chevron_right</span>
+            </a>
           </p>
         }
         @if (busy()) {
@@ -110,7 +120,16 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
                         Claim task
                       </button>
                     } @else {
-                      <a mat-button [routerLink]="['/preparation/tasks', entry.task.id]">Open</a>
+                      <a
+                        class="task-link"
+                        [routerLink]="['/preparation/tasks', entry.task.id]"
+                        [attr.aria-label]="'Open task: ' + entry.task.title"
+                      >
+                        Open task
+                        <span class="material-icons task-chevron" aria-hidden="true"
+                          >chevron_right</span
+                        >
+                      </a>
                     }
                   </td>
                 </tr>

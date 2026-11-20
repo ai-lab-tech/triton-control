@@ -26,6 +26,7 @@
         type="button"
         (click)="edit()"
         [disabled]="busy()"
+        color="primary"
       >
         <span class="material-icons" aria-hidden="true">edit</span>
         Edit endpoint
@@ -152,6 +153,7 @@
         type="button"
         (click)="save()"
         [disabled]="busy() || !valid()"
+        color="primary"
       >
         Save endpoint
       </button>

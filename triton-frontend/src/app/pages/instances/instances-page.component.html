@@ -6,6 +6,16 @@
         Manage runtime health, model catalogs, and S3 connectivity per instance.
       </p>
     </div>
+    @if (canWriteInstances()) {
+      <div class="header-actions">
+        <button mat-stroked-button type="button" (click)="openNewInstanceDialog()">
+          Connect existing instance
+        </button>
+        @if (kubernetesEnabled()) {
+          <a mat-flat-button color="primary" routerLink="/deployments/new">Add deployment</a>
+        }
+      </div>
+    }
   </div>
 
   <div class="filters card">
@@ -26,7 +36,7 @@
       </mat-form-field>
     </div>
     <div class="filter-actions">
-      <button mat-flat-button color="primary" type="button" (click)="refresh()">
+      <button mat-stroked-button type="button" (click)="refresh()">
         <span class="material-icons">sync</span>
         Refresh
       </button>
@@ -119,6 +129,7 @@
               type="button"
               class="delete-instance-btn"
               (click)="deleteInstance(instance.id, instance.name, instance.isSelfDeployed)"
+              color="warn"
             >
               Delete
               <span class="material-icons">delete</span>

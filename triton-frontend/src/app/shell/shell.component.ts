@@ -15,9 +15,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatToolbarModule } from "@angular/material/toolbar";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatDividerModule } from "@angular/material/divider";
-import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 
-import { NewInstanceDialogComponent } from "../pages/instances/new-instance-dialog/new-instance-dialog.component";
 import { AuthStore } from "../shared/auth/auth.store";
 import { AuthService } from "../shared/auth/auth.service";
 import { ChromeService } from "../shared/chrome.service";
@@ -31,6 +29,7 @@ type NavItem = {
   icon: string;
   path: string;
   disabledReason?: string;
+  section?: "Serving" | "Development";
 };
 
 @Component({
@@ -48,7 +47,6 @@ type NavItem = {
     MatToolbarModule,
     MatMenuModule,
     MatDividerModule,
-    MatDialogModule,
   ],
   styleUrl: "./shell.component.scss",
   templateUrl: "./shell.component.html",
@@ -74,33 +72,41 @@ export class ShellComponent {
     const kubernetesActionDisabledReason = this.kubernetesActionDisabledReason();
     const items: NavItem[] = [
       { label: "Dashboard", icon: "grid_view", path: "/dashboard" },
-      ...(this.canWriteInstances()
-        ? [{ label: "Submit model", icon: "assignment_add", path: "/preparation/handoffs/new" }]
-        : []),
+      { label: "Instances", icon: "dns", path: "/instances", section: "Serving" },
+      {
+        label: "Add deployment",
+        icon: "add",
+        path: "/deployments/new",
+        section: "Serving",
+        disabledReason: kubernetesActionDisabledReason,
+      },
       ...(this.installation.allows("development_jobs")
-        ? [{ label: "Engineering queue", icon: "assignment", path: "/preparation" }]
+        ? [
+            {
+              label: "Engineering queue",
+              icon: "assignment",
+              path: "/preparation",
+              section: "Development" as const,
+            },
+          ]
         : []),
-      { label: "Triton Instances", icon: "dns", path: "/instances" },
       {
         label: "Workspaces",
+        section: "Development",
         icon: "terminal",
         path: "/workspaces",
         disabledReason: kubernetesActionDisabledReason,
       },
       {
-        label: "Add Deployment",
-        icon: "rocket_launch",
-        path: "/deployments/new",
-        disabledReason: kubernetesActionDisabledReason,
-      },
-      {
-        label: "Workflows",
+        label: "Argo Workflows",
+        section: "Development",
         icon: "account_tree",
         path: "/workflows",
         disabledReason: kubernetesActionDisabledReason,
       },
       {
         label: "MLflow",
+        section: "Development",
         icon: "insights",
         path: "/mlflow",
         disabledReason: kubernetesActionDisabledReason,
@@ -129,7 +135,6 @@ export class ShellComponent {
 
   private readonly router = inject(Router);
   private readonly breakpointObserver = inject(BreakpointObserver);
-  private readonly dialog = inject(MatDialog);
   private readonly fleetHealthPollingIntervalMs = environment.instancePollingIntervalMs ?? 10000;
   readonly appVersion = environment.appVersion;
 
@@ -231,15 +236,5 @@ export class ShellComponent {
     this.oidc.logout();
     this.adminMenuOpen.set(false);
     void this.router.navigateByUrl("/signin");
-  }
-
-  openNewInstanceDialog() {
-    if (!this.canWriteInstances()) {
-      return;
-    }
-    this.dialog.open(NewInstanceDialogComponent, {
-      width: "420px",
-      panelClass: "custom-dialog",
-    });
   }
 }

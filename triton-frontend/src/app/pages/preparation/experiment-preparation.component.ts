@@ -52,8 +52,9 @@ import {
             @if (terminal()) {
               <button mat-button (click)="newCapture()" [disabled]="busy()">New capture</button>
             }
-            <button mat-button (click)="monitor(op.id)" [disabled]="busy()">
-              Refresh snapshot status
+            <button mat-stroked-button (click)="monitor(op.id)" [disabled]="busy()">
+              <span class="material-icons action-glyph" aria-hidden="true">refresh</span> Refresh
+              snapshot status
             </button>
           } @else {
             <form (ngSubmit)="submit()">
@@ -107,7 +108,7 @@ import {
                   blockers.
                 </p>
               </fieldset>
-              <button mat-stroked-button type="submit" [disabled]="busy() || !valid()">
+              <button mat-flat-button type="submit" [disabled]="busy() || !valid()" color="primary">
                 {{ pending() ? "Retry capture request" : "Capture snapshot" }}
               </button>
             </form>
