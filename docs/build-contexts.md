@@ -1,10 +1,11 @@
-# Immutable build contexts (S06-B)
+# Immutable build contexts
 
-[Story #30](https://github.com/ai-lab-tech/triton-control-concepts/issues/30)
-adds authenticated context upload and temporary, version-pinned S3 storage. It uses
-S02-C durable operations, S05-B safe artifact paths/canonical hashing and S06-A
-operator policy. It does not build images (S06-C / #31) or add a build button
-(S06-D / #32). MLflow is not required.
+The build-context service provides authenticated context upload and temporary,
+version-pinned S3 storage. It uses
+durable operations, safe artifact paths, canonical hashing and builder
+qualification policy. Image execution and workspace build controls are documented
+in [Runtime builds](runtime-builds.md) and [Serving image builds](serving-image-build-ui.md).
+MLflow is not required.
 
 ## Installation
 
@@ -16,7 +17,7 @@ With Helm, set `buildQualification.policy` to a complete policy described in
 [build provisioning](build-provisioning.md). The chart copies the credential-free
 policy into an application-namespace ConfigMap and mounts it read-only. It keeps
 `policy.enabled: false`: uploading input is allowed, but executor admission stays
-disabled until the S06-C execution/provisioning integration is installed and
+disabled until the runtime-build executor is installed and
 qualified. Staging does not certify the builder or installed Kubernetes secrets.
 
 For other installations, mount an operator-owned JSON policy file and configure:
@@ -87,7 +88,7 @@ admins may inspect/control a context, subject to current role and membership
 checks. Other engineers cannot read another owner’s context through this API.
 Delegated deployment tokens are rejected. Requests never grant access to arbitrary
 workspace paths; the caller uploads selected bytes. Source workspace authorization
-and collection for the future button remain S06-D responsibilities.
+and file collection belong to the workspace build UI.
 
 ## Validation and identities
 
@@ -129,7 +130,7 @@ that every RUN download is pinned or that a build is fully reproducible.
 
 The normalized archive sorts regular files, preserves executable intent, fixes
 ownership/timestamps/modes and removes excluded bytes. Its inventory SHA-256 covers
-sorted file paths/sizes/checksums/executable bits using S05-A canonical JSON. Every
+sorted file paths/sizes/checksums/executable bits using canonical lineage JSON. Every
 upload attempt gets `<staging_prefix><context-id>/<attempt-id>/context.tar.gz`.
 A source-archive checksum and prepared-archive checksum are distinct. The receipt,
 S3 versions, operation states and approvals are outside the archive/inventory hash.
@@ -142,14 +143,16 @@ Versionless/null responses and missing/corrupt retained bytes cannot pass.
 
 ## Executor boundary, cancellation and retention
 
-S06-C must call `consume_for_build` before starting each Job/retry. This hook
+The runtime-build executor must call `consume_for_build` before starting each Job/retry.
+This hook
 rechecks owner authorization, unchanged policy, current qualification and the
 exact recorded S3 version/checksum. It extends retention to cover a Job admitted
 immediately afterward, using policy timeout plus five minutes. The future executor
 must download that **version**, verify it locally and use the receipt Dockerfile
 path. The existing qualification-only renderer is not a general execution API and
-must not be used to fetch a mutable latest key. S06-C must additionally verify
-installed site credentials/policies before execution, as required by S06-A.
+must not be used to fetch a mutable latest key. The runtime-build executor must
+additionally verify
+installed site credentials/policies before execution, as required by builder qualification.
 
 Cancel fences the uploader before deleting objects. An uncertain in-flight PUT
 waits until its upload lease plus transport grace elapses before final cleanup.
@@ -187,11 +190,11 @@ old mutable workspace paths or invent base-image hashes during migration.
 
 Relevant suites: `tests.test_build_contexts`, `tests.test_build_contexts_settings`,
 `tests.test_build_contexts_postgres`, `tests.test_build_contexts_s3`. PostgreSQL uses
-`BUILD_CONTEXT_TEST_DATABASE_URL`; real MinIO uses `BUILD_CONTEXT_TEST_S3_ENDPOINT`,
+`BUILD_CONTEXT_TEST_DATABASE_URL`; real SeaweedFS storage uses `BUILD_CONTEXT_TEST_S3_ENDPOINT`,
 `BUILD_CONTEXT_TEST_S3_ACCESS_KEY`, `BUILD_CONTEXT_TEST_S3_SECRET_KEY`. Each test uses
 an isolated schema/bucket and removes only its fixtures. Backend CI runs both real
 providers in the existing candidate-import provider job. No Kubernetes workload
-provider is added in this increment; Job execution tests belong to S06-C.
+provider is added in this increment; Job execution tests cover the runtime-build executor.
 
 Local validation (2026-11-16): full backend discovery ran 1209 tests successfully
 with 170 opt-in environment tests skipped, including the enabled real PostgreSQL

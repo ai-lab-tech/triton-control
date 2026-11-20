@@ -1,4 +1,4 @@
-"""Materialize a real neutral-import receipt from versioned MinIO storage."""
+"""Materialize a real neutral-import receipt from versioned S3-compatible storage."""
 
 import os
 import tempfile

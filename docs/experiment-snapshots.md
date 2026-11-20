@@ -1,6 +1,7 @@
 # Immutable development experiment snapshots
 
-S03-B captures an authorized development experiment into controlled staging and
+Experiment snapshot capture copies an authorized development experiment into controlled
+staging and
 creates one preparation task referencing the immutable snapshot. It does not
 change, restart, scale, pause or delete the development workload. It does not
 create a production release, approve it or claim validation success.
@@ -206,7 +207,7 @@ PODS_TEST_KUBECONFIG=/path/to/kubeconfig python -m unittest tests.test_experimen
 CANDIDATE_IMPORT_TEST_S3_ENDPOINT=http://127.0.0.1:9000 python -m unittest tests.test_experiment_snapshots_s3 -v
 ```
 
-Backend CI runs these in its existing PostgreSQL, Kubernetes and pinned-MinIO
+Backend CI runs these in its existing PostgreSQL, Kubernetes and digest-pinned SeaweedFS
 jobs. The Kubernetes suite creates/deletes only a unique disposable namespace.
 Tests exercise actual runtime ownership/platform reads and workspace exec,
 concurrent submissions/workers, rollback/recovery, stale fences, immutable

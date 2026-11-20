@@ -1,4 +1,4 @@
-# MLflow Control lineage and explicit handoffs (S05-D)
+# MLflow Control lineage and explicit handoffs
 
 The optional `mlflow-triton-control` adapter explicitly submits prepared requests
 to `POST /api/preparation/handoff-captures`. Plain MLflow logging remains unchanged.
