@@ -1,6 +1,7 @@
 # Immutable development experiment snapshots
 
-S03-B captures an authorized development experiment into controlled staging and
+Experiment snapshot capture copies an authorized development experiment into controlled
+staging and
 creates one preparation task referencing the immutable snapshot. It does not
 change, restart, scale, pause or delete the development workload. It does not
 create a production release, approve it or claim validation success.

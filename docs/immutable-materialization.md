@@ -1,10 +1,11 @@
 # Immutable repository materialization
 
-S12-A provides the shared repository initializer for validation and subsequent
+Immutable materialization provides the shared repository initializer for validation and
+subsequent
 release consumers. It does **not** enable production mode, approvals, the release
 reconciler or a new deployment UI. Existing interactive development deployments
-keep their current mutable S3 behavior. The validation executor (S07-B) and
-release/rollout consumers (S09-F, S10-A) must use this shared path rather
+keep their current mutable S3 behavior. The validation executor and
+release/rollout consumers must use this shared path rather
 than reproducing the old S3 sync script.
 
 ## Contract and lifecycle
@@ -57,7 +58,8 @@ initializer. Model backend execution remains the serving runtime's responsibilit
 ## Deterministic normalization
 
 `identity/v1` copies paths and bytes unchanged. Use it for already prepared
-multi-model repositories imported by S05-B. `from_import(imported, helper_image)`
+multi-model repositories created by [repository import](candidate-import.md).
+`from_import(imported, helper_image)`
 adapts an authorized versioned-S3 import receipt, excluding provenance metadata
 from the model inventory. The caller resolves the binding to
 `<import-prefix>/repository` and checks authorization independently.

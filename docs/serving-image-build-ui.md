@@ -1,7 +1,7 @@
 # Serving image builds from a task workspace
 
-Implements concept story [S06-D / #32](https://github.com/ai-lab-tech/triton-control-concepts/issues/32)
-on the S04-A task workspace and S06-C durable build contracts. API controllers delegate
+The serving image build UI uses the task workspace and durable build contracts. API
+controllers delegate
 to services; repositories own SQL; schemas perform no I/O. The extension separates
 VS Code interaction, HTTP transport and bounded filesystem snapshots.
 
@@ -82,7 +82,7 @@ as a substitute for an executor result.
 
 ## Authorization and configuration
 
-The installation must have a qualified, enabled S06 build policy and its configured
+The installation must have a qualified, enabled build policy and its configured
 storage/credentials. `/api/builds/options?task_id=...` returns only authorized repository
 names and the context byte limit, never Secret names, storage credentials or executor
 configuration. The local snapshot cap is the smaller of installation policy and 64 MiB.
@@ -97,8 +97,8 @@ retain existing task/team and operation ownership checks.
 
 Production denies these build APIs, including reads and direct workspace calls. The
 mode check uses the existing `TRITON_CONTROL_MODE` contract and does not depend on
-optional MLflow. The separately developed S01-B installation capability UI is not
-required by this branch. Administrators do not bypass development-only build policy.
+optional MLflow. The installation capability UI is not
+required by the build controls. Administrators do not bypass development-only build policy.
 
 ## Upgrade and verification
 
@@ -150,4 +150,4 @@ existing personal-workspace restart/upgrade smoke remains independent.
 
 This smoke does not build or push an image. Successful execution, progress, logs,
 retry and exact digest handling have separate unit/provider coverage; testing them
-end to end requires the qualified S06 builder, trusted registry and staging fixture.
+end to end requires the qualified builder, trusted registry and staging fixture.

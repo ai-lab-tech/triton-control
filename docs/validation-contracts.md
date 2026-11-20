@@ -1,10 +1,9 @@
-# Validation contracts v1alpha1 (S07-A)
+# Validation contracts v1alpha1
 
-[Issue #33](https://github.com/ai-lab-tech/triton-control-concepts/issues/33)
-defines what is tested and what a result means. This increment supplies schemas,
-a typed evaluator interface, deterministic identities and offline consistency
-checks. It does not execute an evaluator, create Kubernetes workloads, authenticate
-an issuer, grant release readiness or implement production mode.
+The validation contracts define what is tested and what a result means. They supply
+schemas, a typed evaluator interface, deterministic identities and offline
+consistency checks. They do not execute an evaluator, create Kubernetes workloads,
+authenticate an issuer, grant release readiness or implement production mode.
 
 ## Three documents
 
@@ -27,7 +26,7 @@ floating-point serialization. Numeric JSON values, NaN and exponent syntax are
 rejected. Ordering and exact decimal spellings are significant in v1alpha1.
 
 `StartupConfiguration.configuration` identifies the immutable serving configuration
-artifact. The S07-B runner must verify and use that artifact, the declared startup
+artifact. The validation runner must verify and use that artifact, the declared startup
 models/resources, all source bytes and the pinned evaluator; a schema cannot prove
 that these are what a workload actually ran. The measured runtime profile is reported
 by that runner. Source references contain URIs/hashes, never inline dataset contents,
@@ -41,7 +40,8 @@ credentials, commands or Python code to execute in the Control API.
 def evaluate(manifest: ValidationManifest) -> ValidationReport: ...
 ```
 
-S07-B implements this interface in an isolated owned runner. It writes the returned
+The validation runner implements this interface in an isolated owned runner. It writes
+the returned
 report using `report.model_dump_json(by_alias=True)` as `report.json`. Other-language
 evaluators use the same JSON contracts. The protocol introduces no API-process
 execution hook. Only the future authorized result-ingestion path may accept results.
@@ -82,7 +82,8 @@ checks passing report consistency, envelope/report identities, expected policy a
 evaluator tool version, supported target and validity window. The caller supplies
 its expected policy and a timezone-aware current time. This function is a necessary
 consistency check only: a forged but internally consistent envelope can still pass.
-**S07-C must authenticate the issuer, apply trusted policy and revocation checks.**
+**Evidence admission must authenticate the issuer, apply trusted policy and revocation
+checks.**
 Separate human deployment approval remains outside all three documents.
 
 Replicas are not part of the validation manifest. Both manifest and report specify
@@ -96,7 +97,8 @@ Existing reports are retained by their identities rather than relabelled as curr
 
 ## Identities and ServingRelease integration
 
-Canonical bytes follow S05-A/S08-A: sorted object keys, compact UTF-8 JSON, explicit
+Canonical bytes follow the lineage and serving metadata conventions: sorted object keys,
+compact UTF-8 JSON, explicit
 model defaults/nulls, stable array order, no floating-point values. `document_digest`
 hashes the complete normalized document. Semantically equivalent YAML/JSON documents
 have the same identity. Reference hashes for these contract documents refer to their
@@ -112,19 +114,21 @@ The dependency order is acyclic:
 5. ServingRelease hash, binding the envelope through `spec.validation`.
 6. ServingTarget hash, selecting the release.
 
-`ArtifactSubjects` is reused from S08-A. Its `validationInput` contains the **complete
+`ArtifactSubjects` is reused from serving metadata. Its `validationInput` contains the **complete
 manifest hash**, which binds dataset/evaluator/criteria/startup/hardware rather than
 only the dataset. Its optional `sourceCode` binds the declared source-code artifact.
 `check_release_binding` compares the release image, repository, startup models,
 per-replica resources, subjects and envelope digest with the validation inputs.
-It does not fetch references or verify their bytes. S07-B/S08-D retain and verify
-artifacts; S07-C handles trust. Neither manifest nor report/envelope embeds a final
+It does not fetch references or verify their bytes. Validation execution and release
+publication retain and verify
+artifacts; evidence admission handles trust. Neither manifest nor report/envelope embeds
+a final
 release hash or approval. Detached authentication can cover the completed envelope
 without introducing a self-hash.
 
 ## Offline loading and CLI
 
-The validation loader reuses the bounded S08-A JSON/YAML event parser: 1 MiB,
+The validation loader reuses the bounded serving metadata JSON/YAML event parser: 1 MiB,
 32 levels and 10000 nodes before constructing a document. Multiple documents,
 duplicate keys, unsafe tags, anchors/aliases, invalid paths/credential-bearing URIs,
 unknown versions and fields fail closed. No network access occurs. Error messages
@@ -148,7 +152,7 @@ is not an authenticated quality gate result.
 ## Fixtures, migration and downstream scope
 
 The fixtures include a complete manifest, passing/failing/unsupported reports,
-an envelope, a bound S08-A release and scale-only target variants. All artifacts,
+an envelope, a bound serving release and scale-only target variants. All artifacts,
 image descriptors, metrics, issuers and timestamps are **synthetic, non-deployable**
 test data; hashes are derived from committed bytes. No real benchmark, image digest,
 signature or approval is invented. Tests mutate inputs individually, check missing
@@ -162,11 +166,11 @@ versions need a new discriminator/schema directory; preserve original documents
 and identities, explicitly convert and revalidate. New schemas alone do not update
 running workloads or mark any release ready.
 
-This story introduces no database, concurrency, network provider or Kubernetes
-behavior, so those integration tests belong to S07-B and downstream stories. CI
-checks the new contracts, S05-A/S08-A compatibility and packaged-wheel CLI outside
-the checkout. The production executor, trusted evidence admission and security gates
-remain separate future work (#34–#36 and the deferred production stories).
+These contracts introduce no database, concurrency, network provider or Kubernetes
+behavior. Tests for those behaviors belong to validation execution and its consumers.
+CI checks contract compatibility with lineage and serving metadata, and tests the
+packaged-wheel CLI outside the checkout. Production execution, trusted evidence
+admission and security gates remain separate integration work.
 
 ## Implementation verification
 

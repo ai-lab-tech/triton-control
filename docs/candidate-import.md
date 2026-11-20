@@ -1,7 +1,7 @@
 # Prepared Triton repository import
 
-S05-B adds a neutral backend service for turning an already prepared Triton
-repository into a captured, inventoried candidate. It uses S05-A's version-one
+The repository import service turns an already prepared Triton repository into
+a captured, inventoried candidate. It uses the version-one lineage
 identity contracts and does not require MLflow, a generator or a running Triton
 server. It never converts weights, rewrites configuration or executes model code.
 Structural import success is not a correctness/performance result or production
@@ -107,7 +107,7 @@ unless they are the reserved metadata sidecars below. Build hints are not execut
 
 Each model artifact gets a normalized relative path, measured byte size and SHA-256
 hash. The overall inventory uses the existing canonical UTF-8 sorting/hash rules
-from S05-A. Unchanged copies have identical inventories; changed weights,
+from the lineage contract. Unchanged copies have identical inventories; changed weights,
 configuration or dependencies change the inventory. Source bytes are never altered.
 
 Root `lineage.json`, `inventory.json`, `receipt.json`, `import-receipt.json`,
@@ -127,7 +127,7 @@ separate relationships; production release replacement is not an import relation
 
 ## Storage and completeness
 
-PostgreSQL `serving_candidates` retains the canonical S05-A envelope and referenced
+PostgreSQL `serving_candidates` retains the canonical lineage envelope and referenced
 inventories. The new insert-only `candidate_imports` table retains the candidate
 and import digests, full result, source transport receipt, storage references,
 actor/task and creation time. `result.inventory` contains the per-file checksums;
@@ -160,7 +160,7 @@ new import origin; an existing immutable receipt is not silently updated.
 
 Every use resolves the current active DB account. Standalone import requires admin
 or current installation engineering eligibility. The installation engineering
-group must already be initialized through S02-A. A task-linked import additionally
+group must already be initialized through User Management. A task-linked import additionally
 requires the current assignee (or admin), a non-cancelled task and its current
 expected revision. Task membership does not grant access to its underlying source.
 Reads of standalone captures require their owner or admin; task-linked reads
