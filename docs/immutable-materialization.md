@@ -4,7 +4,7 @@ S12-A provides the shared repository initializer for validation and subsequent
 release consumers. It does **not** enable production mode, approvals, the release
 reconciler or a new deployment UI. Existing interactive development deployments
 keep their current mutable S3 behavior. The validation executor (S07-B) and
-release/rollout consumers (S09-F, S10-A, S12-B) must use this shared path rather
+release/rollout consumers (S09-F, S10-A) must use this shared path rather
 than reproducing the old S3 sync script.
 
 ## Contract and lifecycle
@@ -120,7 +120,7 @@ are sorted by path, consistent with the existing neutral-import identity rules.
 
 `app.services.materialization.kubernetes.manifests(release, plan, policy, binding,
 name=..., namespace=..., limits=...)` renders an immutable plan ConfigMap and a Pod.
-ConfigMap names include a hash of the full workload name, plan and limits. Long
+ConfigMap names bind the workload name, canonical release, plan receipt and limits. Long
 names and changed plans do not collide with existing immutable ConfigMaps. It binds
 the release's source/prepared inventory and helper identity to the plan and
 requires matching qualification for the chosen Linux architecture. Both validation
@@ -134,11 +134,9 @@ S3 sidecar, shell entrypoint or runtime package installer. Dependencies belong i
 the qualified serving image. The Pod uses a non-root UID, dropped capabilities,
 read-only root filesystem and a separate writable temporary volume.
 
-This renderer does not authorize a release, fetch or approve evidence, select
-per-model startup versions, provide rollout orchestration, or establish serving
-readiness. Those remain downstream contracts. Consumers must authorize the target
-and storage binding, verify validation/security subjects, provide image pull access
-where required, and apply their separately qualified readiness/rollout behavior.
+The renderer derives per-pod readiness expectations from the release. Consumers
+must authorize the target and storage binding, verify validation/security subjects,
+provide image pull access where required, and orchestrate rollout and rollback.
 The qualification record is administrator-provisioned configuration, never a
 self-approval supplied by an untrusted release author.
 
@@ -179,7 +177,7 @@ probe replaces Triton to test byte/layout equality and an actual `EROFS` write
 failure; **it does not claim inference correctness or model readiness**. Separate
 MinIO integration tests exercise genuine S3 version retention and the neutral
 import adapter. Qualification output is emitted only when all required tests
-pass with none skipped. Fixture revision `materializer-qualification/v2` requires
+pass with none skipped. Fixture revision `materializer-qualification/v3` requires
 renewed qualification; older records are rejected. The report's canonical JSON digest is referenced by
 `qualification.json`; keep both in an immutable evidence store and review them
 before provisioning the policy. Changes to image, architecture, transform version
@@ -193,8 +191,27 @@ approval. Requalify your retained registry image before use. The real S3 tests
 run in the existing isolated PostgreSQL/MinIO job; no new application database
 tables or upgrade migrations are introduced.
 
-## Remaining integration work
+## Release pod readiness
 
-This change supplies the shared primitive. S07-B and S12-B still need to wire it
-into validation and production execution. The corresponding end-to-end acceptance
-criterion in concept issue #55 remains open until both consumers are integrated.
+The immutable pod renderer installs the same qualified, digest-pinned image as a
+readiness sidecar. Its exec probe compares the mounted receipt with the expected
+receipt for the release plan, then issues HTTP requests to port 8000 on the
+pod's loopback interface. Live, server-ready and each exact model/version in
+the release must return HTTP 200. Endpoint redirects fail the check. Keep every
+required version enabled in the prepared repository's Triton version policy.
+The probe consumes that repository read-only and never rewrites its config.
+
+The startup probe gives Triton up to 30 minutes to report live. After startup,
+six consecutive liveness failures at ten-second intervals trigger a restart.
+Server readiness and the sidecar check run every five seconds. A single failure
+removes readiness while Triton continues loading. The exec probe allows five
+seconds plus one second per expected version for the full sweep, with a two-second
+socket timeout. Pod annotations expose the canonical release and prepared inventory
+digests. GPU requests and limits stay on the Triton container.
+
+Before upgrading, requalify the helper image on each target platform with
+`scripts/qualify_materializer.py`. Revision v3 adds Kubernetes evidence for a
+slow-loading replica, an independently missing model version, a mismatched
+receipt and a pod that exceeds available GPU capacity. The HTTP fixture tests
+the Triton protocol and scheduler behavior; actual inference and model accuracy
+require release-specific validation.

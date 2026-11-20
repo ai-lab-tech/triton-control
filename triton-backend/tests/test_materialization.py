@@ -322,9 +322,34 @@ class MaterializerPodTests(unittest.TestCase):
         self.assertNotIn("env", runtime)
         self.assertTrue(runtime["volumeMounts"][0]["readOnly"])
         self.assertFalse(spec["automountServiceAccountToken"])
-        self.assertEqual(len(spec["containers"]), 1)
+        self.assertEqual(spec["containers"][1]["image"], IMAGE)
+        self.assertNotIn("env", spec["containers"][1])
         self.assertNotIn("pip install", json.dumps(docs))
         self.assertNotIn("repository-poll", json.dumps(docs))
+
+    def test_new_release_on_same_plan_gets_distinct_immutable_readiness_expectations(self):
+        from app.schemas.serving_metadata import StartupModel
+        from app.services.materialization.runtime import receipt_for
+
+        release = self.release()
+        spec = release.spec.model_copy(update={"models": (StartupModel(name="iris", versions=("1", "2")),)})
+        binding = StorageBinding(bucket="models", prefix="repository", secret_name="read-only-models")
+        config, pod = manifests(
+            release.model_copy(update={"spec": spec}),
+            plan(),
+            policy(),
+            binding,
+            name="iris",
+            namespace="test",
+            limits=LIMITS,
+        )
+        original, _ = manifests(release, plan(), policy(), binding, name="iris", namespace="test", limits=LIMITS)
+        expected = json.loads(config["data"]["readiness.json"])
+        self.assertTrue(config["immutable"])
+        self.assertNotEqual(original["metadata"]["name"], config["metadata"]["name"])
+        self.assertEqual(expected["models"], [{"name": "iris", "versions": ["1", "2"]}])
+        self.assertEqual(expected["receipt"], receipt_for(plan()).model_dump(mode="json"))
+        self.assertEqual(expected["release"], pod["metadata"]["annotations"]["triton-control/release-digest"])
 
     def test_qualification_subject_mismatch_is_rejected(self):
         for field in ("image", "platform"):
