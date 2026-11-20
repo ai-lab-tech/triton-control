@@ -1,16 +1,14 @@
 import { Component, DestroyRef, inject, input, OnInit, signal } from "@angular/core";
-import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
 import { firstValueFrom } from "rxjs";
-import { BASE_PATH } from "../../api/generated";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { InstallationService } from "../../shared/installation/installation.service";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import { HandoffsApiService, SourceProfile } from "../handoffs/handoffs-api.service";
 import { Instance } from "../instances/instances.data";
-import { InstancePods } from "../instances/detail/workload.types";
+import { SnapshotCaptureService } from "./snapshot-capture.service";
 import {
   CaptureOperation,
   PreparationApiService,
@@ -22,6 +20,7 @@ import {
   standalone: true,
   imports: [FormsModule, RouterLink, MatButtonModule],
   styleUrl: "./preparation.scss",
+  styles: ["fieldset { border: 0; margin: 0; padding: 0; }"],
   template: `
     @if (allowed()) {
       <button mat-stroked-button (click)="begin()">Prepare for production</button>
@@ -58,53 +57,58 @@ import {
             </button>
           } @else {
             <form (ngSubmit)="submit()">
-              <label
-                >Task title<input name="title" [(ngModel)]="title" maxlength="200" required
-              /></label>
-              <label
-                >Models and versions (one model:version per line)<textarea
-                  name="models"
-                  [(ngModel)]="models"
-                  required
-                  placeholder="iris:1"
-                ></textarea>
-              </label>
-              <p>
-                Leave repository fields empty for a managed Kubernetes experiment. External
-                endpoints require an explicit S3 profile and repository prefix.
-              </p>
-              <label
-                >Source repository profile
-                <select name="profile" [(ngModel)]="profileId">
-                  <option [ngValue]="null">Use managed experiment repository</option>
-                  @for (profile of profiles(); track profile.id) {
-                    <option [ngValue]="profile.id">
-                      {{ profile.name }} · {{ profile.bucket }}
-                    </option>
-                  }
-                </select>
-              </label>
-              <label>Repository prefix<input name="prefix" [(ngModel)]="prefix" /></label>
-              <label
-                >Expected behavior<textarea
-                  name="behavior"
-                  [(ngModel)]="behavior"
-                  maxlength="8000"
-                ></textarea>
-              </label>
-              <label
-                >Acceptance criteria<textarea
-                  name="criteria"
-                  [(ngModel)]="criteria"
-                  maxlength="8000"
-                ></textarea>
-              </label>
-              <p>
-                Missing evaluation evidence and unknown runtime changes remain visible as task
-                blockers.
-              </p>
+              @if (pending()) {
+                <p>Retry the saved selection to recover the original capture request.</p>
+              }
+              <fieldset [disabled]="busy() || pending()">
+                <label
+                  >Task title<input name="title" [(ngModel)]="title" maxlength="200" required
+                /></label>
+                <label
+                  >Models and versions (one model:version per line)<textarea
+                    name="models"
+                    [(ngModel)]="models"
+                    required
+                    placeholder="iris:1"
+                  ></textarea>
+                </label>
+                <p>
+                  Leave repository fields empty for a managed Kubernetes experiment. External
+                  endpoints require an explicit S3 profile and repository prefix.
+                </p>
+                <label
+                  >Source repository profile
+                  <select name="profile" [(ngModel)]="profileId">
+                    <option [ngValue]="null">Use managed experiment repository</option>
+                    @for (profile of profiles(); track profile.id) {
+                      <option [ngValue]="profile.id">
+                        {{ profile.name }} · {{ profile.bucket }}
+                      </option>
+                    }
+                  </select>
+                </label>
+                <label>Repository prefix<input name="prefix" [(ngModel)]="prefix" /></label>
+                <label
+                  >Expected behavior<textarea
+                    name="behavior"
+                    [(ngModel)]="behavior"
+                    maxlength="8000"
+                  ></textarea>
+                </label>
+                <label
+                  >Acceptance criteria<textarea
+                    name="criteria"
+                    [(ngModel)]="criteria"
+                    maxlength="8000"
+                  ></textarea>
+                </label>
+                <p>
+                  Missing evaluation evidence and unknown runtime changes remain visible as task
+                  blockers.
+                </p>
+              </fieldset>
               <button mat-stroked-button type="submit" [disabled]="busy() || !valid()">
-                Capture snapshot
+                {{ pending() ? "Retry capture request" : "Capture snapshot" }}
               </button>
             </form>
           }
@@ -119,8 +123,7 @@ export class ExperimentPreparationComponent implements OnInit {
   private readonly api = inject(PreparationApiService);
   private readonly handoffs = inject(HandoffsApiService);
   readonly profiles = signal<SourceProfile[]>([]);
-  private readonly http = inject(HttpClient);
-  private readonly base = `${inject(BASE_PATH, { optional: true }) ?? ""}`.replace(/\/$/, "");
+  private readonly captures = inject(SnapshotCaptureService);
   private readonly auth = inject(AuthStore);
   private readonly installation = inject(InstallationService);
   private readonly router = inject(Router);
@@ -128,7 +131,7 @@ export class ExperimentPreparationComponent implements OnInit {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private generation = 0;
   private destroyed = false;
-  private memoryKey: { payload: string; key: string } | null = null;
+  readonly pending = signal(false);
   readonly expanded = signal(false);
   readonly busy = signal(false);
   readonly error = signal("");
@@ -148,10 +151,25 @@ export class ExperimentPreparationComponent implements OnInit {
   }
   ngOnInit() {
     this.title = `Prepare ${this.instance().name}`;
-    const selected = new Map<string, string>();
-    for (const model of this.instance().repositoryModels)
-      if (model.version) selected.set(model.name, model.version);
-    this.models = [...selected].map(([name, version]) => `${name}:${version}`).join("\n");
+    this.models = [
+      ...new Set(
+        this.instance()
+          .repositoryModels.filter((model) => model.version)
+          .map((model) => `${model.name}:${model.version}`),
+      ),
+    ].join("\n");
+    const saved = this.captures.request(this.storageKey());
+    if (saved) {
+      this.title = saved.title;
+      this.models = saved.models
+        .flatMap((model) => model.versions.map((version) => `${model.name}:${version}`))
+        .join("\n");
+      this.profileId = saved.repository?.profile_id ?? null;
+      this.prefix = saved.repository?.prefix ?? "";
+      this.behavior = saved.expected_behavior ?? "";
+      this.criteria = saved.acceptance_criteria ?? "";
+      this.pending.set(true);
+    }
     const capture = this.route.snapshot.queryParamMap.get("snapshotCapture");
     if (capture && this.allowed()) {
       this.expanded.set(true);
@@ -182,15 +200,17 @@ export class ExperimentPreparationComponent implements OnInit {
     return typeof id === "string" ? id : null;
   }
   private selectedModels() {
-    return this.models
-      .trim()
-      .split(/\n/)
-      .map((line) => {
-        const [name, version] = line.trim().split(":");
-        return { name, versions: [version] };
-      });
+    const selected = new Map<string, Set<string>>();
+    for (const line of this.models.trim().split(/\n/)) {
+      const [name, version] = line.trim().split(":");
+      const versions = selected.get(name) ?? new Set<string>();
+      versions.add(version);
+      selected.set(name, versions);
+    }
+    return [...selected].map(([name, versions]) => ({ name, versions: [...versions] }));
   }
   valid() {
+    if (this.pending()) return true;
     const models = this.selectedModels();
     const repositoryValid =
       this.profileId !== null &&
@@ -206,30 +226,13 @@ export class ExperimentPreparationComponent implements OnInit {
       this.models
         .trim()
         .split(/\n/)
-        .every((line) => /^[^:\s]+:[1-9][0-9]*$/.test(line.trim())) &&
-      new Set(models.map((model) => model.name)).size === models.length &&
+        .every((line) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]{0,18}$/.test(line.trim())) &&
+      models.every((model) => model.versions.length <= 100) &&
       (repositoryValid || (managed && this.profileId === null && !this.prefix.trim()))
     );
   }
   private storageKey() {
     return `preparation-capture:${this.auth.userEmail()}:${this.instance().id}`;
-  }
-  private idempotencyKey(payload: string) {
-    let saved = this.memoryKey;
-    try {
-      saved = JSON.parse(sessionStorage.getItem(this.storageKey()) || "null");
-    } catch {
-      /* Memory retains retries when storage is unavailable. */
-    }
-    if (!saved || saved.payload !== payload || typeof saved.key !== "string")
-      saved = { payload, key: crypto.randomUUID() };
-    this.memoryKey = saved;
-    try {
-      sessionStorage.setItem(this.storageKey(), JSON.stringify(saved));
-    } catch {
-      /* Current-page retry remains idempotent. */
-    }
-    return saved.key;
   }
   async submit() {
     if (!this.allowed() || !this.valid() || this.busy() || this.operation()) return;
@@ -245,22 +248,7 @@ export class ExperimentPreparationComponent implements OnInit {
       };
       if (this.profileId !== null)
         request.repository = { profile_id: this.profileId, prefix: this.prefix.trim() };
-      if (instance.isSelfDeployed && instance.deploymentRuntime === "kubernetes") {
-        const pods = await firstValueFrom(
-          this.http.get<InstancePods>(
-            `${this.base}/api/instances/${encodeURIComponent(instance.id)}/pods`,
-          ),
-        );
-        if (!pods.managed || !pods.deployment || pods.deployment.stale)
-          throw new Error(
-            "Fresh deployment identity is required. Refresh the experiment and retry.",
-          );
-        request.deployment_uid = pods.deployment.uid;
-        request.expected_generation = pods.deployment.generation;
-      }
-      const accepted = await firstValueFrom(
-        this.api.capture(instance.id, request, this.idempotencyKey(JSON.stringify(request))),
-      );
+      const accepted = await this.captures.submit(this.storageKey(), instance, request);
       if (this.destroyed) return;
       await this.router.navigate([], {
         relativeTo: this.route,
@@ -280,6 +268,7 @@ export class ExperimentPreparationComponent implements OnInit {
               ),
         );
     } finally {
+      this.pending.set(this.captures.request(this.storageKey()) !== null);
       this.busy.set(false);
     }
   }
@@ -330,12 +319,8 @@ export class ExperimentPreparationComponent implements OnInit {
     ++this.generation;
     clearTimeout(this.timer);
     this.operation.set(null);
-    this.memoryKey = null;
-    try {
-      sessionStorage.removeItem(this.storageKey());
-    } catch {
-      /* Memory key was cleared. */
-    }
+    this.captures.clear(this.storageKey());
+    this.pending.set(false);
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { snapshotCapture: null },

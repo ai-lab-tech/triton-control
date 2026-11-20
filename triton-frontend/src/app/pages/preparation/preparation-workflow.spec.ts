@@ -188,6 +188,12 @@ describe("Engineering preparation workflow", () => {
       "These records do not establish production validation or deployment approval.",
     );
     expect(text).not.toContain("Open task workspace");
+    fixture.destroy();
+  });
+  it("loads build history without changing task status", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(PreparationDetailComponent);
+    await finishDetailLoad(entry);
     // Act
     const pending = fixture.componentInstance.loadBuilds();
     http.expectOne("/api/builds?task_id=task-1&limit=50&offset=0").flush([
@@ -206,6 +212,7 @@ describe("Engineering preparation workflow", () => {
     expect(fixture.nativeElement.textContent).toContain("Attempt 1: failed");
     expect(fixture.nativeElement.textContent).toContain("Attempt 2: succeeded");
     expect(fixture.componentInstance.entry()?.task.state).toBe("queued");
+    fixture.destroy();
   });
   it("does not offer task mutations to a read-only submitter", async () => {
     // Arrange
@@ -505,6 +512,205 @@ describe("Engineering preparation workflow", () => {
       operation: { ...operation, state: "succeeded", result: { task_id: "task-1" } },
     });
     await pending;
+    fixture.destroy();
+  });
+
+  it("replays the original managed request without observing a later rollout", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    fixture.componentRef.setInput("instance", {
+      ...instance,
+      isSelfDeployed: true,
+      deploymentRuntime: "kubernetes",
+    });
+    page.profileId = null;
+    page.prefix = "";
+    let pending = page.submit();
+    http
+      .expectOne("/api/instances/7/pods")
+      .flush({ managed: true, deployment: { uid: "original", generation: 3, stale: false } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const first = http.expectOne("/api/instances/7/preparation-requests");
+    const key = first.request.headers.get("Idempotency-Key");
+    const body = first.request.body;
+    first.flush({}, { status: 502, statusText: "Lost response" });
+    await pending;
+    // Act
+    pending = page.submit();
+    const retry = http.expectOne("/api/instances/7/preparation-requests");
+    const retryKey = retry.request.headers.get("Idempotency-Key");
+    const retryBody = retry.request.body;
+    retry.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    fixture.destroy();
+    // Assert
+    http.expectNone("/api/instances/7/pods");
+    expect(retryKey).toBe(key);
+    expect(retryBody).toEqual(body);
+    expect(retryBody.expected_generation).toBe(3);
+  });
+  it("retains the memory request when session storage writes fail", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    spyOn(Storage.prototype, "setItem").and.throwError("QuotaExceededError");
+    let pending = page.submit();
+    const first = http.expectOne("/api/instances/7/preparation-requests");
+    const key = first.request.headers.get("Idempotency-Key");
+    first.flush({}, { status: 502, statusText: "Lost response" });
+    await pending;
+    // Act
+    pending = page.submit();
+    const retry = http.expectOne("/api/instances/7/preparation-requests");
+    const retryKey = retry.request.headers.get("Idempotency-Key");
+    retry.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    fixture.destroy();
+    // Assert
+    expect(retryKey).toBe(key);
+  });
+  it("restores the saved request after reload instead of the current instance defaults", async () => {
+    // Arrange
+    const saved = {
+      title: "Original selection",
+      models: [{ name: "iris", versions: ["1", "2"] }],
+      repository: { profile_id: 9, prefix: "original" },
+      expected_behavior: "Original behavior",
+      acceptance_criteria: null,
+      deployment_uid: "before-rollout",
+      expected_generation: 3,
+    };
+    sessionStorage.setItem(
+      "preparation-capture:engineer@example.test:7",
+      JSON.stringify({ key: "original-key", payload: JSON.stringify(saved) }),
+    );
+    const fixture = TestBed.createComponent(ExperimentPreparationComponent);
+    fixture.componentRef.setInput("instance", {
+      ...instance,
+      isSelfDeployed: true,
+      deploymentRuntime: "kubernetes",
+    });
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    fixture.detectChanges();
+    const page = fixture.componentInstance;
+    // Act
+    const pending = page.submit();
+    const request = http.expectOne("/api/instances/7/preparation-requests");
+    const body = request.request.body;
+    const key = request.request.headers.get("Idempotency-Key");
+    request.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    // Assert
+    expect(page.title).toBe(saved.title);
+    expect(page.models).toBe("iris:1\niris:2");
+    expect(body).toEqual(saved);
+    expect(key).toBe("original-key");
+    http.expectNone("/api/instances/7/pods");
+    fixture.destroy();
+  });
+  it("groups and deduplicates versions without dropping other models", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    page.models = "iris:1\niris:2\niris:1\nother:3";
+    // Act
+    const pending = page.submit();
+    const request = http.expectOne("/api/instances/7/preparation-requests");
+    const models = request.request.body.models;
+    request.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    // Assert
+    expect(models).toEqual([
+      { name: "iris", versions: ["1", "2"] },
+      { name: "other", versions: ["3"] },
+    ]);
+    fixture.destroy();
+  });
+  it("prefills every observed model version", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(ExperimentPreparationComponent);
+    fixture.componentRef.setInput("instance", {
+      ...instance,
+      repositoryModels: [
+        { name: "iris", version: "1" },
+        { name: "iris", version: "2" },
+        { name: "iris", version: "1" },
+      ],
+    });
+    // Act
+    fixture.detectChanges();
+    // Assert
+    expect(fixture.componentInstance.models).toBe("iris:1\niris:2");
+    fixture.destroy();
+  });
+  it("does not revive a completed request when storage removal fails", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    let pending = page.submit();
+    const first = http.expectOne("/api/instances/7/preparation-requests");
+    const key = first.request.headers.get("Idempotency-Key");
+    first.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    spyOn(Storage.prototype, "removeItem").and.throwError("Storage unavailable");
+    // Act
+    page.newCapture();
+    pending = page.submit();
+    const next = http.expectOne("/api/instances/7/preparation-requests");
+    const nextKey = next.request.headers.get("Idempotency-Key");
+    next.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    // Assert
+    expect(nextKey).not.toBe(key);
+    fixture.destroy();
+  });
+
+  it("allows correcting an initial admission rejection", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    let pending = page.submit();
+    const first = http.expectOne("/api/instances/7/preparation-requests");
+    const firstKey = first.request.headers.get("Idempotency-Key");
+    first.flush({ detail: "Invalid repository" }, { status: 400, statusText: "Bad Request" });
+    await pending;
+    page.prefix = "corrected";
+    // Act
+    pending = page.submit();
+    const corrected = http.expectOne("/api/instances/7/preparation-requests");
+    const key = corrected.request.headers.get("Idempotency-Key");
+    const prefix = corrected.request.body.repository.prefix;
+    corrected.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    // Assert
+    expect(key).not.toBe(firstKey);
+    expect(prefix).toBe("corrected");
+    fixture.destroy();
+  });
+  it("retains an uncertain request through a later authorization rejection", async () => {
+    // Arrange
+    const fixture = captureFixture();
+    const page = fixture.componentInstance;
+    let pending = page.submit();
+    const first = http.expectOne("/api/instances/7/preparation-requests");
+    const key = first.request.headers.get("Idempotency-Key");
+    first.flush({}, { status: 502, statusText: "Lost response" });
+    await pending;
+    // Act
+    pending = page.submit();
+    http
+      .expectOne("/api/instances/7/preparation-requests")
+      .flush({}, { status: 403, statusText: "Forbidden" });
+    await pending;
+    pending = page.submit();
+    const recovered = http.expectOne("/api/instances/7/preparation-requests");
+    const recoveredKey = recovered.request.headers.get("Idempotency-Key");
+    recovered.flush({ operation: { ...operation, state: "cancelled" } });
+    await pending;
+    // Assert
+    expect(recoveredKey).toBe(key);
     fixture.destroy();
   });
 });
