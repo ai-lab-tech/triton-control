@@ -1,10 +1,11 @@
 """Versioned experiment-capture requests and immutable receipts; no I/O."""
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing_extensions import Self
 
 from app.schemas.candidate_import import ArtifactLocation
 from app.schemas.lineage import Digest, FileEntry, InventoryV1, Origin, Snapshot

@@ -1,9 +1,10 @@
 """Version one tool-independent provenance contracts. No I/O."""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 from unicodedata import normalize
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing_extensions import Self
 
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 Identity = Annotated[str, Field(min_length=1, max_length=256)]

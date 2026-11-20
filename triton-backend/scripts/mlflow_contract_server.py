@@ -46,6 +46,23 @@ class FixtureS3Client:
         return {"Body": path.open("rb")}
 
 
+def record_applied_deployment(
+    applied: list[dict[str, Any]], instance_id: int, request: Any, session: Any,
+) -> None:
+    """Publish a complete fixture record for concurrent readiness requests."""
+    from app.db.entities import TritonInstanceEntity
+
+    record = {
+        key: getattr(request, key)
+        for key in ("model_uri", "model_name", "requirements_txt", "image", "model_control_mode")
+    }
+    row = session.get(TritonInstanceEntity, instance_id)
+    assert row is not None
+    record["inference_examples"] = row.inference_examples
+    record["url"] = row.url
+    applied.append(record)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--connection-file", type=Path, required=True)
@@ -66,7 +83,7 @@ def main() -> None:
         from app.core.crypto import encrypt_secret
         from app.core.user_auth import issue_access_token
         from app.db.database import engine
-        from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
+        from app.db.entities import S3ProfileEntity, UserEntity
         from app.schemas.deployment import CreateDeploymentRequest
         from app.services.deployment import deployment, examples, kubernetes, mlflow
         from app.services.deployment import operations as durable
@@ -120,23 +137,8 @@ def main() -> None:
         applied: list[dict[str, Any]] = []
 
         def record_apply(_instance_id: int, request: CreateDeploymentRequest, *_args: str) -> None:
-            applied.append(
-                {
-                    key: getattr(request, key)
-                    for key in (
-                        "model_uri",
-                        "model_name",
-                        "requirements_txt",
-                        "image",
-                        "model_control_mode",
-                    )
-                }
-            )
             with Session(engine) as session:
-                row = session.get(TritonInstanceEntity, _instance_id)
-                assert row is not None
-                applied[-1]["inference_examples"] = row.inference_examples
-                applied[-1]["url"] = row.url
+                record_applied_deployment(applied, _instance_id, request, session)
 
         class ReadyTriton:
             def __init__(self, url: str, *_args: object, **_kwargs: object) -> None:

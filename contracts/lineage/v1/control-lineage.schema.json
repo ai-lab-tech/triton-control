@@ -1,0 +1,375 @@
+{
+  "$defs": {
+    "EngineeringAttempt": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "operation": {
+          "enum": [
+            "packaging",
+            "conversion",
+            "optimization",
+            "validation"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "input_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Inventory",
+          "type": "string"
+        },
+        "output_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Inventory",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "origin",
+        "operation",
+        "input_inventory",
+        "output_inventory"
+      ],
+      "title": "EngineeringAttempt",
+      "type": "object"
+    },
+    "MlflowReference": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "requested_uri": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Requested Uri",
+          "type": "string"
+        },
+        "model_uri": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Model Uri",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "training_run_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Training Run Id"
+        },
+        "registry_name": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registry Name"
+        },
+        "registry_version": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registry Version"
+        },
+        "candidate_origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "installation_id",
+        "requested_uri",
+        "model_uri"
+      ],
+      "title": "MlflowReference",
+      "type": "object"
+    },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installation_id",
+        "record_id"
+      ],
+      "title": "Origin",
+      "type": "object"
+    },
+    "PluginReference": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": [
+            "mlflow",
+            "hf",
+            "generator"
+          ],
+          "title": "Provider",
+          "type": "string"
+        },
+        "installation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "installation_id",
+        "record_id"
+      ],
+      "title": "PluginReference",
+      "type": "object"
+    },
+    "ServingCandidateV1": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "derived_from_snapshot": {
+          "$ref": "#/$defs/Snapshot"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/EngineeringAttempt"
+          },
+          "minItems": 1,
+          "title": "Attempts",
+          "type": "array"
+        },
+        "output_inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Inventory",
+          "type": "string"
+        },
+        "previous_serving_candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "plugin_references": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginReference"
+          },
+          "title": "Plugin References",
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "derived_from_snapshot",
+        "attempts",
+        "output_inventory"
+      ],
+      "title": "ServingCandidateV1",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "kind": {
+          "enum": [
+            "manual",
+            "git",
+            "hf",
+            "mlflow"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "inventory": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Inventory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "kind",
+        "inventory"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "provider": {
+      "const": "mlflow",
+      "default": "mlflow",
+      "title": "Provider",
+      "type": "string"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MlflowReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "candidate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServingCandidateV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "previous_serving_model": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MlflowReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "conversion_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conversion Run Id"
+    },
+    "lineage_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lineage Digest"
+    }
+  },
+  "required": [
+    "origin"
+  ],
+  "title": "ControlLineage",
+  "type": "object"
+}

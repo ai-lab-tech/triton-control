@@ -8423,6 +8423,86 @@
         ],
         "title": "ContextManifest"
       },
+      "ControlLineage": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "provider": {
+            "type": "string",
+            "const": "mlflow",
+            "title": "Provider",
+            "default": "mlflow"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MlflowReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServingCandidateV1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous_serving_model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MlflowReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conversion_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversion Run Id"
+          },
+          "lineage_digest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lineage Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin"
+        ],
+        "title": "ControlLineage"
+      },
       "CreateCodeServerRequest": {
         "properties": {
           "name": {
@@ -8685,6 +8765,16 @@
               }
             ],
             "title": "Model Uri"
+          },
+          "lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControlLineage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "s3_region": {
             "type": "string",
@@ -9471,6 +9561,16 @@
       },
       "DeploymentResponse": {
         "properties": {
+          "lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControlLineage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "instance_id": {
             "type": "integer",
             "title": "Instance Id"
@@ -10370,6 +10470,16 @@
             ],
             "title": "Source"
           },
+          "lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControlLineage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dataset": {
             "anyOf": [
               {
@@ -10994,6 +11104,98 @@
         "title": "MlflowInstallResponse",
         "description": "Response after MLflow Kubernetes resources are applied."
       },
+      "MlflowReference": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Installation Id"
+          },
+          "requested_uri": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Requested Uri"
+          },
+          "model_uri": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Model Uri"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "training_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Run Id"
+          },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Name"
+          },
+          "registry_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Version"
+          },
+          "candidate_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installation_id",
+          "requested_uri",
+          "model_uri"
+        ],
+        "title": "MlflowReference"
+      },
       "MlflowStatusResponse": {
         "properties": {
           "installed": {
@@ -11586,6 +11788,39 @@
         ],
         "title": "PerfAnalyzerLatestRunResponse",
         "description": "Persisted latest Perf Analyzer result for one instance model target."
+      },
+      "PluginReference": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mlflow",
+              "hf",
+              "generator"
+            ],
+            "title": "Provider"
+          },
+          "installation_id": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Installation Id"
+          },
+          "record_id": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Record Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "installation_id",
+          "record_id"
+        ],
+        "title": "PluginReference"
       },
       "PodCondition": {
         "properties": {
@@ -13186,6 +13421,62 @@
           "password"
         ],
         "title": "SelfRegisterRequest"
+      },
+      "ServingCandidateV1": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schema Version",
+            "default": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "derived_from_snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/EngineeringAttempt"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Attempts"
+          },
+          "output_inventory": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Output Inventory"
+          },
+          "previous_serving_candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plugin_references": {
+            "items": {
+              "$ref": "#/components/schemas/PluginReference"
+            },
+            "type": "array",
+            "title": "Plugin References",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "origin",
+          "derived_from_snapshot",
+          "attempts",
+          "output_inventory"
+        ],
+        "title": "ServingCandidateV1"
       },
       "ServingRelease": {
         "properties": {

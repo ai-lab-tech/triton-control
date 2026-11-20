@@ -10,6 +10,7 @@ import {
   Frame,
   APIResponse,
 } from "@playwright/test";
+import { workspaceStatus } from "./workspace-status";
 
 const namespace = "plugin-smoke";
 const phase = process.env.PLUGIN_SMOKE_PHASE || "baseline";
@@ -544,8 +545,7 @@ test.describe.serial("code-server plugin workflows", () => {
         async () => {
           const uid = probe(() => kubectl("get", "pod", pod, "-o", "jsonpath={.metadata.uid}"));
           if (!uid || uid === oldUid) return "restarting";
-          const response = await context.request.get(`/api/development/${workspaceId}`);
-          return (await response.json()).status;
+          return workspaceStatus(context.request, workspaceId);
         },
         { timeout: 540_000, intervals: [3000] },
       )

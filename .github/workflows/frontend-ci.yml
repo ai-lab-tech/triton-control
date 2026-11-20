@@ -75,6 +75,9 @@ jobs:
       - name: Test API generator download retries
         run: node --test scripts/download-with-retry.test.mjs
 
+      - name: Test workspace readiness request retries
+        run: npx playwright test -c e2e/code-server/playwright.config.ts workspace-status.spec.ts
+
       - name: Generate API client
         run: npm run generate:api
 

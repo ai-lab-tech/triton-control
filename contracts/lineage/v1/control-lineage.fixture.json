@@ -1,0 +1,177 @@
+{
+  "manifest": {
+    "schema_version": 1,
+    "candidate": {
+      "schema_version": 1,
+      "origin": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-1"
+      },
+      "derived_from_snapshot": {
+        "origin": {
+          "installation_id": "training-lab",
+          "record_id": "models:/m-source"
+        },
+        "kind": "mlflow",
+        "inventory": "sha256:f9e79e8b7937aef83732361cf674daf18f0a06a10708ddf9f73c2397d953f031"
+      },
+      "attempts": [
+        {
+          "origin": {
+            "installation_id": "serving-lab",
+            "record_id": "convert-1"
+          },
+          "operation": "conversion",
+          "input_inventory": "sha256:f9e79e8b7937aef83732361cf674daf18f0a06a10708ddf9f73c2397d953f031",
+          "output_inventory": "sha256:e4f403e7f17e4bf0ea5d0ef7d7eb52694bccd9a7a34ae44ab3e37d9b560406e2",
+          "tool": null
+        }
+      ],
+      "output_inventory": "sha256:e4f403e7f17e4bf0ea5d0ef7d7eb52694bccd9a7a34ae44ab3e37d9b560406e2",
+      "previous_serving_candidate": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-previous"
+      },
+      "plugin_references": [
+        {
+          "provider": "mlflow",
+          "installation_id": "training-lab",
+          "record_id": "models:/m-source"
+        }
+      ]
+    },
+    "source": {
+      "installation_id": "training-lab",
+      "requested_uri": "models:/source@ready",
+      "model_uri": "models:/m-source",
+      "model_id": "m-source",
+      "training_run_id": "train-1",
+      "registry_name": "source",
+      "registry_version": "3",
+      "candidate_origin": null
+    },
+    "previous_serving_model": {
+      "installation_id": "serving-lab",
+      "requested_uri": "models:/serving/1",
+      "model_uri": "models:/m-previous",
+      "model_id": "m-previous",
+      "training_run_id": "train-1",
+      "registry_name": "source",
+      "registry_version": "3",
+      "candidate_origin": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-previous"
+      }
+    },
+    "conversion_run_id": "convert-1",
+    "backend": "onnxruntime",
+    "precision": null,
+    "inventories": [
+      {
+        "schema_version": 1,
+        "files": [
+          {
+            "path": "weights",
+            "size": 5,
+            "digest": "sha256:9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4"
+          }
+        ]
+      },
+      {
+        "schema_version": 1,
+        "files": [
+          {
+            "path": "iris/1/model.onnx",
+            "size": 5,
+            "digest": "sha256:9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4"
+          },
+          {
+            "path": "iris/config.pbtxt",
+            "size": 6,
+            "digest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          }
+        ]
+      }
+    ]
+  },
+  "lineage": {
+    "schema_version": 1,
+    "provider": "mlflow",
+    "origin": {
+      "installation_id": "serving-lab",
+      "record_id": "models:/m-derived"
+    },
+    "source": {
+      "installation_id": "training-lab",
+      "requested_uri": "models:/source@ready",
+      "model_uri": "models:/m-source",
+      "model_id": "m-source",
+      "training_run_id": "train-1",
+      "registry_name": "source",
+      "registry_version": "3",
+      "candidate_origin": null
+    },
+    "candidate": {
+      "schema_version": 1,
+      "origin": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-1"
+      },
+      "derived_from_snapshot": {
+        "origin": {
+          "installation_id": "training-lab",
+          "record_id": "models:/m-source"
+        },
+        "kind": "mlflow",
+        "inventory": "sha256:f9e79e8b7937aef83732361cf674daf18f0a06a10708ddf9f73c2397d953f031"
+      },
+      "attempts": [
+        {
+          "origin": {
+            "installation_id": "serving-lab",
+            "record_id": "convert-1"
+          },
+          "operation": "conversion",
+          "input_inventory": "sha256:f9e79e8b7937aef83732361cf674daf18f0a06a10708ddf9f73c2397d953f031",
+          "output_inventory": "sha256:e4f403e7f17e4bf0ea5d0ef7d7eb52694bccd9a7a34ae44ab3e37d9b560406e2",
+          "tool": null
+        }
+      ],
+      "output_inventory": "sha256:e4f403e7f17e4bf0ea5d0ef7d7eb52694bccd9a7a34ae44ab3e37d9b560406e2",
+      "previous_serving_candidate": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-previous"
+      },
+      "plugin_references": [
+        {
+          "provider": "mlflow",
+          "installation_id": "training-lab",
+          "record_id": "models:/m-source"
+        }
+      ]
+    },
+    "previous_serving_model": {
+      "installation_id": "serving-lab",
+      "requested_uri": "models:/serving/1",
+      "model_uri": "models:/m-previous",
+      "model_id": "m-previous",
+      "training_run_id": "train-1",
+      "registry_name": "source",
+      "registry_version": "3",
+      "candidate_origin": {
+        "installation_id": "serving-lab",
+        "record_id": "publish-previous"
+      }
+    },
+    "conversion_run_id": "convert-1",
+    "lineage_digest": "sha256:f958a714feeaa34e30a537729d90c4a41e78c0ce44d85c4371f71adc51f45cce"
+  },
+  "declaration": {
+    "schema_version": 1,
+    "manifest": "lineage.json",
+    "digest": "sha256:f958a714feeaa34e30a537729d90c4a41e78c0ce44d85c4371f71adc51f45cce",
+    "candidate_digest": "sha256:ea06121df578275b9a9d7c9a65bd6e59882ec5226c40fb1f647f1acd8763d7b5",
+    "publication_operation_id": "publish-1",
+    "model_uri": "models:/m-derived"
+  }
+}

@@ -67,7 +67,12 @@ def keep_lease(context: ExecutionContext) -> Iterator[Callable[[], None]]:
 class CaptureAdapter:
     def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
-            return HandoffRequest.model_validate(payload).model_dump(mode="json")
+            request = HandoffRequest.model_validate(payload)
+            normalized = request.model_dump(mode="json")
+            if request.lineage is None:
+                # Preserve idempotency hashes for captures admitted before lineage support.
+                normalized.pop("lineage", None)
+            return normalized
         except ValidationError:
             raise BadRequestError("Invalid handoff request") from None
 

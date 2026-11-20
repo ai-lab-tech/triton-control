@@ -1,10 +1,11 @@
 """Versioned, credential-free build-context contracts; no I/O."""
 
 from datetime import datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing_extensions import Self
 
 from app.schemas.lineage import Digest, FileEntry
 from app.schemas.operations import OperationResponse

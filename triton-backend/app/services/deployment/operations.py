@@ -50,6 +50,8 @@ def timeout_seconds() -> int:
 
 def input_data(request: CreateDeploymentRequest) -> dict[str, Any]:
     data = request.model_dump(mode="json")
+    if request.lineage is None:
+        data.pop("lineage", None)  # Preserve fingerprints and keyless retries from older clients.
     if request.basic_auth_password:
         data["basic_auth_password"] = request.basic_auth_password.get_secret_value()
     return data
@@ -132,6 +134,7 @@ def submit(
         )
         result = DeploymentResponse(
             instance_id=instance.id, namespace=namespace, deployment_name=target, service_name=f"{target}-service",
+            lineage=request.lineage,
             secret_name=f"{target}-s3-credentials", image=request.image, s3_url=request.s3_url, applied_resources=[],
             external_url=f"{request.ingress_scheme}://{request.ingress_host}" if request.ingress_host else None,
         )
