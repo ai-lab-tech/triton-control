@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
+from app.schemas.control_lineage import ControlLineage
 from app.schemas.lineage import Digest, FileEntry, Origin, Snapshot
 from app.schemas.preparation import Request, TaskDTO
 
@@ -40,10 +41,18 @@ class HandoffRequest(Request):
     revision: str = Field(min_length=1, max_length=256)
     title: str = Field(min_length=1, max_length=200)
     source: S3Input | S3RepositoryInput
+    lineage: ControlLineage | None = None
     dataset: S3Input | None = None
     baseline: S3Input | None = None
     expected_behavior: str | None = Field(default=None, min_length=1, max_length=8000)
     acceptance_criteria: str | None = Field(default=None, min_length=1, max_length=8000)
+
+
+    @model_validator(mode="after")
+    def lineage_origin(self) -> "HandoffRequest":
+        if self.lineage and (self.origin != self.lineage.origin or not isinstance(self.source, S3RepositoryInput)):
+            raise ValueError("MLflow handoffs require the logged-model origin and a repository source")
+        return self
 
 
 def missing_evaluation_inputs(

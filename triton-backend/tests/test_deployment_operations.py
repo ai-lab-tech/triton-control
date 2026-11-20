@@ -1,11 +1,14 @@
 """Deployment admission and recovery using the real adapter and a faulting Kubernetes API."""
 
+import asyncio
 import base64
 import copy
+import json
 import os
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -19,10 +22,12 @@ from app.core.operation_secrets import decode
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import DeploymentIntentEntity, OperationEntity, S3ProfileEntity, TritonInstanceEntity, UserEntity
-from app.exceptions import BadRequestError, ConflictError, ForbiddenError
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.repositories import deployment_intents as intents
 from app.repositories import instances, operations as repo
 from app.schemas import CreateDeploymentRequest
+from app.schemas.control_lineage import ControlLineage
+from app.services.deployment import mlflow
 from app.services.deployment import operations as deploy
 from app.services.deployment.operation_provider import DeploymentProvider, OWNER, OwnershipConflict
 from app.services.operations import OperationService, OperationWorker
@@ -118,6 +123,67 @@ class DeploymentOperationTests(unittest.TestCase):
         OperationWorker(self.service, lambda: Session(self.engine)).run_once()
         with Session(self.engine) as session:
             return self.service.read(session, self.claims, operation_id)
+
+    def lineage_request(self):
+        fixture = json.loads((Path(__file__).resolve().parents[2] /
+                              "contracts/lineage/v1/control-lineage.fixture.json").read_text())["lineage"]
+        return self.request.model_copy(update={
+            "model_uri": "s3://models/repository/iris", "model_name": "iris", "repository_prefix": "repository",
+            "lineage": ControlLineage.model_validate(fixture),
+        })
+
+    def test_lineage_is_returned_on_admission(self):
+        # Arrange
+        request = self.lineage_request()
+        # Act
+        response = self.submit(request=request)
+        # Assert
+        self.assertEqual(response.lineage, request.lineage)
+
+    def test_lineage_is_exported_by_public_get_and_list(self):
+        # Arrange
+        request = self.lineage_request()
+        response = self.submit(request=request)
+        self.enterContext(patch.object(mlflow.TritonService, "is_ready", new=AsyncMock(return_value=False)))
+        self.enterContext(patch.object(mlflow.access, "read_instance_access", return_value=None))
+        # Act: read through fresh sessions, using the public services.
+        with Session(self.engine) as session:
+            detail = asyncio.run(mlflow.get(session, self.claims, "iris"))
+        with Session(self.engine) as session:
+            listed = asyncio.run(mlflow.list_all(session, self.claims))
+        # Assert
+        expected = request.lineage.model_dump(mode="json")
+        self.assertEqual(detail["lineage"], expected)
+        self.assertEqual(detail["instance_id"], response.instance_id)
+        self.assertEqual([item["lineage"] for item in listed], [expected])
+
+    def test_lineage_exports_remain_owner_scoped(self):
+        # Arrange
+        self.submit(request=self.lineage_request())
+        other = {"email": "ben@test.invalid", "role": "member"}
+        # Act / Assert
+        with Session(self.engine) as session:
+            with self.assertRaises(NotFoundError):
+                asyncio.run(mlflow.get(session, other, "iris"))
+            self.assertEqual(asyncio.run(mlflow.list_all(session, other)), [])
+
+    def test_lineage_request_replays_the_original_operation(self):
+        # Arrange
+        request = self.lineage_request()
+        original = self.submit(request=request)
+        # Act
+        repeated = self.submit(request=request)
+        # Assert
+        self.assertEqual(repeated.operation_id, original.operation_id)
+        self.assertEqual(repeated.lineage, original.lineage)
+
+    def test_legacy_deployment_fingerprint_omits_lineage(self):
+        # Arrange
+        request = self.request
+        # Act
+        payload = deploy.input_data(request)
+        # Assert
+        self.assertNotIn("lineage", payload)
 
     def test_admission_is_atomic_secret_safe_and_replay_ignores_changed_defaults(self):
         result = self.submit()

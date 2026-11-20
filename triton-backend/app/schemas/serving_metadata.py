@@ -2,11 +2,12 @@
 
 import re
 from decimal import Decimal
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, model_validator
 from pydantic.alias_generators import to_camel
+from typing_extensions import Self
 
 from app.schemas.lineage import Digest, ReleaseLineageV1
 

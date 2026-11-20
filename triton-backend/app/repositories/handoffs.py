@@ -41,6 +41,10 @@ def find_source(
     return session.exec(statement.order_by(col(HandoffEntity.created_at), col(HandoffEntity.id))).first()
 
 
+def find_identity(session: Session, identity: str) -> HandoffEntity | None:
+    return session.exec(select(HandoffEntity).where(HandoffEntity.identity_digest == identity)).first()
+
+
 def for_tasks(session: Session, task_ids: list[UUID]) -> list[HandoffEntity]:
     if not task_ids:
         return []
