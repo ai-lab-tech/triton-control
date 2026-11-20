@@ -5,8 +5,15 @@ import sys
 from http.client import HTTPConnection, HTTPException
 from pathlib import Path
 
+HTTP_TIMEOUT_SECONDS = 2
+
 EXPECTED = Path("/plan/readiness.json")
 RECEIPT = Path("/var/run/triton-materialization/receipt.json")
+
+
+def probe_timeout_seconds(version_count: int) -> int:
+    """Allow the sequential health/version sweep plus Python startup overhead."""
+    return 5 + (2 + version_count) * HTTP_TIMEOUT_SECONDS
 
 
 def check(expected_path: Path = EXPECTED, receipt_path: Path = RECEIPT) -> None:
@@ -18,7 +25,7 @@ def check(expected_path: Path = EXPECTED, receipt_path: Path = RECEIPT) -> None:
     for model in expected["models"]:
         paths.extend(f"/v2/models/{model['name']}/versions/{version}/ready" for version in model["versions"])
 
-    connection = HTTPConnection("127.0.0.1", 8000, timeout=2)
+    connection = HTTPConnection("127.0.0.1", 8000, timeout=HTTP_TIMEOUT_SECONDS)
     try:
         for path in paths:
             connection.request("GET", path)

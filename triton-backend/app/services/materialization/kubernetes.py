@@ -14,6 +14,7 @@ from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.budgets import check_plan, storage_bytes
 from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
+from app.services.materialization.readiness import probe_timeout_seconds
 from app.services.materialization.runtime import receipt_for
 
 
@@ -219,7 +220,7 @@ def manifests(
                         "readinessProbe": {
                             "exec": {"command": ["python", "-m", "app.services.materialization.readiness"]},
                             "periodSeconds": 5,
-                            "timeoutSeconds": 5 + sum(len(m.versions) for m in release.spec.models),
+                            "timeoutSeconds": probe_timeout_seconds(sum(len(m.versions) for m in release.spec.models)),
                             "failureThreshold": 1,
                         },
                     },

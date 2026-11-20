@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from http.client import RemoteDisconnected
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -33,30 +34,132 @@ class ReleaseReadinessTests(unittest.TestCase):
             "/v2/models/forecast/versions/3/ready",
         ]
 
-    def test_every_required_route_must_return_200_without_redirect(self):
-        for failed in [*self.paths, None]:
-            with self.subTest(failed=failed), patch("app.services.materialization.readiness.HTTPConnection") as connect:
-                conn = connect.return_value
-                conn.getresponse.side_effect = [
-                    MagicMock(status=302 if path == failed else 200, read=lambda size: b"") for path in self.paths
-                ]
-                if failed:
-                    with self.assertRaisesRegex(ValueError, "HTTP 302"):
-                        check(self.expected, self.receipt)
-                else:
-                    check(self.expected, self.receipt)
-                connect.assert_called_once_with("127.0.0.1", 8000, timeout=2)
-                requests = [call.args for call in conn.request.call_args_list]
-                count = self.paths.index(failed) + 1 if failed else len(self.paths)
-                self.assertEqual(requests, [("GET", path) for path in self.paths[:count]])
-                conn.close.assert_called_once()
+    @patch("app.services.materialization.readiness.HTTPConnection")
+    def test_all_required_routes_are_checked_on_loopback(self, connect):
+        # Arrange
+        conn = connect.return_value
+        conn.getresponse.return_value = MagicMock(status=200, read=lambda size: b"")
 
-    def test_wrong_or_missing_receipt_fails_before_network(self):
+        # Act
+        check(self.expected, self.receipt)
+
+        # Assert
+        connect.assert_called_once_with("127.0.0.1", 8000, timeout=2)
+        self.assertEqual([call.args for call in conn.request.call_args_list], [("GET", path) for path in self.paths])
+        conn.close.assert_called_once()
+
+    def test_each_required_route_rejects_redirects_and_unavailable_responses(self):
+        for failed in self.paths:
+            for status in (302, 404, 503):
+                with (
+                    self.subTest(failed=failed, status=status),
+                    patch("app.services.materialization.readiness.HTTPConnection") as connect,
+                ):
+                    # Arrange
+                    conn = connect.return_value
+                    conn.getresponse.side_effect = [
+                        MagicMock(status=status if path == failed else 200, read=lambda size: b"")
+                        for path in self.paths
+                    ]
+
+                    # Act / Assert
+                    with self.assertRaisesRegex(ValueError, f"HTTP {status}"):
+                        check(self.expected, self.receipt)
+                    count = self.paths.index(failed) + 1
+                    self.assertEqual(
+                        [call.args for call in conn.request.call_args_list],
+                        [("GET", path) for path in self.paths[:count]],
+                    )
+                    conn.close.assert_called_once()
+
+    def test_wrong_receipt_fails_before_network(self):
         with patch("app.services.materialization.readiness.HTTPConnection") as connect:
+            # Arrange
             self.receipt.write_text("{}")
+            # Act / Assert
             with self.assertRaisesRegex(ValueError, "receipt differs"):
                 check(self.expected, self.receipt)
+            connect.assert_not_called()
+
+    def test_missing_receipt_fails_before_network(self):
+        with patch("app.services.materialization.readiness.HTTPConnection") as connect:
+            # Arrange
             self.receipt.unlink()
+            # Act / Assert
             with self.assertRaises(FileNotFoundError):
                 check(self.expected, self.receipt)
             connect.assert_not_called()
+
+    def test_transport_failures_close_connection_and_stop_sweep(self):
+        for stage, error in (
+            ("request", ConnectionRefusedError()),
+            ("getresponse", RemoteDisconnected("Connection closed before response")),
+            ("read", TimeoutError()),
+        ):
+            with self.subTest(stage=stage), patch("app.services.materialization.readiness.HTTPConnection") as connect:
+                # Arrange
+                conn = connect.return_value
+                response = conn.getresponse.return_value
+                response.status = 200
+                target = response if stage == "read" else conn
+                getattr(target, stage).side_effect = error
+
+                # Act / Assert
+                with self.assertRaises(type(error)):
+                    check(self.expected, self.receipt)
+                conn.request.assert_called_once_with("GET", self.paths[0])
+                conn.close.assert_called_once()
+
+    @patch("app.services.materialization.readiness.HTTPConnection")
+    def test_oversized_health_response_stops_sweep(self, connect):
+        # Arrange
+        conn = connect.return_value
+        response = conn.getresponse.return_value
+        response.status = 200
+        response.read.return_value = b"x" * 4097
+
+        # Act / Assert
+        with self.assertRaisesRegex(ValueError, "oversized health response"):
+            check(self.expected, self.receipt)
+        response.read.assert_called_once_with(4097)
+        conn.request.assert_called_once_with("GET", self.paths[0])
+        conn.close.assert_called_once()
+
+    def test_pod_budget_allows_slow_successful_responses_for_every_version(self):
+        # Arrange
+        from app.schemas.materialization import StorageBinding
+        from app.schemas.serving_metadata import StartupModel
+        from app.services.materialization.kubernetes import manifests
+        from tests.materialization_fixtures import LIMITS, plan, policy
+        from tests.test_materialization import MaterializerPodTests
+
+        release = MaterializerPodTests().release()
+        models = (StartupModel(name="iris", versions=tuple(str(i) for i in range(1, 11))),)
+        release = release.model_copy(update={"spec": release.spec.model_copy(update={"models": models})})
+        config, pod = manifests(
+            release,
+            plan(),
+            policy(),
+            StorageBinding(bucket="models", prefix="repository", secret_name="models"),
+            name="iris",
+            namespace="test",
+            limits=LIMITS,
+        )
+        self.expected.write_text(config["data"]["readiness.json"])
+        self.receipt.write_text(json.dumps(json.loads(config["data"]["readiness.json"])["receipt"]))
+        elapsed = 0.0
+
+        def respond():
+            nonlocal elapsed
+            elapsed += 1.9  # Successful responses arrive within the two-second socket timeout.
+            return MagicMock(status=200, read=lambda size: b"")
+
+        # Act
+        with patch("app.services.materialization.readiness.HTTPConnection") as connect:
+            connect.return_value.getresponse.side_effect = respond
+            check(self.expected, self.receipt)
+
+        # Assert
+        probe = next(c for c in pod["spec"]["containers"] if c["name"] == "release-readiness")["readinessProbe"]
+        self.assertEqual(connect.return_value.request.call_count, 12)
+        self.assertLess(elapsed, probe["timeoutSeconds"])

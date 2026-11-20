@@ -68,6 +68,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromNames(
         [
             "tests.test_materialization",
+            "tests.test_release_readiness",
             "tests.test_materialization_kubernetes",
         ]
     )

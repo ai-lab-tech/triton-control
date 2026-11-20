@@ -205,9 +205,9 @@ The startup probe gives Triton up to 30 minutes to report live. After startup,
 six consecutive liveness failures at ten-second intervals trigger a restart.
 Server readiness and the sidecar check run every five seconds. A single failure
 removes readiness while Triton continues loading. The exec probe allows five
-seconds plus one second per expected version for the full sweep, with a two-second
-socket timeout. Pod annotations expose the canonical release and prepared inventory
-digests. GPU requests and limits stay on the Triton container.
+seconds for process startup plus two seconds for each live, server-ready and
+model-version request in the sequential sweep, matching the two-second socket
+timeout. Pod annotations expose the canonical release and prepared inventory digests. GPU requests and limits stay on the Triton container.
 
 Before upgrading, requalify the helper image on each target platform with
 `scripts/qualify_materializer.py`. Revision v3 adds Kubernetes evidence for a
