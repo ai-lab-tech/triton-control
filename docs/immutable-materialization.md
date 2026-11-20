@@ -1,8 +1,7 @@
 # Immutable repository materialization
 
-Immutable materialization provides the shared repository initializer for validation and
-subsequent
-release consumers. It does **not** enable production mode, approvals, the release
+Immutable materialization provides the shared repository initializer for
+validation and subsequent release consumers. It does **not** enable production mode, approvals, the release
 reconciler or a new deployment UI. Existing interactive development deployments
 keep their current mutable S3 behavior. The validation executor and
 release/rollout consumers must use this shared path rather
