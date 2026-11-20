@@ -1,0 +1,242 @@
+<nav class="detail-nav" aria-label="Task navigation">
+  <a routerLink="/preparation">← Engineering queue</a>
+  <button mat-button (click)="load()" [disabled]="busy()">Refresh task</button>
+</nav>
+@if (error()) {
+  <p role="alert">{{ error() }}</p>
+}
+@if (busy()) {
+  <p role="status">Loading…</p>
+}
+@if (entry(); as item) {
+  <header class="task-header">
+    <span class="task-status" [attr.data-state]="item.task.state">{{
+      label(item.task.state)
+    }}</span>
+    <h1 class="page-title">{{ item.task.title }}</h1>
+    <p>Submitted by {{ item.submitter_name }} · {{ item.task.created_at | date: "mediumDate" }}</p>
+  </header>
+  <div class="task-grid">
+    <div class="task-body card">
+      <section class="review">
+        <h2>Input readiness</h2>
+        @if (item.task.blocked_reasons.length) {
+          <ul class="blockers">
+            @for (reason of item.task.blocked_reasons; track reason) {
+              <li>{{ label(reason) }}</li>
+            }
+          </ul>
+        } @else {
+          <p>No recorded task blockers.</p>
+        }
+        @if (item.actions.request_information) {
+          <details class="request">
+            <summary>Request information</summary>
+            <form (ngSubmit)="action('request-information')">
+              <label
+                >Missing inputs (comma-separated identifiers)<input
+                  name="missing"
+                  [(ngModel)]="missing"
+                  placeholder="test_data, expected_results"
+                  required
+              /></label>
+              <label
+                >Information needed<textarea
+                  name="reason"
+                  [(ngModel)]="reason"
+                  maxlength="2000"
+                  required
+                ></textarea>
+              </label>
+              <button mat-stroked-button type="submit" [disabled]="busy() || !validInformation()">
+                Request information
+              </button>
+            </form>
+          </details>
+        }
+      </section>
+      <section>
+        <h2>Model source</h2>
+        <dl class="source-meta">
+          <dt>Source</dt>
+          <dd>{{ sourceLabel(item.source.kind) }}</dd>
+          @if (item.source.revision) {
+            <dt>Revision</dt>
+            <dd>{{ item.source.revision }}</dd>
+          }
+          @if (item.source.models.length) {
+            <dt>Models</dt>
+            <dd>{{ item.source.models.join(", ") }}</dd>
+          }
+        </dl>
+        @if (item.source.instance_id) {
+          <a [routerLink]="['/instances', item.source.instance_id]"
+            >Back to original development experiment</a
+          >
+        }
+        @if (item.source.handoff_id) {
+          <a [routerLink]="['/preparation/handoffs', item.source.handoff_id]"
+            >Inspect handoff inputs and revision</a
+          >
+        }
+        @if (sourceError()) {
+          <p role="alert">{{ sourceError() }}</p>
+        }
+        @if (snapshot(); as captured) {
+          <p>Snapshot {{ captured.id }} · {{ captured.manifest.captured_at | date: "medium" }}</p>
+          <p>
+            Manifest digest: <code>{{ captured.manifest_digest }}</code>
+          </p>
+          @if (captured.manifest.previous_snapshot_id) {
+            <p>Previous snapshot: {{ captured.manifest.previous_snapshot_id }}</p>
+          }
+          <p>Expected behavior: {{ captured.manifest.request.expected_behavior || "Missing" }}</p>
+          <p>
+            Acceptance criteria: {{ captured.manifest.request.acceptance_criteria || "Missing" }}
+          </p>
+          @for (gap of captured.manifest.gaps; track gap) {
+            <p>Capture gap: {{ gap }}</p>
+          }
+          <details>
+            <summary>
+              Repository inventory ({{ captured.manifest.inventory.files.length }} files)
+            </summary>
+            @for (file of captured.manifest.inventory.files; track file.path) {
+              <p>
+                {{ file.path }} · {{ file.size }} bytes<br /><code>{{ file.digest }}</code>
+              </p>
+            }
+          </details>
+          <details>
+            <summary>Selected workspace files</summary>
+            @for (file of captured.manifest.workspace_inventory.files; track file.path) {
+              <p>
+                {{ file.path }} · {{ file.size }} bytes<br /><code>{{ file.digest }}</code>
+              </p>
+            }
+          </details>
+        }
+      </section>
+      <details class="records">
+        <summary>Build history</summary>
+        <p>Build status is independent of task status, validation and deployment.</p>
+        <a [routerLink]="['/preparation/tasks', item.task.id, 'builds']"
+          >Build serving image and inspect logs</a
+        >
+        @if (!builds().length || moreBuilds()) {
+          <button mat-button (click)="loadBuilds()" [disabled]="buildsBusy()">
+            Load build history
+          </button>
+        }
+        @if (buildsError()) {
+          <p role="alert">{{ buildsError() }}</p>
+        }
+        @for (build of builds(); track build.id) {
+          <h3>{{ build.id }} · {{ buildLabel(build) }}</h3>
+          @for (attempt of build.attempts; track attempt.number) {
+            <p>
+              Attempt {{ attempt.number }}: {{ attempt.state }} ·
+              {{ attempt.final_digest || "No image digest" }}
+            </p>
+          }
+        }
+      </details>
+      <details class="records">
+        <summary>Preparation and validation attempts</summary>
+        @for (record of attempts(); track record.id) {
+          <article>
+            <h3>
+              {{ record.attempt.operation }} · {{ record.attempt.tool || "Tool not recorded" }}
+            </h3>
+            <p>{{ record.created_at | date: "medium" }} · {{ record.attempt.origin.record_id }}</p>
+            <p>
+              Input inventory: <code>{{ record.attempt.input_inventory }}</code>
+            </p>
+            <p>
+              Output inventory: <code>{{ record.attempt.output_inventory }}</code>
+            </p>
+          </article>
+        } @empty {
+          <p>No recorded preparation attempts.</p>
+        }
+        @if (moreAttempts()) {
+          <button mat-button (click)="more('attempts')" [disabled]="busy()">
+            Load older attempts
+          </button>
+        }
+        <p>These records do not establish production validation or deployment approval.</p>
+        <h3>Retained candidates</h3>
+        @for (candidate of item.candidates; track candidate.installation_id + candidate.record_id) {
+          <p>
+            {{ candidate.installation_id }} / {{ candidate.record_id }} ·
+            {{ candidate.created_at | date: "medium" }}<br /><code>{{
+              candidate.candidate_digest
+            }}</code>
+          </p>
+        } @empty {
+          <p>No candidates linked to this task.</p>
+        }
+      </details>
+      <details class="records">
+        <summary>Task history</summary>
+        @for (event of events(); track event.id) {
+          <details>
+            <summary>
+              {{ event.action }} · {{ event.created_at | date: "medium" }} · revision
+              {{ event.revision }}
+            </summary>
+            <pre>{{ event.changes | json }}</pre>
+          </details>
+        }
+        @if (moreEvents()) {
+          <button mat-button (click)="more('events')" [disabled]="busy()">Load older events</button>
+        }
+      </details>
+    </div>
+    <section class="assignment card">
+      <h2>Assignment</h2>
+      <dl>
+        <dt>Assigned to</dt>
+        <dd>{{ item.assignee_name || "Unassigned" }}</dd>
+        <dt>Team</dt>
+        <dd>{{ item.team_name }}</dd>
+      </dl>
+      <div class="task-actions">
+        @if (item.actions.claim) {
+          <button mat-flat-button (click)="action('claim')" [disabled]="busy()">Claim task</button>
+        }
+        @if (item.actions.release) {
+          <button mat-button (click)="action('release-claim')" [disabled]="busy()">
+            Release claim
+          </button>
+        }
+        @if (item.actions.open_workspace) {
+          <button mat-flat-button (click)="prepareWorkspace()" [disabled]="busy()">
+            Open task workspace
+          </button>
+        }
+        @if (sizing(); as size) {
+          @if (size.existing_storage_size) {
+            <p>Existing storage: {{ size.existing_storage_size }}</p>
+          } @else {
+            <p>Recommended: {{ size.recommended_gib }} GiB. Maximum: {{ size.maximum_gib }} GiB.</p>
+            <label
+              >Writable storage (GiB)<input
+                type="number"
+                [(ngModel)]="storageGiB"
+                [min]="size.recommended_gib"
+                [max]="size.maximum_gib"
+            /></label>
+          }
+          <button
+            mat-stroked-button
+            (click)="openWorkspace()"
+            [disabled]="busy() || !validStorage()"
+          >
+            Continue to workspace
+          </button>
+        }
+      </div>
+    </section>
+  </div>
+}

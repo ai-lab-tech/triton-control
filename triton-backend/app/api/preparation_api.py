@@ -1,6 +1,6 @@
 """Preparation HTTP boundary; handoff submission belongs to S03-A."""
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +9,7 @@ from sqlmodel import Session
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
+from app.schemas.engineering_queue import QueueEntry, TaskOverview
 from app.schemas.preparation import (
     AttemptDTO,
     InformationRequest,
@@ -19,7 +20,7 @@ from app.schemas.preparation import (
     TaskEventDTO,
     TaskRevision,
 )
-from app.services import preparation
+from app.services import engineering_queue, preparation
 
 router = APIRouter(prefix="/api/preparation-tasks", tags=["preparation"])
 
@@ -33,6 +34,22 @@ def list_tasks(
     claims: dict[str, Any] = Depends(get_claims),
 ) -> list[TaskDTO]:
     return preparation.list_tasks(session, claims, limit, offset)
+
+
+@router.get("/queue", response_model=list[QueueEntry])
+@translate_app_errors
+def queue(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0, le=1000000),
+          view: Literal["all", "mine", "unassigned"] | None = None,
+          search: str = Query(default="", max_length=200),
+          session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims)) -> list[QueueEntry]:
+    return engineering_queue.queue(session, claims, limit, offset, view=view, search=search)
+
+
+@router.get("/{task_id}/overview", response_model=TaskOverview)
+@translate_app_errors
+def overview(task_id: UUID, session: Session = Depends(get_session),
+             claims: dict[str, Any] = Depends(get_claims)) -> TaskOverview:
+    return engineering_queue.overview(session, claims, task_id)
 
 
 @router.get("/{task_id}", response_model=TaskDTO)

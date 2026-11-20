@@ -1,3 +1,4 @@
+import { ExperimentPreparationComponent } from "../../preparation/experiment-preparation.component";
 import { InstallationService } from "../../../shared/installation/installation.service";
 import { DeploymentOperationComponent } from "../../../shared/deployment-operation.component";
 import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
@@ -63,6 +64,7 @@ import { isSelfDeployedStarting } from "../../../state/instances.utils";
   selector: "app-instance-detail-page",
   standalone: true,
   imports: [
+    ExperimentPreparationComponent,
     DeploymentOperationComponent,
     S3ProfileLabelComponent,
     DeploymentAccessComponent,

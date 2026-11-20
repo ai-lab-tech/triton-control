@@ -324,6 +324,9 @@
             {{ sizing.existing_storage_size ? "Reopen workspace" : "Create workspace" }}
           </button>
         }
+        <a mat-stroked-button [routerLink]="['/preparation/tasks', item.task.id]"
+          >Open preparation detail</a
+        >
         <p>
           Only the current assignee can open the workspace. Inputs are verified and read-only; use
           /workspace/conversion for your changes. Reopening reuses the existing workspace.

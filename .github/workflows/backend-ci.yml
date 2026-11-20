@@ -156,7 +156,7 @@ jobs:
           BUILD_TEST_DATABASE_URL: postgresql://teams_test:teams_test@localhost:5432/teams_test
         run: |
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
-          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_handoffs_postgres tests.test_control_lineage_postgres tests.test_handoff_repositories_postgres tests.test_handoff_capture_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_build_ui_postgres tests.test_builds_kubernetes -v
+          python -m unittest tests.test_teams_postgres tests.test_preparation_postgres tests.test_engineering_queue_postgres tests.test_handoffs_postgres tests.test_control_lineage_postgres tests.test_handoff_repositories_postgres tests.test_handoff_capture_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_build_ui_postgres tests.test_builds_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
         working-directory: triton-backend
         env:

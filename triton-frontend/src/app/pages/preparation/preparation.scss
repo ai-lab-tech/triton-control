@@ -1,0 +1,57 @@
+:host {
+  display: block;
+  max-width: 1100px;
+  margin: auto;
+  padding: 24px;
+}
+article,
+section {
+  border: 1px solid var(--mat-sys-outline-variant, #687583);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+}
+dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 180px) 1fr;
+  gap: 8px 16px;
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+form {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+}
+label {
+  display: grid;
+  gap: 6px;
+}
+input,
+textarea,
+select {
+  padding: 10px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #687583;
+  border-radius: 4px;
+}
+button,
+a {
+  margin-right: 8px;
+}
+pre,
+code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  :host {
+    padding: 12px;
+  }
+  dl {
+    grid-template-columns: 1fr;
+  }
+}

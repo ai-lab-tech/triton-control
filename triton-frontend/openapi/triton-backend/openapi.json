@@ -2974,6 +2974,152 @@
         }
       }
     },
+    "/api/preparation-tasks/queue": {
+      "get": {
+        "tags": [
+          "preparation"
+        ],
+        "summary": "Queue",
+        "operationId": "queue_api_preparation_tasks_queue_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "mine",
+                    "unassigned"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "View"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/QueueEntry"
+                  },
+                  "title": "Response Queue Api Preparation Tasks Queue Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preparation-tasks/{task_id}/overview": {
+      "get": {
+        "tags": [
+          "preparation"
+        ],
+        "summary": "Overview",
+        "operationId": "overview_api_preparation_tasks__task_id__overview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOverview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preparation-tasks/{task_id}": {
       "get": {
         "tags": [
@@ -7837,6 +7983,35 @@
         ],
         "title": "BuildResponse"
       },
+      "CandidateSummary": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "title": "Installation Id"
+          },
+          "record_id": {
+            "type": "string",
+            "title": "Record Id"
+          },
+          "candidate_digest": {
+            "type": "string",
+            "title": "Candidate Digest"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "installation_id",
+          "record_id",
+          "candidate_digest",
+          "created_at"
+        ],
+        "title": "CandidateSummary"
+      },
       "Capabilities": {
         "properties": {
           "mode": {
@@ -12174,6 +12349,48 @@
         ],
         "title": "Quantities"
       },
+      "QueueEntry": {
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/TaskDTO"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TaskSource"
+          },
+          "team_name": {
+            "type": "string",
+            "title": "Team Name"
+          },
+          "submitter_name": {
+            "type": "string",
+            "title": "Submitter Name"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
+          },
+          "actions": {
+            "$ref": "#/components/schemas/TaskActions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "source",
+          "team_name",
+          "submitter_name",
+          "assignee_name",
+          "actions"
+        ],
+        "title": "QueueEntry"
+      },
       "ReasonRequest": {
         "properties": {
           "expected_revision": {
@@ -13818,6 +14035,32 @@
         ],
         "title": "TargetSpec"
       },
+      "TaskActions": {
+        "properties": {
+          "claim": {
+            "type": "boolean",
+            "title": "Claim",
+            "default": false
+          },
+          "release": {
+            "type": "boolean",
+            "title": "Release",
+            "default": false
+          },
+          "request_information": {
+            "type": "boolean",
+            "title": "Request Information",
+            "default": false
+          },
+          "open_workspace": {
+            "type": "boolean",
+            "title": "Open Workspace",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "TaskActions"
+      },
       "TaskDTO": {
         "properties": {
           "schema_version": {
@@ -13963,6 +14206,55 @@
         ],
         "title": "TaskEventDTO"
       },
+      "TaskOverview": {
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/TaskDTO"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TaskSource"
+          },
+          "team_name": {
+            "type": "string",
+            "title": "Team Name"
+          },
+          "submitter_name": {
+            "type": "string",
+            "title": "Submitter Name"
+          },
+          "assignee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Name"
+          },
+          "actions": {
+            "$ref": "#/components/schemas/TaskActions"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateSummary"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "source",
+          "team_name",
+          "submitter_name",
+          "assignee_name",
+          "actions"
+        ],
+        "title": "TaskOverview"
+      },
       "TaskRevision": {
         "properties": {
           "expected_revision": {
@@ -13977,6 +14269,70 @@
           "expected_revision"
         ],
         "title": "TaskRevision"
+      },
+      "TaskSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "unavailable"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "handoff_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handoff Id"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "title": "TaskSource"
       },
       "TaskWorkspaceDTO": {
         "properties": {

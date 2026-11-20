@@ -12,6 +12,7 @@
     @if (instanceId(); as id) {
       <app-deployment-operation [instanceId]="id" [connectionUnavailable]="!!loadError()" />
     }
+    <app-experiment-preparation [instance]="instance" [unavailable]="!!loadError()" />
     <div class="detail-top">
       <nav class="page-breadcrumbs" aria-label="Breadcrumb">
         <a routerLink="/instances">Triton Instances</a>

@@ -42,6 +42,8 @@ def queue(
     admin: bool,
     limit: int,
     offset: int,
+    view: str | None = None,
+    search: str = "",
 ) -> list[PreparationTaskEntity]:
     statement = select(PreparationTaskEntity)
     if not admin:
@@ -49,6 +51,14 @@ def queue(
             (col(PreparationTaskEntity.submitter_user_id) == actor_id)
             | col(PreparationTaskEntity.assigned_team_id).in_(team_ids)
         )
+    if view is not None:
+        statement = statement.where(PreparationTaskEntity.state != "cancelled")
+    if view == "mine":
+        statement = statement.where(PreparationTaskEntity.assignee_user_id == actor_id)
+    elif view == "unassigned":
+        statement = statement.where(col(PreparationTaskEntity.assignee_user_id).is_(None))
+    if search.strip():
+        statement = statement.where(col(PreparationTaskEntity.title).icontains(search.strip(), autoescape=True))
     return list(
         session.exec(
             statement.order_by(col(PreparationTaskEntity.created_at), col(PreparationTaskEntity.id))
