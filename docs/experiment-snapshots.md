@@ -73,8 +73,8 @@ workspace inventory. Declarations do not constitute passed evaluation evidence.
 Managed deployments normally use the instance's configured S3 repository.
 An explicit `repository: {"profile_id": 3, "prefix": "prepared/iris"}` instead
 uses a prefix beneath an existing authorized S3 profile. External endpoints
-**require** this supplied repository; their internals and actual runtime image
-are not inferred from endpoint health. Optional `supplied_runtime_image` is a
+require an explicit repository or the workspace model selection described below.
+Their actual runtime image is unobserved. Optional `supplied_runtime_image` is a
 pinned user-supplied reference, retained separately from observed runtime
 identity and never represented as the actually tested image.
 
@@ -85,6 +85,32 @@ task ID and gaps. `GET /api/preparation/snapshots/{id}` returns the immutable
 manifest, its digest, retained artifact references and the current task state.
 The submitter and authorized task readers can inspect it without requiring the
 original development deployment to still exist.
+
+### Capture source provenance
+
+The optional `source` object adds provenance to the same capture request.
+
+| `source.kind` | Source declarations |
+| --- | --- |
+| `hf` | `repository` (for example `owner/model`), `revision`, `resolved_commit`, `serving_manifest` and `checkpoint_files`. |
+| `example` | `repository` (for example `github.com/owner/repo`), `commit` and `project_path` (`.` for the repository root). |
+| `manual` | Select workspace files. The receipt records the authenticated submitter. Optional `author` and `ai_assisted` record supplied attribution. |
+
+Use workspace-relative paths for `serving_manifest`, `model_card`,
+`license_file` and `source_documents` and include them in `workspace.files`.
+The receipt retains references to their original bytes. Checkpoint file paths
+are relative to the captured model repository, or prefixed with `.workspace/`
+for selected workspace files. The checkpoint digest hashes the captured subset.
+The revision fingerprint binds that digest to the declared source revision.
+Generator metadata and revision declarations are inputs for review. No upstream
+requests, training runs or validation evidence are created by the adapters.
+
+Set `workspace_model_root` to the workspace-relative Triton repository directory
+to compare selected model files with the captured repository. An external endpoint
+may use these explicit workspace model inputs in place of a repository selection.
+The receipt still flags the unobserved runtime. Recapture with a new idempotency
+key to retain changed bytes as a separate snapshot and preparation task.
+Omitting `source` preserves the existing API behavior and stored receipt digests.
 
 ## Consistency and security boundaries
 

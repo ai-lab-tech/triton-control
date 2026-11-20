@@ -40,6 +40,7 @@ from app.services.operations import Action, ExecutionContext
 from app.services.operations import service as operations
 from app.services.snapshots.artifacts import SelectedModels, scan_credentials
 from app.services.snapshots.runtime import RuntimeProvider
+from app.services.snapshots.sources import capture_provenance
 from app.services.snapshots.workspace import WorkspaceProvider
 from app.services.storage.s3_client import S3Config, build_s3_client
 
@@ -98,8 +99,8 @@ def _selectors(session: Session, claims: dict[str, Any], instance: Any, request:
             raise BadRequestError("Managed capture requires deployment_uid and expected_generation from pod state")
         if not instance.deployment_namespace or not instance.deployment_name:
             raise ConflictError("Managed deployment identity is unavailable")
-    elif request.repository is None:
-        raise BadRequestError("External endpoints require explicitly supplied repository inputs")
+    elif request.repository is None and not (request.source and request.source.workspace_model_root):
+        raise BadRequestError("External endpoints require explicitly supplied repository or workspace model inputs")
     if request.workspace:
         get_owned_code_server(session, claims, request.workspace.workspace_id)
     if request.previous_snapshot_id:
@@ -194,6 +195,8 @@ def _source(
     if request.repository:
         client, bucket, prefix = _checked_profile_client(session, claims, request.repository.profile_id)
         prefix = "/".join(part for part in (prefix, request.repository.prefix) if part)
+    elif not _managed(instance):
+        return None
     elif (
         instance.s3_enabled
         and instance.s3_bucket
@@ -381,6 +384,10 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
             if _store_identity(_store(session, claims, stack)) != store_identity:
                 raise ConflictError("Controlled staging binding changed during capture")
             heartbeat.check()
+            source_kind, provenance, source_gaps = capture_provenance(
+                request, operation.actor_id, staging, inventory, workspace,
+            )
+            gaps.update(source_gaps)
             origin = Origin(installation_id=installation, record_id=operation.id)
             manifest = SnapshotManifest(
                 origin=origin,
@@ -396,11 +403,12 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 configuration_digest=digest(configuration),
                 source_snapshot=Snapshot(
                     origin=origin,
-                    kind="manual",
+                    kind=source_kind,
                     inventory=inventory_digest(InventoryV1(files=(*inventory.files, *workspace.files))),
                 ),
                 inventory=inventory,
                 workspace_inventory=workspace,
+                source_provenance=provenance,
                 gaps=tuple(sorted(gaps)),
                 workspace_relation="selected_unverified_changes" if request.workspace else "not_selected",
             )
