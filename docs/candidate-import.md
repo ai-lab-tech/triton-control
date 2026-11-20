@@ -214,9 +214,9 @@ python scripts/export_candidate_import_schema.py
 ```
 
 PostgreSQL tests isolate random schemas; S3 tests isolate random buckets and remove
-all test versions. Use disposable test services. The CI job builds its test-only
-MinIO server from pinned upstream commit
-`07c3a429bfed433e49018cb0f78a52145d4bedeb` and runs the real PostgreSQL/S3 suites.
+all test versions. Use disposable test services. The CI job starts disposable
+SeaweedFS storage using the image pinned by digest in `triton-backend/scripts/seaweedfs-image.txt` and runs the real PostgreSQL/S3
+suites after an authenticated S3 readiness check.
 No Kubernetes workload is created by this story, so Kubernetes execution testing
 is not applicable. Structural ONNX fixture bytes are explicitly non-executable;
 these tests do not claim model-runtime qualification.

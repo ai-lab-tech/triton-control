@@ -176,7 +176,7 @@ Interrupted-download recovery is exercised on that same volume. Each reported
 check maps to successful named image tests; host unit tests alone cannot qualify it. A Python
 probe replaces Triton to test byte/layout equality and an actual `EROFS` write
 failure; **it does not claim inference correctness or model readiness**. Separate
-MinIO integration tests exercise genuine S3 version retention and the neutral
+SeaweedFS integration tests exercise genuine S3 version retention and the neutral
 import adapter. Qualification output is emitted only when all required tests
 pass with none skipped. Fixture revision `materializer-qualification/v3` requires
 renewed qualification; older records are rejected. The report's canonical JSON digest is referenced by
@@ -189,7 +189,7 @@ Backend CI builds the helper, pushes it to an isolated test registry, runs the
 same Kubernetes qualification on Linux/amd64 and uploads its actual evidence.
 The ephemeral CI image/fixture is not a published production image or human
 approval. Requalify your retained registry image before use. The real S3 tests
-run in the existing isolated PostgreSQL/MinIO job; no new application database
+run in the existing isolated PostgreSQL/S3 job; no new application database
 tables or upgrade migrations are introduced.
 
 ## Release pod readiness

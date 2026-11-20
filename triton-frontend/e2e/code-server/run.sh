@@ -59,19 +59,21 @@ if [[ ${PLUGIN_SMOKE_SKIP_BUILD:-false} != true ]]; then
   docker build -t triton-control:plugin-smoke "$REPO_ROOT"
 fi
 docker build -t plugin-smoke-workspace:local -f "$SCRIPT_DIR/workspace.Dockerfile" "$SCRIPT_DIR"
-docker build -t plugin-smoke-minio:local -f "$SCRIPT_DIR/minio.Dockerfile" "$SCRIPT_DIR"
+SEAWEEDFS_IMAGE=$(cat "$REPO_ROOT/triton-backend/scripts/seaweedfs-image.txt")
+docker pull "$SEAWEEDFS_IMAGE"
+docker tag "$SEAWEEDFS_IMAGE" plugin-smoke-seaweedfs:local
 CLUSTER_CREATED=true
 "$KIND" create cluster --name "$CLUSTER" --wait 120s
-"$KIND" load docker-image --name "$CLUSTER" triton-control:plugin-smoke plugin-smoke-workspace:local plugin-smoke-minio:local
+"$KIND" load docker-image --name "$CLUSTER" triton-control:plugin-smoke plugin-smoke-workspace:local plugin-smoke-seaweedfs:local
 kubectl create namespace plugin-smoke
 # Use a temporary manifest so credentials never become shell command arguments.
 "$PLUGIN_SMOKE_PYTHON" - "$RUNTIME" <<'PY'
 import base64, json, os, pathlib, secrets, sys
 root = pathlib.Path(sys.argv[1])
-(root / "minio-secret.json").write_text(json.dumps({
-    "apiVersion": "v1", "kind": "Secret", "metadata": {"name": "plugin-smoke-minio"},
-    "stringData": {"MINIO_ROOT_USER": os.environ["PLUGIN_SMOKE_S3_KEY"],
-                   "MINIO_ROOT_PASSWORD": os.environ["PLUGIN_SMOKE_S3_SECRET"]},
+(root / "seaweedfs-secret.json").write_text(json.dumps({
+    "apiVersion": "v1", "kind": "Secret", "metadata": {"name": "plugin-smoke-seaweedfs"},
+    "stringData": {"AWS_ACCESS_KEY_ID": os.environ["PLUGIN_SMOKE_S3_KEY"],
+                   "AWS_SECRET_ACCESS_KEY": os.environ["PLUGIN_SMOKE_S3_SECRET"]},
 }))
 (root / "values.json").write_text(json.dumps({
     "fullnameOverride": "triton-control", "ingress": {"enabled": False},
@@ -89,22 +91,24 @@ root = pathlib.Path(sys.argv[1])
     "postgresql": {"auth": {"password": secrets.token_hex(24)}},
 }))
 PY
-kubectl -n plugin-smoke apply -f "$RUNTIME/minio-secret.json" -f "$SCRIPT_DIR/minio.yaml"
+kubectl -n plugin-smoke apply -f "$RUNTIME/seaweedfs-secret.json" -f "$SCRIPT_DIR/seaweedfs.yaml"
 # Copy the chart before resolving dependencies to leave the working tree untouched.
 cp -R "$REPO_ROOT/charts/triton-control" "$RUNTIME/chart"
 helm repo add argo https://argoproj.github.io/argo-helm --repository-config "$RUNTIME/repositories.yaml" --repository-cache "$RUNTIME/helm-cache"
 helm dependency build "$RUNTIME/chart" --repository-config "$RUNTIME/repositories.yaml" --repository-cache "$RUNTIME/helm-cache"
 helm upgrade --install triton-control "$RUNTIME/chart" -n plugin-smoke -f "$RUNTIME/values.json" --wait --timeout 5m
-kubectl -n plugin-smoke rollout status deployment/minio --timeout=180s
+kubectl -n plugin-smoke rollout status deployment/seaweedfs --timeout=180s
 kubectl -n plugin-smoke port-forward service/triton-control 18080:8080 > "$ARTIFACTS/control-forward.log" 2>&1 &
 PIDS+=("$!")
-kubectl -n plugin-smoke port-forward service/minio 19000:9000 > "$ARTIFACTS/minio-forward.log" 2>&1 &
+kubectl -n plugin-smoke port-forward service/seaweedfs 19000:9000 > "$ARTIFACTS/seaweedfs-forward.log" 2>&1 &
 PIDS+=("$!")
 for attempt in {1..60}; do
-  if curl -fsS "$PLUGIN_SMOKE_URL/health" >/dev/null && curl -fsS "$PLUGIN_SMOKE_S3_URL/minio/health/ready" >/dev/null; then break; fi
+  if curl -fsS "$PLUGIN_SMOKE_URL/health" >/dev/null; then break; fi
   if [[ $attempt == 60 ]]; then echo "Port forwards failed" >&2; exit 1; fi
   sleep 1
 done
+AWS_ACCESS_KEY_ID="$PLUGIN_SMOKE_S3_KEY" AWS_SECRET_ACCESS_KEY="$PLUGIN_SMOKE_S3_SECRET" \
+  "$PLUGIN_SMOKE_PYTHON" "$REPO_ROOT/triton-backend/scripts/wait_s3.py" --endpoint "$PLUGIN_SMOKE_S3_URL"
 "$PLUGIN_SMOKE_PYTHON" "$SCRIPT_DIR/s3.py" init
 "$PLUGIN_SMOKE_PYTHON" - "$RUNTIME/environment.json" <<'PY'
 import json, os, pathlib, sys

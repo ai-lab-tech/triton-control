@@ -1,12 +1,15 @@
-"""Real S3-compatible capture/retention, opt in against a disposable MinIO service."""
+"""Real S3 capture/retention, opt in against a disposable S3-compatible service."""
 
 import os
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 from uuid import uuid4
 
 import boto3
+from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from app.exceptions import BadRequestError, ConflictError, ServiceUnavailableError
 from app.services.candidates.artifacts import CaptureLimits, S3ArtifactStore, S3Source
@@ -49,6 +52,24 @@ class CandidateS3IntegrationTests(fixtures.CandidateFixture, unittest.TestCase):
                 self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": objects})
         self.client.delete_bucket(Bucket=self.bucket)
         self.client.close()
+
+    def test_storage_rejects_invalid_and_anonymous_credentials(self):
+        # Arrange: use the same endpoint without an authorized identity.
+        for signature in ("s3v4", UNSIGNED):
+            with self.subTest(signature=signature), closing(boto3.client(
+                "s3",
+                endpoint_url=ENDPOINT,
+                aws_access_key_id="unauthorized-test-key",
+                aws_secret_access_key="unauthorized-test-secret",
+                region_name="us-east-1",
+                config=Config(signature_version=signature, retries={"max_attempts": 0}),
+            )) as client:
+                # Act: request the bucket list without valid credentials.
+                with self.assertRaises(ClientError) as raised:
+                    client.list_buckets()
+
+                # Assert: the service denies access rather than allowing anonymous use.
+                self.assertEqual(raised.exception.response["ResponseMetadata"]["HTTPStatusCode"], 403)
 
     def test_real_versioned_import_is_readable_and_repeatable_without_mlflow(self):
         result = self.do_import(source=self.provider, store=self.output)

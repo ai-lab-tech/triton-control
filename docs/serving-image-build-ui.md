@@ -141,7 +141,7 @@ kubectl, Helm, Playwright Chromium, and Python with boto3/packaging are required
 It creates and removes an isolated cluster.
 
 The browser tests exercise the deployed VSIX in real code-server: both commands
-explain the task requirement in a personal workspace. A versioned MinIO handoff,
+explain the task requirement in a personal workspace. A versioned SeaweedFS handoff,
 engineering-group membership and claimed task provision a real task workspace;
 its extension reads empty build history using the managed workspace credential.
 Build submission is denied before context selection because this installation has

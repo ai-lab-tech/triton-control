@@ -190,7 +190,7 @@ old mutable workspace paths or invent base-image hashes during migration.
 
 Relevant suites: `tests.test_build_contexts`, `tests.test_build_contexts_settings`,
 `tests.test_build_contexts_postgres`, `tests.test_build_contexts_s3`. PostgreSQL uses
-`BUILD_CONTEXT_TEST_DATABASE_URL`; real MinIO uses `BUILD_CONTEXT_TEST_S3_ENDPOINT`,
+`BUILD_CONTEXT_TEST_DATABASE_URL`; real SeaweedFS storage uses `BUILD_CONTEXT_TEST_S3_ENDPOINT`,
 `BUILD_CONTEXT_TEST_S3_ACCESS_KEY`, `BUILD_CONTEXT_TEST_S3_SECRET_KEY`. Each test uses
 an isolated schema/bucket and removes only its fixtures. Backend CI runs both real
 providers in the existing candidate-import provider job. No Kubernetes workload

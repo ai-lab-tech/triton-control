@@ -207,7 +207,7 @@ fast first check; this suite checks the workbench and extension-host integration
 - Create a Python model repository through the native wizard. Verify generated
   files inside the pod and repository discovery in the workspace view.
 - Choose an S3 profile, open an object, edit and save it, and verify its content
-  independently through the MinIO API.
+  independently through the S3 API.
 - Drag a repository from the workspace to S3 and a file back to the workspace.
   Verify destination contents and source preservation. This tests the workbench
   patch against the actual code-server release, not a synthetic JavaScript bundle.
@@ -239,12 +239,17 @@ bash triton-frontend/e2e/code-server/run.sh
 ```
 
 The runner builds the current checkout, creates a uniquely named kind cluster,
-builds MinIO from a pinned upstream release, deploys Triton Control with its
-Helm chart and disposable MinIO, and starts
-Playwright. The production workspace startup installs code-server and the
-bundled extension. Credentials are generated for each run. A separate kubeconfig
+pulls the digest-pinned SeaweedFS image shared with backend CI, deploys Triton
+Control with its Helm chart and disposable SeaweedFS storage, and starts
+Playwright after an authenticated S3 readiness check. The production workspace
+startup installs code-server and the bundled extension. Credentials are generated for each run. A separate kubeconfig
 protects existing clusters; by default the runner removes its own cluster and temporary
 credentials on exit.
+
+SeaweedFS replaces MinIO only in CI test fixtures. The shared image pin is in
+`triton-backend/scripts/seaweedfs-image.txt`; `ci_s3_start.sh` starts the backend
+fixture and `wait_s3.py` verifies authenticated S3 access. Production storage
+configuration remains unchanged.
 
 The baseline defaults to the Helm chart's managed code-server version. For upgrades:
 
