@@ -14,12 +14,14 @@
     @if (detail()) {
       <a mat-stroked-button routerLink="/preparation/handoffs/new">New handoff</a>
       @if (receipt(); as item) {
-        <a
-          mat-stroked-button
-          routerLink="/preparation/handoffs/new"
-          [queryParams]="{ previous: item.id }"
-          >New revision</a
-        >
+        @if (!item.task.missing_inputs.length) {
+          <a
+            mat-stroked-button
+            routerLink="/preparation/handoffs/new"
+            [queryParams]="{ previous: item.id }"
+            >New revision</a
+          >
+        }
       }
     }
   </header>
@@ -145,7 +147,13 @@
               <mat-form-field appearance="outline">
                 <mat-label>Submission revision</mat-label>
                 <input matInput name="revision" [(ngModel)]="revision" required maxlength="256" />
-                <mat-hint>Keep for retries. Change for updated inputs.</mat-hint>
+                <mat-hint>
+                  {{
+                    previousHandoffId
+                      ? "Enter a new revision, such as 2."
+                      : "Keep for retries. Change for updated inputs."
+                  }}
+                </mat-hint>
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Previous handoff ID (optional)</mat-label>
@@ -346,16 +354,25 @@
       }
       @if (item.task.missing_inputs.length) {
         <div class="notice">
-          <strong>Evaluation inputs incomplete</strong>
+          <strong>Workspace blocked by missing inputs</strong>
           <p>
-            Release readiness is blocked. Submit a new handoff revision with these inputs; the
-            original receipt remains unchanged.
+            Submit a new handoff revision with the inputs below, then claim the new task to open its
+            workspace.
           </p>
           <ul>
             @for (name of item.task.missing_inputs; track name) {
               <li>{{ inputLabel(name) }}</li>
             }
           </ul>
+          @if (canSubmit()) {
+            <a
+              mat-stroked-button
+              routerLink="/preparation/handoffs/new"
+              [queryParams]="{ previous: item.id }"
+            >
+              Submit a new revision
+            </a>
+          }
         </div>
       }
       @if (item.task.blocked_reasons.includes("no_eligible_engineers")) {

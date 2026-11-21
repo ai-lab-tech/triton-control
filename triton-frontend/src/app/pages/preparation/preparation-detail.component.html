@@ -220,10 +220,37 @@
             Release claim
           </button>
         }
-        @if (item.actions.open_workspace) {
-          <button mat-flat-button (click)="prepareWorkspace()" [disabled]="busy()" color="primary">
+        @if (item.actions.open_workspace || item.actions.release) {
+          <button
+            mat-flat-button
+            (click)="prepareWorkspace()"
+            [disabled]="busy() || !item.actions.open_workspace"
+            [attr.aria-describedby]="
+              item.actions.open_workspace ? null : 'workspace-blocked-reason'
+            "
+            color="primary"
+          >
             Open task workspace
           </button>
+          @if (!item.actions.open_workspace) {
+            @if (item.source.handoff_id && item.task.missing_inputs.length) {
+              <p id="workspace-blocked-reason">
+                Add the missing evaluation inputs in a new handoff revision, then claim the new
+                task.
+              </p>
+              <a
+                mat-stroked-button
+                routerLink="/preparation/handoffs/new"
+                [queryParams]="{ previous: item.source.handoff_id }"
+              >
+                Submit a new revision
+              </a>
+            } @else {
+              <p id="workspace-blocked-reason">
+                The assigned engineer can open the workspace once the required inputs are available.
+              </p>
+            }
+          }
         }
         @if (sizing(); as size) {
           @if (size.existing_storage_size) {

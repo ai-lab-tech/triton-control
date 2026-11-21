@@ -75,6 +75,7 @@ export class HandoffPageComponent {
     const captureId = this.route.snapshot.queryParamMap.get("capture");
     if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
     this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
+    if (this.previousHandoffId) this.revision = "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
       this.detail.set(!!id);

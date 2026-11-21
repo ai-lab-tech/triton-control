@@ -30,7 +30,12 @@ const receipt = {
 
 describe("HandoffPageComponent", () => {
   let http: HttpTestingController;
-  async function setup(id: string | null = null, role = "member", requireS3Versioning = true) {
+  async function setup(
+    id: string | null = null,
+    role = "member",
+    requireS3Versioning = true,
+    previous = "",
+  ) {
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -41,7 +46,7 @@ describe("HandoffPageComponent", () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
-            snapshot: { queryParamMap: convertToParamMap({}) },
+            snapshot: { queryParamMap: convertToParamMap(previous ? { previous } : {}) },
           },
         },
       ],
@@ -61,6 +66,25 @@ describe("HandoffPageComponent", () => {
     return fixture;
   }
   afterEach(() => http.verify());
+
+  it("starts a linked handoff revision with a blank revision field", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", true, receipt.id);
+    http.expectOne("/api/s3-profiles").flush([]);
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    const form = fixture.nativeElement as HTMLElement;
+    expect(form.querySelector<HTMLInputElement>('input[name="previousHandoff"]')?.value).toBe(
+      receipt.id,
+    );
+    expect(form.querySelector<HTMLInputElement>('input[name="revision"]')?.value).toBe("");
+    expect(form.textContent).toContain("Enter a new revision, such as 2.");
+  });
 
   it("warns about overwritten or deleted files when unversioned inputs are allowed", async () => {
     // Arrange
@@ -204,7 +228,7 @@ describe("HandoffPageComponent", () => {
     await fixture.whenStable();
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain("Evaluation inputs incomplete");
+    expect(text).toContain("Workspace blocked by missing inputs");
     expect(text).toContain("Evaluation dataset");
     expect(text).toContain("v1");
     expect(text).toContain("task-1");
