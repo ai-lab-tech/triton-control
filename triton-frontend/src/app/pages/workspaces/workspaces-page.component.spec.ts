@@ -144,6 +144,45 @@ describe("WorkspacesPageComponent", () => {
     expect(component.embeddedWorkspaceUrl()).not.toBeNull();
   });
 
+  it("opens the personal creation form when only a task workspace exists", async () => {
+    // Arrange
+    const task = { ...readyWorkspace, task_title: "Convert model", storage_size: "50Gi" };
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([task]) as any);
+    codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet.and.returnValue(of(task) as any);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
+    await fixture.componentInstance.load();
+    fixture.detectChanges();
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.textContent).toContain("Storage: 50Gi");
+
+    // Act
+    Array.from(view.querySelectorAll("button"))
+      .find((button) => button.textContent.includes("Create personal workspace"))!
+      .click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(view.querySelector("#code-server-name")).toBeTruthy();
+  });
+
+  it("shows cleanup without starting the editor or polling the inaccessible workspace", async () => {
+    // Arrange
+    const ended = { ...readyWorkspace, url: "", status: "cleanup_only" };
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(of([ended]) as any);
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
+
+    // Act
+    await fixture.componentInstance.load();
+    fixture.detectChanges();
+
+    // Assert
+    const view = fixture.nativeElement as HTMLElement;
+    expect(view.querySelector('[aria-label="Delete workspace"]')).toBeTruthy();
+    expect(view.querySelector("iframe")).toBeNull();
+    expect(view.textContent).not.toContain("Storage: 20Gi");
+    expect(codeServersApi.getCodeServerApiDevelopmentCodeServerIdGet).not.toHaveBeenCalled();
+  });
+
   it("CanCreate_DecimalMemoryGi_ReturnsFalse", () => {
     // Arrange
     const fixture = TestBed.createComponent(WorkspacesPageComponent);

@@ -95,7 +95,9 @@
                       (click)="closeNavOnMobile()"
                     >
                       <span class="material-icons" aria-hidden="true">{{
-                        workspace.task_title ? "assignment" : "terminal"
+                        workspace.task_title || workspace.status === "cleanup_only"
+                          ? "assignment"
+                          : "terminal"
                       }}</span>
                       <span class="workspace-nav-name">{{
                         workspaceDirectory.label(workspace)

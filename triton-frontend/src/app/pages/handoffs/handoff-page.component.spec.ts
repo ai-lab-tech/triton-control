@@ -5,7 +5,7 @@ import { MatSelectHarness } from "@angular/material/select/testing";
 import { TestBed } from "@angular/core/testing";
 import { By } from "@angular/platform-browser";
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from "@angular/router";
-import { of } from "rxjs";
+import { BehaviorSubject, of } from "rxjs";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { HandoffPageComponent } from "./handoff-page.component";
 import { TaskWorkspaceOptionsComponent } from "./task-workspace-options.component";
@@ -31,6 +31,7 @@ const receipt = {
 };
 
 describe("HandoffPageComponent", () => {
+  let query: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   let http: HttpTestingController;
   async function setup(
     id: string | null = null,
@@ -38,6 +39,7 @@ describe("HandoffPageComponent", () => {
     requireS3Versioning = true,
     previous = "",
   ) {
+    query = new BehaviorSubject(convertToParamMap(previous ? { previous } : {}));
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -47,6 +49,7 @@ describe("HandoffPageComponent", () => {
         {
           provide: ActivatedRoute,
           useValue: {
+            queryParamMap: query.asObservable(),
             paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
             snapshot: { queryParamMap: convertToParamMap(previous ? { previous } : {}) },
           },
@@ -312,6 +315,31 @@ describe("HandoffPageComponent", () => {
     await pending;
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
   });
+  it("clears the original receipt and revision when starting over on the same route", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", true, receipt.id);
+    http.expectOne("/api/s3-profiles").flush([]);
+    http.expectOne("/api/preparation/handoffs/" + receipt.id).flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    expect(page.original()?.id).toBe(receipt.id);
+
+    // Act
+    page.newSubmission();
+    query.next(convertToParamMap({}));
+    http.expectOne("/api/s3-profiles").flush([]);
+    http
+      .expectOne("/api/preparation/handoff-submission-policy")
+      .flush({ require_s3_versioning: true });
+    await fixture.whenStable();
+
+    // Assert
+    expect(page.original()).toBeNull();
+    expect(page.revision).toBe("1");
+    expect(page.previousHandoffId).toBe("");
+    expect(page.title).toBe("");
+  });
+
   it("starts an unchanged new submission with a fresh key after cancellation", async () => {
     const fixture = await setup();
     http

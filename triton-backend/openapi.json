@@ -8169,6 +8169,17 @@
               }
             ],
             "title": "Task Title"
+          },
+          "storage_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Size"
           }
         },
         "type": "object",

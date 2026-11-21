@@ -32,10 +32,14 @@ def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServ
         try:
             guard(session, row)
         except (ForbiddenError, ConflictError):
+            visible.append(workspace_dto(row).model_copy(update={
+                "url": "", "status": "cleanup_only", "applied_resources": [],
+                "status_message": "Editor access has ended. You can delete this task workspace.",
+            }))
             continue
-        visible.append(row)
         _refresh_status(session, row)
-    return [workspace_dto(row, session) for row in visible]
+        visible.append(workspace_dto(row, session))
+    return visible
 
 
 def create_code_server(
@@ -192,6 +196,7 @@ def workspace_dto(row: CodeServerEntity, session: Session | None = None) -> Code
         status=row.status,
         status_message=row.status_message,
         applied_resources=row.applied_resources or [],
+        storage_size=association.configuration.get("storage_size") if association else None,
         task_title=task_repository.get(session, association.task_id).title if session and association else None,
     )
 

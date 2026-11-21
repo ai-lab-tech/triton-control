@@ -29,6 +29,7 @@ export class WorkspaceDirectory {
   }
 
   label(workspace: CodeServerDTO): string {
+    if (workspace.status === "cleanup_only") return `Task workspace #${workspace.id}`;
     const name = workspace.task_title || workspace.name;
     const duplicate = this.workspaces().some(
       (item) => item.id !== workspace.id && (item.task_title || item.name) === name,

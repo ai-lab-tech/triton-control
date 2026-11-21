@@ -8,7 +8,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
-import { firstValueFrom, forkJoin, of } from "rxjs";
+import { combineLatest, distinctUntilChanged, firstValueFrom, forkJoin, map, of } from "rxjs";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
@@ -59,7 +59,8 @@ export class HandoffPageComponent {
   readonly draftLoading = signal(false);
   readonly draftLoadFailed = signal(false);
   readonly original = signal<HandoffReceipt | null>(null);
-  readonly originalId = this.route.snapshot.queryParamMap.get("previous") ?? "";
+  originalId = "";
+  private draftGeneration = 0;
   readonly capture = signal<CaptureOperation | null>(null);
   readonly evaluationHelp = {
     dataset: {
@@ -104,17 +105,35 @@ export class HandoffPageComponent {
     });
     const captureId = this.route.snapshot.queryParamMap.get("capture");
     if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
-    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const id = params.get("handoffId");
-      this.detail.set(!!id);
-      this.receipt.set(null);
-      this.workspaceSizing.set(null);
-      this.error.set("");
-      if (id) void this.loadReceipt(id);
-      else if (this.canSubmit()) void this.loadDraft();
-    });
+    const previousId = this.route.queryParamMap.pipe(
+      map((params) => params.get("previous") ?? ""),
+      distinctUntilChanged(),
+    );
+    combineLatest([this.route.paramMap, previousId])
+      .pipe(takeUntilDestroyed())
+      .subscribe(([params, previous]) => {
+        if (previous !== this.originalId) {
+          this.originalId = previous;
+          this.original.set(null);
+          this.title = this.sourcePath = this.datasetPath = this.baselinePath = "";
+          this.expectedBehavior = this.criteria = this.previousHandoffId = "";
+          this.profileId = this.datasetProfileId = this.baselineProfileId = null;
+          this.sourceKind = "s3";
+          this.revision = "1";
+          this.openHelp.set(null);
+          this.submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+        }
+        const id = params.get("handoffId");
+        this.detail.set(!!id);
+        this.receipt.set(null);
+        this.workspaceSizing.set(null);
+        this.error.set("");
+        if (id) void this.loadReceipt(id);
+        else if (this.canSubmit()) void this.loadDraft();
+      });
   }
   async loadDraft() {
+    const generation = ++this.draftGeneration;
     this.draftLoading.set(true);
     this.draftLoadFailed.set(false);
     this.error.set("");
@@ -126,7 +145,7 @@ export class HandoffPageComponent {
           original: this.originalId ? this.api.get(this.originalId) : of(null),
         }),
       );
-      if (this.destroyed) return;
+      if (this.destroyed || generation !== this.draftGeneration) return;
       this.requireS3Versioning.set(policy.require_s3_versioning);
       this.profiles.set(profiles);
       if (original) {
@@ -145,7 +164,7 @@ export class HandoffPageComponent {
         this.revision = `revision-${this.submissionId}`;
       }
     } catch (error) {
-      if (this.destroyed) return;
+      if (this.destroyed || generation !== this.draftGeneration) return;
       this.draftLoadFailed.set(true);
       this.error.set(
         mapApiErrorMessage(
@@ -156,7 +175,7 @@ export class HandoffPageComponent {
         ),
       );
     } finally {
-      if (!this.destroyed) this.draftLoading.set(false);
+      if (!this.destroyed && generation === this.draftGeneration) this.draftLoading.set(false);
     }
   }
 

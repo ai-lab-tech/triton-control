@@ -1,4 +1,13 @@
-import { Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from "@angular/core";
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  signal,
+} from "@angular/core";
 import { HttpErrorResponse } from "@angular/common/http";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
@@ -89,6 +98,10 @@ export class WorkspacesPageComponent implements OnDestroy {
   readonly saving = signal(false);
   readonly deletingId = signal<number | null>(null);
   readonly workspaces = this.directory.workspaces;
+  readonly creatingPersonal = signal(false);
+  readonly hasPersonalWorkspace = computed(() =>
+    this.workspaces().some((item) => !item.task_title && item.status !== "cleanup_only"),
+  );
   readonly selectedWorkspaceId = signal<number | null>(null);
   readonly embeddedWorkspaceUrl = signal<SafeResourceUrl | null>(null);
   readonly frameLoading = signal(false);
@@ -112,6 +125,7 @@ export class WorkspacesPageComponent implements OnDestroy {
       .subscribe((event) => {
         const requested = this.requestedWorkspaceId(event.urlAfterRedirects);
         const workspace = this.workspaces().find((item) => item.id === requested);
+        if (workspace) this.creatingPersonal.set(false);
         if (workspace && workspace.id !== this.selectedWorkspaceId()) {
           void this.selectWorkspaceAsync(workspace);
         } else if (requested !== null && !workspace) {
@@ -284,6 +298,8 @@ export class WorkspacesPageComponent implements OnDestroy {
         this.workspaceApi.createCodeServerApiDevelopmentPost(payload),
       );
       this.directory.upsert(workspace);
+      this.creatingPersonal.set(false);
+      await this.router.navigateByUrl(`/workspaces?workspace=${workspace.id}`);
       this.selectWorkspace(workspace);
       this.updateStatusPolling();
       await this.pollPendingWorkspaces();
@@ -565,7 +581,7 @@ export class WorkspacesPageComponent implements OnDestroy {
   }
 
   private shouldPollWorkspace(workspace: CodeServer): boolean {
-    if (workspace.status === "missing") {
+    if (workspace.status === "missing" || workspace.status === "cleanup_only") {
       return false;
     }
     if (workspace.status !== "ready") {

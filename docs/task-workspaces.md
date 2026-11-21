@@ -3,12 +3,14 @@
 An assigned engineer can open a workspace from a complete scientist handoff. The
 handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
-The existing personal workspace can coexist with task workspaces.
+Each engineer can have one personal workspace alongside their task workspaces.
+If you opened a task workspace first, choose **Create personal workspace** in its toolbar.
 
 When you have several workspaces, select one under **Development → Workspaces**
 in the navigation. Task workspaces use the task title. To remove a finished
 workspace, open it and select **Delete** in its toolbar. The handoff and task
-history remain available.
+history remain available. After you release a claim or the task is cancelled,
+your workspace is listed by ID with the status **Cleanup only**. Select it to delete it.
 
 When creating the task workspace, choose its image, GPU count, optional CPU
 cores and RAM, and writable storage. The default GPU count is zero. Leaving
