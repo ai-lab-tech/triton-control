@@ -155,7 +155,7 @@ test.describe.serial("code-server plugin workflows", () => {
     // Workspace restoration can dismiss the palette during extension activation.
     // Retry opening the palette if it closes before the command can be clicked.
     const palette = workbench.locator(".quick-input-widget:visible");
-    const choice = palette.getByRole("option", { name: title, exact: true });
+    const choice = palette.getByRole("option").filter({ hasText: title }).first();
     await expect(async () => {
       await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
       await workbench.locator("body").press("F1");
