@@ -86,7 +86,26 @@ export interface CaptureOperation {
   cancel_requested: boolean;
   result: Record<string, unknown>;
 }
+export interface SnapshotSource {
+  kind: "hf" | "example" | "manual";
+  repository?: string;
+  revision?: string;
+  resolved_commit?: string;
+  serving_manifest?: string;
+  acquisition_record?: string;
+  checkpoint_files?: string[];
+  commit?: string;
+  project_path?: string;
+  author?: string;
+  ai_assisted?: boolean;
+  workspace_model_root?: string;
+  model_card?: string;
+  license_file?: string;
+  source_documents?: string[];
+}
 export interface SnapshotRequest {
+  source?: SnapshotSource;
+  workspace?: { workspace_id: number; files: string[] };
   title: string;
   models: { name: string; versions: string[] }[];
   deployment_uid?: string;

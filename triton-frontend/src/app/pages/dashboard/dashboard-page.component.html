@@ -16,8 +16,10 @@
       </div>
     </mat-card>
   } @else {
-    <div class="page-title">Command Center</div>
-    <p class="page-subtitle">Realtime view of Triton instances.</p>
+    <header>
+      <h1 class="page-title">Command Center</h1>
+      <p class="page-subtitle">Realtime view of Triton instances.</p>
+    </header>
 
     <div class="stats">
       @for (stat of stats(); track stat.label) {

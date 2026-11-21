@@ -4,7 +4,10 @@
     @if (instance()) {
       <div>Last known state. Updates and actions are temporarily unavailable.</div>
     }
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }
 @if (instance(); as instance) {
@@ -12,7 +15,6 @@
     @if (instanceId(); as id) {
       <app-deployment-operation [instanceId]="id" [connectionUnavailable]="!!loadError()" />
     }
-    <app-experiment-preparation [instance]="instance" [unavailable]="!!loadError()" />
     <div class="detail-top">
       <nav class="page-breadcrumbs" aria-label="Breadcrumb">
         <a routerLink="/instances">Triton Instances</a>
@@ -23,7 +25,13 @@
     <div class="detail-header">
       <div class="detail-summary">
         <div class="detail-summary-head">
-          <div class="page-title">{{ instance.name }}</div>
+          <h1 class="page-title">{{ instance.name }}</h1>
+          @if (preparation.allowed() && !preparation.expanded()) {
+            <button mat-stroked-button color="primary" type="button" (click)="preparation.begin()">
+              <mat-icon>assignment</mat-icon>
+              Prepare for production
+            </button>
+          }
         </div>
         <div class="summary-row">
           <span class="summary-label">Instance name</span>
@@ -86,6 +94,12 @@
         <p class="page-subtitle">{{ instance.version }} · {{ instance.region }}</p>
       </div>
     </div>
+    <app-experiment-preparation
+      #preparation
+      [instance]="instance"
+      [unavailable]="!!loadError()"
+      [hidden]="!preparation.allowed() || !preparation.expanded()"
+    />
     @if (deploymentDeleteError()) {
       <div class="panel-hint health-error">{{ deploymentDeleteError() }}</div>
     }
@@ -569,6 +583,7 @@
                     class="s3-disable-btn"
                     (click)="disableS3Config()"
                     [disabled]="s3Saving()"
+                    color="warn"
                   >
                     <span class="material-icons">link_off</span>
                     Delete S3 Connection
@@ -717,10 +732,11 @@
         <div class="s3-dialog-actions">
           <button mat-stroked-button type="button" (click)="closeS3Dialog()">Cancel</button>
           <button
-            mat-stroked-button
+            mat-flat-button
             type="button"
             (click)="saveS3Config()"
             [disabled]="s3Saving() || !canSaveS3Config()"
+            color="primary"
           >
             <span class="material-icons">save</span>
             {{ s3Saving() ? "Saving..." : "Save S3 settings" }}
@@ -786,7 +802,11 @@
               <div class="panel-hint">Validate the Triton endpoint certificate.</div>
             </div>
             <label class="switch">
-              <input type="checkbox" [(ngModel)]="tritonVerifySsl" />
+              <input
+                type="checkbox"
+                aria-label="Verify endpoint TLS certificate"
+                [(ngModel)]="tritonVerifySsl"
+              />
               <span class="slider"></span>
             </label>
           </div>
@@ -823,10 +843,11 @@
         <div class="s3-dialog-actions">
           <button mat-stroked-button type="button" (click)="closeTritonDialog()">Cancel</button>
           <button
-            mat-stroked-button
+            mat-flat-button
             type="button"
             (click)="saveTritonConnection()"
             [disabled]="tritonSaving() || !tritonEndpoint.trim()"
+            color="primary"
           >
             <span class="material-icons">save</span>
             {{ tritonSaving() ? "Saving..." : "Save connection" }}
@@ -848,6 +869,9 @@
   <div class="empty">
     <span class="material-icons">dns</span>
     <div>Instance not found.</div>
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }

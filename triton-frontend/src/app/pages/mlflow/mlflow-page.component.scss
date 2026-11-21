@@ -8,7 +8,7 @@
   flex-direction: column;
   height: calc(100vh - 24px);
   min-height: 520px;
-  gap: 1.8rem;
+  gap: var(--page-gap);
 }
 
 .header-row {
@@ -20,19 +20,19 @@
 
 .page-subtitle {
   margin: 0.2rem 0 0;
-  color: var(--text-muted, #718096);
+  color: var(--ink-500);
 }
 
 .create-view {
   display: flex;
   flex-direction: column;
-  gap: 1.8rem;
+  gap: var(--page-gap);
 }
 
 .create-card {
   display: grid;
   gap: 1.4rem;
-  padding: 1.6rem;
+  padding: var(--card-padding);
   max-width: 1100px;
   width: 100%;
   margin: 0 auto;
@@ -43,11 +43,6 @@
   gap: 1rem;
   padding-bottom: 1.4rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.section-title {
-  font-weight: 700;
-  font-size: 1.05rem;
 }
 
 .section-subtitle {
@@ -87,12 +82,6 @@
   width: 100%;
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.8rem;
-}
-
 .danger {
   border-color: rgba(220, 38, 38, 0.45);
 }
@@ -103,7 +92,8 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   background: #fff;
 }
 
@@ -114,7 +104,8 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   background: #ffffff;
 }
 
@@ -221,7 +212,7 @@
 
 .state-message {
   max-width: 680px;
-  color: var(--text-muted, #718096);
+  color: var(--ink-500);
 }
 
 .message {
@@ -253,7 +244,7 @@
   }
 
   .create-card {
-    padding: 1.2rem;
+    padding: var(--card-padding);
   }
 
   .form-grid {

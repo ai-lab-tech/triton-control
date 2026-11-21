@@ -16,7 +16,7 @@ argoWorkflows:
 The bundled configuration installs Argo Workflows `v4.0.6` through Helm chart
 version `1.0.16`.
 
-After deployment, members and administrators can open **Workflows** in the
+After deployment, members and administrators can open **Development → Argo Workflows** in the
 Triton Control sidebar. The page embeds the Argo UI through:
 
 ```text
@@ -125,7 +125,7 @@ user-submitted Workflow YAML are handled separately (see above).
 
 ### Link an S3 Profile
 
-Members and administrators can open **Workflows → Configure S3 Secrets**, select
+Members and administrators can open **Development → Argo Workflows → Configure S3 Secrets**, select
 an available **S3 profile**, and click **Link profile**. Manual credential
 requests are rejected. Administrators create or edit source profiles through
 the existing **S3 Profiles** account menu entry.

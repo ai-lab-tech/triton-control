@@ -57,7 +57,7 @@
         }
         @if (deployment.conditions.length) {
           <details class="rollout-details">
-            <summary>
+            <summary class="app-disclosure">
               Rollout conditions <span>{{ deployment.conditions.length }}</span>
             </summary>
             @for (condition of deployment.conditions; track condition.type) {
@@ -78,7 +78,7 @@
       @for (section of podSections(); track section.title) {
         @if (!section.history || section.count) {
           <details class="pod-section" [open]="!section.history">
-            <summary>{{ section.title }} · {{ section.count }}</summary>
+            <summary class="app-disclosure">{{ section.title }} · {{ section.count }}</summary>
             @if (section.history) {
               <p class="history-description">
                 Failed and completed pod instances retained by Kubernetes. These are not restarts of
@@ -99,7 +99,7 @@
                     }
                   }
                   <details class="pod-group-details" [open]="group.pods.length === 1">
-                    <summary [hidden]="group.pods.length === 1">
+                    <summary class="app-disclosure" [hidden]="group.pods.length === 1">
                       Inspect {{ group.pods.length }} affected pods &amp; logs
                     </summary>
                     @for (pod of group.pods; track pod.uid) {
@@ -118,7 +118,12 @@
                             {{ pod.terminating ? "Terminating" : pod.phase }} ·
                             {{ pod.ready ? "Ready" : "Not ready" }}
                           </span>
-                          <button mat-flat-button type="button" (click)="viewLogs.emit(pod.uid)">
+                          <button
+                            mat-flat-button
+                            type="button"
+                            (click)="viewLogs.emit(pod.uid)"
+                            color="primary"
+                          >
                             <mat-icon>terminal</mat-icon>View logs
                           </button>
                         </div>
@@ -155,7 +160,7 @@
                           </div>
                         </dl>
                         <details class="container-details">
-                          <summary>
+                          <summary class="app-disclosure">
                             Containers &amp; conditions
                             <span
                               >{{ pod.containers.length }}
@@ -309,10 +314,12 @@
                       selectedPod()?.phase === 'Succeeded'
                     "
                   >
-                    <summary>{{ section.title }} · {{ section.pods.length }}</summary>
+                    <summary class="app-disclosure">
+                      {{ section.title }} · {{ section.pods.length }}
+                    </summary>
                     @for (pod of section.pods; track pod.uid) {
                       <details class="pod-resource" open>
-                        <summary>
+                        <summary class="app-disclosure">
                           <span
                             class="status-dot"
                             [class.ready]="pod.ready && !pod.terminating"
@@ -407,7 +414,7 @@
               </button>
             </header>
             <details class="log-options">
-              <summary>
+              <summary class="app-disclosure">
                 Log options
                 <span
                   >{{ previous() ? "Previous run" : "Current run" }} ·

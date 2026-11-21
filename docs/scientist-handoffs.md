@@ -1,7 +1,7 @@
 # Scientist handoffs
 
-The **Submit model** navigation entry opens `/preparation/handoffs/new` in the
-Control app. Active members and administrators can explicitly submit a model
+Open **Development → Engineering queue → Submit model** to reach the handoff form
+at `/preparation/handoffs/new`. Active members and administrators can explicitly submit a model
 object or archive, optional dataset/baseline objects and evaluation requirements.
 Logging a model, uploading an artifact and running an experiment do not submit a
 handoff. Submission does not run a build, validate a candidate or approve/deploy a

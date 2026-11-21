@@ -68,12 +68,6 @@
   gap: 1rem;
 }
 
-.page-title {
-  font-weight: 850;
-  font-size: 1.15rem;
-  color: #0f172a;
-}
-
 .page-subtitle {
   margin: 0.2rem 0 0;
   color: #64748b;
@@ -100,7 +94,8 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   background: #ffffff;
 }
 
@@ -220,7 +215,7 @@
 .workspace-card {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
+  padding: var(--card-padding);
 }
 
 .section {
@@ -228,11 +223,6 @@
   gap: 1rem;
   padding-bottom: 1.4rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.section-title {
-  font-weight: 700;
-  font-size: 1.05rem;
 }
 
 .section-subtitle {
@@ -381,11 +371,6 @@
     font-weight: 700;
     color: #0f172a;
   }
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .workspace-message {
@@ -555,7 +540,7 @@
   }
 
   .workspace-card {
-    padding: 1.2rem;
+    padding: var(--card-padding);
   }
 
   .actions,

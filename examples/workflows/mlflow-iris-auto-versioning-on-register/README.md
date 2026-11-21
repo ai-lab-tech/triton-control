@@ -22,7 +22,7 @@ Only the training script needs to be uploaded to S3.
 ## Prepare and run through Argo
 
 1. Enable MLflow with an S3 artifact store and Argo Workflows in Triton Control.
-2. Link the same S3 profile under **Workflows → Configure S3 Secrets**.
+2. Link the same S3 profile under **Development → Argo Workflows → Configure S3 Secrets**.
 3. Upload `train.py` to `workflows/mlflow-iris-auto-versioning-on-register/train.py`.
 4. In `workflow.yaml`, set `s3-script-key` to the full uploaded script key,
    including any profile prefix.
@@ -30,7 +30,7 @@ Only the training script needs to be uploaded to S3.
    `automatic-triton-versions-register`.
 5. If multiple S3 profiles are linked, add the annotation
    `triton-control.ai/mlflow-s3-profile-name` with the selected profile name.
-6. In **Workflows → Submit New Workflow → Edit using full workflow options**,
+6. In **Development → Argo Workflows → Submit New Workflow → Edit using full workflow options**,
    submit the complete `workflow.yaml`, including `spec.arguments.parameters`.
 
 Argo downloads the script as an S3 input artifact. The training container

@@ -15,10 +15,13 @@ class SelectedModels(S3Source):
         self.models = {model.name: set(model.versions) for model in models}
 
     def includes(self, path: str) -> bool:
-        parts = path.split("/")
-        if parts[0] not in self.models or not allowed(path):
-            return False
-        return not (len(parts) > 1 and parts[1].isdigit() and parts[1] not in self.models[parts[0]])
+        return selected_model_path(path, self.models) and allowed(path)
+
+
+def selected_model_path(path: str, models: dict[str, set[str]]) -> bool:
+    model, _, remainder = path.partition("/")
+    version = remainder.split("/", 1)[0]
+    return model in models and (not version.isdigit() or version in models[model])
 
 
 def scan_credentials(staging: Path, paths: list[str]) -> None:

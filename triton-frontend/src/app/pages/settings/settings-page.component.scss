@@ -1,11 +1,11 @@
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 1.8rem;
+  gap: var(--page-gap);
 }
 
 .card {
-  padding: 1.6rem;
+  padding: var(--card-padding);
 }
 
 .tab-content {
@@ -76,54 +76,6 @@
 .toggle-row.compact {
   padding: 0;
   border-bottom: 0;
-}
-
-.switch {
-  position: relative;
-  width: 52px;
-  height: 30px;
-  display: inline-block;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #cbd5f5;
-  border-radius: 999px;
-  transition: background 0.2s ease;
-}
-
-.slider::before {
-  content: "";
-  position: absolute;
-  height: 22px;
-  width: 22px;
-  left: 4px;
-  top: 4px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.2);
-}
-
-.switch input:checked + .slider {
-  background: #14b8a6;
-}
-
-.switch input:disabled + .slider {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(22px);
 }
 
 .toggle-title {
@@ -365,8 +317,6 @@
 }
 
 .actions {
-  display: flex;
-  gap: 0.8rem;
   margin-top: 1.6rem;
 }
 

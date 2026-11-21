@@ -101,7 +101,11 @@ export const APP_ROUTES: Routes = [
         component: InstanceModelProfilePageComponent,
       },
       { path: "instances/:id/s3", component: InstanceS3BrowserPageComponent },
-      { path: "s3-profiles", component: S3ProfilesPageComponent },
+      {
+        path: "s3-profiles",
+        component: S3ProfilesPageComponent,
+        canDeactivate: [(page: S3ProfilesPageComponent) => page.canLeave()],
+      },
       { path: "users", component: UsersPageComponent, canActivate: [adminGuard] },
       { path: "teams", redirectTo: "users", pathMatch: "full" },
       { path: "settings", component: SettingsPageComponent, canActivate: [adminGuard] },

@@ -1,3 +1,4 @@
+import { MatButtonModule } from "@angular/material/button";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
@@ -16,20 +17,23 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 @Component({
   selector: "app-task-builds-page",
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MatButtonModule],
   templateUrl: "./task-builds-page.component.html",
   styles: [
     `
       :host {
         display: block;
-        padding: 24px;
+        max-width: 1100px;
+        margin: auto;
+        padding: var(--card-padding);
       }
       article,
       form {
-        padding: 16px;
+        padding: var(--card-padding);
         margin: 16px 0;
-        border: 1px solid #8886;
-        border-radius: 8px;
+        background: white;
+        box-shadow: var(--shadow-card);
+        border-radius: var(--radius-lg);
       }
       label {
         display: block;
@@ -38,7 +42,13 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
       input,
       select {
         display: block;
-        min-width: 320px;
+        width: min(100%, 32rem);
+        min-height: var(--control-height);
+        border: 1px solid var(--mist-200);
+        border-radius: 10px;
+        background: white;
+        color: inherit;
+        font: inherit;
         max-width: 100%;
         padding: 8px;
       }

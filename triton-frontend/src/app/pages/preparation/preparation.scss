@@ -6,7 +6,7 @@
 }
 article,
 section {
-  border: 1px solid var(--mat-sys-outline-variant, #687583);
+  border: 1px solid var(--mist-200);
   border-radius: 12px;
   padding: 20px;
   margin: 20px 0;
@@ -29,14 +29,17 @@ label {
   display: grid;
   gap: 6px;
 }
-input,
+input:not([type="checkbox"], [type="radio"]),
 textarea,
 select {
-  padding: 10px;
+  min-height: var(--control-height);
+  max-width: 100%;
+  padding: 8px 12px;
+  font: inherit;
   color: inherit;
-  background: transparent;
-  border: 1px solid #687583;
-  border-radius: 4px;
+  background: white;
+  border: 1px solid #94a3b8;
+  border-radius: 10px;
 }
 button,
 a {

@@ -33,7 +33,7 @@ local evaluation, and with separate Python/npm processes for development.
 
 Product:
 
-- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and Add Instance.
+- [User Guide](user-guide.md): user workflows for dashboard, instances, inference, profile, S3, Add Deployment, Perf Analyzer, MLflow, and connecting existing instances.
 - [User Management](user-management.md): roles, local and OIDC users, invitations, password resets, approvals, and instance assignment.
 - [Workspaces](development-workspaces.md): the Kubernetes-backed, browser-based code-server workspace and its Triton deployment extension.
 - [Code-server Plugin Smoke Tests](development.md#code-server-plugin-smoke-tests): real browser workflows and code-server upgrade checks in an isolated cluster.

@@ -21,17 +21,17 @@ the object store.
 
 ## 1. Create a Development Workspace
 
-In Triton Control, open **Development** and create a CPU-only workspace for
+In Triton Control, open **Development → Workspaces** and create a CPU-only workspace for
 writing and testing the training code:
 
 | Field | Value |
 | --- | --- |
 | Triton development image | `nvcr.io/nvidia/tritonserver:26.10-py3` |
-| Image already has Development installed | Disabled |
+| Use preinstalled code-server | Disabled |
 | Workspace storage | At least `5Gi` |
 | GPU count | `0` |
 
-When the workspace is ready, open code-server from **Development**. Triton
+When the workspace is ready, select **Open in new tab** on the **Workspaces** page. Triton
 Control installs the Development runtime because the Python image does not
 include code-server. It also installs the **Triton Control Deploy** plugin, whose
 S3 browser appears alongside the workspace folders in **Explorer**.
@@ -99,7 +99,7 @@ already starts at the profile prefix.
 
 ## 4. Link the S3 Profile
 
-In the **Triton Control UI**, select **Workflows** in the left sidebar, then
+In the **Triton Control UI**, select **Development → Argo Workflows** in the sidebar, then
 click **Configure S3 Secrets** at the top right, as shown below.
 
 ![Triton Control Workflows page with Workflows selected in the sidebar and the Configure S3 Secrets button at the top right](screenshots/workflows-configure-s3-secrets.png)

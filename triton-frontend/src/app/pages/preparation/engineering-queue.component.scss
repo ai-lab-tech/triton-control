@@ -158,3 +158,26 @@ small {
     color: var(--ink-500);
   }
 }
+
+.queue-action-icon {
+  font-size: 18px;
+  vertical-align: middle;
+  margin-inline-end: 4px;
+}
+a.task-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  color: #0f766e;
+  font-weight: 600;
+  white-space: nowrap;
+}
+a.task-link:hover,
+a.task-link:focus-visible {
+  text-decoration: underline;
+}
+
+.task-chevron {
+  font-size: 18px;
+}

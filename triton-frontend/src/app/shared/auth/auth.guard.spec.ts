@@ -52,7 +52,7 @@ describe("authGuard", () => {
     expect(routerMock.createUrlTree).toHaveBeenCalled();
   });
 
-  it("AdminGuard_UserIsNotAdmin_RedirectsToLogin", async () => {
+  it("AdminGuard_UserIsNotAdmin_RedirectsToDashboard", async () => {
     // Arrange
     authState.setAuthenticatedUser({ name: "User", role: "viewer", accessAllowed: true });
 
@@ -60,6 +60,6 @@ describe("authGuard", () => {
     await TestBed.runInInjectionContext(() => adminGuard({} as any, { url: "/users" } as any));
 
     // Assert
-    expect(routerMock.createUrlTree).toHaveBeenCalled();
+    expect(routerMock.createUrlTree).toHaveBeenCalledWith(["/dashboard"]);
   });
 });

@@ -364,6 +364,64 @@ describe("Engineering preparation workflow", () => {
     spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
     return fixture;
   }
+  for (const kind of ["hf", "manual", "example"] as const) {
+    it(`submits the ${kind} workspace source from the capture form`, async () => {
+      // Arrange
+      const fixture = captureFixture();
+      const page = fixture.componentInstance;
+      page.expanded.set(true);
+      page.profileId = null;
+      page.prefix = "";
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const form = fixture.nativeElement.querySelector("form") as HTMLFormElement;
+      const kindInput = form.querySelector<HTMLSelectElement>('select[name="sourceKind"]')!;
+      kindInput.value = kind;
+      kindInput.dispatchEvent(new Event("change"));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const fields: Record<string, string> = {
+        workspaceId: "7",
+        workspaceFiles: "repo/iris/config.pbtxt",
+        modelRoot: "repo",
+      };
+      if (kind === "manual") fields["author"] = "Ada";
+      if (kind === "example") fields["project_path"] = "examples/street";
+      if (kind === "hf") {
+        fields["revision"] = "main";
+        fields["checkpoints"] = "iris/1/model.bin";
+      }
+      for (const [name, value] of Object.entries(fields)) {
+        const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+        field.value = value;
+        field.dispatchEvent(new Event("input"));
+      }
+      fixture.detectChanges();
+
+      // Act
+      form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+
+      // Assert
+      const capture = http.expectOne("/api/instances/7/preparation-requests");
+      expect(capture.request.body.source.kind).toBe(kind);
+      if (kind === "manual") expect(capture.request.body.source.author).toBe("Ada");
+      if (kind === "example")
+        expect(capture.request.body.source.project_path).toBe("examples/street");
+      if (kind === "hf") {
+        expect(capture.request.body.source.revision).toBe("main");
+        expect(capture.request.body.source.checkpoint_files).toEqual(["iris/1/model.bin"]);
+      }
+      expect(capture.request.body.source.workspace_model_root).toBe("repo");
+      expect(capture.request.body.workspace).toEqual({
+        workspace_id: 7,
+        files: ["repo/iris/config.pbtxt"],
+      });
+      capture.flush({}, { status: 400, statusText: "Invalid fixture" });
+      await fixture.whenStable();
+      fixture.destroy();
+    });
+  }
+
   it("sends the snapshot contract, retains idempotency after a lost response and never mutates the experiment", async () => {
     // Arrange
     const fixture = captureFixture();

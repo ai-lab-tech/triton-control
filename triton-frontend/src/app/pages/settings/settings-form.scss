@@ -1,0 +1,42 @@
+:host {
+  display: grid;
+  gap: 1rem;
+}
+h2,
+p {
+  margin: 0;
+}
+p {
+  color: var(--ink-700);
+}
+form {
+  display: grid;
+  gap: 1rem;
+}
+.limits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+label + mat-form-field {
+  margin-top: 0.4rem;
+}
+:host > label + mat-form-field {
+  margin-top: -0.6rem;
+}
+mat-form-field {
+  width: 100%;
+}
+details {
+  border-top: 1px solid var(--mist-200);
+  padding-top: 1rem;
+}
+details p {
+  margin-top: 0.75rem;
+}

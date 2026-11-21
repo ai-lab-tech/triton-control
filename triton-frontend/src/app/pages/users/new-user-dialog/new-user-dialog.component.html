@@ -1,17 +1,16 @@
 <div class="dialog">
   <h2 mat-dialog-title class="dialog-title">Add user</h2>
-  <p class="dialog-subtitle">Create a new identity and assign instance access.</p>
 
   <mat-dialog-content class="dialog-form">
     <div class="form-row">
       <label class="field-label" for="dialog-user-name">Full name</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input id="dialog-user-name" matInput [(ngModel)]="newUser.name" placeholder="Full name" />
       </mat-form-field>
     </div>
     <div class="form-row">
       <label class="field-label" for="dialog-user-email">Email</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input
           id="dialog-user-email"
           matInput
@@ -24,7 +23,7 @@
     </div>
     <div class="form-row">
       <label class="field-label" for="dialog-user-role">Role</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-select id="dialog-user-role" [(ngModel)]="newUser.role">
           <mat-option value="admin">admin</mat-option>
           <mat-option value="member">member</mat-option>
@@ -33,32 +32,13 @@
       </mat-form-field>
     </div>
     <div class="form-row">
-      <label class="field-label" for="dialog-user-auth">Auth method</label>
-      <mat-form-field appearance="outline">
-        <mat-select
-          id="dialog-user-auth"
-          [ngModel]="oidcEnabled() ? 'oidc' : 'local'"
-          [disabled]="true"
-        >
-          @if (oidcEnabled()) {
-            <mat-option value="oidc">OIDC identity</mat-option>
-          } @else {
-            <mat-option value="local">Local password</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-      <div class="field-note">
-        @if (oidcEnabled()) {
-          OIDC is enabled system-wide. New users must use OIDC.
-        } @else {
-          OIDC is disabled system-wide. New users must use local password login.
-        }
-      </div>
+      <span class="field-label">Authentication</span>
+      <span>{{ oidcEnabled() ? "OIDC identity" : "Local password" }}</span>
     </div>
     @if (!oidcEnabled() && invitationAvailable) {
       <div class="form-row">
         <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
             <mat-option value="invite">Invite user</mat-option>
             <mat-option value="inactive">Create inactive account</mat-option>
@@ -68,7 +48,7 @@
     }
     <div class="form-row">
       <label class="field-label" for="dialog-user-instances">Assigned instances</label>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-select id="dialog-user-instances" [(ngModel)]="newUser.instances" multiple>
           @for (instance of instances(); track instance) {
             <mat-option [value]="instance">{{ instance }}</mat-option>
@@ -88,7 +68,7 @@
       <span class="dialog-error">{{ error }}</span>
     }
     @if (manualLink) {
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <input matInput [value]="manualLink" readonly aria-label="One-time activation link" />
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
