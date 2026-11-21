@@ -139,6 +139,65 @@ curl -X POST "http://localhost:8000/v2/models/yolo_pipeline/infer" \
   --data-binary @request.json
 ```
 
+## 6. Capture the Experiment for Engineering
+
+Use this capture to hand off the detector, including its preprocessing and
+postprocessing, for evaluation on a reviewed set of street scenes. The
+development deployment uses the weights already uploaded to S3. Keep large
+artifacts there and select the source files you want engineering to review.
+
+After running inference, change `yolov8_onnx/config.pbtxt` in the workspace, for
+example by changing `KIND_GPU` to `KIND_CPU` for a proposed CPU deployment. Keep
+the live experiment deployed while you capture the edited config.
+
+Send the following JSON to `POST /api/instances/{instance_id}/preparation-requests`
+with your authenticated session and a new `Idempotency-Key`. Replace the
+deployment UID and generation with the values from
+`GET /api/instances/{instance_id}/pods`. Use your actual workspace ID, adjust the
+folder name if needed, and replace the commit placeholder with the output of
+`git rev-parse HEAD` from the checkout that supplied the example.
+
+```json
+{
+  "title": "Evaluate the YOLOv8 street-scene detector on CPU",
+  "deployment_uid": "DEPLOYMENT-UID",
+  "expected_generation": 1,
+  "models": [
+    {"name": "yolo_pipeline", "versions": ["1"]},
+    {"name": "preprocess", "versions": ["1"]},
+    {"name": "yolov8_onnx", "versions": ["1"]},
+    {"name": "postprocess", "versions": ["1"]}
+  ],
+  "workspace": {
+    "workspace_id": 7,
+    "files": [
+      "yolov8-object-detection-ensemble/README.md",
+      "yolov8-object-detection-ensemble/yolov8_onnx/config.pbtxt"
+    ]
+  },
+  "source": {
+    "kind": "example",
+    "repository": "github.com/ai-lab-tech/triton-control",
+    "commit": "REPLACE_WITH_FULL_CHECKOUT_COMMIT",
+    "project_path": "examples/onnx/yolov8-object-detection-ensemble",
+    "workspace_model_root": "yolov8-object-detection-ensemble",
+    "source_documents": ["yolov8-object-detection-ensemble/README.md"]
+  },
+  "expected_behavior": "Return boxes, confidence scores and class IDs for cars, bicycles and people.",
+  "acceptance_criteria": "Measure per-class recall and p95 inference latency on a reviewed set of daytime and dusk street scenes."
+}
+```
+
+Follow the returned operation URL and open the snapshot receipt once it
+succeeds. The receipt inventories the S3 model files separately from the edited
+config and lists `workspace_model_bytes_differ` for the edited config. The partial file selection also produces
+`workspace_model_comparison_incomplete`.
+Add any model card and license supplied with your weights to the workspace
+selection and declare their paths in `source`. The preparation task tracks
+missing provenance and evaluation inputs before the CPU configuration can be
+validated. See the [snapshot capture guide](../../../docs/experiment-snapshots.md)
+for other source types and recapture behavior.
+
 ## Optional Python Client
 
 The Python client also calls the deployed Triton instance. Change the client URL
