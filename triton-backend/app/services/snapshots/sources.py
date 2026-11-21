@@ -3,12 +3,17 @@
 import json
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from app.schemas.experiment_snapshots import ExampleSource, HFSource, PreparationRequest, SourceProvenance
+from app.schemas.experiment_snapshots import (
+    ExampleSource,
+    HFSource,
+    PreparationRequest,
+    SourceProvenance,
+    selected_model_path,
+)
 from app.schemas.lineage import FileEntry, InventoryV1
 from app.services.lineage import digest, inventory_digest
-from app.services.snapshots.artifacts import selected_model_path
 
 WORKSPACE_PREFIX = ".workspace/"
 MAX_MANIFEST_BYTES = 1024**2
@@ -27,15 +32,17 @@ def _hint(value: object) -> str | None:
     return None
 
 
-def _hf_hints(staging: Path, entry: FileEntry | None) -> tuple[str | None, str | None, dict[str, str | int]]:
+def _hf_document(staging: Path, entry: FileEntry | None) -> dict[str, Any]:
     if entry is None or entry.size > MAX_MANIFEST_BYTES:
-        return None, None, {}
+        return {}
     try:
         document = json.loads((staging / entry.path).read_bytes())
     except (ValueError, RecursionError):
-        return None, None, {}
-    if not isinstance(document, dict):
-        return None, None, {}
+        return {}
+    return document if isinstance(document, dict) else {}
+
+
+def _hf_hints(document: dict[str, Any]) -> tuple[str | None, str | None, dict[str, str | int]]:
     options: dict[str, str | int] = {}
     for key in STRING_OPTIONS:
         value = _hint(document.get(key))
@@ -46,6 +53,22 @@ def _hf_hints(staging: Path, entry: FileEntry | None) -> tuple[str | None, str |
         if type(number) is int and 0 <= number <= 2**31 - 1:
             options[key] = number
     return _hint(document.get("generator")), _hint(document.get("generator_version")), options
+
+
+def _hf_origin_conflicts(source: HFSource, document: dict[str, Any]) -> bool:
+    repository, revision = document.get("repo_id"), document.get("revision")
+    if isinstance(repository, str) and source.repository and repository != source.repository:
+        return True
+    if not isinstance(revision, str) or not revision:
+        return False
+    # A symbolic ref and its resolved commit are different representations, not
+    # evidence of a conflict. Compare commits with commits and refs with refs.
+    is_commit = bool(re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", revision))
+    for declared in (source.revision, source.resolved_commit):
+        if declared and bool(re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", declared)) == is_commit:
+            if revision != declared:
+                return True
+    return False
 
 
 def workspace_model_files(request: PreparationRequest, workspace: InventoryV1) -> dict[str, FileEntry]:
@@ -67,10 +90,18 @@ def _hf_provenance(
     source: HFSource, staging: Path, files: dict[str, FileEntry], provenance: SourceProvenance, gaps: set[str],
 ) -> SourceProvenance:
     manifest = files.get(WORKSPACE_PREFIX + source.serving_manifest) if source.serving_manifest else None
-    generator, version, options = _hf_hints(staging, manifest)
+    generator, version, options = _hf_hints(_hf_document(staging, manifest))
     if source.acquisition_record:
         record = files[WORKSPACE_PREFIX + source.acquisition_record]
-        record_generator, record_version, acquired_options = _hf_hints(staging, record)
+        document = _hf_document(staging, record)
+        record_generator, record_version, acquired_options = _hf_hints(document)
+        serving_image = _hint(document.get("serving_image"))
+        if serving_image is not None:
+            if "image" in acquired_options and acquired_options["image"] != serving_image:
+                gaps.add("hf_generator_metadata_conflict")
+            acquired_options["image"] = serving_image
+        if _hf_origin_conflicts(source, document):
+            gaps.add("hf_source_revision_conflict")
         if not acquired_options:
             gaps.add("hf_acquisition_options_missing")
         if (
@@ -94,7 +125,8 @@ def _hf_provenance(
     if not source.repository or not source.resolved_commit:
         gaps.add("hf_source_revision_missing")
     revision_fingerprint = None
-    if source.repository and (source.revision or source.resolved_commit) and checkpoint:
+    if (source.repository and (source.revision or source.resolved_commit) and checkpoint
+            and "hf_source_revision_conflict" not in gaps):
         revision_fingerprint = digest({
             "repository": source.repository,
             "revision": source.revision,

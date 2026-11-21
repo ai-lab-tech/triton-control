@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from app.exceptions import BadRequestError
+from app.schemas.experiment_snapshots import selected_model_path
 from app.schemas.serving_metadata import StartupModel
 from app.services.candidates.artifacts import S3Source
 from app.services.snapshots.safety import allowed, reject_secrets
@@ -16,12 +17,6 @@ class SelectedModels(S3Source):
 
     def includes(self, path: str) -> bool:
         return selected_model_path(path, self.models) and allowed(path)
-
-
-def selected_model_path(path: str, models: dict[str, set[str]]) -> bool:
-    model, _, remainder = path.partition("/")
-    version = remainder.split("/", 1)[0]
-    return model in models and (not version.isdigit() or version in models[model])
 
 
 def scan_credentials(staging: Path, paths: list[str]) -> None:

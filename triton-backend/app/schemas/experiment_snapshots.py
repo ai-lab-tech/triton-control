@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Self
 
 from app.schemas.candidate_import import ArtifactLocation
@@ -40,6 +40,28 @@ GitCommit = Annotated[str, Field(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")]
 ProjectPath = Path | Literal["."]
 
 
+def valid_hf_repository(value: str) -> str:
+    if "--" in value or ".." in value or value.endswith(".git"):
+        raise ValueError("Invalid Hugging Face repository ID")
+    return value
+
+
+HFRepositoryName = Annotated[
+    str,
+    Field(
+        max_length=96,
+        pattern=r"^([A-Za-z0-9_]([A-Za-z0-9_.-]*[A-Za-z0-9_])?/)?[A-Za-z0-9_]([A-Za-z0-9_.-]*[A-Za-z0-9_])?$",
+    ),
+    AfterValidator(valid_hf_repository),
+]
+
+
+def selected_model_path(path: str, models: dict[str, set[str]]) -> bool:
+    model, separator, remainder = path.partition("/")
+    version = remainder.split("/", 1)[0]
+    return bool(separator) and model in models and (not version.isdigit() or version in models[model])
+
+
 class SourceInput(Contract):
     model_card: Path | None = None
     license_file: Path | None = None
@@ -49,7 +71,7 @@ class SourceInput(Contract):
 
 class HFSource(SourceInput):
     kind: Literal["hf"]
-    repository: RepositoryName | None = None
+    repository: HFRepositoryName | None = None
     revision: SourceLabel | None = None
     resolved_commit: GitCommit | None = None
     serving_manifest: Path | None = None
@@ -120,9 +142,12 @@ class PreparationRequest(Contract):
             root = self.source.workspace_model_root
             if root:
                 prefix = "" if root == "." else f"{root}/"
-                prefixes = tuple(f"{prefix}{model.name}/" for model in self.models)
-                if not any(path.startswith(prefixes) for path in selected):
-                    raise ValueError("Select files for an intended model under workspace_model_root")
+                models = {model.name: set(model.versions) for model in self.models}
+                if not any(
+                    path.startswith(prefix) and selected_model_path(path.removeprefix(prefix), models)
+                    for path in selected
+                ):
+                    raise ValueError("Select files for an intended model/version under workspace_model_root")
         return self
 
 

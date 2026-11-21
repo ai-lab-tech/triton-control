@@ -10518,9 +10518,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 256,
-                "minLength": 1,
-                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$"
+                "maxLength": 96,
+                "pattern": "^([A-Za-z0-9_]([A-Za-z0-9_.-]*[A-Za-z0-9_])?/)?[A-Za-z0-9_]([A-Za-z0-9_.-]*[A-Za-z0-9_])?$"
               },
               {
                 "type": "null"
