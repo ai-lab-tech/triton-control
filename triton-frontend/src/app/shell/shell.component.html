@@ -77,6 +77,34 @@
                 <span class="nav-label">{{ item.label }}</span>
               </span>
             </a>
+            @if (
+              item.path === "/workspaces" &&
+              workspaces().length > 1 &&
+              (isHandset() || !navCollapsed())
+            ) {
+              <ul class="workspace-nav-list" aria-label="Available workspaces">
+                @for (workspace of workspaces(); track workspace.id) {
+                  <li>
+                    <a
+                      routerLink="/workspaces"
+                      [queryParams]="{ workspace: workspace.id }"
+                      routerLinkActive="active"
+                      [routerLinkActiveOptions]="workspaceLinkMatch"
+                      ariaCurrentWhenActive="page"
+                      [title]="workspaceDirectory.label(workspace)"
+                      (click)="closeNavOnMobile()"
+                    >
+                      <span class="material-icons" aria-hidden="true">{{
+                        workspace.task_title ? "assignment" : "terminal"
+                      }}</span>
+                      <span class="workspace-nav-name">{{
+                        workspaceDirectory.label(workspace)
+                      }}</span>
+                    </a>
+                  </li>
+                }
+              </ul>
+            }
           }
         }
       </nav>
@@ -150,7 +178,7 @@
   }
 
   <mat-sidenav-content class="content" (click)="closeAdminMenu()">
-    @if (!topbarHidden()) {
+    @if (!topbarHidden() || isHandset()) {
       <mat-toolbar class="topbar">
         @if (isLoggedIn() && isHandset()) {
           <button

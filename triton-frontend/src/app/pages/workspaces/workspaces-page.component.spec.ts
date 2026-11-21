@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from "@angular/core/testing";
-import { Router } from "@angular/router";
-import { of, throwError } from "rxjs";
+import { NavigationEnd, Router } from "@angular/router";
+import { of, Subject, throwError } from "rxjs";
 
 import { BASE_PATH, CodeServerDTO, DevelopmentService } from "../../api/generated/index";
 import { AuthService } from "../../shared/auth/auth.service";
+import { WorkspaceDirectory } from "../../shared/workspace-directory.service";
 import { WorkspacesPageComponent } from "./workspaces-page.component";
 
 describe("WorkspacesPageComponent", () => {
@@ -29,6 +30,7 @@ describe("WorkspacesPageComponent", () => {
   let codeServersApi: jasmine.SpyObj<DevelopmentService>;
   let authService: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
+  let navigation: Subject<NavigationEnd>;
 
   beforeEach(async () => {
     window.sessionStorage.clear();
@@ -54,7 +56,10 @@ describe("WorkspacesPageComponent", () => {
     ]);
     authService.refreshSession.and.resolveTo();
     authService.getAccessToken.and.returnValue("token-1");
-    router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]);
+    navigation = new Subject<NavigationEnd>();
+    router = jasmine.createSpyObj<Router>("Router", ["navigateByUrl"], {
+      events: navigation.asObservable(),
+    });
     Object.defineProperty(router, "url", { value: "/workspaces", configurable: true });
 
     await TestBed.configureTestingModule({
@@ -189,14 +194,17 @@ describe("WorkspacesPageComponent", () => {
     // Arrange
     const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
-    component.workspaces.set([readyWorkspace]);
+    await component.load();
+    TestBed.inject(WorkspaceDirectory).upsert(readyWorkspace);
     component.selectWorkspace(readyWorkspace);
+    const confirm = spyOn(window, "confirm").and.returnValue(true);
 
     // Act
     await component.delete(readyWorkspace);
 
     // Assert
     expect(codeServersApi.deleteCodeServerApiDevelopmentCodeServerIdDelete).toHaveBeenCalledWith(3);
+    expect(confirm).toHaveBeenCalledWith('Delete workspace "workspace"?');
     expect(component.workspaces()).toEqual([]);
     expect(component.selectedWorkspaceId()).toBeNull();
     expect(component.embeddedWorkspaceUrl()).toBeNull();
@@ -428,7 +436,7 @@ describe("WorkspacesPageComponent", () => {
     );
     const fixture = TestBed.createComponent(WorkspacesPageComponent);
     const component = fixture.componentInstance;
-    component.workspaces.set([readyWorkspace]);
+    TestBed.inject(WorkspaceDirectory).upsert(readyWorkspace);
     component.selectWorkspace(readyWorkspace);
 
     // Act
@@ -479,5 +487,45 @@ describe("WorkspacesPageComponent", () => {
     expect(`${component.embeddedWorkspaceUrl()}`).toContain(
       "/api/development/7/proxy/?_tc_reload=",
     );
+  });
+
+  it("switches between workspaces on same-page navigation", async () => {
+    // Arrange
+    const task = {
+      ...readyWorkspace,
+      id: 7,
+      task_title: "Prepare Iris",
+      url: "/api/development/7/proxy/",
+    };
+    codeServersApi.listCodeServersApiDevelopmentGet.and.returnValue(
+      of([readyWorkspace, task]) as any,
+    );
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
+    const page = fixture.componentInstance;
+    await page.load();
+
+    // Act
+    navigation.next(new NavigationEnd(2, "/workspaces?workspace=7", "/workspaces?workspace=7"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Assert
+    expect(page.selectedWorkspaceId()).toBe(7);
+    expect(page.selectedWorkspace()?.task_title).toBe("Prepare Iris");
+    expect(String(page.embeddedWorkspaceUrl())).toContain("/api/development/7/proxy/");
+  });
+
+  it("keeps a workspace when deletion is cancelled", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(WorkspacesPageComponent);
+    const task = { ...readyWorkspace, task_title: "Prepare Iris" };
+    const confirm = spyOn(window, "confirm").and.returnValue(false);
+
+    // Act
+    await fixture.componentInstance.delete(task);
+
+    // Assert
+    expect(confirm).toHaveBeenCalledWith('Delete workspace "Prepare Iris"?');
+    expect(codeServersApi.deleteCodeServerApiDevelopmentCodeServerIdDelete).not.toHaveBeenCalled();
   });
 });

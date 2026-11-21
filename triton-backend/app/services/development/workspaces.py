@@ -35,7 +35,7 @@ def list_code_servers(session: Session, claims: dict[str, Any]) -> list[CodeServ
             continue
         visible.append(row)
         _refresh_status(session, row)
-    return [workspace_dto(row) for row in visible]
+    return [workspace_dto(row, session) for row in visible]
 
 
 def create_code_server(
@@ -94,7 +94,7 @@ def get_code_server(session: Session, claims: dict[str, Any], code_server_id: in
     installation_policy.require("development_tools")
     row = _get_owned(session, claims, code_server_id)
     _refresh_status(session, row)
-    return workspace_dto(row)
+    return workspace_dto(row, session)
 
 
 def get_owned_code_server(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
@@ -179,7 +179,8 @@ def _refresh_status(session: Session, row: CodeServerEntity) -> None:
         code_servers.save(session, row)
 
 
-def workspace_dto(row: CodeServerEntity) -> CodeServerDTO:
+def workspace_dto(row: CodeServerEntity, session: Session | None = None) -> CodeServerDTO:
+    association = associations.for_workspace(session, row.id) if session is not None and row.id else None
     return CodeServerDTO(
         id=row.id or 0,
         name=row.name,
@@ -191,6 +192,7 @@ def workspace_dto(row: CodeServerEntity) -> CodeServerDTO:
         status=row.status,
         status_message=row.status_message,
         applied_resources=row.applied_resources or [],
+        task_title=task_repository.get(session, association.task_id).title if session and association else None,
     )
 
 

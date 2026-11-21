@@ -8158,6 +8158,17 @@
             },
             "type": "array",
             "title": "Applied Resources"
+          },
+          "task_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Title"
           }
         },
         "type": "object",

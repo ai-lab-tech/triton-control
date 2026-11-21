@@ -81,6 +81,7 @@ class CodeServerDTO(SQLModel):
     status: str
     status_message: str
     applied_resources: List[str]
+    task_title: str | None = None
 
 
 class CodeServerDeleteResponse(SQLModel):

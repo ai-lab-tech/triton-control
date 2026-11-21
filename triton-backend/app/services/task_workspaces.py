@@ -79,7 +79,7 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         session.refresh(workspace)
         _provision_workspace(session, workspace, request, task_id, inputs)
         session.commit()
-        return TaskWorkspaceDTO(task_id=task_id, workspace=workspaces.workspace_dto(workspace))
+        return TaskWorkspaceDTO(task_id=task_id, workspace=workspaces.workspace_dto(workspace, session))
     except Exception:
         session.rollback()
         raise

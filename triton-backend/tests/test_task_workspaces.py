@@ -245,6 +245,17 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
             self.open()
         self.assertEqual(workspaces.list_code_servers(self.session, self.engineer), [])
 
+    def test_task_workspace_title_is_available_in_workspace_navigation(self):
+        # Arrange
+        opened = self.open()
+
+        # Act
+        available = workspaces.list_code_servers(self.session, self.engineer)
+
+        # Assert
+        self.assertEqual(opened.workspace.task_title, self.task.title)
+        self.assertEqual([(item.id, item.task_title) for item in available], [(opened.workspace.id, self.task.title)])
+
     def test_released_claim_blocks_existing_workspace(self):
         result = self.open()
         task = preparation.get_task(self.session, self.engineer, self.task.id)

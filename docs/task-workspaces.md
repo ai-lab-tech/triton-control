@@ -5,6 +5,11 @@ handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
 The existing personal workspace can coexist with task workspaces.
 
+When you have several workspaces, select one under **Development → Workspaces**
+in the navigation. Task workspaces use the task title. To remove a finished
+workspace, open it and select **Delete** in its toolbar. The handoff and task
+history remain available.
+
 When creating the task workspace, choose its image, GPU count, optional CPU
 cores and RAM, and writable storage. The default GPU count is zero. Leaving
 CPU or RAM blank uses the cluster defaults. Reopening displays the saved

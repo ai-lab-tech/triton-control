@@ -19,6 +19,7 @@ import { MatDividerModule } from "@angular/material/divider";
 import { AuthStore } from "../shared/auth/auth.store";
 import { AuthService } from "../shared/auth/auth.service";
 import { ChromeService } from "../shared/chrome.service";
+import { WorkspaceDirectory } from "../shared/workspace-directory.service";
 import { environment } from "../../environments/environment";
 import { Store } from "@ngrx/store";
 import { selectDashboardFleetHealthPercentage } from "../state/dashboard/dashboard.selectors";
@@ -57,6 +58,14 @@ export class ShellComponent {
   private readonly oidc = inject(AuthService);
   private readonly store = inject(Store);
   private readonly chrome = inject(ChromeService);
+  readonly workspaceDirectory = inject(WorkspaceDirectory);
+  readonly workspaces = this.workspaceDirectory.workspaces;
+  readonly workspaceLinkMatch = {
+    paths: "exact",
+    queryParams: "exact",
+    fragment: "ignored",
+    matrixParams: "ignored",
+  } as const;
   readonly topbarHidden = this.chrome.topbarHidden;
   readonly userName = this.auth.userName;
   readonly role = this.auth.role;
@@ -165,6 +174,17 @@ export class ShellComponent {
   });
 
   constructor() {
+    effect(() => {
+      if (
+        !this.isLoggedIn() ||
+        !this.canWriteInstances() ||
+        !this.installation.allows("development_tools")
+      ) {
+        this.workspaceDirectory.clear();
+        return;
+      }
+      if (this.kubernetesEnabled()) void this.workspaceDirectory.refresh().catch(() => undefined);
+    });
     effect(() => {
       if (!this.isLoggedIn()) {
         this.kubernetesEnabled.set(false);
