@@ -145,6 +145,44 @@
   gap: 0.4rem;
 }
 
+.workspace-nav-list {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  border-inline-start: 1px solid rgba(148, 163, 184, 0.32);
+  margin: 0 0 4px 22px;
+  padding-inline-start: 8px;
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding-inline: 8px;
+    border-radius: 8px;
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 0.82rem;
+
+    &:hover,
+    &.active {
+      color: #f8fafc;
+      background: rgba(148, 163, 184, 0.18);
+    }
+  }
+
+  .material-icons {
+    flex: 0 0 auto;
+    font-size: 16px;
+  }
+}
+
+.workspace-nav-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nav-divider {
   align-self: stretch;
   margin: 0.6rem 0 0.2rem;

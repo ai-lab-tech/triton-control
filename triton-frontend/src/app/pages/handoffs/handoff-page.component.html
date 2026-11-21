@@ -2,12 +2,24 @@
   <header class="page-heading">
     <div>
       <p class="eyebrow">MODEL PREPARATION</p>
-      <h1>{{ detail() ? "Handoff receipt" : "Submit model for preparation" }}</h1>
+      <h1>
+        {{
+          detail()
+            ? "Handoff receipt"
+            : originalId
+              ? completingHandoff()
+                ? "Add missing information"
+                : "Revise handoff"
+              : "Submit model for preparation"
+        }}
+      </h1>
       <p class="subtitle">
         {{
           detail()
             ? "Exact source inputs and engineering task reference."
-            : "Bring your model. Give engineering the context to prepare it for serving."
+            : originalId
+              ? "Review the copied details and submit a new revision for engineering."
+              : "Bring your model. Give engineering the context to prepare it for serving."
         }}
       </p>
     </div>
@@ -27,6 +39,12 @@
   </header>
   @if (error()) {
     <div class="notice error" role="alert">{{ error() }}</div>
+  }
+  @if (draftLoading()) {
+    <p role="status">{{ originalId ? "Loading original handoff…" : "Loading source profiles…" }}</p>
+  }
+  @if (draftLoadFailed() && !capture()) {
+    <button mat-stroked-button (click)="loadDraft()">Retry loading form</button>
   }
   @if (busy()) {
     <p role="status">
@@ -62,9 +80,27 @@
     <p class="notice">
       Submitting and inspecting handoffs requires member or administrator access.
     </p>
-  } @else if (!detail() && !capture()) {
+  } @else if (!detail() && !capture() && !draftLoading() && !draftLoadFailed()) {
     <div class="submission-layout">
       <form #form="ngForm" (ngSubmit)="submit()" class="submission-form">
+        @if (original(); as previous) {
+          <p class="notice">
+            Based on
+            <a [routerLink]="['/preparation/handoffs', previous.id]">{{
+              previous.request.title
+            }}</a>
+            (revision {{ previous.request.revision }}).
+            @if (completingHandoff()) {
+              Add the remaining evaluation details, then claim the new task to open its workspace.
+            }
+          </p>
+        }
+        @if (unavailableRevisionProfile()) {
+          <p class="notice">
+            An original S3 profile is unavailable. Select an available profile for each affected
+            input.
+          </p>
+        }
         <fieldset [disabled]="busy()" class="form-card">
           <legend><span class="step-number" aria-hidden="true">01</span> Model source</legend>
           <p class="section-intro">Choose the model you want engineering to work with.</p>
@@ -139,29 +175,31 @@
               No source profiles available. Ask an administrator to configure an S3 profile.
             </p>
           }
-          <details class="revision-details" [open]="!!previousHandoffId">
-            <summary class="app-disclosure">
-              Revision details <span>For retries or updated models</span>
-            </summary>
-            <div class="fields">
-              <mat-form-field appearance="outline">
-                <mat-label>Submission revision</mat-label>
-                <input matInput name="revision" [(ngModel)]="revision" required maxlength="256" />
-                <mat-hint>
-                  {{
-                    previousHandoffId
-                      ? "Enter a new revision, such as 2."
-                      : "Keep for retries. Change for updated inputs."
-                  }}
-                </mat-hint>
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Previous handoff ID (optional)</mat-label>
-                <input matInput name="previousHandoff" [(ngModel)]="previousHandoffId" />
-                <mat-hint>Link the original handoff when submitting a revision.</mat-hint>
-              </mat-form-field>
-            </div>
-          </details>
+          @if (!originalId) {
+            <details class="revision-details" [open]="!!previousHandoffId">
+              <summary class="app-disclosure">
+                Revision details <span>For retries or updated models</span>
+              </summary>
+              <div class="fields">
+                <mat-form-field appearance="outline">
+                  <mat-label>Submission revision</mat-label>
+                  <input matInput name="revision" [(ngModel)]="revision" required maxlength="256" />
+                  <mat-hint>
+                    {{
+                      previousHandoffId
+                        ? "Use a revision different from the previous handoff."
+                        : "Keep for retries. Change for updated inputs."
+                    }}
+                  </mat-hint>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Previous handoff ID (optional)</mat-label>
+                  <input matInput name="previousHandoff" [(ngModel)]="previousHandoffId" />
+                  <mat-hint>Link the original handoff when submitting a revision.</mat-hint>
+                </mat-form-field>
+              </div>
+            </details>
+          }
         </fieldset>
         <fieldset [disabled]="busy()" class="form-card">
           <legend>
@@ -170,64 +208,174 @@
           <p class="section-intro">
             Help engineering understand what a successful model looks like.
           </p>
+          <ng-template #fieldHelp let-field let-help="help">
+            <button
+              mat-icon-button
+              type="button"
+              class="evaluation-help-button"
+              [attr.aria-label]="help.label + ' help'"
+              [attr.aria-controls]="'evaluation-help-' + field"
+              [attr.aria-expanded]="openHelp() === field"
+              (click)="toggleHelp(field)"
+            >
+              <span class="material-icons" aria-hidden="true">help_outline</span>
+            </button>
+            <p
+              class="evaluation-help-text"
+              [id]="'evaluation-help-' + field"
+              [hidden]="openHelp() !== field"
+            >
+              {{ help.text }}
+            </p>
+          </ng-template>
           <div class="fields">
-            <mat-form-field appearance="outline">
-              <mat-label>Evaluation dataset object path (optional)</mat-label>
-              <input
-                matInput
-                name="dataset"
-                [(ngModel)]="datasetPath"
-                maxlength="1024"
-                placeholder="datasets/evaluation.csv"
+            <div class="evaluation-field">
+              <mat-form-field appearance="outline">
+                <mat-label
+                  >Evaluation dataset object path{{
+                    completingHandoff() ? "" : " (optional)"
+                  }}</mat-label
+                >
+                <input
+                  matInput
+                  name="dataset"
+                  aria-describedby="evaluation-help-dataset"
+                  [(ngModel)]="datasetPath"
+                  [required]="completingHandoff()"
+                  maxlength="1024"
+                  placeholder="datasets/evaluation.csv"
+                />
+              </mat-form-field>
+              <ng-container
+                *ngTemplateOutlet="
+                  fieldHelp;
+                  context: { $implicit: 'dataset', help: evaluationHelp.dataset }
+                "
               />
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Baseline object path (optional)</mat-label>
-              <input
-                matInput
-                name="baseline"
-                [(ngModel)]="baselinePath"
-                maxlength="1024"
-                placeholder="baselines/results.json"
+            </div>
+            @if (originalId && datasetPath.trim()) {
+              <mat-form-field appearance="outline">
+                <mat-label>Evaluation dataset S3 profile</mat-label>
+                <mat-select
+                  name="datasetProfile"
+                  [(ngModel)]="datasetProfileId"
+                  [canSelectNullableOptions]="true"
+                >
+                  <mat-option [value]="null">Use model profile</mat-option>
+                  @for (profile of profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
+            <div class="evaluation-field">
+              <mat-form-field appearance="outline">
+                <mat-label
+                  >Baseline object path{{ completingHandoff() ? "" : " (optional)" }}</mat-label
+                >
+                <input
+                  matInput
+                  name="baseline"
+                  aria-describedby="evaluation-help-baseline"
+                  [(ngModel)]="baselinePath"
+                  [required]="completingHandoff()"
+                  maxlength="1024"
+                  placeholder="baselines/results.json"
+                />
+              </mat-form-field>
+              <ng-container
+                *ngTemplateOutlet="
+                  fieldHelp;
+                  context: { $implicit: 'baseline', help: evaluationHelp.baseline }
+                "
               />
-            </mat-form-field>
+            </div>
+            @if (originalId && baselinePath.trim()) {
+              <mat-form-field appearance="outline">
+                <mat-label>Baseline S3 profile</mat-label>
+                <mat-select
+                  name="baselineProfile"
+                  [(ngModel)]="baselineProfileId"
+                  [canSelectNullableOptions]="true"
+                >
+                  <mat-option [value]="null">Use model profile</mat-option>
+                  @for (profile of profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+            }
           </div>
-          <mat-form-field appearance="outline" class="wide">
-            <mat-label>Expected behavior (optional)</mat-label>
-            <textarea
-              matInput
-              name="behavior"
-              [(ngModel)]="expectedBehavior"
-              rows="3"
-              maxlength="8000"
-              placeholder="Describe expected outputs and representative examples."
-            ></textarea>
-          </mat-form-field>
-          <mat-form-field appearance="outline" class="wide">
-            <mat-label>Acceptance criteria (optional)</mat-label>
-            <textarea
-              matInput
-              name="criteria"
-              [(ngModel)]="criteria"
-              rows="3"
-              maxlength="8000"
-              placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
-            ></textarea>
-          </mat-form-field>
-          <p class="evaluation-note">
-            <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
-            later with a new revision. Missing inputs block release readiness.
+          <p class="evaluation-file-note">
+            Triton Control verifies the dataset and baseline files when staging the workspace. The
+            engineer reviews their contents and runs the evaluation.
           </p>
+          <div class="evaluation-field">
+            <mat-form-field appearance="outline" class="wide">
+              <mat-label>Expected behavior{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
+              <textarea
+                matInput
+                name="behavior"
+                aria-describedby="evaluation-help-behavior"
+                [(ngModel)]="expectedBehavior"
+                [required]="completingHandoff()"
+                rows="3"
+                maxlength="8000"
+                placeholder="Describe expected outputs and representative examples."
+              ></textarea>
+            </mat-form-field>
+            <ng-container
+              *ngTemplateOutlet="
+                fieldHelp;
+                context: { $implicit: 'behavior', help: evaluationHelp.behavior }
+              "
+            />
+          </div>
+          <div class="evaluation-field">
+            <mat-form-field appearance="outline" class="wide">
+              <mat-label
+                >Acceptance criteria{{ completingHandoff() ? "" : " (optional)" }}</mat-label
+              >
+              <textarea
+                matInput
+                name="criteria"
+                aria-describedby="evaluation-help-criteria"
+                [(ngModel)]="criteria"
+                [required]="completingHandoff()"
+                rows="3"
+                maxlength="8000"
+                placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
+              ></textarea>
+            </mat-form-field>
+            <ng-container
+              *ngTemplateOutlet="
+                fieldHelp;
+                context: { $implicit: 'criteria', help: evaluationHelp.criteria }
+              "
+            />
+          </div>
+          @if (!completingHandoff()) {
+            <p class="evaluation-note">
+              <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
+              later with a new revision. Missing inputs block the task workspace.
+            </p>
+          }
         </fieldset>
         <footer class="submission-footer">
           <p>Ready for the next step?<span>Send to the installation’s engineering group.</span></p>
           <button
             mat-flat-button
             type="submit"
-            [disabled]="busy() || form.invalid || !profiles().length"
+            [disabled]="
+              busy() || form.invalid || !profiles().length || unavailableRevisionProfile()
+            "
             color="primary"
           >
-            {{ busy() ? "Submitting…" : "Submit to engineering" }}
+            {{ busy() ? "Submitting…" : originalId ? "Submit revision" : "Submit to engineering" }}
             <span class="material-icons" aria-hidden="true">arrow_forward</span>
           </button>
         </footer>
@@ -309,40 +457,11 @@
         </div>
         @if (workspaceSizing(); as sizing) {
           <p>Actual task inputs: {{ sizing.input_bytes / 1073741824 | number: "1.0-2" }} GiB.</p>
-          @if (sizing.existing_storage_size; as existing) {
-            <p>Existing workspace storage: {{ existing }}. Reopening keeps this allocation.</p>
-          } @else {
-            <p>
-              Recommended writable storage: {{ sizing.recommended_gib }} GiB, including working
-              space. Administrator maximum: {{ sizing.maximum_gib }} GiB. Verified inputs use
-              separate storage.
-            </p>
-            <mat-form-field appearance="outline">
-              <mat-label>Writable workspace storage (GiB)</mat-label>
-              <input
-                matInput
-                type="number"
-                step="1"
-                [min]="sizing.recommended_gib"
-                [max]="sizing.maximum_gib"
-                [(ngModel)]="storageGiB"
-                [disabled]="busy()"
-              />
-            </mat-form-field>
-            @if (sizing.recommended_gib > sizing.maximum_gib) {
-              <p role="alert">
-                This task exceeds the workspace storage maximum. Contact an administrator.
-              </p>
-            }
-          }
-          <button
-            mat-flat-button
-            (click)="openWorkspace()"
-            [disabled]="busy() || !validWorkspaceSize()"
-            color="primary"
-          >
-            {{ sizing.existing_storage_size ? "Reopen workspace" : "Create workspace" }}
-          </button>
+          <app-task-workspace-options
+            [sizing]="sizing"
+            [busy]="busy()"
+            (confirmOptions)="openWorkspace($event)"
+          />
         }
         <a mat-stroked-button [routerLink]="['/preparation/tasks', item.task.id]"
           >Open preparation detail</a
@@ -370,7 +489,7 @@
               routerLink="/preparation/handoffs/new"
               [queryParams]="{ previous: item.id }"
             >
-              Submit a new revision
+              Add missing information
             </a>
           }
         </div>

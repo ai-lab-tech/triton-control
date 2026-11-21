@@ -32,8 +32,8 @@ assigned task's workspace, not a personal workspace.
 
 If **Open task workspace** is disabled, check that the task is assigned and no
 required inputs are missing. Only the current assignee can open its normal task
-workspace. If you submitted incomplete inputs, use **New revision** on the receipt
-to submit the missing information, then claim the new task.
+workspace. If you submitted incomplete inputs, select **Add missing information**.
+Complete the prefilled form, submit the revision and claim the new task.
 
 Before an image build can start, an administrator must also configure an enabled,
 qualified build policy with registry and staging storage access. Creating a task

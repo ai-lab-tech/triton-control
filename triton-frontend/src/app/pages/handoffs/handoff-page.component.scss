@@ -270,6 +270,29 @@ code {
     margin-top: 22px;
   }
 }
+.evaluation-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.evaluation-help-button {
+  margin-block-start: 4px;
+  color: #0f766e;
+}
+.evaluation-help-text,
+.evaluation-file-note {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.evaluation-help-text {
+  grid-column: 1 / -1;
+  margin: 0 0 12px;
+}
+.evaluation-file-note {
+  margin: 0 0 16px;
+}
 .evaluation-note {
   display: flex;
   gap: 8px;

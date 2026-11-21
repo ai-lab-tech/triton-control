@@ -1,9 +1,19 @@
-import { Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from "@angular/core";
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  signal,
+} from "@angular/core";
 import { HttpErrorResponse } from "@angular/common/http";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { FormsModule } from "@angular/forms";
-import { Router } from "@angular/router";
-import { firstValueFrom } from "rxjs";
+import { NavigationEnd, Router } from "@angular/router";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { filter, firstValueFrom } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
@@ -24,6 +34,7 @@ import {
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import { ChromeService } from "../../shared/chrome.service";
 import { AuthService } from "../../shared/auth/auth.service";
+import { WorkspaceDirectory } from "../../shared/workspace-directory.service";
 
 type CodeServer = CodeServerDTO;
 
@@ -56,6 +67,7 @@ export class WorkspacesPageComponent implements OnDestroy {
   private readonly chrome = inject(ChromeService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  readonly directory = inject(WorkspaceDirectory);
   private readonly basePath = `${inject(BASE_PATH, { optional: true }) ?? ""}`
     .trim()
     .replace(/\/$/, "");
@@ -85,7 +97,11 @@ export class WorkspacesPageComponent implements OnDestroy {
   readonly initialLoaded = signal(false);
   readonly saving = signal(false);
   readonly deletingId = signal<number | null>(null);
-  readonly workspaces = signal<CodeServer[]>([]);
+  readonly workspaces = this.directory.workspaces;
+  readonly creatingPersonal = signal(false);
+  readonly hasPersonalWorkspace = computed(() =>
+    this.workspaces().some((item) => !item.task_title && item.status !== "cleanup_only"),
+  );
   readonly selectedWorkspaceId = signal<number | null>(null);
   readonly embeddedWorkspaceUrl = signal<SafeResourceUrl | null>(null);
   readonly frameLoading = signal(false);
@@ -101,6 +117,21 @@ export class WorkspacesPageComponent implements OnDestroy {
         this.chrome.showTopbar();
       }
     });
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe((event) => {
+        const requested = this.requestedWorkspaceId(event.urlAfterRedirects);
+        const workspace = this.workspaces().find((item) => item.id === requested);
+        if (workspace) this.creatingPersonal.set(false);
+        if (workspace && workspace.id !== this.selectedWorkspaceId()) {
+          void this.selectWorkspaceAsync(workspace);
+        } else if (requested !== null && !workspace) {
+          void this.load();
+        }
+      });
     window.addEventListener("message", this.handleCodeServerMessage);
     this.startDeploymentNavigationPolling();
     void this.load();
@@ -222,10 +253,7 @@ export class WorkspacesPageComponent implements OnDestroy {
   async load(): Promise<void> {
     this.loading.set(true);
     try {
-      const workspaces = (await firstValueFrom(
-        this.workspaceApi.listCodeServersApiDevelopmentGet(),
-      )) as CodeServer[];
-      this.workspaces.set(workspaces);
+      await this.directory.refresh();
       await this.ensureSelectedWorkspace({ refreshReadyWorkspace: true });
       this.updateStatusPolling();
     } catch (error) {
@@ -269,7 +297,9 @@ export class WorkspacesPageComponent implements OnDestroy {
       const workspace = await firstValueFrom(
         this.workspaceApi.createCodeServerApiDevelopmentPost(payload),
       );
-      this.upsertWorkspace(workspace);
+      this.directory.upsert(workspace);
+      this.creatingPersonal.set(false);
+      await this.router.navigateByUrl(`/workspaces?workspace=${workspace.id}`);
       this.selectWorkspace(workspace);
       this.updateStatusPolling();
       await this.pollPendingWorkspaces();
@@ -322,10 +352,10 @@ export class WorkspacesPageComponent implements OnDestroy {
       const updated = await firstValueFrom(
         this.workspaceApi.getCodeServerApiDevelopmentCodeServerIdGet(workspace.id),
       );
-      this.upsertWorkspace(updated);
+      this.directory.upsert(updated);
       if (this.selectedWorkspaceId() === updated.id) {
         await this.auth.refreshSession().catch(() => undefined);
-        this.setEmbeddedWorkspace(updated);
+        if (this.selectedWorkspaceId() === updated.id) this.setEmbeddedWorkspace(updated);
       }
       this.updateStatusPolling();
     } catch (error) {
@@ -340,16 +370,24 @@ export class WorkspacesPageComponent implements OnDestroy {
   }
 
   async delete(workspace: CodeServer): Promise<void> {
+    if (!window.confirm(`Delete workspace "${this.directory.label(workspace)}"?`)) return;
     this.deletingId.set(workspace.id);
     try {
       await firstValueFrom(
         this.workspaceApi.deleteCodeServerApiDevelopmentCodeServerIdDelete(workspace.id),
       );
-      this.workspaces.update((items) => items.filter((item) => item.id !== workspace.id));
+      this.directory.remove(workspace.id);
       if (this.selectedWorkspaceId() === workspace.id) {
         this.selectedWorkspaceId.set(null);
         this.embeddedWorkspaceUrl.set(null);
         await this.ensureSelectedWorkspace();
+        const next = this.selectedWorkspaceId();
+        void this.router.navigateByUrl(
+          next === null ? "/workspaces" : `/workspaces?workspace=${next}`,
+          {
+            replaceUrl: true,
+          },
+        );
       }
       this.updateStatusPolling();
       this.setMessage("Workspace deleted.", "success");
@@ -379,8 +417,7 @@ export class WorkspacesPageComponent implements OnDestroy {
   }
 
   selectedWorkspace(): CodeServer | null {
-    const requested = new URLSearchParams(this.router.url.split("?")[1] ?? "").get("workspace");
-    const selectedId = this.selectedWorkspaceId() ?? (requested ? Number(requested) : null);
+    const selectedId = this.selectedWorkspaceId() ?? this.requestedWorkspaceId();
     return this.workspaces().find((workspace) => workspace.id === selectedId) ?? null;
   }
 
@@ -392,24 +429,17 @@ export class WorkspacesPageComponent implements OnDestroy {
     return trimmed.split("/").pop() || trimmed;
   }
 
-  private upsertWorkspace(workspace: CodeServer): void {
-    this.workspaces.update((items) => {
-      const index = items.findIndex((item) => item.id === workspace.id);
-      if (index === -1) {
-        return [workspace, ...items];
-      }
-      const next = [...items];
-      next[index] = workspace;
-      return next;
-    });
+  private requestedWorkspaceId(url = this.router.url): number | null {
+    const requested = new URLSearchParams(url.split("?")[1]?.split("#")[0]).get("workspace");
+    const id = Number(requested);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
   }
 
   private async ensureSelectedWorkspace(
     options: { refreshReadyWorkspace?: boolean } = {},
   ): Promise<void> {
     const workspaces = this.workspaces();
-    const requested = new URLSearchParams(this.router.url.split("?")[1] ?? "").get("workspace");
-    const selectedId = this.selectedWorkspaceId() ?? (requested ? Number(requested) : null);
+    const selectedId = this.requestedWorkspaceId() ?? this.selectedWorkspaceId();
     const selected = workspaces.find((workspace) => workspace.id === selectedId);
     if (selected) {
       if (options.refreshReadyWorkspace && selected.status === "ready") {
@@ -551,7 +581,7 @@ export class WorkspacesPageComponent implements OnDestroy {
   }
 
   private shouldPollWorkspace(workspace: CodeServer): boolean {
-    if (workspace.status === "missing") {
+    if (workspace.status === "missing" || workspace.status === "cleanup_only") {
       return false;
     }
     if (workspace.status !== "ready") {
@@ -578,7 +608,10 @@ export class WorkspacesPageComponent implements OnDestroy {
           ),
         ),
       );
-      updates.forEach((workspace) => this.upsertWorkspace(workspace));
+      updates.forEach((workspace) => {
+        if (this.workspaces().some((item) => item.id === workspace.id))
+          this.directory.upsert(workspace);
+      });
       await this.ensureSelectedWorkspace();
     } catch {
       // Keep manual refresh as the visible error path; transient startup polls can fail briefly.

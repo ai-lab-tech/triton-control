@@ -3,7 +3,19 @@
 An assigned engineer can open a workspace from a complete scientist handoff. The
 handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
-The existing personal workspace can coexist with task workspaces.
+Each engineer can have one personal workspace alongside their task workspaces.
+If you opened a task workspace first, choose **Create personal workspace** in its toolbar.
+
+When you have several workspaces, select one under **Development → Workspaces**
+in the navigation. Task workspaces use the task title. To remove a finished
+workspace, open it and select **Delete** in its toolbar. The handoff and task
+history remain available. After you release a claim or the task is cancelled,
+your workspace is listed by ID with the status **Cleanup only**. Select it to delete it.
+
+When creating the task workspace, choose its image, GPU count, optional CPU
+cores and RAM, and writable storage. The default GPU count is zero. Leaving
+CPU or RAM blank uses the cluster defaults. Reopening displays the saved
+configuration and uses it again.
 
 ## HTTP interface and ownership
 
@@ -13,6 +25,9 @@ The existing personal workspace can coexist with task workspaces.
 {
   "workspace": {
     "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
+    "gpu_count": 1,
+    "cpu": "1500m",
+    "memory": "4096Mi",
     "storage_size": "20Gi",
     "install_hf_builder": true,
     "install_mlflow": true
@@ -20,7 +35,8 @@ The existing personal workspace can coexist with task workspaces.
 }
 ```
 
-An empty body uses the existing workspace defaults. The response contains
+An empty body uses defaults for a new workspace and the saved settings when
+reopening a workspace. The response contains
 `task_id` and the existing `CodeServerDTO`, including its authenticated proxy URL.
 `GET /api/preparation/tasks/{task_id}/workspace` refreshes the workspace status.
 The status is `creating` while the init container verifies files, `blocked` on
@@ -68,14 +84,19 @@ checks the current profile endpoint, bucket and prefix, downloads to a private
 temporary file and checks size, version and SHA-256 before serving bytes. The
 init container verifies the streamed bytes again. No archives are extracted.
 Input size and download budgets follow [Model preparation settings](model-preparation-settings.md).
-The verified-input volume is sized from the actual captured bytes plus overhead.
+Verified inputs use a pod-local Kubernetes `emptyDir` volume sized from the captured
+bytes plus overhead. When Kubernetes replaces the pod, the init container stages
+and verifies the inputs again in a fresh `emptyDir`.
 
 All files must pass before the init container atomically publishes
 `/inputs/verified`. Kubernetes mounts `/inputs` read-only in the editor, which
 has all Linux capabilities dropped and privilege escalation disabled. The editor
 has no Kubernetes service-account token. Conversion files live separately in
-`/workspace/conversion` on the workspace's persistent volume. Conversion is the
-first editor folder so builder and scaffolding defaults target writable storage.
+`/workspace/conversion` on the writable volume backed by the workspace's persistent
+volume claim (PVC). The writable storage size selected during workspace creation
+applies to this PVC. Conversion files persist when a replacement pod mounts the
+same claim. Conversion is the first editor folder so builder and scaffolding
+defaults target writable storage.
 
 `/inputs/verified/task.json` contains the task ID, exact snapshot, file paths,
 version IDs, hashes, expected behavior and acceptance criteria. It contains no
