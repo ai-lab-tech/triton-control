@@ -3,10 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from "@angular/common
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatSelectHarness } from "@angular/material/select/testing";
 import { TestBed } from "@angular/core/testing";
+import { By } from "@angular/platform-browser";
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from "@angular/router";
 import { of } from "rxjs";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { HandoffPageComponent } from "./handoff-page.component";
+import { TaskWorkspaceOptionsComponent } from "./task-workspace-options.component";
 
 const receipt = {
   id: "receipt-1",
@@ -66,6 +68,46 @@ describe("HandoffPageComponent", () => {
     return fixture;
   }
   afterEach(() => http.verify());
+
+  it("reveals the generic help for each evaluation field without submitting the form", async () => {
+    // Arrange
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const form = fixture.nativeElement as HTMLElement;
+    const fields = [
+      ["dataset", "Evaluation dataset", "representative inputs"],
+      ["baseline", "Baseline", "reference outputs or measurements"],
+      ["behavior", "Expected behavior", "important edge cases"],
+      ["criteria", "Acceptance criteria", "measurable thresholds"],
+    ];
+
+    for (const [name, label, expected] of fields) {
+      const button = form.querySelector<HTMLButtonElement>(`button[aria-label="${label} help"]`)!;
+      const input = form.querySelector(`[name="${name}"]`)!;
+      const help = form.querySelector<HTMLElement>(`#evaluation-help-${name}`)!;
+
+      // Act
+      button.click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(button.type).toBe("button");
+      expect(button.getAttribute("aria-expanded")).toBe("true");
+      expect(button.getAttribute("aria-controls")).toBe(help.id);
+      expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(help.id);
+      expect(help.hidden).toBeFalse();
+      expect(help.textContent).toContain(expected);
+
+      button.click();
+      fixture.detectChanges();
+      expect(help.hidden).toBeTrue();
+    }
+    http.expectNone("/api/preparation/handoff-captures");
+  });
 
   it("prefills an incomplete handoff and submits the missing data as a new revision", async () => {
     // Arrange
@@ -377,20 +419,40 @@ describe("HandoffPageComponent", () => {
       recommended_gib: 24,
       maximum_gib: 50,
       existing_storage_size: null,
+      default_image: "registry.test/default:1",
     });
     await preview;
+    fixture.detectChanges();
+    const options = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .componentInstance as TaskWorkspaceOptionsComponent;
     // Assert
-    expect(page.storageGiB).toBe(24);
+    expect(options.draft().storage).toBe(24);
+    expect(options.draft().image).toBe("registry.test/default:1");
+    expect(options.draft().gpu).toBe(0);
     http.expectNone("/api/preparation/tasks/task-1/workspace");
     // Act
-    page.storageGiB = 30;
-    const pending = page.openWorkspace();
+    options.draft.set({
+      storage: 30,
+      image: "registry.test/converter:2",
+      gpu: 1,
+      cpu: 1.5,
+      memory: 4096,
+    });
+    options.confirm();
     const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
     const body = request.request.body;
     request.flush({ workspace: { id: 42 } });
-    await pending;
+    await fixture.whenStable();
     // Assert
-    expect(body).toEqual({ workspace: { storage_size: "30Gi" } });
+    expect(body).toEqual({
+      workspace: {
+        storage_size: "30Gi",
+        image: "registry.test/converter:2",
+        gpu_count: 1,
+        cpu: "1500m",
+        memory: "4096Mi",
+      },
+    });
   });
   it("blocks workspace creation when the estimate exceeds the admin maximum", async () => {
     // Arrange
@@ -403,13 +465,51 @@ describe("HandoffPageComponent", () => {
       recommended_gib: 60,
       maximum_gib: 50,
       existing_storage_size: null,
+      default_image: "registry.test/default:1",
     });
-    page.storageGiB = 60;
+    fixture.detectChanges();
+    const options = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .componentInstance as TaskWorkspaceOptionsComponent;
     // Act
-    await page.openWorkspace();
+    options.confirm();
     // Assert
-    expect(page.validWorkspaceSize()).toBeFalse();
+    expect(options.valid()).toBeFalse();
     http.expectNone("/api/preparation/tasks/task-1/workspace");
+  });
+  it("shows saved workspace resources and reopens without sending overrides", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    fixture.componentInstance.workspaceSizing.set({
+      input_bytes: 10,
+      recommended_gib: 6,
+      maximum_gib: 50,
+      existing_storage_size: "10Gi",
+      default_image: "registry.test/default:1",
+      existing_image: "registry.test/converter:2",
+      existing_gpu_count: 1,
+      existing_cpu: "1500m",
+      existing_memory: "4096Mi",
+    });
+    fixture.detectChanges();
+    const settings = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .nativeElement as HTMLElement;
+
+    // Act
+    settings.querySelector("button")?.click();
+    const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
+    request.flush({ workspace: { id: 42 } });
+    await fixture.whenStable();
+
+    // Assert
+    expect(settings.textContent).toContain("registry.test/converter:2");
+    expect(settings.textContent).toContain("GPUs: 1");
+    expect(settings.textContent).toContain("CPU: 1500m");
+    expect(settings.textContent).toContain("RAM: 4096Mi");
+    expect(settings.querySelector("input")).toBeNull();
+    expect(request.request.body).toEqual({});
   });
   it("opens the task workspace and navigates to its exact instance", async () => {
     const fixture = await setup("receipt-1");

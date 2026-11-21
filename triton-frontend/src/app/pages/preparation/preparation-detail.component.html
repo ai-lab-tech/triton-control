@@ -253,25 +253,11 @@
           }
         }
         @if (sizing(); as size) {
-          @if (size.existing_storage_size) {
-            <p>Existing storage: {{ size.existing_storage_size }}</p>
-          } @else {
-            <p>Recommended: {{ size.recommended_gib }} GiB. Maximum: {{ size.maximum_gib }} GiB.</p>
-            <label
-              >Writable storage (GiB)<input
-                type="number"
-                [(ngModel)]="storageGiB"
-                [min]="size.recommended_gib"
-                [max]="size.maximum_gib"
-            /></label>
-          }
-          <button
-            mat-stroked-button
-            (click)="openWorkspace()"
-            [disabled]="busy() || !validStorage()"
-          >
-            Continue to workspace
-          </button>
+          <app-task-workspace-options
+            [sizing]="size"
+            [busy]="busy()"
+            (confirmOptions)="openWorkspace($event)"
+          />
         }
       </div>
     </section>

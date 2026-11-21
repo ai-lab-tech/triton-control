@@ -16286,6 +16286,54 @@
               }
             ],
             "title": "Existing Storage Size"
+          },
+          "default_image": {
+            "type": "string",
+            "title": "Default Image"
+          },
+          "existing_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Image"
+          },
+          "existing_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Gpu Count"
+          },
+          "existing_cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Cpu"
+          },
+          "existing_memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Memory"
           }
         },
         "additionalProperties": false,
@@ -16293,7 +16341,8 @@
         "required": [
           "input_bytes",
           "recommended_gib",
-          "maximum_gib"
+          "maximum_gib",
+          "default_image"
         ],
         "title": "WorkspaceSizing"
       }

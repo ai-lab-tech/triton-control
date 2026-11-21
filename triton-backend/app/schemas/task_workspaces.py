@@ -53,6 +53,8 @@ class OpenTaskWorkspace(Request):
     def local_registry_only(self) -> "OpenTaskWorkspace":
         if self.workspace.dockerconfigjson:
             raise ValueError("Use the installation registry configuration, not inline credentials")
+        if self.workspace.gpu_count is not None and self.workspace.gpu_count < 0:
+            raise ValueError("GPU count must be zero or greater")
         return self
 
 
@@ -66,3 +68,8 @@ class WorkspaceSizing(Request):
     recommended_gib: int
     maximum_gib: int
     existing_storage_size: str | None = None
+    default_image: str
+    existing_image: str | None = None
+    existing_gpu_count: int | None = None
+    existing_cpu: str | None = None
+    existing_memory: str | None = None

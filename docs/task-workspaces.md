@@ -5,6 +5,11 @@ handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
 The existing personal workspace can coexist with task workspaces.
 
+When creating the task workspace, choose its image, GPU count, optional CPU
+cores and RAM, and writable storage. The default GPU count is zero. Leaving
+CPU or RAM blank uses the cluster defaults. Reopening displays the saved
+configuration and uses it again.
+
 ## HTTP interface and ownership
 
 `POST /api/preparation/tasks/{task_id}/workspace` accepts:
@@ -13,6 +18,9 @@ The existing personal workspace can coexist with task workspaces.
 {
   "workspace": {
     "image": "nvcr.io/nvidia/tritonserver:26.06-py3",
+    "gpu_count": 1,
+    "cpu": "1500m",
+    "memory": "4096Mi",
     "storage_size": "20Gi",
     "install_hf_builder": true,
     "install_mlflow": true
@@ -20,7 +28,8 @@ The existing personal workspace can coexist with task workspaces.
 }
 ```
 
-An empty body uses the existing workspace defaults. The response contains
+An empty body uses defaults for a new workspace and the saved settings when
+reopening a workspace. The response contains
 `task_id` and the existing `CodeServerDTO`, including its authenticated proxy URL.
 `GET /api/preparation/tasks/{task_id}/workspace` refreshes the workspace status.
 The status is `creating` while the init container verifies files, `blocked` on

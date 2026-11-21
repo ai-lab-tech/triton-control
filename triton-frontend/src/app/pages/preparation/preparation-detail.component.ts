@@ -12,14 +12,26 @@ import {
   TaskEvent,
   SnapshotReceipt,
 } from "./preparation-api.service";
-import { HandoffsApiService, WorkspaceSizing } from "../handoffs/handoffs-api.service";
+import {
+  HandoffsApiService,
+  TaskWorkspaceOptions,
+  WorkspaceSizing,
+} from "../handoffs/handoffs-api.service";
 import { BuildsApiService, TaskBuild, buildLabel } from "../builds/builds-api.service";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+import { TaskWorkspaceOptionsComponent } from "../handoffs/task-workspace-options.component";
 
 @Component({
   selector: "app-preparation-detail",
   standalone: true,
-  imports: [DatePipe, JsonPipe, FormsModule, RouterLink, MatButtonModule],
+  imports: [
+    DatePipe,
+    JsonPipe,
+    FormsModule,
+    RouterLink,
+    MatButtonModule,
+    TaskWorkspaceOptionsComponent,
+  ],
   templateUrl: "./preparation-detail.component.html",
   styleUrls: ["./preparation.scss", "./preparation-detail.component.scss"],
 })
@@ -41,7 +53,6 @@ export class PreparationDetailComponent {
   readonly moreAttempts = signal(false);
   readonly moreEvents = signal(false);
   readonly sizing = signal<WorkspaceSizing | null>(null);
-  storageGiB: number | null = null;
   reason = "";
   missing = "";
   readonly busy = signal(false);
@@ -221,7 +232,6 @@ export class PreparationDetailComponent {
       const sizing = await firstValueFrom(this.workspaces.workspaceSizing(this.id));
       if (generation === this.generation) {
         this.sizing.set(sizing);
-        this.storageGiB = sizing.recommended_gib;
       }
     } catch (error) {
       if (generation === this.generation)
@@ -230,28 +240,12 @@ export class PreparationDetailComponent {
       if (generation === this.generation) this.busy.set(false);
     }
   }
-  validStorage() {
-    const sizing = this.sizing();
-    return (
-      !!sizing &&
-      (!!sizing.existing_storage_size ||
-        (this.storageGiB !== null &&
-          Number.isInteger(this.storageGiB) &&
-          this.storageGiB >= sizing.recommended_gib &&
-          this.storageGiB <= sizing.maximum_gib))
-    );
-  }
-  async openWorkspace() {
-    if (!this.entry()?.actions.open_workspace || this.busy() || !this.validStorage()) return;
+  async openWorkspace(options?: TaskWorkspaceOptions) {
+    if (!this.entry()?.actions.open_workspace || this.busy()) return;
     const generation = this.generation;
     this.busy.set(true);
     try {
-      const result = await firstValueFrom(
-        this.workspaces.openWorkspace(
-          this.id,
-          this.sizing()?.existing_storage_size ? undefined : this.storageGiB!,
-        ),
-      );
+      const result = await firstValueFrom(this.workspaces.openWorkspace(this.id, options));
       if (generation === this.generation)
         await this.router.navigate(["/workspaces"], {
           queryParams: { workspace: result.workspace.id },

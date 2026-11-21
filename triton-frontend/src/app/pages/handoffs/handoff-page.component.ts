@@ -1,7 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
-import { DOCUMENT, DatePipe, DecimalPipe } from "@angular/common";
+import { DOCUMENT, DatePipe, DecimalPipe, NgTemplateOutlet } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
@@ -20,8 +20,10 @@ import {
   ResolvedInput,
   SourceInput,
   SourceProfile,
+  TaskWorkspaceOptions,
   WorkspaceSizing,
 } from "./handoffs-api.service";
+import { TaskWorkspaceOptionsComponent } from "./task-workspace-options.component";
 
 @Component({
   selector: "app-handoff-page",
@@ -31,10 +33,12 @@ import {
     RouterLink,
     DatePipe,
     DecimalPipe,
+    NgTemplateOutlet,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    TaskWorkspaceOptionsComponent,
   ],
   templateUrl: "./handoff-page.component.html",
   styleUrl: "./handoff-page.component.scss",
@@ -51,13 +55,31 @@ export class HandoffPageComponent {
   readonly busy = signal(false);
   readonly error = signal("");
   readonly workspaceSizing = signal<WorkspaceSizing | null>(null);
-  storageGiB: number | null = null;
   readonly detail = signal(false);
   readonly draftLoading = signal(false);
   readonly draftLoadFailed = signal(false);
   readonly original = signal<HandoffReceipt | null>(null);
   readonly originalId = this.route.snapshot.queryParamMap.get("previous") ?? "";
   readonly capture = signal<CaptureOperation | null>(null);
+  readonly evaluationHelp = {
+    dataset: {
+      label: "Evaluation dataset",
+      text: "Enter the S3 path to a file containing representative inputs the model will be tested with.",
+    },
+    baseline: {
+      label: "Baseline",
+      text: "Enter the S3 path to a file containing reference outputs or measurements for comparison. These can come from an existing model or from reviewed expected results.",
+    },
+    behavior: {
+      label: "Expected behavior",
+      text: "Describe what the model should do for typical inputs and how it should handle important edge cases.",
+    },
+    criteria: {
+      label: "Acceptance criteria",
+      text: "Define what counts as passing. Include measurable thresholds or allowed differences where relevant.",
+    },
+  };
+  readonly openHelp = signal<keyof HandoffPageComponent["evaluationHelp"] | null>(null);
   private captureTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
   private captureGeneration = 0;
@@ -87,7 +109,6 @@ export class HandoffPageComponent {
       this.detail.set(!!id);
       this.receipt.set(null);
       this.workspaceSizing.set(null);
-      this.storageGiB = null;
       this.error.set("");
       if (id) void this.loadReceipt(id);
       else if (this.canSubmit()) void this.loadDraft();
@@ -141,6 +162,10 @@ export class HandoffPageComponent {
 
   completingHandoff(): boolean {
     return !!this.original()?.task.missing_inputs.length;
+  }
+
+  toggleHelp(field: keyof HandoffPageComponent["evaluationHelp"]): void {
+    this.openHelp.update((current) => (current === field ? null : field));
   }
 
   unavailableRevisionProfile(): boolean {
@@ -206,34 +231,19 @@ export class HandoffPageComponent {
     try {
       const sizing = await firstValueFrom(this.api.workspaceSizing(receipt.task.id));
       this.workspaceSizing.set(sizing);
-      this.storageGiB = sizing.recommended_gib;
     } catch (error) {
       this.error.set(mapApiErrorMessage(error, "Could not calculate workspace storage."));
     } finally {
       this.busy.set(false);
     }
   }
-  validWorkspaceSize(): boolean {
-    const sizing = this.workspaceSizing();
-    return (
-      !!sizing &&
-      (sizing.existing_storage_size !== null ||
-        (this.storageGiB !== null &&
-          Number.isInteger(this.storageGiB) &&
-          this.storageGiB >= sizing.recommended_gib &&
-          this.storageGiB <= sizing.maximum_gib))
-    );
-  }
-  async openWorkspace() {
+  async openWorkspace(options?: TaskWorkspaceOptions) {
     const receipt = this.receipt();
     if (!receipt || this.busy()) return;
     this.busy.set(true);
     this.error.set("");
     try {
-      const sizing = this.workspaceSizing();
-      if (sizing && !this.validWorkspaceSize()) return;
-      const storage = sizing && !sizing.existing_storage_size ? this.storageGiB! : undefined;
-      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id, storage));
+      const result = await firstValueFrom(this.api.openWorkspace(receipt.task.id, options));
       await this.router.navigate(["/workspaces"], {
         queryParams: { workspace: result.workspace.id },
       });

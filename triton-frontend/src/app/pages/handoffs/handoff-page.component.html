@@ -208,22 +208,51 @@
           <p class="section-intro">
             Help engineering understand what a successful model looks like.
           </p>
+          <ng-template #fieldHelp let-field let-help="help">
+            <button
+              mat-icon-button
+              type="button"
+              class="evaluation-help-button"
+              [attr.aria-label]="help.label + ' help'"
+              [attr.aria-controls]="'evaluation-help-' + field"
+              [attr.aria-expanded]="openHelp() === field"
+              (click)="toggleHelp(field)"
+            >
+              <span class="material-icons" aria-hidden="true">help_outline</span>
+            </button>
+            <p
+              class="evaluation-help-text"
+              [id]="'evaluation-help-' + field"
+              [hidden]="openHelp() !== field"
+            >
+              {{ help.text }}
+            </p>
+          </ng-template>
           <div class="fields">
-            <mat-form-field appearance="outline">
-              <mat-label
-                >Evaluation dataset object path{{
-                  completingHandoff() ? "" : " (optional)"
-                }}</mat-label
-              >
-              <input
-                matInput
-                name="dataset"
-                [(ngModel)]="datasetPath"
-                [required]="completingHandoff()"
-                maxlength="1024"
-                placeholder="datasets/evaluation.csv"
+            <div class="evaluation-field">
+              <mat-form-field appearance="outline">
+                <mat-label
+                  >Evaluation dataset object path{{
+                    completingHandoff() ? "" : " (optional)"
+                  }}</mat-label
+                >
+                <input
+                  matInput
+                  name="dataset"
+                  aria-describedby="evaluation-help-dataset"
+                  [(ngModel)]="datasetPath"
+                  [required]="completingHandoff()"
+                  maxlength="1024"
+                  placeholder="datasets/evaluation.csv"
+                />
+              </mat-form-field>
+              <ng-container
+                *ngTemplateOutlet="
+                  fieldHelp;
+                  context: { $implicit: 'dataset', help: evaluationHelp.dataset }
+                "
               />
-            </mat-form-field>
+            </div>
             @if (originalId && datasetPath.trim()) {
               <mat-form-field appearance="outline">
                 <mat-label>Evaluation dataset S3 profile</mat-label>
@@ -241,19 +270,28 @@
                 </mat-select>
               </mat-form-field>
             }
-            <mat-form-field appearance="outline">
-              <mat-label
-                >Baseline object path{{ completingHandoff() ? "" : " (optional)" }}</mat-label
-              >
-              <input
-                matInput
-                name="baseline"
-                [(ngModel)]="baselinePath"
-                [required]="completingHandoff()"
-                maxlength="1024"
-                placeholder="baselines/results.json"
+            <div class="evaluation-field">
+              <mat-form-field appearance="outline">
+                <mat-label
+                  >Baseline object path{{ completingHandoff() ? "" : " (optional)" }}</mat-label
+                >
+                <input
+                  matInput
+                  name="baseline"
+                  aria-describedby="evaluation-help-baseline"
+                  [(ngModel)]="baselinePath"
+                  [required]="completingHandoff()"
+                  maxlength="1024"
+                  placeholder="baselines/results.json"
+                />
+              </mat-form-field>
+              <ng-container
+                *ngTemplateOutlet="
+                  fieldHelp;
+                  context: { $implicit: 'baseline', help: evaluationHelp.baseline }
+                "
               />
-            </mat-form-field>
+            </div>
             @if (originalId && baselinePath.trim()) {
               <mat-form-field appearance="outline">
                 <mat-label>Baseline S3 profile</mat-label>
@@ -272,30 +310,54 @@
               </mat-form-field>
             }
           </div>
-          <mat-form-field appearance="outline" class="wide">
-            <mat-label>Expected behavior{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
-            <textarea
-              matInput
-              name="behavior"
-              [(ngModel)]="expectedBehavior"
-              [required]="completingHandoff()"
-              rows="3"
-              maxlength="8000"
-              placeholder="Describe expected outputs and representative examples."
-            ></textarea>
-          </mat-form-field>
-          <mat-form-field appearance="outline" class="wide">
-            <mat-label>Acceptance criteria{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
-            <textarea
-              matInput
-              name="criteria"
-              [(ngModel)]="criteria"
-              [required]="completingHandoff()"
-              rows="3"
-              maxlength="8000"
-              placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
-            ></textarea>
-          </mat-form-field>
+          <p class="evaluation-file-note">
+            Triton Control verifies the dataset and baseline files when staging the workspace. The
+            engineer reviews their contents and runs the evaluation.
+          </p>
+          <div class="evaluation-field">
+            <mat-form-field appearance="outline" class="wide">
+              <mat-label>Expected behavior{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
+              <textarea
+                matInput
+                name="behavior"
+                aria-describedby="evaluation-help-behavior"
+                [(ngModel)]="expectedBehavior"
+                [required]="completingHandoff()"
+                rows="3"
+                maxlength="8000"
+                placeholder="Describe expected outputs and representative examples."
+              ></textarea>
+            </mat-form-field>
+            <ng-container
+              *ngTemplateOutlet="
+                fieldHelp;
+                context: { $implicit: 'behavior', help: evaluationHelp.behavior }
+              "
+            />
+          </div>
+          <div class="evaluation-field">
+            <mat-form-field appearance="outline" class="wide">
+              <mat-label
+                >Acceptance criteria{{ completingHandoff() ? "" : " (optional)" }}</mat-label
+              >
+              <textarea
+                matInput
+                name="criteria"
+                aria-describedby="evaluation-help-criteria"
+                [(ngModel)]="criteria"
+                [required]="completingHandoff()"
+                rows="3"
+                maxlength="8000"
+                placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
+              ></textarea>
+            </mat-form-field>
+            <ng-container
+              *ngTemplateOutlet="
+                fieldHelp;
+                context: { $implicit: 'criteria', help: evaluationHelp.criteria }
+              "
+            />
+          </div>
           @if (!completingHandoff()) {
             <p class="evaluation-note">
               <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
@@ -395,40 +457,11 @@
         </div>
         @if (workspaceSizing(); as sizing) {
           <p>Actual task inputs: {{ sizing.input_bytes / 1073741824 | number: "1.0-2" }} GiB.</p>
-          @if (sizing.existing_storage_size; as existing) {
-            <p>Existing workspace storage: {{ existing }}. Reopening keeps this allocation.</p>
-          } @else {
-            <p>
-              Recommended writable storage: {{ sizing.recommended_gib }} GiB, including working
-              space. Administrator maximum: {{ sizing.maximum_gib }} GiB. Verified inputs use
-              separate storage.
-            </p>
-            <mat-form-field appearance="outline">
-              <mat-label>Writable workspace storage (GiB)</mat-label>
-              <input
-                matInput
-                type="number"
-                step="1"
-                [min]="sizing.recommended_gib"
-                [max]="sizing.maximum_gib"
-                [(ngModel)]="storageGiB"
-                [disabled]="busy()"
-              />
-            </mat-form-field>
-            @if (sizing.recommended_gib > sizing.maximum_gib) {
-              <p role="alert">
-                This task exceeds the workspace storage maximum. Contact an administrator.
-              </p>
-            }
-          }
-          <button
-            mat-flat-button
-            (click)="openWorkspace()"
-            [disabled]="busy() || !validWorkspaceSize()"
-            color="primary"
-          >
-            {{ sizing.existing_storage_size ? "Reopen workspace" : "Create workspace" }}
-          </button>
+          <app-task-workspace-options
+            [sizing]="sizing"
+            [busy]="busy()"
+            (confirmOptions)="openWorkspace($event)"
+          />
         }
         <a mat-stroked-button [routerLink]="['/preparation/tasks', item.task.id]"
           >Open preparation detail</a

@@ -13,6 +13,7 @@ from app.exceptions import ConflictError, ForbiddenError, NotFoundError, Service
 from app.repositories import developments
 from app.repositories import preparation as tasks
 from app.repositories import task_workspaces as repository
+from app.schemas.development import CreateCodeServerRequest
 from app.schemas.task_workspaces import (
     OpenTaskWorkspace,
     SnapshotFile,
@@ -55,20 +56,17 @@ def open_workspace(session: Session, claims: dict[str, Any], task_id: UUID,
         inputs = access.load_inputs(session, task_id)
         access.authorize_inputs(session, inputs)
         association = repository.get(session, task_id)
-        explicit = "storage_size" in request.workspace.model_fields_set
-        existing_size = (association.configuration.get("storage_size")
-                         if association is not None and association.workspace_id is not None else None)
-        if existing_size is not None and (not explicit or request.workspace.storage_size == existing_size):
-            # Reopening must retain the originally allocated volume, even after policy changes.
-            size = existing_size
+        if association is not None and association.workspace_id is not None:
+            saved = CreateCodeServerRequest.model_validate(association.configuration)
+            workspace_config = saved.model_copy(update=request.workspace.model_dump(exclude_unset=True))
         else:
+            explicit = "storage_size" in request.workspace.model_fields_set
             size = task_workspace_sizing.storage_size(
                 sum(item.artifact.file.size for item in inputs.files), effective(session),
                 request.workspace.storage_size if explicit else None,
             )
-        request = request.model_copy(update={"workspace": request.workspace.model_copy(
-            update={"storage_size": size},
-        )})
+            workspace_config = request.workspace.model_copy(update={"storage_size": size})
+        request = request.model_copy(update={"workspace": workspace_config})
         workspace = _reserve_workspace(session, task_id, actor, request, inputs)
         # Persist intent before any Kubernetes writes. The same task/name is reused
         # after a crash; no background process-local scheduling state is required.
@@ -99,7 +97,8 @@ def _reserve_workspace(
             raise ConflictError("Task workspace association requires administrator recovery")
         if workspace.owner_user_id != actor:
             raise ConflictError("Another user owns this task workspace; an administrator must delete it first")
-        if (association.configuration != configuration
+        saved = CreateCodeServerRequest.model_validate(association.configuration)
+        if (saved.model_dump(mode="json") != configuration
                 or association.recovery_reason != request.admin_recovery_reason
                 or association.inputs != inputs.model_dump(mode="json")):
             raise ConflictError("Task workspace already exists with different inputs or settings")
@@ -161,11 +160,17 @@ def workspace_sizing(session: Session, claims: dict[str, Any], task_id: UUID) ->
     limits = effective(session)
     total = sum(item.artifact.file.size for item in inputs.files)
     association = repository.get(session, task_id)
-    existing = (association.configuration.get("storage_size")
+    existing = (CreateCodeServerRequest.model_validate(association.configuration)
                 if association is not None and association.workspace_id is not None else None)
     return WorkspaceSizing(input_bytes=total,
                            recommended_gib=task_workspace_sizing.recommended_gib(total),
-                           maximum_gib=limits.max_workspace_storage_gib, existing_storage_size=existing)
+                           maximum_gib=limits.max_workspace_storage_gib,
+                           default_image=CreateCodeServerRequest().image,
+                           existing_storage_size=existing.storage_size if existing else None,
+                           existing_image=existing.image if existing else None,
+                           existing_gpu_count=max(0, existing.gpu_count or 0) if existing else None,
+                           existing_cpu=existing.cpu if existing else None,
+                           existing_memory=existing.memory if existing else None)
 
 
 def get_workspace(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskWorkspaceDTO:

@@ -344,17 +344,18 @@ describe("Engineering preparation workflow", () => {
     const page = fixture.componentInstance;
     // Act
     let pending = page.prepareWorkspace();
-    http
-      .expectOne("/api/preparation/tasks/task-1/workspace-sizing")
-      .flush({ input_bytes: 10, recommended_gib: 6, maximum_gib: 50, existing_storage_size: null });
+    http.expectOne("/api/preparation/tasks/task-1/workspace-sizing").flush({
+      input_bytes: 10,
+      recommended_gib: 6,
+      maximum_gib: 50,
+      existing_storage_size: null,
+      default_image: "registry.test/default:1",
+    });
     await pending;
-    page.storageGiB = 5;
-    await page.openWorkspace();
-    http.expectNone("/api/preparation/tasks/task-1/workspace");
-    page.storageGiB = 10;
-    pending = page.openWorkspace();
+    const options = { storage_size: "10Gi", image: "registry.test/custom:1", gpu_count: 2 };
+    pending = page.openWorkspace(options);
     const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
-    expect(request.request.body).toEqual({ workspace: { storage_size: "10Gi" } });
+    expect(request.request.body).toEqual({ workspace: options });
     request.flush({ workspace: { id: 42 } });
     await pending;
     // Assert

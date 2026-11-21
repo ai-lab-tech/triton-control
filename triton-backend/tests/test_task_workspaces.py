@@ -110,6 +110,25 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(repository.get(self.session, self.task.id).configuration["storage_size"], "6Gi")
         self.apply.assert_called_once()
 
+    def test_reopen_uses_saved_image_and_resources_without_overrides(self):
+        # Arrange
+        options = {"image": "registry.example/converter:2", "gpu_count": 1,
+                   "cpu": "1500m", "memory": "4096Mi", "storage_size": "8Gi"}
+        first = self.open(request=OpenTaskWorkspace(workspace=options))
+
+        # Act
+        sizing = task_workspaces.workspace_sizing(self.session, self.engineer, self.task.id)
+        reopened = self.open()
+
+        # Assert
+        self.assertEqual(reopened.workspace.id, first.workspace.id)
+        self.assertEqual(sizing.existing_image, options["image"])
+        self.assertEqual(sizing.existing_gpu_count, options["gpu_count"])
+        self.assertEqual(sizing.existing_cpu, options["cpu"])
+        self.assertEqual(sizing.existing_memory, options["memory"])
+        self.assertEqual(sizing.existing_storage_size, options["storage_size"])
+        self.apply.assert_called_once()
+
     def test_missing_inputs_block_start(self):
         incomplete = self.submit(self.request(revision="incomplete"))
         self.task = self.claim(incomplete.task)

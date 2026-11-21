@@ -9,6 +9,19 @@ export interface WorkspaceSizing {
   recommended_gib: number;
   maximum_gib: number;
   existing_storage_size: string | null;
+  default_image: string;
+  existing_image?: string | null;
+  existing_gpu_count?: number | null;
+  existing_cpu?: string | null;
+  existing_memory?: string | null;
+}
+
+export interface TaskWorkspaceOptions {
+  storage_size: string;
+  image: string;
+  gpu_count: number;
+  cpu?: string;
+  memory?: string;
 }
 
 export interface CaptureOperation {
@@ -126,10 +139,10 @@ export class HandoffsApiService {
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace-sizing",
     );
   }
-  openWorkspace(taskId: string, storageGiB?: number) {
+  openWorkspace(taskId: string, workspace?: TaskWorkspaceOptions) {
     return this.http.post<{ task_id: string; workspace: CodeServerDTO }>(
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace",
-      storageGiB === undefined ? {} : { workspace: { storage_size: `${storageGiB}Gi` } },
+      workspace ? { workspace } : {},
     );
   }
   profiles() {
