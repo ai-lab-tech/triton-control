@@ -153,20 +153,15 @@ test.describe.serial("code-server plugin workflows", () => {
 
   async function command(title: string): Promise<void> {
     // Workspace restoration can dismiss the palette during extension activation.
-    // Wait for the command to remain available before executing it once.
-    const choice = workbench
-      .locator(".quick-input-list .monaco-list-row")
-      .filter({ hasText: title })
-      .first();
+    // Retry opening the palette if it closes before the command can be clicked.
+    const palette = workbench.locator(".quick-input-widget:visible");
+    const choice = palette.getByRole("option", { name: title, exact: true });
     await expect(async () => {
       await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
       await workbench.locator("body").press("F1");
-      const input = workbench.locator(".quick-input-widget input");
-      await expect(input).toBeVisible({ timeout: 2000 });
-      await input.fill(`>${title}`);
-      await expect(choice).toBeVisible({ timeout: 2000 });
+      await palette.locator("input").fill(`>${title}`, { timeout: 2000 });
+      await choice.click({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
-    await choice.click();
   }
 
   async function input(value: string, prompt: string): Promise<void> {
