@@ -61,7 +61,7 @@
   font-size: 0.875rem;
 }
 
-.user-badges,
+.user-name-row,
 .access-controls,
 .role-control,
 .instance-chips,
@@ -211,6 +211,11 @@ th {
   cursor: pointer;
   text-align: left;
   overflow-wrap: anywhere;
+}
+.engineer-badge {
+  background: #eef2ff;
+  color: #3730a3;
+  white-space: nowrap;
 }
 .user-email {
   display: block;

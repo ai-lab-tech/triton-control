@@ -59,12 +59,15 @@
         @for (row of users(); track row.id) {
           <tr>
             <td>
-              <button class="name-link" type="button" (click)="openDetails(details, row)">
-                {{ row.name }}</button
-              ><span class="user-email">{{ row.email }}</span>
-              @if (isEngineer(row.id)) {
-                <span class="chip">ML engineer</span>
-              }
+              <div class="user-name-row">
+                <button class="name-link" type="button" (click)="openDetails(details, row)">
+                  {{ row.name }}
+                </button>
+                @if (isEngineer(row.id)) {
+                  <span class="chip engineer-badge">ML engineer</span>
+                }
+              </div>
+              <span class="user-email">{{ row.email }}</span>
             </td>
             <td class="optional">{{ row.role }}</td>
             <td>
