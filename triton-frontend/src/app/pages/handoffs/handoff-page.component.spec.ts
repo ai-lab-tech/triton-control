@@ -67,23 +67,106 @@ describe("HandoffPageComponent", () => {
   }
   afterEach(() => http.verify());
 
-  it("starts a linked handoff revision with a blank revision field", async () => {
+  it("prefills an incomplete handoff and submits the missing data as a new revision", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", true, receipt.id);
+    const origin = { installation_id: "lab-dev", record_id: "model-17" };
+    const model = { kind: "s3", profile_id: 1, path: "models/iris.onnx" };
+    const baseline = { kind: "s3", profile_id: 2, path: "results/baseline.json" };
+    http.expectOne("/api/s3-profiles").flush([
+      { id: 1, name: "Models", bucket: "models", prefix: "" },
+      { id: 2, name: "Results", bucket: "results", prefix: "" },
+    ]);
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush({
+      ...receipt,
+      request: {
+        ...receipt.request,
+        origin,
+        source: model,
+        dataset: null,
+        baseline,
+        expected_behavior: "Predict species",
+        acceptance_criteria: "Match saved predictions",
+      },
+      baseline: { version_id: "baseline-v1", file: { digest: "sha256:baseline", size: 12 } },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const form = fixture.nativeElement as HTMLElement;
+    const input = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+    const displayed = [
+      input("title").value,
+      input("source").value,
+      input("baseline").value,
+      input("behavior").value,
+      input("criteria").value,
+    ];
+    const page = fixture.componentInstance;
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+
+    // Act
+    await page.submit();
+    http.expectNone("/api/preparation/handoff-captures");
+    input("dataset").value = "datasets/eval.csv";
+    input("dataset").dispatchEvent(new Event("input"));
+    const pending = page.submit();
+    const post = http.expectOne("/api/preparation/handoff-captures");
+    post.flush({
+      id: "capture-new",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: "receipt-new" },
+    });
+    await pending;
+
+    // Assert
+    expect(form.textContent).toContain("Add missing information");
+    expect(displayed).toEqual([
+      "Iris",
+      model.path,
+      baseline.path,
+      "Predict species",
+      "Match saved predictions",
+    ]);
+    expect(post.request.body.previous_handoff_id).toBe(receipt.id);
+    expect(post.request.body.revision).toMatch(/^revision-[a-f0-9]{32}$/);
+    expect(post.request.body.origin).toEqual(origin);
+    expect(post.request.body.source).toEqual({
+      ...model,
+      version_id: "v1",
+      expected_digest: "sha256:abc",
+    });
+    expect(post.request.body.baseline).toEqual({
+      ...baseline,
+      version_id: "baseline-v1",
+      expected_digest: "sha256:baseline",
+    });
+    expect(post.request.body.dataset).toEqual({
+      kind: "s3",
+      profile_id: 1,
+      path: "datasets/eval.csv",
+    });
+    expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-new"]);
+  });
+
+  it("blocks submission and offers retry if the linked handoff cannot be loaded", async () => {
     // Arrange
     const fixture = await setup(null, "member", true, receipt.id);
     http.expectOne("/api/s3-profiles").flush([]);
 
     // Act
+    http
+      .expectOne("/api/preparation/handoffs/receipt-1")
+      .flush({}, { status: 404, statusText: "Not Found" });
     await fixture.whenStable();
     fixture.detectChanges();
-    await fixture.whenStable();
+    await fixture.componentInstance.submit();
 
     // Assert
-    const form = fixture.nativeElement as HTMLElement;
-    expect(form.querySelector<HTMLInputElement>('input[name="previousHandoff"]')?.value).toBe(
-      receipt.id,
-    );
-    expect(form.querySelector<HTMLInputElement>('input[name="revision"]')?.value).toBe("");
-    expect(form.textContent).toContain("Enter a new revision, such as 2.");
+    expect(fixture.nativeElement.querySelector("form")).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain("Retry loading form");
+    http.expectNone("/api/preparation/handoff-captures");
   });
 
   it("warns about overwritten or deleted files when unversioned inputs are allowed", async () => {
@@ -117,8 +200,10 @@ describe("HandoffPageComponent", () => {
     http
       .expectOne("/api/s3-profiles")
       .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    await fixture.whenStable();
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
     const form = fixture.nativeElement.querySelector("form") as HTMLFormElement;
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     expect(button.disabled).toBeTrue();

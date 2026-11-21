@@ -8,7 +8,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
-import { firstValueFrom, forkJoin } from "rxjs";
+import { firstValueFrom, forkJoin, of } from "rxjs";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
@@ -16,6 +16,8 @@ import {
   CaptureOperation,
   HandoffsApiService,
   HandoffReceipt,
+  HandoffRequest,
+  ResolvedInput,
   SourceInput,
   SourceProfile,
   WorkspaceSizing,
@@ -51,6 +53,10 @@ export class HandoffPageComponent {
   readonly workspaceSizing = signal<WorkspaceSizing | null>(null);
   storageGiB: number | null = null;
   readonly detail = signal(false);
+  readonly draftLoading = signal(false);
+  readonly draftLoadFailed = signal(false);
+  readonly original = signal<HandoffReceipt | null>(null);
+  readonly originalId = this.route.snapshot.queryParamMap.get("previous") ?? "";
   readonly capture = signal<CaptureOperation | null>(null);
   private captureTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
@@ -63,7 +69,9 @@ export class HandoffPageComponent {
   revision = "1";
   previousHandoffId = "";
   datasetPath = "";
+  datasetProfileId: number | null = null;
   baselinePath = "";
+  baselineProfileId: number | null = null;
   expectedBehavior = "";
   criteria = "";
 
@@ -74,8 +82,6 @@ export class HandoffPageComponent {
     });
     const captureId = this.route.snapshot.queryParamMap.get("capture");
     if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
-    this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
-    if (this.previousHandoffId) this.revision = "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
       this.detail.set(!!id);
@@ -84,21 +90,83 @@ export class HandoffPageComponent {
       this.storageGiB = null;
       this.error.set("");
       if (id) void this.loadReceipt(id);
-      else if (this.canSubmit()) void this.loadProfiles();
+      else if (this.canSubmit()) void this.loadDraft();
     });
   }
-  private async loadProfiles() {
+  async loadDraft() {
+    this.draftLoading.set(true);
+    this.draftLoadFailed.set(false);
+    this.error.set("");
     try {
-      const { profiles, policy } = await firstValueFrom(
-        forkJoin({ profiles: this.api.profiles(), policy: this.api.submissionPolicy() }),
+      const { profiles, policy, original } = await firstValueFrom(
+        forkJoin({
+          profiles: this.api.profiles(),
+          policy: this.api.submissionPolicy(),
+          original: this.originalId ? this.api.get(this.originalId) : of(null),
+        }),
       );
+      if (this.destroyed) return;
       this.requireS3Versioning.set(policy.require_s3_versioning);
       this.profiles.set(profiles);
+      if (original) {
+        this.original.set(original);
+        const request = original.request;
+        this.title = request.title;
+        this.sourceKind = request.source.kind;
+        this.profileId = request.source.profile_id;
+        this.sourcePath = request.source.path;
+        this.datasetPath = request.dataset?.path ?? "";
+        this.datasetProfileId = request.dataset?.profile_id ?? null;
+        this.baselinePath = request.baseline?.path ?? "";
+        this.baselineProfileId = request.baseline?.profile_id ?? null;
+        this.expectedBehavior = request.expected_behavior ?? "";
+        this.criteria = request.acceptance_criteria ?? "";
+        this.revision = `revision-${this.submissionId}`;
+      }
     } catch (error) {
+      if (this.destroyed) return;
+      this.draftLoadFailed.set(true);
       this.error.set(
-        mapApiErrorMessage(error, "Could not load handoff settings or source profiles."),
+        mapApiErrorMessage(
+          error,
+          this.originalId
+            ? "Could not load the original handoff or its source profiles."
+            : "Could not load handoff settings or source profiles.",
+        ),
       );
+    } finally {
+      if (!this.destroyed) this.draftLoading.set(false);
     }
+  }
+
+  completingHandoff(): boolean {
+    return !!this.original()?.task.missing_inputs.length;
+  }
+
+  unavailableRevisionProfile(): boolean {
+    if (!this.original()) return false;
+    const selected = [
+      this.profileId,
+      this.datasetPath.trim() ? this.datasetProfileId : null,
+      this.baselinePath.trim() ? this.baselineProfileId : null,
+    ];
+    return selected.some(
+      (id) => id !== null && !this.profiles().some((profile) => profile.id === id),
+    );
+  }
+
+  private objectInput(
+    path: string,
+    profileId: number,
+    previous: SourceInput | null | undefined,
+    captured: ResolvedInput | null | undefined,
+  ): SourceInput {
+    const input: SourceInput = { kind: "s3", profile_id: profileId, path: path.trim() };
+    if (previous?.profile_id === profileId && previous.path === input.path) {
+      input.version_id = captured?.version_id ?? previous.version_id;
+      input.expected_digest = captured?.file.digest ?? previous.expected_digest;
+    }
+    return input;
   }
   hasUnversionedInputs(receipt: HandoffReceipt): boolean {
     const source = "files" in receipt.source ? receipt.source.files : [receipt.source];
@@ -191,48 +259,73 @@ export class HandoffPageComponent {
     if (
       this.busy() ||
       !this.canSubmit() ||
+      (this.originalId && !this.original()) ||
       this.capture() !== null ||
       this.profileId === null ||
       !this.title.trim() ||
       !this.sourcePath.trim() ||
-      !this.revision.trim()
+      !this.revision.trim() ||
+      this.unavailableRevisionProfile() ||
+      (this.completingHandoff() &&
+        ![this.datasetPath, this.baselinePath, this.expectedBehavior, this.criteria].every(
+          (value) => value.trim(),
+        ))
     )
       return;
-    const source = (path: string): SourceInput => ({
-      kind: "s3",
-      profile_id: this.profileId!,
-      path: path.trim(),
-    });
+    const original = this.original();
+    const previous = original?.request;
+    const profileId = this.profileId;
+    const path = this.sourcePath.trim();
+    const sameSource =
+      previous?.source.kind === this.sourceKind &&
+      previous.source.profile_id === profileId &&
+      previous.source.path === path;
+    const source: HandoffRequest["source"] =
+      this.sourceKind === "s3_repository"
+        ? { kind: "s3_repository", profile_id: profileId, path }
+        : this.objectInput(
+            path,
+            profileId,
+            previous?.source.kind === "s3" ? previous.source : null,
+            original && "version_id" in original.source ? original.source : null,
+          );
+    const draft: HandoffRequest = {
+      schema_version: 1,
+      origin:
+        sameSource && previous
+          ? previous.origin
+          : {
+              installation_id: previous?.origin.installation_id ?? this.document.location.origin,
+              record_id: `s3-profile:${profileId}:${bytesToHex(sha256(new TextEncoder().encode(path)))}`,
+            },
+      previous_handoff_id: original?.id ?? (this.previousHandoffId.trim() || null),
+      revision: this.revision.trim(),
+      title: this.title.trim(),
+      source,
+      ...(sameSource && previous?.lineage ? { lineage: previous.lineage } : {}),
+      dataset: this.datasetPath.trim()
+        ? this.objectInput(
+            this.datasetPath,
+            this.datasetProfileId ?? profileId,
+            previous?.dataset,
+            original?.dataset,
+          )
+        : null,
+      baseline: this.baselinePath.trim()
+        ? this.objectInput(
+            this.baselinePath,
+            this.baselineProfileId ?? profileId,
+            previous?.baseline,
+            original?.baseline,
+          )
+        : null,
+      expected_behavior: this.expectedBehavior.trim() || null,
+      acceptance_criteria: this.criteria.trim() || null,
+    };
     this.busy.set(true);
     this.error.set("");
     try {
-      const operation = await firstValueFrom(
-        this.api.submit(
-          {
-            schema_version: 1,
-            origin: {
-              installation_id: this.document.location.origin,
-              record_id: `s3-profile:${this.profileId}:${bytesToHex(sha256(new TextEncoder().encode(this.sourcePath.trim())))}`,
-            },
-            previous_handoff_id: this.previousHandoffId.trim() || null,
-            revision: this.revision.trim(),
-            title: this.title.trim(),
-            source:
-              this.sourceKind === "s3_repository"
-                ? {
-                    kind: "s3_repository",
-                    profile_id: this.profileId!,
-                    path: this.sourcePath.trim(),
-                  }
-                : source(this.sourcePath),
-            dataset: this.datasetPath.trim() ? source(this.datasetPath) : null,
-            baseline: this.baselinePath.trim() ? source(this.baselinePath) : null,
-            expected_behavior: this.expectedBehavior.trim() || null,
-            acceptance_criteria: this.criteria.trim() || null,
-          },
-          this.submissionId,
-        ),
-      );
+      const operation = await firstValueFrom(this.api.submit(draft, this.submissionId));
       this.capture.set(operation);
       await this.router.navigate([], {
         relativeTo: this.route,

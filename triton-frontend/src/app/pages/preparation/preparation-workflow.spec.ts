@@ -279,6 +279,7 @@ describe("Engineering preparation workflow", () => {
     expect(assignment.querySelector("a")?.getAttribute("href")).toBe(
       "/preparation/handoffs/new?previous=handoff-1",
     );
+    expect(assignment.querySelector("a")?.textContent).toContain("Add missing information");
     http.expectNone("/api/preparation/tasks/task-1/workspace-sizing");
     fixture.destroy();
   });

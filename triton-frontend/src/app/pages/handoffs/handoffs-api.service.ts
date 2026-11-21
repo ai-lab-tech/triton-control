@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
-import { BASE_PATH, CodeServerDTO } from "../../api/generated";
+import { BASE_PATH, CodeServerDTO, ControlLineage } from "../../api/generated";
 
 export interface WorkspaceSizing {
   input_bytes: number;
@@ -36,6 +36,7 @@ export interface HandoffRequest {
   revision: string;
   title: string;
   source: SourceInput | RepositoryInput;
+  lineage?: ControlLineage | null;
   dataset: SourceInput | null;
   baseline: SourceInput | null;
   expected_behavior: string | null;
