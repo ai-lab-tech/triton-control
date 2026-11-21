@@ -10135,6 +10135,123 @@
         ],
         "title": "Evidence"
       },
+      "ExampleSource": {
+        "properties": {
+          "model_card": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Card"
+          },
+          "license_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License File"
+          },
+          "source_documents": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Source Documents",
+            "default": []
+          },
+          "workspace_model_root": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "string",
+                "const": "."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Model Root"
+          },
+          "kind": {
+            "type": "string",
+            "const": "example",
+            "title": "Kind"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "project_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "string",
+                "const": "."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ExampleSource"
+      },
       "FileEntry": {
         "properties": {
           "path": {
@@ -10331,6 +10448,145 @@
           "path"
         ],
         "title": "GitLocation"
+      },
+      "HFSource": {
+        "properties": {
+          "model_card": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Card"
+          },
+          "license_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License File"
+          },
+          "source_documents": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Source Documents",
+            "default": []
+          },
+          "workspace_model_root": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "string",
+                "const": "."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Model Root"
+          },
+          "kind": {
+            "type": "string",
+            "const": "hf",
+            "title": "Kind"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "resolved_commit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Commit"
+          },
+          "serving_manifest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serving Manifest"
+          },
+          "checkpoint_files": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Checkpoint Files",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "HFSource"
       },
       "HTTPValidationError": {
         "properties": {
@@ -10975,6 +11231,98 @@
           "user"
         ],
         "title": "LoginResponse"
+      },
+      "ManualSource": {
+        "properties": {
+          "model_card": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Card"
+          },
+          "license_file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License File"
+          },
+          "source_documents": {
+            "items": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Source Documents",
+            "default": []
+          },
+          "workspace_model_root": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "string",
+                "const": "."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Model Root"
+          },
+          "kind": {
+            "type": "string",
+            "const": "manual",
+            "title": "Kind"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "ai_assisted": {
+            "type": "boolean",
+            "title": "Ai Assisted",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ManualSource"
       },
       "Metadata": {
         "properties": {
@@ -12221,6 +12569,35 @@
                 "type": "null"
               }
             ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/HFSource"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExampleSource"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ManualSource"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "kind",
+                  "mapping": {
+                    "example": "#/components/schemas/ExampleSource",
+                    "hf": "#/components/schemas/HFSource",
+                    "manual": "#/components/schemas/ManualSource"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "previous_snapshot_id": {
             "anyOf": [
@@ -13636,6 +14013,16 @@
           "workspace_inventory": {
             "$ref": "#/components/schemas/InventoryV1"
           },
+          "source_provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "gaps": {
             "items": {
               "type": "string"
@@ -13757,6 +14144,104 @@
           "read_binding"
         ],
         "title": "SourceGrant"
+      },
+      "SourceProvenance": {
+        "properties": {
+          "submitter_user_id": {
+            "type": "integer",
+            "title": "Submitter User Id"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "serving_manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generator": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generator"
+          },
+          "generator_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generator Version"
+          },
+          "generator_options": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Generator Options"
+          },
+          "checkpoint_inventory": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Inventory"
+          },
+          "revision_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Fingerprint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submitter_user_id",
+          "documents"
+        ],
+        "title": "SourceProvenance"
       },
       "SourceSpec": {
         "properties": {

@@ -29,10 +29,12 @@ from app.main import app
 from app.repositories import operations as operation_repo
 from app.schemas.experiment_snapshots import PreparationRequest, RuntimeObservation
 from app.schemas.lineage import FileEntry, InventoryV1
+from app.schemas.task_workspaces import SnapshotFile
 from app.services.candidates.artifacts import CapturedSource, DirectoryArtifactStore
 from app.services.operations import OperationWorker
 from app.services.operations import service as operations
 from app.services.snapshots import service, workspace_reader
+from app.services.snapshots.inputs import download
 from app.services.snapshots.runtime import actual_image
 from app.services.snapshots.workspace import decode
 from tests.test_preparation import PreparationFixture
@@ -142,6 +144,7 @@ class SnapshotFixture(PreparationFixture):
         patcher = patch.dict(operations.adapters, {service.KIND: self.adapter})
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.original_source = service._source
         for name, value in (("_source", self.source), ("_observe", self.runtime)):
             mock = patch.object(service, name, return_value=value)
             mock.start()
@@ -179,9 +182,183 @@ class SnapshotFixture(PreparationFixture):
 
 
 class SnapshotTests(SnapshotFixture, unittest.TestCase):
+    def select_workspace(self, files: dict[str, bytes]):
+        def capture(namespace, name, selected, destination):
+            rows = [{"path": path, "data": base64.b64encode(files[path]).decode()} for path in selected]
+            return decode(json.dumps({"files": rows}).encode(), selected, destination)
+
+        self.enterContext(patch.object(service.WorkspaceProvider, "capture", side_effect=capture))
+        return {"workspace_id": 1, "files": list(files)}
+
+    def test_hf_capture_fingerprints_changed_bytes_at_same_declared_revision(self):
+        # Arrange
+        restored_manifest = Path(self.temporary.name) / "restored-serving.json"
+        hints = json.dumps({
+            "generator": "triton-hf-builder",
+            "generator_version": "1.2.3",
+            "runtime": "vllm",
+            "gpu_count": 2,
+            "max_new_tokens": True,
+            "validation": {"static": "passed", "serving": "passed"},
+        }).encode()
+        manifest_path = "generated/serving.json"
+        source = {
+            "kind": "hf", "repository": "demo/model", "revision": "main",
+            "serving_manifest": manifest_path, "checkpoint_files": ["iris/1/model.onnx"],
+        }
+        workspace = self.select_workspace({manifest_path: hints})
+
+        # Act
+        first = self.finish(request=self.request(source=source, workspace=workspace))
+        self.source.data = b"new checkpoint at the same upstream revision"
+        second = self.finish(key="recapture", request=self.request(
+            source=source, workspace=workspace, previous_snapshot_id=first.id,
+        ))
+        original, revised = first.manifest.source_provenance, second.manifest.source_provenance
+        assert original is not None and original.serving_manifest is not None and revised is not None
+        download(self.session, SnapshotFile(snapshot_id=first.id, file=original.serving_manifest), restored_manifest)
+
+        # Assert
+        self.assertEqual(first.manifest.source_snapshot.kind, "hf")
+        self.assertEqual(original.serving_manifest, entry(".workspace/" + manifest_path, hints))
+        self.assertEqual((original.generator, original.generator_version), ("triton-hf-builder", "1.2.3"))
+        self.assertEqual(original.generator_options, {"runtime": "vllm", "gpu_count": 2})
+        self.assertEqual(restored_manifest.read_bytes(), hints)
+        self.assertIn("hf_source_revision_missing", second.task.missing_inputs)
+        self.assertIn("evaluation_inputs_missing", second.task.missing_inputs)
+        self.assertIn("running_model_bytes_unverified", second.task.missing_inputs)
+        for provenance in (original, revised):
+            self.assertIsNotNone(provenance.checkpoint_inventory)
+            self.assertIsNotNone(provenance.revision_fingerprint)
+        self.assertNotEqual(original.checkpoint_inventory, revised.checkpoint_inventory)
+        self.assertNotEqual(original.revision_fingerprint, revised.revision_fingerprint)
+        self.assertNotEqual(first.manifest.source_snapshot.inventory, second.manifest.source_snapshot.inventory)
+        self.assertNotEqual(first.task.id, second.task.id)
+        self.assertEqual(second.manifest.previous_snapshot_id, first.id)
+        self.assertEqual(first.manifest_digest, self.receipt(first.operation_id).manifest_digest)
+
+    def test_example_capture_retains_documents_and_detects_an_omitted_repository_file(self):
+        # Arrange
+        model_card = "project/MODEL_CARD.md"
+        license_file = "project/LICENSE"
+        source_notes = "project/SOURCES.md"
+        files = {
+            model_card: b"Model card",
+            license_file: b"License supplied by author",
+            source_notes: b"Source notes",
+            "project/iris/1/model.onnx": self.source.data,
+            "project/iris/2/model.onnx": b"Unselected version",
+        }
+        source = {
+            "kind": "example", "repository": "github.com/example/models", "commit": "a" * 40,
+            "project_path": "examples/iris", "workspace_model_root": "project",
+            "model_card": model_card, "license_file": license_file, "source_documents": [source_notes],
+        }
+        workspace = self.select_workspace(files)
+
+        # Act
+        partial = self.finish(request=self.request(source=source, workspace=workspace))
+        files["project/iris/config.pbtxt"] = b'name: "iris"'
+        complete = self.finish(key="complete", request=self.request(
+            source=source, workspace={**workspace, "files": list(files)},
+        ))
+        files["project/iris/config.pbtxt"] = b'name: "iris"\n# Uncommitted edit'
+        changed = self.finish(key="changed", request=self.request(
+            source=source, workspace={**workspace, "files": list(files)},
+        ))
+
+        # Assert
+        provenance = partial.manifest.source_provenance
+        assert provenance is not None and partial.manifest.request.source is not None
+        self.assertEqual(partial.manifest.source_snapshot.kind, "git")
+        self.assertEqual(partial.manifest.request.source.model_dump(mode="json"), source)
+        self.assertEqual(provenance.documents, tuple(
+            entry(".workspace/" + path, files[path]) for path in (model_card, license_file, source_notes)
+        ))
+        self.assertIn("workspace_model_bytes_differ", partial.task.missing_inputs)
+        self.assertNotIn("workspace_model_bytes_differ", complete.task.missing_inputs)
+        self.assertIn("workspace_model_bytes_differ", changed.task.missing_inputs)
+        self.assertIn("running_model_bytes_unverified", complete.task.missing_inputs)
+        self.assertNotEqual(complete.manifest.source_snapshot.inventory, changed.manifest.source_snapshot.inventory)
+        self.assertNotIn("source_license_missing", partial.task.missing_inputs)
+
+    def test_external_manual_capture_accepts_complete_workspace_model_and_attributes_author(self):
+        # Arrange
+        instance = self.session.get(TritonInstanceEntity, 1)
+        instance.is_self_deployed = False
+        self.session.add(instance)
+        self.session.commit()
+        workspace = self.select_workspace({
+            "iris/config.pbtxt": b'name: "iris"',
+            "iris/1/model.py": b"# Uncommitted model logic",
+        })
+        self.enterContext(patch.object(service, "_source", wraps=self.original_source))
+        self.enterContext(patch.object(service, "_observe", return_value=RuntimeObservation(managed=False)))
+        request = self.request(
+            deployment_uid=None, expected_generation=None, workspace=workspace,
+            source={"kind": "manual", "workspace_model_root": ".", "author": "Ada Example", "ai_assisted": True},
+        )
+
+        # Act
+        receipt = self.finish(request=request)
+
+        # Assert
+        provenance = receipt.manifest.source_provenance
+        assert provenance is not None
+        self.assertEqual(receipt.manifest.source_snapshot.kind, "manual")
+        self.assertEqual(receipt.manifest.request.source, request.source)
+        self.assertEqual(provenance.submitter_user_id, receipt.manifest.submitter_user_id)
+        self.assertEqual(receipt.manifest.inventory.files, ())
+        self.assertIn(entry(".workspace/iris/1/model.py", b"# Uncommitted model logic"),
+                      receipt.manifest.workspace_inventory.files)
+        self.assertNotIn("model_artifacts_missing", receipt.task.missing_inputs)
+        self.assertIn("external_runtime_unobserved", receipt.task.missing_inputs)
+        self.assertIn("source_model_card_missing", receipt.task.missing_inputs)
+        self.assertIn("source_license_missing", receipt.task.missing_inputs)
+
+    def test_hf_capture_retains_unreadable_manifest_and_flags_unavailable_checkpoint(self):
+        # Arrange
+        path, data = "generated/serving.json", b'{"truncated":'
+        workspace = self.select_workspace({path: data})
+        request = self.request(workspace=workspace, source={
+            "kind": "hf", "repository": "demo/model", "resolved_commit": "b" * 40,
+            "serving_manifest": path, "checkpoint_files": ["iris/1/missing.bin"],
+        })
+
+        # Act
+        receipt = self.finish(request=request)
+
+        # Assert
+        provenance = receipt.manifest.source_provenance
+        assert provenance is not None
+        self.assertEqual(provenance.serving_manifest, entry(".workspace/" + path, data))
+        self.assertIsNone(provenance.checkpoint_inventory)
+        self.assertIsNone(provenance.revision_fingerprint)
+        self.assertIn("hf_generator_metadata_missing", receipt.task.missing_inputs)
+        self.assertIn("hf_checkpoint_fingerprint_missing", receipt.task.missing_inputs)
+        self.assertNotIn("hf_source_revision_missing", receipt.task.missing_inputs)
+
+    def test_declared_source_files_must_be_selected(self):
+        # Arrange
+        workspace = {"workspace_id": 1, "files": ["project/notes.txt"]}
+        invalid_sources = (
+            {"kind": "example", "license_file": "project/LICENSE"},
+            {"kind": "hf", "serving_manifest": "project/serving.json"},
+            {"kind": "hf", "serving_manifest": "project/notes.txt"},
+            {"kind": "manual", "workspace_model_root": "other-project"},
+        )
+
+        for source in invalid_sources:
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                # Act / Assert
+                self.request(source=source, workspace=workspace)
+
     def test_capture_commits_one_task_and_immutable_receipt_with_real_bytes(self):
         before = self.session.get(TritonInstanceEntity, 1).model_dump()
         receipt = self.finish()
+        serialized = receipt.manifest.model_dump(mode="json")
+        self.assertNotIn("source", serialized["request"])
+        self.assertNotIn("source_provenance", serialized)
         self.assertEqual(receipt.task.source_snapshot_id, receipt.id)
         self.assertEqual(receipt.manifest.configuration["models"], ["iris"])
         self.assertIn("runtime_state_unverified", receipt.manifest.gaps)
