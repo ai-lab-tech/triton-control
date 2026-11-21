@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   test,
   expect,
@@ -169,27 +169,6 @@ test.describe.serial("code-server plugin workflows", () => {
     await expect(widget).toContainText(prompt);
     await widget.locator("input").fill(value);
     await widget.locator("input").press("Enter");
-  }
-
-  async function openFile(path: string): Promise<void> {
-    // An S3 editor may be restored as the active editor after restart. Absolute
-    // Quick Open paths then resolve against that editor's filesystem provider.
-    // Search relative to the workspace instead and verify the local file below.
-    const workspacePath = path.replace(/^\/workspace\//, "");
-    await expect(async () => {
-      await workbench.locator("body").press("Escape");
-      await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
-      await workbench.locator("body").press("Control+p");
-      const quick = workbench.locator(".quick-input-widget input");
-      await expect(quick).toBeVisible({ timeout: 2000 });
-      await quick.fill(workspacePath);
-      await workbench
-        .locator(".quick-input-list .monaco-list-row")
-        .filter({ hasText: basename(path) })
-        .first()
-        .click({ timeout: 2000 });
-      await expect(quick).toBeHidden({ timeout: 2000 });
-    }).toPass({ timeout: 30_000 });
   }
 
   async function explorer(): Promise<void> {
@@ -554,7 +533,20 @@ test.describe.serial("code-server plugin workflows", () => {
       workbench.getByText("S3 · Smoke S3 · plugin-smoke", { exact: true }),
     ).toBeVisible();
     await command("Triton Control: Refresh Repositories");
-    await openFile(`/workspace/${repository}/${model}/config.pbtxt`);
+    await explorer();
+    // Quick Open can still be indexing after restart, with only S3 history available.
+    // Open the persisted file from the local tree, hiding its uploaded S3 copy.
+    const remoteRoot = row("S3 · Smoke S3 · plugin-smoke");
+    if ((await remoteRoot.getAttribute("aria-expanded")) === "true") {
+      await remoteRoot.locator(".monaco-tl-twistie").click();
+    }
+    for (const name of ["workspace", repository, model]) {
+      const folder = row(name);
+      if ((await folder.getAttribute("aria-expanded")) !== "true") {
+        await folder.locator(".monaco-tl-twistie").click();
+      }
+    }
+    await row("config.pbtxt").dblclick();
     await expect(workbench.locator(".monaco-editor").first()).toContainText("python");
     expect(JSON.parse(readFile(`/workspace/${hfRepository}/serving.json`)).generator_version).toBe(
       required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),
