@@ -1,4 +1,4 @@
-"""Authorized, bounded capture of exact versioned S3 object identities."""
+"""Authorized, bounded capture and verification of S3 handoff inputs."""
 
 import hashlib
 import shutil
@@ -11,7 +11,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlmodel import Session
 
-from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError
+from app.exceptions import BadGatewayError, BadRequestError, ConflictError, ForbiddenError
 from app.repositories import s3_profiles
 from app.schemas.handoffs import ResolvedInput, S3Input, S3RepositoryInput
 from app.schemas.lineage import FileEntry
@@ -54,8 +54,16 @@ def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3
     )
 
 
+def version_id(metadata: dict[str, Any]) -> str | None:
+    value = metadata.get("VersionId")
+    return value if isinstance(value, str) and value not in {"", "null"} else None
+
+
 def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
-            allow_empty: bool = False, checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedInput:
+            allow_empty: bool = False, expected_etag: str | None = None,
+            checkpoint: Callable[[int], None] = lambda _: None) -> ResolvedInput:
+    if source.version_id == "null":
+        raise BadRequestError("Omit the version ID when submitting an unversioned object")
     limits = effective(session)
     max_bytes = limits.max_input_gib * 1024**3
     config, bucket, key = authorize(session, source)
@@ -71,16 +79,28 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
             args["VersionId"] = source.version_id
         checkpoint(0)
         head = client.head_object(**args)
-        version = head.get("VersionId")
-        if not version or version == "null":
+        version = version_id(head)
+        if version is None and limits.require_s3_versioning:
             raise BadRequestError("Enable S3 bucket versioning before submitting immutable handoff inputs")
+        if source.version_id is not None and source.version_id != version:
+            raise ConflictError("Handoff input version changed during capture")
+        get_args: dict[str, Any] = {"Bucket": bucket, "Key": key}
+        if version is not None:
+            get_args["VersionId"] = version
+        else:
+            etag = head.get("ETag")
+            if not etag:
+                raise BadRequestError("Source storage must provide an ETag for unversioned handoff inputs")
+            if expected_etag is not None and etag != expected_etag:
+                raise ConflictError("Repository source changed during capture; retry after publishing finishes")
+            get_args["IfMatch"] = etag
         size = head["ContentLength"]
         if size < (0 if allow_empty else 1) or size > max_bytes:
             raise BadRequestError(
                 f"Handoff input exceeds the configured {limits.max_input_gib} GiB total input limit or is empty"
             )
         checkpoint(0)
-        response = client.get_object(Bucket=bucket, Key=key, VersionId=version)
+        response = client.get_object(**get_args)
         body = response["Body"]
         measured, checksum = 0, hashlib.sha256()
         while True:
@@ -95,7 +115,7 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
             checksum.update(chunk)
             checkpoint(len(chunk))
         actual = "sha256:" + checksum.hexdigest()
-        if measured != size or response.get("VersionId") != version:
+        if measured != size or version_id(response) != version:
             raise BadRequestError("Handoff input changed during capture")
         if source.expected_digest is not None and actual != source.expected_digest:
             raise BadRequestError("Handoff input checksum does not match")
@@ -108,7 +128,10 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
             file=FileEntry(path=source.path, size=measured, digest=actual),
         )
     except ClientError as exc:
-        if str(exc.response.get("Error", {}).get("Code")) in {
+        code = str(exc.response.get("Error", {}).get("Code"))
+        if code in {"PreconditionFailed", "412"}:
+            raise ConflictError("Handoff input changed during capture; retry after publishing finishes") from None
+        if code in {
             "AccessDenied",
             "403",
             "NoSuchKey",
@@ -126,15 +149,21 @@ def resolve(session: Session, source: S3Input, *, deadline: float | None = None,
             client.close()
 
 
+def _changed_input(artifact: ResolvedInput) -> ConflictError:
+    return ConflictError(f"Unversioned input {artifact.file.path} changed or disappeared. Submit a new handoff.")
+
+
 def download(session: Session, artifact: ResolvedInput, destination: Path) -> None:
-    """Read only the captured version; verify before exposing any bytes to a workspace."""
+    """Verify captured bytes before exposing an input to a workspace."""
     limits = effective(session)
     config, bucket, key = authorize(session, artifact.source)
     if (config["s3_endpoint"], bucket, key) != (artifact.endpoint, artifact.bucket, artifact.key):
         raise ForbiddenError("Captured source profile changed")
-    if (not artifact.version_id or artifact.version_id == "null"
-            or not 0 <= artifact.file.size <= limits.max_input_gib * 1024**3):
-        raise BadRequestError("Workspace input requires a bounded, versioned artifact")
+    if not 0 <= artifact.file.size <= limits.max_input_gib * 1024**3:
+        raise BadRequestError("Workspace input exceeds the configured size limit")
+    get_args: dict[str, Any] = {"Bucket": bucket, "Key": key}
+    if artifact.version_id is not None:
+        get_args["VersionId"] = artifact.version_id
     if shutil.disk_usage(destination.parent).free < artifact.file.size + 64 * 1024**2:
         raise BadRequestError("Insufficient backend temporary storage; increase the backend staging disk")
     client: Any = None
@@ -143,7 +172,7 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
         client = build_s3_client(config, client_config=Config(
             connect_timeout=3, read_timeout=10, retries={"max_attempts": 1},
         ))
-        response = client.get_object(Bucket=bucket, Key=key, VersionId=artifact.version_id)
+        response = client.get_object(**get_args)
         body = response["Body"]
         measured, checksum = 0, hashlib.sha256()
         started = time.monotonic()
@@ -156,13 +185,22 @@ def download(session: Session, artifact: ResolvedInput, destination: Path) -> No
                     break
                 measured += len(chunk)
                 if measured > artifact.file.size:
+                    if artifact.version_id is None:
+                        raise _changed_input(artifact)
                     raise BadRequestError("Workspace input size does not match its snapshot")
                 checksum.update(chunk)
                 output.write(chunk)
         if (measured != artifact.file.size or "sha256:" + checksum.hexdigest() != artifact.file.digest
-                or response.get("VersionId") != artifact.version_id):
+                or (artifact.version_id is not None and version_id(response) != artifact.version_id)):
+            if artifact.version_id is None:
+                raise _changed_input(artifact)
             raise BadRequestError("Workspace input hash or version does not match its snapshot")
-    except (BotoCoreError, ClientError, OSError):
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code"))
+        if artifact.version_id is None and code in {"NoSuchKey", "NoSuchVersion", "404"}:
+            raise _changed_input(artifact) from None
+        raise BadGatewayError("Workspace input storage is unavailable") from None
+    except (BotoCoreError, OSError):
         raise BadGatewayError("Workspace input storage is unavailable") from None
     finally:
         if body is not None:

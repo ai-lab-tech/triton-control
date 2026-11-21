@@ -40,14 +40,14 @@ requirements and nested Python modules. Inputs are read-only; copy the repositor
 to `/workspace/conversion` when you need to edit it. Sibling prefixes, such as
 `iris-repository-backup/`, are not included.
 
-The bucket must have versioning enabled. Finish uploading before submitting: the
-backend lists the folder, pins and hashes every file, then lists it again to reject
+Bucket versioning is required by default. Finish uploading before submitting. The
+backend lists the folder, records versions and hashes every file, then lists it again to reject
 observed changes during capture. S3 does not provide an atomic multi-object folder
 transaction; publishers should stop modifying the folder while it is captured.
-The receipt retains each exact version and checksum plus a repository inventory
+The receipt retains each checksum, available version IDs and a repository inventory
 hash. Later edits or added files do not change an existing receipt. Retry with the
 same submission revision to recover it; use **New revision** for changed inputs.
-Keep the captured object versions in S3 while the task needs them.
+Keep the captured objects in S3 while the task needs them.
 
 Repository capture permits up to 998 files. Size and time budgets are configurable
 in [Model preparation settings](model-preparation-settings.md): defaults are 15 GiB
@@ -87,13 +87,14 @@ member/admin S3-profile policy; engineering responsibility alone grants no sourc
 access. Provider access denial or missing inputs referenced as objects rejects the
 entire submission.
 
-Each object is resolved using HEAD and then read using its exact non-null S3
-VersionId. SHA-256 is measured from streamed bytes, not inferred from ETags. Bucket
-versioning is required; the service rejects unversioned/suspended null versions.
+Each object is resolved using HEAD and read using its exact S3 version when available.
+SHA-256 is measured from streamed bytes. If an admin allows unversioned inputs,
+capture uses a conditional read with the object's ETag and stores the measured checksum.
+The workspace verifies the bytes against that checksum when staging.
 Each input uses the configured model preparation size and time limits, read in 1 MiB chunks with bounded
 connection/read timeouts. An expected digest mismatch rejects the submission.
-Inputs are referenced by exact versions; this story does not copy or retain their
-bytes. Storage retention must preserve those versions. Snapshot staging of live
+The workspace fetches inputs from the source bucket. Keep the original objects
+available until engineering is done. Snapshot staging of live
 experiments is #21; repository import is #26; optional plugin submission is #28.
 Additional source kinds require authorized adapters and are not accepted as
 unverified user claims.

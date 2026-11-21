@@ -16,9 +16,10 @@ ENV_PREFIX = "PREPARATION_"
 
 def defaults() -> PreparationLimits:
     try:
-        return PreparationLimits(**{
+        return PreparationLimits.model_validate({
             name: int(os.environ[ENV_PREFIX + name.upper()])
-            for name in PreparationLimits.model_fields if ENV_PREFIX + name.upper() in os.environ
+            for name in ("max_input_gib", "max_workspace_storage_gib", "transfer_timeout_seconds")
+            if ENV_PREFIX + name.upper() in os.environ
         })
     except (ValueError, ValidationError):
         raise ServiceUnavailableError("Invalid model preparation deployment limits") from None

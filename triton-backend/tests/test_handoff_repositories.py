@@ -21,7 +21,7 @@ from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.schemas.handoffs import S3RepositoryInput
 from app.schemas.preparation_settings import PreparationLimits
 from app.services import handoff_repositories as repositories
-from app.services import handoff_sources, handoffs, task_workspace_access, task_workspaces
+from app.services import handoff_sources, handoffs, preparation_settings, task_workspace_access, task_workspaces
 from app.services.development.task_stage_runner import stage
 from tests.test_handoffs import HandoffFixture
 
@@ -141,6 +141,65 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
         # Assert
         self.assertIn("versioning", str(error.exception))
         self.assertEqual(self.session.exec(select(PreparationTaskEntity)).all(), [])
+
+    def test_opt_in_repository_keeps_pinned_versions_and_hashes_unversioned_files(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        mutable_key = "allowed/repo/iris/1/model.onnx"
+
+        def head(**kwargs):
+            metadata = self.head(**kwargs)
+            return {**metadata, "VersionId": "null", "ETag": '"model"'} if kwargs["Key"] == mutable_key else metadata
+
+        def get_object(**kwargs):
+            response = self.get_object(**kwargs)
+            return {**response, "VersionId": "null"} if kwargs["Key"] == mutable_key else response
+
+        self.client.head_object.side_effect = head
+        self.client.get_object.side_effect = get_object
+        request = self.repository_request()
+
+        # Act
+        receipt = handoffs.submit(self.session, self.submitter, request)
+        inputs = task_workspace_access.load_inputs(self.session, receipt.task.id)
+
+        # Assert
+        source = inputs.files[1].artifact
+        self.assertIsNone(source.version_id)
+        self.assertEqual(source.file.digest, "sha256:" + hashlib.sha256(b"model bytes").hexdigest())
+        self.assertEqual(inputs.files[0].artifact.version_id, "v1")
+        self.client.get_object.assert_any_call(Bucket="models", Key=mutable_key, IfMatch='"model"')
+
+    def test_unversioned_repository_rejects_same_size_overwrite_after_hashing(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        mutable_key = "allowed/repo/iris/1/model.onnx"
+        original_get = self.get_object
+        etag = '"original"'
+
+        def head(**kwargs):
+            metadata = self.head(**kwargs)
+            return {**metadata, "VersionId": None, "ETag": etag} if kwargs["Key"] == mutable_key else metadata
+
+        def get_object(**kwargs):
+            nonlocal etag
+            response = original_get(**kwargs)
+            if kwargs["Key"] == mutable_key:
+                etag = '"replaced"'
+                response["VersionId"] = None
+            return response
+
+        self.client.head_object.side_effect = head
+        self.client.get_object.side_effect = get_object
+        request = self.repository_request()
+
+        # Act
+        with self.assertRaises(ConflictError) as error:
+            handoffs.submit(self.session, self.submitter, request)
+
+        # Assert
+        self.assertIn("changed during capture", str(error.exception))
+        self.assertEqual(self.session.exec(select(HandoffEntity)).all(), [])
 
     def test_changing_membership_during_capture_creates_no_task(self):
         # Arrange

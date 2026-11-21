@@ -10,7 +10,7 @@ from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableEr
 from app.schemas.handoffs import S3Input
 from app.schemas.preparation_settings import PreparationLimits
 from app.schemas.task_workspaces import OpenTaskWorkspace
-from app.services import handoff_sources
+from app.services import handoff_sources, handoffs
 from app.services import preparation_settings as settings
 from app.services.development import kubernetes as k8s
 from app.services.development.task_staging import configure
@@ -26,6 +26,7 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         # Assert
         self.assertEqual(result.limits.model_dump(), {
             "max_input_gib": 15, "max_workspace_storage_gib": 50, "transfer_timeout_seconds": 3600,
+            "require_s3_versioning": True,
         })
         self.assertEqual(result.source, "deployment")
 
@@ -34,7 +35,7 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         self.enterContext(patch.dict(os.environ, {"PREPARATION_MAX_INPUT_GIB": "12",
                                                  "PREPARATION_TRANSFER_TIMEOUT_SECONDS": "7200"}))
         requested = PreparationLimits(max_input_gib=40, max_workspace_storage_gib=100,
-                                      transfer_timeout_seconds=1800)
+                                      transfer_timeout_seconds=1800, require_s3_versioning=False)
         # Act
         saved = settings.update(self.session, self.admin, requested)
         loaded = settings.effective(self.session)
@@ -45,6 +46,7 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(reset.source, "deployment")
         self.assertEqual(reset.limits.max_input_gib, 12)
         self.assertEqual(reset.limits.transfer_timeout_seconds, 7200)
+        self.assertTrue(reset.limits.require_s3_versioning)
 
     def test_legacy_saved_override_is_read_and_reset_without_old_fields(self):
         # Arrange
@@ -58,6 +60,7 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
         # Assert
         self.assertEqual(result.limits.model_dump(), {
             "max_input_gib": 30, "max_workspace_storage_gib": 50, "transfer_timeout_seconds": 1800,
+            "require_s3_versioning": True,
         })
         self.assertEqual(result.source, "admin")
 
@@ -70,6 +73,16 @@ class PreparationSettingsTests(HandoffFixture, unittest.TestCase):
                        lambda: settings.update(self.session, self.engineer, None)):
             with self.assertRaises(ForbiddenError):
                 action()
+
+    def test_member_can_read_submission_policy_after_admin_disables_versioning(self):
+        # Arrange
+        settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+
+        # Act
+        policy = handoffs.submission_policy(self.session, self.submitter)
+
+        # Assert
+        self.assertFalse(policy.require_s3_versioning)
 
     def test_inconsistent_limits_and_invalid_environment_fail_closed(self):
         # Arrange

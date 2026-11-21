@@ -13,6 +13,7 @@ from app.repositories import teams
 from app.schemas.handoffs import (
     HandoffReceipt,
     HandoffRequest,
+    HandoffSubmissionPolicy,
     NotificationDTO,
     ResolvedInput,
     ResolvedRepository,
@@ -45,6 +46,12 @@ def _receipt(session: Session, claims: dict[str, Any], row: HandoffEntity) -> Ha
 def get(session: Session, claims: dict[str, Any], handoff_id: UUID) -> HandoffReceipt:
     _actor(session, claims)
     return _receipt(session, claims, repository.get(session, handoff_id))
+
+
+def submission_policy(session: Session, claims: dict[str, Any]) -> HandoffSubmissionPolicy:
+    installation_policy.require("development_jobs")
+    _actor(session, claims)
+    return HandoffSubmissionPolicy(require_s3_versioning=effective(session).require_s3_versioning)
 
 
 def _selection(source: S3Input | S3RepositoryInput, endpoint: str | None, bucket: str, key: str) -> dict[str, Any]:
@@ -117,8 +124,7 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
         )
         if existing is not None:
             return _reuse(session, claims, existing, selectors)
-        # No database write/row lock across provider reads. Each mutable object is
-        # resolved once to a non-null version ID; retries return the stored receipt.
+        # Capture checksums without holding a database write lock across provider reads.
         options: dict[str, Any] = {"checkpoint": checkpoint} if checkpoint else {}
         source = (
             handoff_repositories.resolve(session, request.source, **options)

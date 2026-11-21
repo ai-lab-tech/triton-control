@@ -5,9 +5,18 @@ import json
 import os
 import shutil
 import time
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Callable, ContextManager
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+UNVERSIONED_INPUT_CHANGED = 42
+UNVERSIONED_INPUT_MESSAGE = "Unversioned task input"
+
+
+class UnversionedInputChanged(Exception):
+    pass
 
 
 def stage(root: Path, document: dict[str, Any], fetch: Callable[[int], ContextManager[BinaryIO]]) -> None:
@@ -58,10 +67,22 @@ def main() -> None:
 
     def fetch(index: int) -> Any:
         request = Request(base + "/" + str(index), headers={"Authorization": "Bearer " + token})
-        return urlopen(request, timeout=document.get("download_timeout_seconds", 3600) + 60)  # nosec B310 -- server-configured internal URL
+        try:
+            return urlopen(request, timeout=document.get("download_timeout_seconds", 3600) + 60)  # nosec B310 -- server-configured internal URL
+        except HTTPError as error:
+            entry = document["files"][index]
+            if error.code == 409 and "version_id" in entry and entry["version_id"] is None:
+                raise UnversionedInputChanged(entry["path"]) from None
+            raise
 
     try:
         stage(Path("/inputs"), document, fetch)
+    except UnversionedInputChanged as error:
+        message = f"{UNVERSIONED_INPUT_MESSAGE} {str(error)!r} changed or disappeared. Submit a new handoff revision."
+        print(message, flush=True)
+        with suppress(OSError):
+            Path("/dev/termination-log").write_text(message, encoding="utf-8")
+        raise SystemExit(UNVERSIONED_INPUT_CHANGED) from None
     except Exception:
         # Never echo a response body, credential or source URL into pod logs.
         print("Task input staging failed. Check source access, hashes and Python runtime; retry.", flush=True)

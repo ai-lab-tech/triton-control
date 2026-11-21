@@ -25,6 +25,7 @@ from app.services.development.python_packages import (
     USER_INSTALL_FLAGS,
     hf_builder_version,
 )
+from app.services.development.task_stage_runner import UNVERSIONED_INPUT_CHANGED, UNVERSIONED_INPUT_MESSAGE
 from app.services.kubernetes_client import (
     api_client,
     gpu_runtime_class_name,
@@ -201,6 +202,15 @@ def read_status(namespace: str, statefulset_name: str) -> tuple[str, str]:
                         "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                     }
                 ):
+                    previous = getattr(getattr(init, "last_state", None), "terminated", None)
+                    failure = terminated or previous
+                    if getattr(failure, "exit_code", 0) == UNVERSIONED_INPUT_CHANGED:
+                        message = getattr(failure, "message", None) or ""
+                        if message.startswith(UNVERSIONED_INPUT_MESSAGE + " "):
+                            return "blocked", message
+                        return "blocked", (
+                            "An unversioned task input changed or disappeared. Submit a new handoff revision."
+                        )
                     return "blocked", "Task input staging failed; check source access and hashes, then retry."
         conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
         ready = any(

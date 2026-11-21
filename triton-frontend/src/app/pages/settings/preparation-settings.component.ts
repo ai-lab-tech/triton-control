@@ -2,16 +2,21 @@ import { Component, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
+import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { firstValueFrom } from "rxjs";
 import { BASE_PATH } from "../../api/generated";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
-interface Limits {
+interface NumericLimits {
   max_input_gib: number;
   max_workspace_storage_gib: number;
   transfer_timeout_seconds: number;
+}
+
+interface Limits extends NumericLimits {
+  require_s3_versioning: boolean;
 }
 
 interface Settings {
@@ -23,7 +28,7 @@ interface Settings {
 @Component({
   selector: "app-preparation-settings",
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [FormsModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule],
   styleUrl: "./settings-form.scss",
   template: `
     <h2 class="card-title">Model preparation</h2>
@@ -59,6 +64,19 @@ interface Settings {
             </div>
           }
         </div>
+        <mat-checkbox
+          name="require_s3_versioning"
+          [(ngModel)]="values.require_s3_versioning"
+          [disabled]="busy()"
+        >
+          Require S3 versioning for handoff inputs
+        </mat-checkbox>
+        @if (!values.require_s3_versioning) {
+          <p role="status">
+            Unversioned files can be overwritten or deleted. Engineers will need a new handoff if
+            the submitted bytes can no longer be retrieved.
+          </p>
+        }
         <details>
           <summary class="app-disclosure">How preparation limits apply</summary>
           <p>
@@ -91,7 +109,7 @@ interface Settings {
             [disabled]="busy() || form.invalid || !valid()"
             color="primary"
           >
-            Save limits
+            Save settings
           </button>
         </div>
       </form>
@@ -110,7 +128,7 @@ export class PreparationSettingsComponent {
   readonly message = signal("");
   readonly source = signal<"deployment" | "admin">("deployment");
   draft: Limits | null = null;
-  readonly fields: { key: keyof Limits; label: string; min: number; max: number }[] = [
+  readonly fields: { key: keyof NumericLimits; label: string; min: number; max: number }[] = [
     { key: "max_input_gib", label: "Maximum total task inputs (GiB)", min: 1, max: 8192 },
     {
       key: "max_workspace_storage_gib",
@@ -154,7 +172,7 @@ export class PreparationSettingsComponent {
     this.busy.set(true);
     try {
       this.accept(await firstValueFrom(this.http.put<Settings>(this.url, this.draft)));
-      this.message.set("Preparation limits saved.");
+      this.message.set("Preparation settings saved.");
     } catch (error) {
       this.message.set(mapApiErrorMessage(error, "Could not save preparation settings."));
     } finally {

@@ -72,8 +72,12 @@ class ResolvedInput(Request):
     bucket: str
     key: str
     endpoint: str
-    version_id: str
+    version_id: str | None
     file: FileEntry
+
+
+class HandoffSubmissionPolicy(Request):
+    require_s3_versioning: bool
 
 
 class ResolvedRepository(Request):

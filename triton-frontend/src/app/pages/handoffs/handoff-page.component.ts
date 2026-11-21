@@ -8,7 +8,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, forkJoin } from "rxjs";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
@@ -44,6 +44,7 @@ export class HandoffPageComponent {
   private readonly document = inject(DOCUMENT);
   readonly canSubmit = inject(AuthStore).canWriteInstances;
   readonly profiles = signal<SourceProfile[]>([]);
+  readonly requireS3Versioning = signal(true);
   readonly receipt = signal<HandoffReceipt | null>(null);
   readonly busy = signal(false);
   readonly error = signal("");
@@ -74,6 +75,7 @@ export class HandoffPageComponent {
     const captureId = this.route.snapshot.queryParamMap.get("capture");
     if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
     this.previousHandoffId = this.route.snapshot.queryParamMap.get("previous") ?? "";
+    if (this.previousHandoffId) this.revision = "";
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const id = params.get("handoffId");
       this.detail.set(!!id);
@@ -87,10 +89,22 @@ export class HandoffPageComponent {
   }
   private async loadProfiles() {
     try {
-      this.profiles.set(await firstValueFrom(this.api.profiles()));
+      const { profiles, policy } = await firstValueFrom(
+        forkJoin({ profiles: this.api.profiles(), policy: this.api.submissionPolicy() }),
+      );
+      this.requireS3Versioning.set(policy.require_s3_versioning);
+      this.profiles.set(profiles);
     } catch (error) {
-      this.error.set(mapApiErrorMessage(error, "Could not load source profiles."));
+      this.error.set(
+        mapApiErrorMessage(error, "Could not load handoff settings or source profiles."),
+      );
     }
+  }
+  hasUnversionedInputs(receipt: HandoffReceipt): boolean {
+    const source = "files" in receipt.source ? receipt.source.files : [receipt.source];
+    return [...source, receipt.dataset, receipt.baseline].some(
+      (input) => input?.version_id === null,
+    );
   }
   private async loadReceipt(id: string) {
     this.busy.set(true);
