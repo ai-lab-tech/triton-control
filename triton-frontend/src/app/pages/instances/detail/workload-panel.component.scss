@@ -751,13 +751,6 @@ summary:focus-visible {
   cursor: pointer;
   list-style: none;
 }
-.pod-resource > summary::before {
-  content: "▸";
-  color: var(--ink-500);
-}
-.pod-resource[open] > summary::before {
-  content: "▾";
-}
 .pod-resource-name {
   overflow-wrap: anywhere;
   min-width: 0;

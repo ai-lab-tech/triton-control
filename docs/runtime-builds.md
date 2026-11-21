@@ -1,4 +1,4 @@
-# Recoverable development runtime builds (S06-C)
+# Recoverable development runtime builds
 
 `POST /api/builds` accepts `task_id`, a verified `context_id`, an exact allowed
 `repository`, and an `Idempotency-Key` header. It returns 202 and a `Location`.
@@ -24,7 +24,7 @@ Follow [builder provisioning](build-provisioning.md) and
 - `policy.enabled=true` and `TRITON_BUILD_FIXTURE_REVISION` set to the reviewed
   qualification receipt's revision (`buildQualification.fixtureRevision` in Helm).
 - A passing receipt for that exact policy, executor digest, platform and fixture
-  revision, including `versioned_https_context`. Older S06-A receipts lack this
+  revision, including `versioned_https_context`. Older builder qualification receipts lack this
   check and cannot enable execution. Re-run `scripts/qualify_builder.py` after
   upgrading. Qualification is never fabricated by the API or the tests.
 - A versioned S3 bucket reachable over trusted HTTPS from the executor. The

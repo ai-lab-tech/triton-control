@@ -46,7 +46,7 @@
   width: min(100%, 760px);
   padding: 0.9rem 1rem;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(241, 245, 249, 0.97));
+  background: white;
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.05),
     inset 0 0 0 1px rgba(15, 23, 42, 0.09);
@@ -54,7 +54,8 @@
 
 .detail-summary-head {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.15rem;
@@ -869,50 +870,6 @@
   border-bottom: 0;
 }
 
-.switch {
-  position: relative;
-  width: 52px;
-  height: 30px;
-  display: inline-block;
-  flex: 0 0 auto;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #cbd5f5;
-  border-radius: 999px;
-  transition: background 0.2s ease;
-}
-
-.slider::before {
-  content: "";
-  position: absolute;
-  height: 22px;
-  width: 22px;
-  left: 4px;
-  top: 4px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.2);
-}
-
-.switch input:checked + .slider {
-  background: #14b8a6;
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(22px);
-}
-
 .toggle-title {
   font-weight: 600;
 }
@@ -954,7 +911,7 @@
   gap: 1rem;
   padding: 1.15rem;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(241, 245, 249, 0.98));
+  background: white;
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.22);
 }
 

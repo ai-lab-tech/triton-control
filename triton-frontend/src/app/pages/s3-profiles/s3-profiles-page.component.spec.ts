@@ -107,7 +107,7 @@ describe("S3ProfilesPageComponent", () => {
     expect(fixture.nativeElement.querySelector(".profile-usage dd").textContent).toBe(
       "MLflow artifact store",
     );
-    const trigger = fixture.nativeElement.querySelector("mat-select-trigger");
+    const trigger = fixture.nativeElement.querySelector(".profile-entry");
     expect(trigger.querySelector(".profile-name").textContent).toBe("dev");
     expect(trigger.querySelector(".usage-badge")).not.toBeNull();
   });

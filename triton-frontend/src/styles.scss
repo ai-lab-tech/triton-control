@@ -1,5 +1,27 @@
 @use "@angular/material" as mat;
 
+@font-face {
+  font-family: "Material Icons";
+  src: url("./assets/MaterialIcons-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+.material-icons {
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
 :root {
   --ink-950: #0b1120;
   --ink-900: #0f172a;
@@ -20,15 +42,58 @@
   --radius-xl: 22px;
   --radius-lg: 16px;
   --radius-md: 12px;
+  --page-gap: 1rem;
+  --card-padding: clamp(1rem, 2vw, 1.5rem);
   --main-bg-color: #ffffff;
   --mat-dialog-container-color: #ffffff;
 }
 
 :root {
+  @include mat.all-component-themes(
+    mat.m2-define-light-theme(
+      (
+        color: (
+          primary: mat.m2-define-palette(mat.$m2-teal-palette, 800),
+          accent: mat.m2-define-palette(mat.$m2-teal-palette, 700),
+          warn: mat.m2-define-palette(mat.$m2-red-palette, 700),
+        ),
+        typography: mat.m2-define-typography-config(
+            $font-family: '"IBM Plex Sans", system-ui, sans-serif'
+          ),
+        density: 0,
+      )
+    )
+  );
+  @include mat.card-overrides(
+    (
+      elevated-container-color: #fff,
+      elevated-container-shape: var(--radius-lg),
+      elevated-container-elevation: var(--shadow-card),
+    )
+  );
+  --control-height: 44px;
   @include mat.form-field-overrides(
     (
-      outlined-container-shape: 18px,
-      filled-container-shape: 18px,
+      outlined-container-shape: 10px,
+      filled-container-shape: 10px,
+      container-height: var(--control-height),
+      container-vertical-padding: 10px,
+    )
+  );
+  @include mat.button-overrides(
+    (
+      filled-container-height: var(--control-height),
+      outlined-container-height: var(--control-height),
+      protected-container-height: var(--control-height),
+      text-container-height: var(--control-height),
+      filled-container-shape: 10px,
+      outlined-container-shape: 10px,
+      protected-container-shape: 10px,
+      text-container-shape: 10px,
+      filled-label-text-tracking: normal,
+      outlined-label-text-tracking: normal,
+      protected-label-text-tracking: normal,
+      text-label-text-tracking: normal,
     )
   );
 }
@@ -53,10 +118,7 @@ body {
     Segoe UI,
     sans-serif;
   color: var(--ink-900);
-  background:
-    radial-gradient(circle at 10% 20%, rgba(20, 184, 166, 0.18), transparent 40%),
-    radial-gradient(circle at 80% 0%, rgba(245, 158, 11, 0.2), transparent 35%),
-    linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+  background: #fafafa;
 }
 
 .cdk-overlay-pane.custom-dialog {
@@ -123,15 +185,16 @@ a {
 }
 
 .page-title {
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 500;
   margin: 0 0 0.4rem;
 }
 
 .page-subtitle {
   color: var(--ink-500);
-  margin: 0 0 1.8rem;
-  font-size: 1rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.9375rem;
 }
 
 .card {
@@ -175,4 +238,186 @@ a {
     opacity: 1;
     transform: none;
   }
+}
+
+.mat-mdc-dialog-container .dialog {
+  background: white;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+.dialog .mat-mdc-dialog-title.dialog-title {
+  padding: 0;
+  margin: 0 0 0.4rem;
+  font:
+    600 1.375rem/1.3 "Space Grotesk",
+    sans-serif;
+}
+.dialog .mat-mdc-dialog-title::before {
+  display: none;
+}
+.dialog .dialog-subtitle {
+  margin: 0 0 1rem;
+  color: var(--ink-500);
+}
+.dialog .mat-mdc-dialog-content {
+  padding: 4px 2px;
+}
+.dialog .mat-mdc-dialog-actions.dialog-actions {
+  padding: 1rem 0 0;
+  margin: 1rem 0 0;
+  min-height: auto;
+  border-top: 1px solid var(--mist-200);
+  gap: 0.5rem;
+}
+
+.app-menu-panel,
+.cdk-overlay-pane :is(.mat-mdc-select-panel, .mat-mdc-menu-panel, .mat-mdc-autocomplete-panel) {
+  background: white;
+  border: 1px solid var(--mist-200);
+  border-radius: 10px;
+  padding: 4px 0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+.cdk-overlay-pane .mat-mdc-menu-content {
+  padding: 0;
+}
+.app-menu-item,
+.cdk-overlay-pane :is(.mat-mdc-option, .mat-mdc-menu-item) {
+  min-height: 44px;
+  padding-inline: 14px;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  letter-spacing: normal;
+}
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-900);
+  cursor: pointer;
+  text-align: start;
+}
+.app-menu-item:hover:enabled,
+.app-menu-item:focus-visible,
+.cdk-overlay-pane :is(.mat-mdc-option, .mat-mdc-menu-item):hover:not([aria-disabled="true"]) {
+  background: var(--mist-100);
+}
+.app-menu-danger {
+  color: #b91c1c;
+}
+.app-menu-item:disabled {
+  color: var(--ink-500);
+  cursor: default;
+}
+
+.action-glyph {
+  font-size: 18px;
+  vertical-align: middle;
+}
+summary.app-disclosure {
+  list-style: none;
+  cursor: pointer;
+}
+summary.app-disclosure::-webkit-details-marker {
+  display: none;
+}
+summary.app-disclosure::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline: 0.15rem 0.65rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  vertical-align: 0.1em;
+  flex-shrink: 0;
+}
+details[open] > summary.app-disclosure::before {
+  transform: rotate(45deg);
+}
+
+.mat-mdc-table .mat-mdc-header-row {
+  background: var(--mist-100);
+  color: var(--ink-700);
+  font-size: 0.8rem;
+}
+.mat-mdc-table :is(.mat-mdc-header-cell, .mat-mdc-cell) {
+  border-bottom-color: var(--mist-200);
+}
+.mat-mdc-table .mat-mdc-row:hover {
+  background: #f8fafc;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  display: inline-block;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch .slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #cbd5f5;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.switch .slider::before {
+  content: "";
+  position: absolute;
+  height: 22px;
+  width: 22px;
+  left: 4px;
+  top: 4px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.2);
+}
+
+.switch input:checked + .slider {
+  background: #00695c;
+}
+
+.switch input:disabled + .slider {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(22px);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid var(--ink-700);
+  outline-offset: 3px;
+}
+
+.card-title,
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.8rem;
 }

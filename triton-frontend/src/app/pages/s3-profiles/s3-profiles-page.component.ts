@@ -6,11 +6,10 @@ import { HttpClient } from "@angular/common/http";
 import { firstValueFrom } from "rxjs";
 
 import { MatButtonModule } from "@angular/material/button";
-import { MatCardModule } from "@angular/material/card";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
-import { MatSelectModule } from "@angular/material/select";
+import { MatMenuModule } from "@angular/material/menu";
 
 import { BASE_PATH } from "../../api/generated/index";
 import { AuthStore } from "../../shared/auth/auth.store";
@@ -37,11 +36,10 @@ type S3Profile = {
     S3ProfileLabelComponent,
     FormsModule,
     MatButtonModule,
-    MatCardModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatSelectModule,
+    MatMenuModule,
   ],
   styleUrl: "./s3-profiles-page.component.scss",
   templateUrl: "./s3-profiles-page.component.html",
@@ -60,6 +58,9 @@ export class S3ProfilesPageComponent {
   readonly message = signal("");
   readonly messageTone = signal<"success" | "error" | "info">("info");
   selectedId = "";
+
+  creating = false;
+  private previousId = "";
 
   draft = this.emptyDraft();
 
@@ -94,15 +95,49 @@ export class S3ProfilesPageComponent {
   }
 
   selectProfile(id: string): void {
+    this.creating = false;
     this.selectedId = id;
     const profile = this.profiles().find((item) => String(item.id) === id);
     this.draft = profile ? { ...profile } : this.emptyDraft();
   }
 
   newProfile(): void {
-    if (!this.installation.allows("trust_admin")) return;
+    if (!this.installation.allows("trust_admin") || this.creating || !this.canLeave()) return;
+    this.previousId = this.selectedId;
+    this.creating = true;
+    this.message.set("");
     this.selectedId = "";
     this.draft = this.emptyDraft();
+  }
+
+  canLeave(): boolean {
+    const original =
+      this.profiles().find((p) => String(p.id) === this.selectedId) ?? this.emptyDraft();
+    return (
+      !this.saving() &&
+      (JSON.stringify(original) === JSON.stringify(this.draft) ||
+        window.confirm("Discard unsaved profile changes?"))
+    );
+  }
+
+  openProfile(id: string): void {
+    if (id !== this.selectedId && this.canLeave()) {
+      this.message.set("");
+      this.selectProfile(id);
+    }
+  }
+
+  cancelNew(): void {
+    if (this.canLeave()) {
+      this.selectProfile(this.previousId);
+      this.message.set("");
+    }
+  }
+
+  confirmDelete(): void {
+    const profile = this.profiles().find((item) => String(item.id) === this.selectedId);
+    if (profile && window.confirm('Delete S3 profile "' + profile.name + '"?'))
+      void this.deleteProfile();
   }
 
   async saveProfile(): Promise<void> {
@@ -136,7 +171,12 @@ export class S3ProfilesPageComponent {
           )
         : await firstValueFrom(this.http.post<S3Profile>(this.apiUrl("/api/s3-profiles"), payload));
       this.setMessage("S3 profile saved.", "success");
-      this.selectedId = String(saved.id);
+      this.profiles.update((items) =>
+        items.some((item) => item.id === saved.id)
+          ? items.map((item) => (item.id === saved.id ? saved : item))
+          : [...items, saved],
+      );
+      this.selectProfile(String(saved.id));
       await this.loadProfiles();
       this.selectProfile(String(saved.id));
     } catch (error) {
@@ -152,6 +192,7 @@ export class S3ProfilesPageComponent {
     try {
       await firstValueFrom(this.http.delete(this.apiUrl(`/api/s3-profiles/${this.selectedId}`)));
       this.setMessage("S3 profile deleted.", "success");
+      this.profiles.update((items) => items.filter((item) => String(item.id) !== this.selectedId));
       this.selectProfile("");
       await this.loadProfiles();
     } catch (error) {

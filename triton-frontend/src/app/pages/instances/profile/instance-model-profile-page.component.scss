@@ -1,6 +1,6 @@
 .profile-page {
   display: grid;
-  gap: 1.2rem;
+  gap: var(--page-gap);
 }
 
 .profile-header {
@@ -80,7 +80,7 @@
 .profile-card {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
+  padding: var(--card-padding);
 }
 
 .endpoint-list {
@@ -94,14 +94,6 @@
 }
 
 .endpoint-label,
-.section-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
 .endpoint-value {
   color: #0f172a;
   font-weight: 600;
@@ -176,13 +168,6 @@
 
 :host ::ng-deep app-instance-model-monaco-editor .editor {
   height: clamp(260px, 42vh, 420px);
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-start;
-  gap: 0.8rem;
-  flex-wrap: wrap;
 }
 
 .actions .material-icons,

@@ -1,12 +1,14 @@
-<p role="note">
-  {{ installation.label() }}. In production, existing credentials may be rotated or revoked; scope
-  changes require review.
-</p>
 <div class="s3-profiles">
-  <div class="page-title">S3 Profiles</div>
+  <header>
+    <h1 class="page-title">S3 Profiles</h1>
+    <p class="page-subtitle" role="note">
+      {{ installation.label() }}. In production, existing credentials may be rotated or revoked;
+      scope changes require review.
+    </p>
+  </header>
 
-  <mat-card class="card">
-    @if (!canManage()) {
+  @if (!canManage()) {
+    <section class="card">
       <div class="message">Global S3 profiles are managed by administrators.</div>
       @for (profile of profiles(); track profile.id) {
         <div class="form-row">
@@ -14,184 +16,185 @@
           <span>{{ profile.endpoint }} / {{ profile.bucket }}</span>
         </div>
       }
-    } @else {
-      <div class="toolbar">
-        <mat-form-field appearance="outline">
-          <mat-select
-            placeholder="S3 profile"
-            [(ngModel)]="selectedId"
-            (selectionChange)="selectProfile($event.value)"
+    </section>
+  } @else {
+    <div class="profile-layout">
+      <aside class="card profile-list" aria-label="Saved profiles">
+        <div class="pane-heading">
+          <h2>Profiles</h2>
+          @if (installation.allows("trust_admin")) {
+            <button
+              mat-stroked-button
+              (click)="newProfile()"
+              [disabled]="creating || saving() || loading()"
+            >
+              New profile
+            </button>
+          }
+        </div>
+        @for (profile of profiles(); track profile.id) {
+          <button
+            class="profile-entry"
+            [attr.aria-current]="selectedId === profile.id.toString() ? 'true' : null"
+            [disabled]="saving()"
+            (click)="openProfile(profile.id.toString())"
           >
-            <mat-select-trigger>
-              @if (!selectedId) {
-                New profile
-              }
-              @for (profile of profiles(); track profile.id) {
-                @if (profile.id.toString() === selectedId) {
-                  <app-s3-profile-label [profile]="profile" />
-                }
-              }
-            </mat-select-trigger>
-            @if (installation.allows("trust_admin")) {
-              <mat-option value="">New profile</mat-option>
-            }
-            @for (profile of profiles(); track profile.id) {
-              <mat-option [value]="profile.id.toString()"
-                ><app-s3-profile-label [profile]="profile"
-              /></mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="newProfile()"
-          [disabled]="!installation.allows('trust_admin')"
-        >
-          <span class="material-icons">add</span>
-          New
-        </button>
-      </div>
-
-      @if (draft.used_by_mlflow) {
-        <dl class="profile-usage">
-          <dt>Usage</dt>
-          <dd>MLflow artifact store</dd>
-        </dl>
-      }
-      <div class="form-grid">
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-name">Profile name</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="s3-profile-name"
-              matInput
-              [(ngModel)]="draft.name"
-              [disabled]="!installation.allows('trust_admin')"
-              placeholder="team-minio"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-endpoint">Endpoint</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="s3-profile-endpoint"
-              matInput
-              [(ngModel)]="draft.endpoint"
-              [disabled]="!installation.allows('trust_admin')"
-              placeholder="https://s3.example.com"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-bucket">Bucket</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="s3-profile-bucket"
-              matInput
-              [(ngModel)]="draft.bucket"
-              [disabled]="!installation.allows('trust_admin')"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-region">Region</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="s3-profile-region"
-              matInput
-              [(ngModel)]="draft.region"
-              [disabled]="!installation.allows('trust_admin')"
-            />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-access-key">Access key</label>
-          <mat-form-field appearance="outline">
-            <input id="s3-profile-access-key" matInput [(ngModel)]="draft.access_key" />
-          </mat-form-field>
-        </div>
-        <div class="form-row">
-          <label class="field-label" for="s3-profile-secret-key">Secret key</label>
-          <mat-form-field appearance="outline">
-            <input
-              id="s3-profile-secret-key"
-              matInput
-              type="password"
-              [(ngModel)]="draft.secret_key"
-              [placeholder]="selectedId ? 'Leave empty to keep the stored secret' : 'Secret key'"
-              autocomplete="new-password"
-            />
-          </mat-form-field>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-title">Path-style S3</div>
-            <div class="toggle-sub">
-              Use path-style bucket URLs for MinIO and S3-compatible endpoints.
-            </div>
-          </div>
-          <label class="switch">
-            <input
-              type="checkbox"
-              [(ngModel)]="draft.force_path_style"
-              [disabled]="!installation.allows('trust_admin')"
-            />
-            <span class="slider"></span>
-          </label>
-        </div>
-        @if (usesHttpsS3()) {
-          <div class="form-row wide">
-            <label class="field-label" for="s3-profile-ca">CA certificate</label>
-            <mat-form-field appearance="outline">
-              <textarea
-                id="s3-profile-ca"
-                matInput
-                rows="5"
-                [(ngModel)]="draft.ca_certificate"
-                [disabled]="!installation.allows('trust_admin')"
-                placeholder="-----BEGIN CERTIFICATE-----"
-              ></textarea>
-              <mat-hint>
-                Optional. Only needed for private, self-signed, or internal CA chains.
-              </mat-hint>
-            </mat-form-field>
-          </div>
+            <app-s3-profile-label [profile]="profile" />
+          </button>
+        } @empty {
+          <p>{{ loading() ? "Loading profiles…" : "No profiles available." }}</p>
         }
-      </div>
+      </aside>
+      @if (selectedId || creating) {
+        <section class="card editor">
+          <div class="pane-heading">
+            <h2>{{ creating ? "New S3 profile" : draft.name }}</h2>
+            @if (selectedId) {
+              <button
+                mat-icon-button
+                aria-label="Profile actions"
+                [matMenuTriggerFor]="actionsMenu"
+                [disabled]="saving()"
+              >
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #actionsMenu="matMenu"
+                ><button mat-menu-item class="app-menu-danger" (click)="confirmDelete()">
+                  Delete profile
+                </button></mat-menu
+              >
+            }
+          </div>
+          @if (draft.used_by_mlflow) {
+            <dl class="profile-usage">
+              <dt>Usage</dt>
+              <dd>MLflow artifact store</dd>
+            </dl>
+          }
+          <div class="form-grid">
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-name">Profile name</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-name"
+                  matInput
+                  [(ngModel)]="draft.name"
+                  [disabled]="!installation.allows('trust_admin')"
+                  placeholder="team-minio"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-endpoint">Endpoint</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-endpoint"
+                  matInput
+                  [(ngModel)]="draft.endpoint"
+                  [disabled]="!installation.allows('trust_admin')"
+                  placeholder="https://s3.example.com"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-bucket">Bucket</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-bucket"
+                  matInput
+                  [(ngModel)]="draft.bucket"
+                  [disabled]="!installation.allows('trust_admin')"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-region">Region</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-region"
+                  matInput
+                  [(ngModel)]="draft.region"
+                  [disabled]="!installation.allows('trust_admin')"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-access-key">Access key</label>
+              <mat-form-field appearance="outline">
+                <input id="s3-profile-access-key" matInput [(ngModel)]="draft.access_key" />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="s3-profile-secret-key">Secret key</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-secret-key"
+                  matInput
+                  type="password"
+                  [(ngModel)]="draft.secret_key"
+                  [placeholder]="
+                    selectedId ? 'Leave empty to keep the stored secret' : 'Secret key'
+                  "
+                  autocomplete="new-password"
+                />
+              </mat-form-field>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-title">Path-style S3</div>
+                <div class="toggle-sub">
+                  Use path-style bucket URLs for MinIO and S3-compatible endpoints.
+                </div>
+              </div>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  aria-label="Path-style S3"
+                  [(ngModel)]="draft.force_path_style"
+                  [disabled]="!installation.allows('trust_admin')"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+            @if (usesHttpsS3()) {
+              <div class="form-row wide">
+                <label class="field-label" for="s3-profile-ca">CA certificate</label>
+                <mat-form-field appearance="outline">
+                  <textarea
+                    id="s3-profile-ca"
+                    matInput
+                    rows="5"
+                    [(ngModel)]="draft.ca_certificate"
+                    [disabled]="!installation.allows('trust_admin')"
+                    placeholder="-----BEGIN CERTIFICATE-----"
+                  ></textarea>
+                  <mat-hint>
+                    Optional. Only needed for private, self-signed, or internal CA chains.
+                  </mat-hint>
+                </mat-form-field>
+              </div>
+            }
+          </div>
 
-      <div class="actions">
-        <button
-          mat-flat-button
-          color="primary"
-          type="button"
-          (click)="saveProfile()"
-          [disabled]="saving() || (!selectedId && !installation.allows('trust_admin'))"
-        >
-          <span class="material-icons">save</span>
-          Save
-        </button>
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="deleteProfile()"
-          [disabled]="!selectedId || saving()"
-        >
-          <span class="material-icons">delete</span>
-          Delete
-        </button>
-      </div>
-
-      @if (message()) {
-        <div
-          class="message"
-          [class.success]="messageTone() === 'success'"
-          [class.error]="messageTone() === 'error'"
-        >
-          {{ message() }}
-        </div>
+          <div class="actions form-actions">
+            @if (creating) {
+              <button mat-stroked-button (click)="cancelNew()" [disabled]="saving()">Cancel</button>
+            }
+            <button mat-flat-button color="primary" (click)="saveProfile()" [disabled]="saving()">
+              {{ creating ? "Create profile" : "Save changes" }}
+            </button>
+          </div>
+        </section>
       }
-    }
-  </mat-card>
+    </div>
+  }
+  @if (message()) {
+    <div
+      class="message"
+      [class.success]="messageTone() === 'success'"
+      [class.error]="messageTone() === 'error'"
+    >
+      {{ message() }}
+    </div>
+  }
 </div>

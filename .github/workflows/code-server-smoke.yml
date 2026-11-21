@@ -18,6 +18,8 @@ on:
       - "triton-frontend/e2e/code-server/**"
       - "triton-frontend/package*.json"
       - "charts/triton-control/**"
+      - "triton-backend/scripts/seaweedfs-image.txt"
+      - "triton-backend/scripts/wait_s3.py"
       - "docker/**"
       - "Dockerfile"
       - ".github/workflows/code-server-smoke.yml"

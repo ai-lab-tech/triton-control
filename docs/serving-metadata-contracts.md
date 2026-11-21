@@ -1,7 +1,7 @@
-# Serving metadata v1alpha1 (S08-A)
+# Serving metadata v1alpha1
 
-[Story #37](https://github.com/ai-lab-tech/triton-control-concepts/issues/37)
-separates immutable release content, target capacity and metadata-source access.
+Serving metadata separates immutable release content, target capacity and
+metadata-source access.
 The schemas are in [`contracts/serving/v1alpha1`](../contracts/serving/v1alpha1).
 They are generated from pure models in `app/schemas/serving_metadata.py`; identical
 copies ship inside the backend wheel. JSON and YAML use the same schema and
@@ -44,7 +44,7 @@ length bounds and allowed values.
 
 | Kind | Required payload |
 | --- | --- |
-| `ServingRelease` | `metadata.name` and publisher label `metadata.release`; pinned `spec.image`; `repository` URI, source `inventoryDigest`, `preparedInventoryDigest` and optional pinned `materializerImage`; `models` with explicit versions; `resourcesPerReplica`; S05-A `lineage`, `lineageManifest` reference; `validation` evidence reference. `security` is optional. |
+| `ServingRelease` | `metadata.name` and publisher label `metadata.release`; pinned `spec.image`; `repository` URI, source `inventoryDigest`, `preparedInventoryDigest` and optional pinned `materializerImage`; `models` with explicit versions; `resourcesPerReplica`; `lineage`, `lineageManifest` reference; `validation` evidence reference. `security` is optional. |
 | `ServingTarget` | `metadata.name` is the target ID. `spec.release` selects a URI and exact release digest. `replicas` is a positive integer; `capacityOwner` defaults to `source`. `credentials.modelStorage` and `.imageRegistry` are local logical bindings. `rollout` contains integer `maxSurge` and `maxUnavailable`. |
 | `MetadataSource` | `metadata.name` is the stable source ID. `spec.location` discriminates Git (`type`, HTTPS `repository`, `ref`, relative `path`) from S3 (`type`, `bucket`, relative `key`). `readCredential` is separate from target bindings. `allowedTargets` is a nonempty explicit list. |
 
@@ -54,7 +54,7 @@ Sources default to `intervalSeconds: 86400`, `approval: {mode: manual}` and
 independent approval; it does not approve a release. No automatic source is
 enabled by installation. Source IDs remain stable across configuration revisions;
 the configuration hash is a separate identity. Source ownership/config-vs-database
-collision checks belong to S08-C, not this offline validator.
+collision checks belong to source configuration, not this offline validator.
 
 Repository URIs use S3 or HTTPS. Reference URIs may also be relative paths resolved
 against a future fetched source snapshot. Relative paths use ASCII alphanumeric,
@@ -79,7 +79,7 @@ Other-language consumers must apply these checks as well as the shared schemas:
   Ki/Mi/Gi/Ti suffix. Requests cannot exceed limits; compare exact quantities.
   GPU count is a nonnegative integer. Counts are bounded at 1000000, but this
   structural ceiling grants no capacity: quotas and supported hardware are local
-  admission decisions in S08-B/S12.
+  binding and rollout admission decisions.
 - A changed prepared inventory requires a digest-pinned materializer. If one is
   supplied even for identical inventories, its digest must be bound by evidence.
 - `lineage` is the existing `ReleaseLineageV1` relationship object, retaining its
@@ -91,7 +91,7 @@ Other-language consumers must apply these checks as well as the shared schemas:
   digests and materializer digest (or null when absent). Optional source-code and
   validation-input digests are explicit fields. Required validation evidence and
   optional security evidence follow the same reference shape: `uri`, `digest`,
-  `subjects`. S07-A supplies the actual report/envelope/trust contract.
+  `subjects`. [Validation contracts](validation-contracts.md) define reports, envelopes and trust boundaries.
 - Target surge and unavailability cannot both be zero. `maxUnavailable` cannot
   exceed replicas. Booleans, fractions, percentage rollout values and string
   replicas are rejected. Target IDs in a source must be unique and cannot be wildcards.
@@ -100,7 +100,7 @@ Other-language consumers must apply these checks as well as the shared schemas:
 
 ## Content identities and evidence ordering
 
-Canonical bytes use the S05-A convention: JSON in UTF-8, sorted object keys, compact
+Canonical bytes use the lineage convention: JSON in UTF-8, sorted object keys, compact
 separators, no ASCII escaping, no floating-point/nonfinite values. Model defaults
 and null fields are included. Arrays preserve order, and ordering is significant.
 The SHA-256 digest hashes the complete normalized document. Whitespace, key order
@@ -109,8 +109,8 @@ resource spellings such as `1` and `1000m` remain different content.
 
 The computed release ID lives **outside** its payload. `metadata.release` is a
 publisher label, not a self-hash. Any content edit produces a new computed ID.
-S08-D publication must reject attempts to overwrite an existing publisher label
-or lineage release origin with different content. This story adds no mutable
+Release publication must reject attempts to overwrite an existing publisher label
+or lineage release origin with different content. The offline contract adds no mutable
 release storage and does not claim database immutability enforcement.
 
 Compute artifact inventories and lineage first, evidence references second,
@@ -172,19 +172,17 @@ unknown versions. A future explicit conversion preserves the original document,
 creates a new identity and requires renewed downstream review. Rollback of this
 tooling does not change deployments; preserve published schemas for consumers.
 
-Prerequisite [S05-A](https://github.com/ai-lab-tech/triton-control-concepts/issues/25)
-was merged in [implementation PR #50](https://github.com/ai-lab-tech/triton-control/pull/50)
-and its lineage unit suite passes. The planning issue was
-still open when this story was implemented; this code does not close it or claim
-external acceptance. Downstream acceptance criteria were reviewed against:
+The contracts reuse the [lineage identities](lineage-contract.md) and preserve
+these boundaries between components:
 
-| Story | Boundary preserved |
+| Component | Boundary preserved |
 | --- | --- |
-| [S07-A](https://github.com/ai-lab-tech/triton-control-concepts/issues/33) | Artifact-subject references are acyclic; issuer, policy, dataset/evaluator and report authenticity remain the evidence contract's responsibility. |
-| [S08-B](https://github.com/ai-lab-tech/triton-control-concepts/issues/38) | Source-read, storage and pull bindings are distinct logical names; authorization, quotas and resolution remain local. Build-push credentials do not belong in serving metadata. |
-| [S08-C](https://github.com/ai-lab-tech/triton-control-concepts/issues/39) | Stable IDs, explicit target allowlists and disabled/manual defaults support source registration and independently reviewed ownership. |
-| [S08-D](https://github.com/ai-lab-tech/triton-control-concepts/issues/40) | Frozen identities, provenance references and external receipts support artifacts/evidence → release → target publication ordering and conflict checks. |
-| [S09-D](https://github.com/ai-lab-tech/triton-control-concepts/issues/44) | Target/release hashes are available for review; no metadata field substitutes for independent human approval or audit. |
-| [S12-A](https://github.com/ai-lab-tech/triton-control-concepts/issues/55) | Source/prepared inventories and pinned materializer identities are explicit; no fabricated helper digest/default or runtime rewriting is introduced. |
+| [Validation contracts](validation-contracts.md) | Artifact-subject references are acyclic; issuer, policy, dataset/evaluator and report authenticity remain the evidence contract's responsibility. |
+| [Local bindings](local-bindings.md) | Source-read, storage and pull bindings are distinct logical names; authorization, quotas and resolution remain local. Build-push credentials do not belong in serving metadata. |
+| Source configuration | Stable IDs, explicit target allowlists and disabled/manual defaults support source registration and independently reviewed ownership. |
+| Release publication | Frozen identities, provenance references and external receipts support artifacts/evidence → release → target publication ordering and conflict checks. |
+| Production approval | Target/release hashes are available for review; no metadata field substitutes for independent human approval or audit. |
+| [Immutable materialization](immutable-materialization.md) | Source/prepared inventories and pinned materializer identities are explicit; no fabricated helper digest/default or runtime rewriting is introduced. |
 
-Local authorization and credential resolution are implemented by [S08-B local bindings](local-bindings.md).
+Local authorization and credential resolution are implemented by [local
+bindings](local-bindings.md).

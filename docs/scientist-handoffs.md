@@ -1,7 +1,7 @@
 # Scientist handoffs
 
-The **Submit model** navigation entry opens `/preparation/handoffs/new` in the
-Control app. Active members and administrators can explicitly submit a model
+Open **Development → Engineering queue → Submit model** to reach the handoff form
+at `/preparation/handoffs/new`. Active members and administrators can explicitly submit a model
 object or archive, optional dataset/baseline objects and evaluation requirements.
 Logging a model, uploading an artifact and running an experiment do not submit a
 handoff. Submission does not run a build, validate a candidate or approve/deploy a
@@ -203,14 +203,14 @@ PREPARATION_TEST_DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB \
 
 The PostgreSQL suite includes simultaneous identical and conflicting submissions,
 rollback, append-only receipts and additive startup. The CI PostgreSQL job runs it.
-For isolated MinIO (test credentials `handoff_test` / `handoff_test_password`):
+For isolated SeaweedFS (test credentials `handoff_test` / `handoff_test_password`):
 
 ```bash
 HANDOFF_TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
   python -m unittest tests.test_handoff_s3_integration -v
 ```
 
-The MinIO suite creates disposable versioned buckets, proves that a pinned version
+The S3 suite creates disposable versioned buckets, proves that a pinned version
 survives replacement of the latest object, and deletes all test versions afterwards.
 No Kubernetes workload/provider behavior is introduced by this story.
 

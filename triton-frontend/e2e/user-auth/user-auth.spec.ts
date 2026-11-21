@@ -348,11 +348,9 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
           );
         } else {
           await admin.page.goto("/users");
-          await admin.page
-            .getByRole("row")
-            .filter({ hasText: member.user.email })
-            .getByRole("button", { name: "Reset password", exact: true })
-            .click();
+          const memberRow = admin.page.getByRole("row").filter({ hasText: member.user.email });
+          await memberRow.getByRole("button", { name: /^Actions for / }).click();
+          await memberRow.getByRole("button", { name: "Reset password", exact: true }).click();
           const field = admin.page.getByRole("textbox", { name: "One-time account link" });
           await expect(field).toBeVisible();
           link = await field.inputValue();

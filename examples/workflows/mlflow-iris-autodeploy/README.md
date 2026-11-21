@@ -25,12 +25,12 @@ Follow the steps below to upload the script and run the training and deployment.
 
 1. In Triton Control, enable **MLflow** with an S3 artifact store and enable
    **Argo Workflows**.
-2. Under **Workflows → Configure S3 Secrets**, link the S3 profile marked
+2. Under **Development → Argo Workflows → Configure S3 Secrets**, link the S3 profile marked
    **MLflow artifact store**. Select the same marked profile in code-server when
    uploading `train.py`. Profiles are global; each user creates their own Argo link.
 
 3. Follow [Create a Development Workspace](../sklearn-iris-training/README.md#1-create-a-development-workspace).
-   When the workspace is ready, open **code-server** from **Development**.
+   When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
    Create `/workspace/mlflow-iris-autodeploy/` and copy this example's
    [train.py](train.py) and [workflow.yaml](workflow.yaml) into it.
 4. Follow [Upload the Training Script](../sklearn-iris-training/README.md#3-upload-the-training-script)
@@ -54,7 +54,7 @@ and edit these settings:
 | `s3-script-key` | Uploaded training script's full S3 key |
 | `triton-image` | `nvcr.io/nvidia/tritonserver:26.10-py3` |
 
-With exactly one of your S3 profiles linked under **Workflows → Configure S3
+With exactly one of your S3 profiles linked under **Development → Argo Workflows → Configure S3
 Secrets** in the workflow namespace, no profile annotation is needed. Triton
 Control selects it automatically. The **MLflow artifact store** marker does not
 override this selection.
@@ -96,7 +96,7 @@ model_repository/classifier/
   1/artifact/
 ```
 
-Open **Triton Instances → your deployment → Details → Models → classifier
+Open **Serving → Instances → your deployment → Details → Models → classifier
 (Version 1) → Infer**. Use the name selected in the `deployment-name` parameter
 (default: `iris-classifier`). Paste the generated `request.json` from MLflow and
 click **Send / Infer**. It contains the four named Iris input tensors and the

@@ -8,7 +8,7 @@
   flex-direction: column;
   height: calc(100vh - 24px);
   min-height: 520px;
-  gap: 12px;
+  gap: var(--page-gap);
 }
 
 .workflows-toolbar {
@@ -24,14 +24,9 @@
   gap: 8px;
 }
 
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-}
-
 .page-subtitle {
   margin-top: 4px;
-  color: var(--text-muted, #718096);
+  color: var(--ink-500);
 }
 
 .workflows-toolbar button {
@@ -49,7 +44,8 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   background: #fff;
 }
 
@@ -100,7 +96,7 @@
 .state-message,
 .state-meta {
   max-width: 680px;
-  color: var(--text-muted, #718096);
+  color: var(--ink-500);
 }
 
 .spin {

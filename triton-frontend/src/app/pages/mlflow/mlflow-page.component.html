@@ -8,7 +8,7 @@
     <div class="create-view">
       <div class="header-row">
         <div>
-          <div class="page-title">MLflow</div>
+          <h1 class="page-title">MLflow</h1>
           <p class="page-subtitle">
             Create a singleton MLflow server managed by Triton Control and embedded via backend
             proxy.
@@ -77,7 +77,7 @@
 
         <p>Image pull credentials are managed centrally in admin Settings.</p>
 
-        <div class="actions">
+        <div class="actions form-actions">
           <button mat-stroked-button type="button" [routerLink]="['/instances']">Cancel</button>
           <button
             mat-flat-button
@@ -162,6 +162,7 @@
             class="danger"
             (click)="uninstall()"
             [disabled]="uninstalling()"
+            color="warn"
           >
             <span class="material-icons">delete</span>
             {{ uninstalling() ? "Uninstalling..." : "Uninstall" }}

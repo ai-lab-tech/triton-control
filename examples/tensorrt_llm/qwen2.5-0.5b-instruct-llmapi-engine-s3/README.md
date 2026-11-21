@@ -24,16 +24,16 @@ Create them with the notebook before deploying.
 
 ## 1. Create Development Workspace
 
-In Triton Control, open **Development** and create the workspace:
+In Triton Control, open **Development → Workspaces** and create the workspace:
 
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3` |
-| Image already has Development installed | Disabled |
+| Use preinstalled code-server | Disabled |
 | Workspace storage | At least `30Gi` |
 | GPU count | `1` |
 
-When the workspace is ready, open code-server from **Development**.
+When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 
 Install the Jupyter extension if needed. Prefer kernel from Triton virtual
 environment:

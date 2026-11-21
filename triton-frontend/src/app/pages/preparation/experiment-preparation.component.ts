@@ -13,109 +13,44 @@ import {
   CaptureOperation,
   PreparationApiService,
   SnapshotRequest,
+  SnapshotSource,
 } from "./preparation-api.service";
 
+type TextField = Exclude<
+  keyof SnapshotSource,
+  "kind" | "ai_assisted" | "checkpoint_files" | "source_documents"
+>;
+const sourceFields: Record<SnapshotSource["kind"], { key: TextField; label: string }[]> = {
+  hf: [
+    { key: "repository", label: "HF repository (owner/model)" },
+    { key: "revision", label: "Revision" },
+    { key: "resolved_commit", label: "Resolved commit" },
+    { key: "serving_manifest", label: "Workspace serving.json path" },
+    { key: "acquisition_record", label: "Workspace acquisition record path" },
+  ],
+  example: [
+    { key: "repository", label: "Git repository (host/owner/repo)" },
+    { key: "commit", label: "Full commit hash" },
+    { key: "project_path", label: "Project path in repository" },
+  ],
+  manual: [{ key: "author", label: "Author" }],
+};
+function paths(text: string): string[] {
+  return [
+    ...new Set(
+      text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
 @Component({
   selector: "app-experiment-preparation",
   standalone: true,
   imports: [FormsModule, RouterLink, MatButtonModule],
-  styleUrl: "./preparation.scss",
-  styles: ["fieldset { border: 0; margin: 0; padding: 0; }"],
-  template: `
-    @if (allowed()) {
-      <button mat-stroked-button (click)="begin()">Prepare for production</button>
-      @if (expanded()) {
-        <section>
-          <h2>Prepare for production</h2>
-          <p>
-            Capture an immutable snapshot for engineering. The running experiment stays unchanged.
-          </p>
-          @if (error()) {
-            <p role="alert">{{ error() }}</p>
-          }
-          @if (operation(); as op) {
-            <p role="status">Snapshot capture: {{ op.state }} · {{ op.message }}</p>
-            <a [routerLink]="['/instances', instance().id]">Original development experiment</a>
-            @if (taskId()) {
-              <a [routerLink]="['/preparation/tasks', taskId()]"
-                >Open preparation task and snapshot</a
-              >
-            }
-            @if (op.state === "failed") {
-              <button mat-button (click)="act('retry')" [disabled]="busy()">Retry snapshot</button>
-            }
-            @if (!terminal()) {
-              <button mat-button (click)="act('cancel')" [disabled]="busy()">
-                Cancel snapshot
-              </button>
-            }
-            @if (terminal()) {
-              <button mat-button (click)="newCapture()" [disabled]="busy()">New capture</button>
-            }
-            <button mat-button (click)="monitor(op.id)" [disabled]="busy()">
-              Refresh snapshot status
-            </button>
-          } @else {
-            <form (ngSubmit)="submit()">
-              @if (pending()) {
-                <p>Retry the saved selection to recover the original capture request.</p>
-              }
-              <fieldset [disabled]="busy() || pending()">
-                <label
-                  >Task title<input name="title" [(ngModel)]="title" maxlength="200" required
-                /></label>
-                <label
-                  >Models and versions (one model:version per line)<textarea
-                    name="models"
-                    [(ngModel)]="models"
-                    required
-                    placeholder="iris:1"
-                  ></textarea>
-                </label>
-                <p>
-                  Leave repository fields empty for a managed Kubernetes experiment. External
-                  endpoints require an explicit S3 profile and repository prefix.
-                </p>
-                <label
-                  >Source repository profile
-                  <select name="profile" [(ngModel)]="profileId">
-                    <option [ngValue]="null">Use managed experiment repository</option>
-                    @for (profile of profiles(); track profile.id) {
-                      <option [ngValue]="profile.id">
-                        {{ profile.name }} · {{ profile.bucket }}
-                      </option>
-                    }
-                  </select>
-                </label>
-                <label>Repository prefix<input name="prefix" [(ngModel)]="prefix" /></label>
-                <label
-                  >Expected behavior<textarea
-                    name="behavior"
-                    [(ngModel)]="behavior"
-                    maxlength="8000"
-                  ></textarea>
-                </label>
-                <label
-                  >Acceptance criteria<textarea
-                    name="criteria"
-                    [(ngModel)]="criteria"
-                    maxlength="8000"
-                  ></textarea>
-                </label>
-                <p>
-                  Missing evaluation evidence and unknown runtime changes remain visible as task
-                  blockers.
-                </p>
-              </fieldset>
-              <button mat-stroked-button type="submit" [disabled]="busy() || !valid()">
-                {{ pending() ? "Retry capture request" : "Capture snapshot" }}
-              </button>
-            </form>
-          }
-        </section>
-      }
-    }
-  `,
+  styleUrls: ["./preparation.scss", "./experiment-preparation.component.scss"],
+  templateUrl: "./experiment-preparation.component.html",
 })
 export class ExperimentPreparationComponent implements OnInit {
   readonly instance = input.required<Instance>();
@@ -140,6 +75,14 @@ export class ExperimentPreparationComponent implements OnInit {
   models = "";
   prefix = "";
   profileId: number | null = null;
+  readonly sourceFields = sourceFields;
+  kind: SnapshotSource["kind"] | "" = "";
+  workspaceId: number | null = null;
+  workspaceFiles = "";
+  values: Partial<Record<TextField, string>> = {};
+  documents = "";
+  checkpoints = "";
+  aiAssisted: boolean | null = null;
   behavior = "";
   criteria = "";
   constructor() {
@@ -168,6 +111,16 @@ export class ExperimentPreparationComponent implements OnInit {
       this.prefix = saved.repository?.prefix ?? "";
       this.behavior = saved.expected_behavior ?? "";
       this.criteria = saved.acceptance_criteria ?? "";
+      if (saved.source) {
+        const { kind, source_documents, checkpoint_files, ai_assisted, ...values } = saved.source;
+        this.kind = kind;
+        this.values = values;
+        this.documents = source_documents?.join("\n") ?? "";
+        this.checkpoints = checkpoint_files?.join("\n") ?? "";
+        this.aiAssisted = ai_assisted ?? null;
+      }
+      this.workspaceId = saved.workspace?.workspace_id ?? null;
+      this.workspaceFiles = saved.workspace?.files.join("\n") ?? "";
       this.pending.set(true);
     }
     const capture = this.route.snapshot.queryParamMap.get("snapshotCapture");
@@ -202,52 +155,105 @@ export class ExperimentPreparationComponent implements OnInit {
   private selectedModels() {
     const selected = new Map<string, Set<string>>();
     for (const line of this.models.trim().split(/\n/)) {
-      const [name, version] = line.trim().split(":");
+      const match = /^([A-Za-z0-9][A-Za-z0-9_-]{0,127}):([1-9][0-9]{0,18})$/.exec(line.trim());
+      if (!match) return [];
+      const [, name, version] = match;
       const versions = selected.get(name) ?? new Set<string>();
       versions.add(version);
       selected.set(name, versions);
     }
     return [...selected].map(([name, versions]) => ({ name, versions: [...versions] }));
   }
-  valid() {
-    if (this.pending()) return true;
+  private selection(): Pick<SnapshotRequest, "source" | "workspace"> | null {
+    if (!this.kind) return {};
+    const source: SnapshotSource = { kind: this.kind };
+    const keys: TextField[] = [
+      "workspace_model_root",
+      "model_card",
+      "license_file",
+      ...sourceFields[this.kind].map((field) => field.key),
+    ];
+    for (const key of keys) {
+      const value = this.values[key]?.trim();
+      if (value) source[key] = value;
+    }
+    if (this.kind === "manual" && this.aiAssisted !== null) source.ai_assisted = this.aiAssisted;
+    if (this.kind === "hf") source.checkpoint_files = paths(this.checkpoints);
+    source.source_documents = paths(this.documents);
+    const files = paths(this.workspaceFiles);
+    const requiredFiles = [
+      source.model_card,
+      source.license_file,
+      source.serving_manifest,
+      source.acquisition_record,
+      ...source.source_documents,
+    ];
+    if (requiredFiles.some((path) => path && !files.includes(path))) return null;
+    if (
+      !files.length &&
+      this.workspaceId === null &&
+      this.kind !== "manual" &&
+      !source.workspace_model_root
+    )
+      return { source };
+    if (
+      !files.length ||
+      !this.workspaceId ||
+      !Number.isInteger(this.workspaceId) ||
+      this.workspaceId < 1
+    )
+      return null;
+    return { source, workspace: { workspace_id: this.workspaceId, files } };
+  }
+  private draft(): SnapshotRequest | null {
     const models = this.selectedModels();
-    const repositoryValid =
-      this.profileId !== null &&
-      Number.isInteger(this.profileId) &&
-      this.profileId > 0 &&
-      !!this.prefix.trim();
-    const managed =
-      this.instance().isSelfDeployed && this.instance().deploymentRuntime === "kubernetes";
-    return (
-      !!this.title.trim() &&
-      this.title.trim().length <= 200 &&
-      models.length <= 100 &&
-      this.models
-        .trim()
-        .split(/\n/)
-        .every((line) => /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}:[1-9][0-9]{0,18}$/.test(line.trim())) &&
-      models.every((model) => model.versions.length <= 100) &&
-      (repositoryValid || (managed && this.profileId === null && !this.prefix.trim()))
-    );
+    const selection = this.selection();
+    if (
+      !selection ||
+      !this.title.trim() ||
+      this.title.trim().length > 200 ||
+      !models.length ||
+      models.length > 100 ||
+      models.some((model) => model.versions.length > 100)
+    )
+      return null;
+    const request: SnapshotRequest = {
+      ...selection,
+      models,
+      title: this.title.trim(),
+      expected_behavior: this.behavior.trim() || null,
+      acceptance_criteria: this.criteria.trim() || null,
+    };
+    if (this.profileId !== null || this.prefix.trim()) {
+      if (
+        !this.profileId ||
+        !Number.isInteger(this.profileId) ||
+        this.profileId < 1 ||
+        !this.prefix.trim()
+      )
+        return null;
+      request.repository = { profile_id: this.profileId, prefix: this.prefix.trim() };
+    } else if (
+      !(this.instance().isSelfDeployed && this.instance().deploymentRuntime === "kubernetes") &&
+      !selection.source?.workspace_model_root
+    )
+      return null;
+    return request;
+  }
+  valid() {
+    return this.pending() || this.draft() !== null;
   }
   private storageKey() {
     return `preparation-capture:${this.auth.userEmail()}:${this.instance().id}`;
   }
   async submit() {
-    if (!this.allowed() || !this.valid() || this.busy() || this.operation()) return;
+    if (!this.allowed() || this.busy() || this.operation()) return;
+    const request = this.captures.request(this.storageKey()) ?? this.draft();
+    if (!request) return;
     this.busy.set(true);
     this.error.set("");
     try {
       const instance = this.instance();
-      const request: SnapshotRequest = {
-        title: this.title.trim(),
-        models: this.selectedModels(),
-        expected_behavior: this.behavior.trim() || null,
-        acceptance_criteria: this.criteria.trim() || null,
-      };
-      if (this.profileId !== null)
-        request.repository = { profile_id: this.profileId, prefix: this.prefix.trim() };
       const accepted = await this.captures.submit(this.storageKey(), instance, request);
       if (this.destroyed) return;
       await this.router.navigate([], {

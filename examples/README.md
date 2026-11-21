@@ -24,9 +24,9 @@ For uploads to an existing polling instance, follow
 
 For model repository examples, use these steps:
 
-1. In Triton Control, open **Development** and create the workspace with the
+1. In Triton Control, open **Development → Workspaces** and create the workspace with the
    image, storage, and GPU settings shown in the example README.
-2. When the workspace is ready, open code-server from **Development**.
+2. When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 3. Copy or upload the example folder into `/workspace`. Alternatively, run
    **Triton Control: New Model Repository** and follow the example README's
    template and file-copy instructions.
@@ -45,7 +45,7 @@ Check each README for whether the code-server workspace needs a GPU. Most
 examples only need CPU in code-server; GPU is usually needed on the deployed
 Triton instance.
 
-For manual UI testing, open **Triton Instances → your deployment → Details →
+For manual UI testing, open **Serving → Instances → your deployment → Details →
 Models → model (version) → Infer** and paste the JSON request body shown in the
 example. For terminal testing, replace `localhost:8000` or `localhost:8001` with the
 instance HTTP or gRPC endpoint unless you are port-forwarding locally.
@@ -54,9 +54,9 @@ instance HTTP or gRPC endpoint unless you are port-forwarding locally.
 
 Use the same plugin path for your own model:
 
-1. In Triton Control, open **Development** and create the workspace with the
+1. In Triton Control, open **Development → Workspaces** and create the workspace with the
    image, storage, and GPU settings needed for your model work.
-2. When the workspace is ready, open code-server from **Development**.
+2. When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 3. Run **New Model Repository** from the Triton Control plugin.
 4. Choose the backend/template, such as Python, ONNX Runtime, PyTorch/LibTorch,
    vLLM, or an ensemble pipeline.

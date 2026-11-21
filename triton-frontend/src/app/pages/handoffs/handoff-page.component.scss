@@ -19,7 +19,8 @@ header {
 }
 h1 {
   margin: 6px 0 12px;
-  font-size: 28px;
+  font-size: 1.5rem;
+  font-weight: 500;
 }
 h2 {
   font-size: 21px;
@@ -38,9 +39,9 @@ footer p {
 }
 .panel {
   background: white;
-  border: 1px solid #dce5ee;
-  border-radius: 14px;
-  padding: 28px;
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  padding: var(--card-padding);
 }
 fieldset {
   border: 0;
@@ -175,9 +176,9 @@ code {
     background: #fff;
     border: 1px solid #dce5ee;
     border-radius: 16px;
-    padding: 26px 28px 24px;
+    padding: var(--card-padding);
     margin-bottom: 20px;
-    box-shadow: 0 4px 18px #24324705;
+    box-shadow: var(--shadow-card);
   }
   legend {
     float: left;
@@ -298,10 +299,7 @@ code {
     margin-top: 3px;
   }
   button {
-    --mat-button-filled-container-color: #0f766e;
-    --mat-button-filled-label-text-color: #fff;
-    --mat-button-filled-container-shape: 10px;
-    min-height: 46px;
+    min-height: var(--control-height);
     padding-inline: 20px;
     .material-icons {
       font-size: 18px;

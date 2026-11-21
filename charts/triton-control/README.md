@@ -582,10 +582,10 @@ Administrators configure wildcard DNS and TLS. If `baseDomain` is empty,
 the short hostname is used unchanged. Existing endpoints are preserved.
 Triton Control's own hostname is configured under `ingress.hosts`.
 
-## Builder qualification (S06-A)
+## Builder qualification
 
 `buildQualification.policy` defaults to null. Configure it only after reviewing
 [builder provisioning](../../docs/build-provisioning.md). It renders a dedicated
 namespace, policy ConfigMap and NetworkPolicy. It does not run builds or create
 registry/S3 credentials. Build execution remains disabled pending successful site
-qualification and the S06-B build service.
+qualification and the runtime-build service.

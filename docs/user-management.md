@@ -1,7 +1,6 @@
 # User Management
 
-User management is available only to administrators. Open **Users** in Triton
-Control to create accounts, approve pending users, assign Triton instances, and
+User management is available only to administrators. Open the account menu at the bottom of the sidebar and select **User Management** to create accounts, approve pending users, assign Triton instances, and
 change roles.
 
 ## Roles
@@ -31,7 +30,7 @@ The first admin needs:
   letter, one digit, one special character, and no whitespace
 - optional display name
 
-After the first admin exists, additional users are managed from the **Users**
+After the first admin exists, additional users are managed from the **User Management**
 page.
 
 ## Add A Local Email/Password User
@@ -42,7 +41,7 @@ local email/password creation is blocked and users must authenticate with OIDC.
 To add a local user:
 
 1. Sign in as an admin.
-2. Open **Users**.
+2. Open **User Management**.
 3. Select **Add user**.
 4. Enter full name and email.
 5. Select `admin`, `member`, or `viewer`.
@@ -107,7 +106,7 @@ depend on `OIDC_CONFIG_SOURCE`:
 To add an OIDC user:
 
 1. Sign in as an admin.
-2. Open **Users**.
+2. Open **User Management**.
 3. Select **Add user**.
 4. Enter the user's full name and email.
 5. Select a role.
@@ -131,17 +130,17 @@ The Users page distinguishes `active`, `inactive`, `invitation pending`, and
 Self-registered `approval pending` users cannot use assigned workflows until an
 admin approves them. To approve a user:
 
-1. Open **Users** as an admin.
-2. Choose the intended role.
-3. Select **Approve**.
-4. Assign Triton instances if the role is `member` or `viewer`.
+1. Open **User Management** as an admin.
+2. Select **Approve** on the pending user’s row to activate the account with its current role.
+3. Select the user’s name to change the role or assign Triton instances.
 
 Approval sets the user active. Instance assignment still controls what a
 non-admin user can see and operate on.
 
 ## Assign Instances
 
-Admins can add or remove assigned instances for each user from the Users page.
+In **User Management**, select the user’s name to open account details. Use
+**Assigned instances** to add or remove an instance.
 Assignments are stored by Triton instance name.
 
 Assigned users can open that instance and use its available workflows.
@@ -170,15 +169,17 @@ from the external OIDC provider.
 ## ML Engineering Responsibility
 
 Each installation serves one use case and has one engineering group. In **User
-Management** (`/users`), admins use the **ML engineer** checkbox to assign or revoke
-responsibility. There is no team creation, naming or selection screen. Existing
+Management** (`/users`), the overview shows **ML engineer** beside the names of
+engineering group members. Select a user’s name and toggle **ML engineer** in
+account details to assign or revoke that responsibility. There is no team creation, naming or selection screen. Existing
 `/teams` bookmarks redirect to user management.
 
 Roles remain `admin`, `member` and `viewer`. Engineering membership never grants
 instance access, artifact access, workspace ownership or admin permissions. Only
 active member/admin accounts are eligible for future engineering task routing;
 a viewer can hold responsibility but is not eligible until their access role permits it.
-Task submission and claiming are separate features, not implemented here.
+Members and admins submit models through **Development → Engineering queue → Submit model**.
+Eligible engineers can claim a submitted task from its receipt.
 
 On first use, the installation group is initialized once. Active memberships from
 active legacy teams are copied into it, including inactive accounts whose eligibility

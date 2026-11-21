@@ -1,5 +1,7 @@
 import { provideHttpClient } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
+import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
+import { MatSelectHarness } from "@angular/material/select/testing";
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from "@angular/router";
 import { of } from "rxjs";
@@ -64,6 +66,45 @@ describe("HandoffPageComponent", () => {
     expect(fixture.nativeElement.textContent).toContain("Submit model for preparation");
     expect(fixture.nativeElement.textContent).toContain("installation’s engineering group");
     expect(fixture.nativeElement.querySelector('[name="team"]')).toBeNull();
+  });
+  it("submits one capture from the rendered handoff form", async () => {
+    // Arrange
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const form = fixture.nativeElement.querySelector("form") as HTMLFormElement;
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(button.disabled).toBeTrue();
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    const profile = await loader.getHarness(
+      MatSelectHarness.with({ selector: '[name="profile"]' }),
+    );
+
+    // Act
+    await profile.open();
+    await profile.clickOptions({ text: /Lab/ });
+    for (const [name, value] of [
+      ["title", "Street detector"],
+      ["source", "street/model.onnx"],
+    ]) {
+      const input = form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+    }
+    fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    button.click();
+
+    // Assert
+    const capture = http.expectOne("/api/preparation/handoff-captures");
+    expect(capture.request.method).toBe("POST");
+    expect(capture.request.body.title).toBe("Street detector");
+    expect(capture.request.body.source.path).toBe("street/model.onnx");
+    capture.flush({}, { status: 400, statusText: "Invalid fixture" });
+    await fixture.whenStable();
   });
   it("submits explicit inputs and keeps the same identity after a retry", async () => {
     const fixture = await setup();

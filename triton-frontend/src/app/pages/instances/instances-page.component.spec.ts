@@ -1,5 +1,6 @@
 import { InstallationService } from "../../shared/installation/installation.service";
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { MatDialog } from "@angular/material/dialog";
 import { TestBed } from "@angular/core/testing";
 import { NavigationEnd, Router } from "@angular/router";
 import { of, Subject } from "rxjs";
@@ -69,6 +70,26 @@ describe("InstancesPageComponent", () => {
 
     // Assert
     expect(instance).toBeTruthy();
+  });
+
+  it("opens the connection dialog for members", () => {
+    const fixture = TestBed.createComponent(InstancesPageComponent);
+    const open = spyOn(fixture.debugElement.injector.get(MatDialog), "open");
+    authState.setAuthenticatedUser({ name: "Member", role: "member", accessAllowed: true });
+
+    fixture.componentInstance.openNewInstanceDialog();
+
+    expect(open).toHaveBeenCalled();
+  });
+
+  it("does not open the connection dialog for viewers", () => {
+    const fixture = TestBed.createComponent(InstancesPageComponent);
+    const open = spyOn(fixture.debugElement.injector.get(MatDialog), "open");
+    authState.setAuthenticatedUser({ name: "Viewer", role: "viewer", accessAllowed: true });
+
+    fixture.componentInstance.openNewInstanceDialog();
+
+    expect(open).not.toHaveBeenCalled();
   });
 
   it("FilteredInstances_QueryAndStatusSet_ReturnsMatchingRows", () => {

@@ -12,14 +12,6 @@
   flex-wrap: wrap;
 }
 
-.section-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
 .config-path {
   display: block;
   margin-top: 0.25rem;
@@ -47,13 +39,6 @@
 
 .health-error {
   color: #b91c1c;
-}
-
-.config-actions {
-  display: flex;
-  justify-content: flex-start;
-  gap: 0.6rem;
-  flex-wrap: wrap;
 }
 
 .save-message {

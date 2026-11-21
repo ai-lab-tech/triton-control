@@ -93,6 +93,10 @@ describe("UsersPageComponent", () => {
       auth: "local" as const,
       instances: [],
     };
+    mockStore.overrideSelector(selectUsers, [user]);
+    mockStore.refreshState();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("tbody").textContent).not.toContain("ML engineer");
     const assignment = spyOn(api, "setMember").and.returnValue(
       of([{ user_id: 2, is_active: true } as any]),
     );
@@ -100,6 +104,8 @@ describe("UsersPageComponent", () => {
     // Act
     await fixture.componentInstance.setEngineer(user, true);
     // Assert
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector("tbody tr").textContent).toContain("ML engineer");
     expect(assignment).toHaveBeenCalledWith("engineering", 2, true);
     expect(fixture.componentInstance.isEngineer(2)).toBeTrue();
     expect(user.role).toBe("member");

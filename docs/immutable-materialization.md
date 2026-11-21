@@ -1,10 +1,10 @@
 # Immutable repository materialization
 
-S12-A provides the shared repository initializer for validation and subsequent
-release consumers. It does **not** enable production mode, approvals, the release
+Immutable materialization provides the shared repository initializer for
+validation and subsequent release consumers. It does **not** enable production mode, approvals, the release
 reconciler or a new deployment UI. Existing interactive development deployments
-keep their current mutable S3 behavior. The validation executor (S07-B) and
-release/rollout consumers (S09-F, S10-A) must use this shared path rather
+keep their current mutable S3 behavior. The validation executor and
+release/rollout consumers must use this shared path rather
 than reproducing the old S3 sync script.
 
 ## Contract and lifecycle
@@ -57,7 +57,8 @@ initializer. Model backend execution remains the serving runtime's responsibilit
 ## Deterministic normalization
 
 `identity/v1` copies paths and bytes unchanged. Use it for already prepared
-multi-model repositories imported by S05-B. `from_import(imported, helper_image)`
+multi-model repositories created by [repository import](candidate-import.md).
+`from_import(imported, helper_image)`
 adapts an authorized versioned-S3 import receipt, excluding provenance metadata
 from the model inventory. The caller resolves the binding to
 `<import-prefix>/repository` and checks authorization independently.
@@ -175,7 +176,7 @@ Interrupted-download recovery is exercised on that same volume. Each reported
 check maps to successful named image tests; host unit tests alone cannot qualify it. A Python
 probe replaces Triton to test byte/layout equality and an actual `EROFS` write
 failure; **it does not claim inference correctness or model readiness**. Separate
-MinIO integration tests exercise genuine S3 version retention and the neutral
+SeaweedFS integration tests exercise genuine S3 version retention and the neutral
 import adapter. Qualification output is emitted only when all required tests
 pass with none skipped. Fixture revision `materializer-qualification/v3` requires
 renewed qualification; older records are rejected. The report's canonical JSON digest is referenced by
@@ -188,7 +189,7 @@ Backend CI builds the helper, pushes it to an isolated test registry, runs the
 same Kubernetes qualification on Linux/amd64 and uploads its actual evidence.
 The ephemeral CI image/fixture is not a published production image or human
 approval. Requalify your retained registry image before use. The real S3 tests
-run in the existing isolated PostgreSQL/MinIO job; no new application database
+run in the existing isolated PostgreSQL/S3 job; no new application database
 tables or upgrade migrations are introduced.
 
 ## Release pod readiness

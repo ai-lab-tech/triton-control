@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   test,
   expect,
@@ -153,20 +153,15 @@ test.describe.serial("code-server plugin workflows", () => {
 
   async function command(title: string): Promise<void> {
     // Workspace restoration can dismiss the palette during extension activation.
-    // Wait for the command to remain available before executing it once.
-    const choice = workbench
-      .locator(".quick-input-list .monaco-list-row")
-      .filter({ hasText: title })
-      .first();
+    // Retry opening the palette if it closes before the command can be clicked.
+    const palette = workbench.locator(".quick-input-widget:visible");
+    const choice = palette.getByRole("option").filter({ hasText: title }).first();
     await expect(async () => {
       await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
       await workbench.locator("body").press("F1");
-      const input = workbench.locator(".quick-input-widget input");
-      await expect(input).toBeVisible({ timeout: 2000 });
-      await input.fill(`>${title}`);
-      await expect(choice).toBeVisible({ timeout: 2000 });
+      await palette.locator("input").fill(`>${title}`, { timeout: 2000 });
+      await choice.click({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
-    await choice.click();
   }
 
   async function input(value: string, prompt: string): Promise<void> {
@@ -174,27 +169,6 @@ test.describe.serial("code-server plugin workflows", () => {
     await expect(widget).toContainText(prompt);
     await widget.locator("input").fill(value);
     await widget.locator("input").press("Enter");
-  }
-
-  async function openFile(path: string): Promise<void> {
-    // An S3 editor may be restored as the active editor after restart. Absolute
-    // Quick Open paths then resolve against that editor's filesystem provider.
-    // Search relative to the workspace instead and verify the local file below.
-    const workspacePath = path.replace(/^\/workspace\//, "");
-    await expect(async () => {
-      await workbench.locator("body").press("Escape");
-      await workbench.locator(".part.editor").click({ position: { x: 50, y: 100 } });
-      await workbench.locator("body").press("Control+p");
-      const quick = workbench.locator(".quick-input-widget input");
-      await expect(quick).toBeVisible({ timeout: 2000 });
-      await quick.fill(workspacePath);
-      await workbench
-        .locator(".quick-input-list .monaco-list-row")
-        .filter({ hasText: basename(path) })
-        .first()
-        .click({ timeout: 2000 });
-      await expect(quick).toBeHidden({ timeout: 2000 });
-    }).toPass({ timeout: 30_000 });
   }
 
   async function explorer(): Promise<void> {
@@ -234,7 +208,7 @@ test.describe.serial("code-server plugin workflows", () => {
       const created = await context.request.post("/api/s3-profiles", {
         data: {
           name: "Smoke S3",
-          endpoint: "http://minio:9000",
+          endpoint: "http://seaweedfs:9000",
           bucket: "plugin-smoke",
           prefix,
           access_key: required("PLUGIN_SMOKE_S3_KEY"),
@@ -559,7 +533,20 @@ test.describe.serial("code-server plugin workflows", () => {
       workbench.getByText("S3 · Smoke S3 · plugin-smoke", { exact: true }),
     ).toBeVisible();
     await command("Triton Control: Refresh Repositories");
-    await openFile(`/workspace/${repository}/${model}/config.pbtxt`);
+    await explorer();
+    // Quick Open can still be indexing after restart, with only S3 history available.
+    // Open the persisted file from the local tree, hiding its uploaded S3 copy.
+    const remoteRoot = row("S3 · Smoke S3 · plugin-smoke");
+    if ((await remoteRoot.getAttribute("aria-expanded")) === "true") {
+      await remoteRoot.locator(".monaco-tl-twistie").click();
+    }
+    for (const name of ["workspace", repository, model]) {
+      const folder = row(name);
+      if ((await folder.getAttribute("aria-expanded")) !== "true") {
+        await folder.locator(".monaco-tl-twistie").click();
+      }
+    }
+    await row("config.pbtxt").dblclick();
     await expect(workbench.locator(".monaco-editor").first()).toContainText("python");
     expect(JSON.parse(readFile(`/workspace/${hfRepository}/serving.json`)).generator_version).toBe(
       required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),

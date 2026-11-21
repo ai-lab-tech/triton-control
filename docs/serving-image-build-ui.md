@@ -1,7 +1,7 @@
 # Serving image builds from a task workspace
 
-Implements concept story [S06-D / #32](https://github.com/ai-lab-tech/triton-control-concepts/issues/32)
-on the S04-A task workspace and S06-C durable build contracts. API controllers delegate
+The serving image build UI uses the task workspace and durable build contracts. API
+controllers delegate
 to services; repositories own SQL; schemas perform no I/O. The extension separates
 VS Code interaction, HTTP transport and bounded filesystem snapshots.
 
@@ -11,10 +11,10 @@ A preparation task records the model you are working on and who is responsible
 for it. Claiming the task assigns it to you. Image builds must run from that
 assigned task's workspace, not a personal workspace.
 
-1. **Enable engineering access.** Ask an administrator to open **Users** and
-   check **ML engineer** for your account. Your account must also have member or
+1. **Enable engineering access.** Ask an administrator to open **User Management** from the account menu,
+   select your name, and check **ML engineer**. Your account must also have member or
    administrator access.
-2. **Open Submit model** from the Triton Control sidebar.
+2. Open **Development → Engineering queue → Submit model**.
 3. **Choose your model.** Enter a handoff title, select an S3 profile, enter the
    model's object path and set a submission revision, for example `1`. The object
    must already exist, and the bucket must have versioning enabled. Paths are
@@ -82,7 +82,7 @@ as a substitute for an executor result.
 
 ## Authorization and configuration
 
-The installation must have a qualified, enabled S06 build policy and its configured
+The installation must have a qualified, enabled build policy and its configured
 storage/credentials. `/api/builds/options?task_id=...` returns only authorized repository
 names and the context byte limit, never Secret names, storage credentials or executor
 configuration. The local snapshot cap is the smaller of installation policy and 64 MiB.
@@ -97,8 +97,8 @@ retain existing task/team and operation ownership checks.
 
 Production denies these build APIs, including reads and direct workspace calls. The
 mode check uses the existing `TRITON_CONTROL_MODE` contract and does not depend on
-optional MLflow. The separately developed S01-B installation capability UI is not
-required by this branch. Administrators do not bypass development-only build policy.
+optional MLflow. The installation capability UI is not
+required by the build controls. Administrators do not bypass development-only build policy.
 
 ## Upgrade and verification
 
@@ -141,7 +141,7 @@ kubectl, Helm, Playwright Chromium, and Python with boto3/packaging are required
 It creates and removes an isolated cluster.
 
 The browser tests exercise the deployed VSIX in real code-server: both commands
-explain the task requirement in a personal workspace. A versioned MinIO handoff,
+explain the task requirement in a personal workspace. A versioned SeaweedFS handoff,
 engineering-group membership and claimed task provision a real task workspace;
 its extension reads empty build history using the managed workspace credential.
 Build submission is denied before context selection because this installation has
@@ -150,4 +150,4 @@ existing personal-workspace restart/upgrade smoke remains independent.
 
 This smoke does not build or push an image. Successful execution, progress, logs,
 retry and exact digest handling have separate unit/provider coverage; testing them
-end to end requires the qualified S06 builder, trusted registry and staging fixture.
+end to end requires the qualified builder, trusted registry and staging fixture.

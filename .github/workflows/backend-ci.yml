@@ -184,7 +184,7 @@ jobs:
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
           python -m unittest tests.test_installation_policy_postgres tests.test_installation_policy_kubernetes -v
 
-  handoff-source-minio:
+  handoff-source-s3:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -195,29 +195,11 @@ jobs:
       - name: Install backend
         working-directory: triton-backend
         run: pip install -e ".[dev]"
-      - uses: actions/checkout@v4
-        with:
-          repository: minio/minio
-          ref: 07c3a429bfed433e49018cb0f78a52145d4bedeb
-          path: .ci-handoff-minio
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24.6"
-          cache-dependency-path: .ci-handoff-minio/go.sum
-      - name: Build pinned MinIO and start isolated test storage
-        working-directory: .ci-handoff-minio
+      - name: Start pinned SeaweedFS test storage
         env:
-          MINIO_ROOT_USER: handoff_test
-          MINIO_ROOT_PASSWORD: handoff_test_password
-        run: |
-          go build -o "$RUNNER_TEMP/handoff-minio" .
-          "$RUNNER_TEMP/handoff-minio" server "$RUNNER_TEMP/handoff-minio-data" --address 127.0.0.1:9000 > "$RUNNER_TEMP/handoff-minio.log" 2>&1 &
-          for attempt in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:9000/minio/health/live; then exit 0; fi
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/handoff-minio.log"
-          exit 1
+          AWS_ACCESS_KEY_ID: handoff_test
+          AWS_SECRET_ACCESS_KEY: handoff_test_password
+        run: bash triton-backend/scripts/ci_s3_start.sh handoff-s3
       - name: Verify exact source versions and access failures
         working-directory: triton-backend
         env:
@@ -226,11 +208,16 @@ jobs:
           AWS_ACCESS_KEY_ID: handoff_test
           AWS_SECRET_ACCESS_KEY: handoff_test_password
         run: python -m unittest tests.test_handoff_s3_integration tests.test_handoff_repositories_s3 -v
+      - name: Collect S3 diagnostics and remove test storage
+        if: always()
+        run: |
+          docker logs handoff-s3 > "$RUNNER_TEMP/handoff-s3.log" 2>&1 || true
+          docker rm -f handoff-s3 || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: handoff-minio-log
-          path: ${{ runner.temp }}/handoff-minio.log
+          name: handoff-s3-log
+          path: ${{ runner.temp }}/handoff-s3.log
 
   candidate-import-postgres-s3:
     runs-on: ubuntu-latest
@@ -260,40 +247,11 @@ jobs:
         run: |
           python scripts/export_candidate_import_schema.py
           git diff --exit-code -- ../contracts/candidate-import
-      # Build the exact source revision used for local MinIO verification. This
-      # avoids relying on mutable or retired vendor container tags in CI.
-      - uses: actions/checkout@v4
-        with:
-          repository: minio/minio
-          ref: 07c3a429bfed433e49018cb0f78a52145d4bedeb
-          path: .ci-minio
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24.6"
-          cache-dependency-path: .ci-minio/go.sum
-      - name: Build test S3 server
-        working-directory: .ci-minio
-        run: go build -o "$RUNNER_TEMP/minio" .
-      - name: Start isolated S3 server
+      - name: Start pinned SeaweedFS test storage
         env:
-          MINIO_ROOT_USER: candidate_test
-          MINIO_ROOT_PASSWORD: candidate_test_password
-        run: |
-          "$RUNNER_TEMP/minio" server "$RUNNER_TEMP/candidate-s3-data" --address 127.0.0.1:9000 > "$RUNNER_TEMP/candidate-s3.log" 2>&1 &
-          python - <<'PY'
-          import time
-          from urllib.request import urlopen
-          for attempt in range(60):
-              try:
-                  with urlopen("http://127.0.0.1:9000/minio/health/ready", timeout=2) as response:
-                      if response.status == 200:
-                          break
-              except OSError:
-                  pass
-              time.sleep(1)
-          else:
-              raise SystemExit("Test S3 server did not become ready")
-          PY
+          AWS_ACCESS_KEY_ID: candidate_test
+          AWS_SECRET_ACCESS_KEY: candidate_test_password
+        run: bash triton-backend/scripts/ci_s3_start.sh candidate-s3
       - name: Verify import, concurrency, retention and recovery
         working-directory: triton-backend
         env:
@@ -310,6 +268,11 @@ jobs:
           BUILD_CONTEXT_TEST_S3_ACCESS_KEY: candidate_test
           BUILD_CONTEXT_TEST_S3_SECRET_KEY: candidate_test_password
         run: python -m unittest tests.test_build_contexts tests.test_build_contexts_postgres tests.test_build_contexts_s3 -v
+      - name: Collect S3 diagnostics and remove test storage
+        if: always()
+        run: |
+          docker logs candidate-s3 > "$RUNNER_TEMP/candidate-s3.log" 2>&1 || true
+          docker rm -f candidate-s3 || true
       - name: Upload S3 diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4

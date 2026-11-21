@@ -10,7 +10,7 @@
         <span class="breadcrumb-separator">/</span>
         <span aria-current="page">Infer {{ modelName() }}</span>
       </nav>
-      <div class="page-title">Model Inference</div>
+      <h1 class="page-title">Model Inference</h1>
       <p class="page-subtitle">{{ modelName() }} - Version {{ version() }}</p>
     </div>
 
@@ -53,7 +53,7 @@
         ></app-instance-model-repository-config>
       </div>
 
-      <div class="actions">
+      <div class="actions form-actions">
         <button
           mat-flat-button
           color="primary"
@@ -153,6 +153,9 @@
   <div class="empty">
     <span class="material-icons">rocket_launch</span>
     <div>Model inference target not found.</div>
-    <a mat-stroked-button routerLink="/instances">Back to list</a>
+    <a mat-stroked-button routerLink="/instances"
+      ><span class="material-icons action-glyph" aria-hidden="true">chevron_left</span> Back to
+      list</a
+    >
   </div>
 }

@@ -9,7 +9,6 @@ import { FormsModule } from "@angular/forms";
 import { Router, RouterLink } from "@angular/router";
 
 import { MatButtonModule } from "@angular/material/button";
-import { MatCardModule } from "@angular/material/card";
 import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { MatFormFieldModule } from "@angular/material/form-field";
@@ -47,7 +46,6 @@ const DEFAULT_GPU_COUNT = 0;
     S3ProfileLabelComponent,
     FormsModule,
     MatButtonModule,
-    MatCardModule,
     MatCheckboxModule,
     MatExpansionModule,
     MatFormFieldModule,
