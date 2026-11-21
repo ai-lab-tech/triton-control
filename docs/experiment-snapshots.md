@@ -73,8 +73,8 @@ workspace inventory. Declarations do not constitute passed evaluation evidence.
 Managed deployments normally use the instance's configured S3 repository.
 An explicit `repository: {"profile_id": 3, "prefix": "prepared/iris"}` instead
 uses a prefix beneath an existing authorized S3 profile. External endpoints
-**require** this supplied repository; their internals and actual runtime image
-are not inferred from endpoint health. Optional `supplied_runtime_image` is a
+require an explicit repository or selected workspace model files. Their runtime
+image is unobserved. Optional `supplied_runtime_image` is a
 pinned user-supplied reference, retained separately from observed runtime
 identity and never represented as the actually tested image.
 
@@ -85,6 +85,53 @@ task ID and gaps. `GET /api/preparation/snapshots/{id}` returns the immutable
 manifest, its digest, retained artifact references and the current task state.
 The submitter and authorized task readers can inspect it without requiring the
 original development deployment to still exist.
+
+## Capture source provenance
+
+Add a `source` object to the capture request to describe how the experiment
+was prepared. The source selector works without an MLflow or HF builder installation.
+
+| `source.kind` | Fields to supply when available |
+| --- | --- |
+| `hf` | `repository` (for example `owner/model`), `revision`, `resolved_commit`, `serving_manifest`, and `checkpoint_files`. |
+| `example` | `repository` (for example `github.com/owner/repo`), the checkout's full `commit`, and `project_path` in that checkout. Use `.` for the repository root. |
+| `manual` | Select the local project files via `workspace.files`. Use `author` for supplied attribution and `ai_assisted` for optional authoring context. The receipt also records the authenticated submitter. |
+
+For any source, set `model_card`, `license_file`, and `source_documents` to
+workspace-relative paths and include each supplied file in `workspace.files`.
+The same rule applies to `serving_manifest`, which points to the builder's
+`serving.json`. Captures retain the original bytes and record file digests.
+The preparation task flags missing model cards, licenses, and source-specific
+provenance for review.
+
+Checkpoint paths are relative to the captured model repository. Use the
+`.workspace/` prefix for checkpoints selected in the workspace. The checkpoint
+fingerprint covers the selected paths and bytes. The revision fingerprint binds
+that inventory to the declared HF revision and commit. The adapter reads
+generator, version, and a bounded set of runtime options from `serving.json` as
+preparation inputs. Set `source.acquisition_record` to a selected workspace JSON file
+such as the HF builder CPU demo’s `demo-source.json` to capture additional
+options such as `max_new_tokens`. Conflicting hints create a review gap and
+serving manifest values take precedence. Omitted manual AI attribution is
+recorded as unknown. Source references and static hints are supplied provenance.
+Capture does not contact upstream services or create validation evidence or
+training runs.
+
+Use `workspace_model_root` to identify the workspace Triton repository, with
+`.` for the workspace root. When a development repository is available, capture
+compares its selected model files against the workspace selection by relative
+path and digest. Paths present in only one inventory flag an incomplete comparison. Different
+digests for the same path flag a byte mismatch. Repository equality still leaves the bytes loaded by the running pod
+unverified. For workspace-only capture, select the config and files for each
+intended model version. The original workspace paths remain in the receipt.
+
+Recapture with a new idempotency key after changing checkpoint or workspace
+bytes. Pass the previous snapshot ID to link the new preparation task to the
+earlier capture. Existing requests and receipts that omit `source` retain their
+behavior and digest format. No database migration is required.
+
+See the [YOLOv8 object detection example](../examples/onnx/yolov8-object-detection-ensemble/README.md#6-capture-the-experiment-for-engineering)
+for a capture based on an existing Git example and a locally edited model config.
 
 ## Consistency and security boundaries
 

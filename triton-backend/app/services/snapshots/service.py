@@ -40,6 +40,7 @@ from app.services.operations import Action, ExecutionContext
 from app.services.operations import service as operations
 from app.services.snapshots.artifacts import SelectedModels, scan_credentials
 from app.services.snapshots.runtime import RuntimeProvider
+from app.services.snapshots.sources import capture_provenance, workspace_model_files
 from app.services.snapshots.workspace import WorkspaceProvider
 from app.services.storage.s3_client import S3Config, build_s3_client
 
@@ -98,8 +99,8 @@ def _selectors(session: Session, claims: dict[str, Any], instance: Any, request:
             raise BadRequestError("Managed capture requires deployment_uid and expected_generation from pod state")
         if not instance.deployment_namespace or not instance.deployment_name:
             raise ConflictError("Managed deployment identity is unavailable")
-    elif request.repository is None:
-        raise BadRequestError("External endpoints require explicitly supplied repository inputs")
+    elif request.repository is None and not (request.source and request.source.workspace_model_root):
+        raise BadRequestError("External endpoints require explicitly supplied repository or workspace model inputs")
     if request.workspace:
         get_owned_code_server(session, claims, request.workspace.workspace_id)
     if request.previous_snapshot_id:
@@ -194,6 +195,8 @@ def _source(
     if request.repository:
         client, bucket, prefix = _checked_profile_client(session, claims, request.repository.profile_id)
         prefix = "/".join(part for part in (prefix, request.repository.prefix) if part)
+    elif not _managed(instance):
+        return None
     elif (
         instance.s3_enabled
         and instance.s3_bucket
@@ -246,7 +249,7 @@ def _workspace(session: Session, claims: dict[str, Any], request: PreparationReq
 
 def _capture_gaps(
     request: PreparationRequest, before: RuntimeObservation, intended_models: list[str],
-    inventory: InventoryV1, workspace: InventoryV1,
+    inventory: InventoryV1, workspace: InventoryV1, *, repository_selected: bool,
 ) -> set[str]:
     gaps = {"runtime_state_unverified", "running_model_bytes_unverified"}
     if request.runtime_changes == "requires_rebuild":
@@ -270,6 +273,18 @@ def _capture_gaps(
     if not request.evaluation_files:
         gaps.add("evaluation_inputs_missing")
     paths = {entry.path for entry in inventory.files}
+    if request.source and request.source.workspace_model_root:
+        workspace_models = workspace_model_files(request, workspace)
+        if repository_selected:
+            repository_hashes = {entry.path: entry.digest for entry in inventory.files}
+            workspace_hashes = {path: entry.digest for path, entry in workspace_models.items()}
+            if workspace_hashes.keys() != repository_hashes.keys():
+                gaps.add("workspace_model_comparison_incomplete")
+            shared = workspace_hashes.keys() & repository_hashes.keys()
+            if any(workspace_hashes[path] != repository_hashes[path] for path in shared):
+                gaps.add("workspace_model_bytes_differ")
+        else:
+            paths = set(workspace_models)
     for model in request.models:
         if f"{model.name}/config.pbtxt" not in paths or any(
             not any(path.startswith(f"{model.name}/{version}/") for path in paths) for version in model.versions
@@ -357,7 +372,9 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 inventory = captured.inventory
             workspace = _workspace(session, claims, request, staging)
             scan_credentials(staging, [entry.path for entry in inventory.files])
-            gaps = _capture_gaps(request, before, instance.model_names, inventory, workspace)
+            gaps = _capture_gaps(
+                request, before, instance.model_names, inventory, workspace, repository_selected=source is not None,
+            )
             heartbeat.check()
             # Re-read the full selected inventory after workspace capture. Do not
             # mix an earlier model view with a later workspace/runtime view.
@@ -381,6 +398,10 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
             if _store_identity(_store(session, claims, stack)) != store_identity:
                 raise ConflictError("Controlled staging binding changed during capture")
             heartbeat.check()
+            source_kind, provenance, source_gaps = capture_provenance(
+                request, operation.actor_id, staging, inventory, workspace,
+            )
+            gaps.update(source_gaps)
             origin = Origin(installation_id=installation, record_id=operation.id)
             manifest = SnapshotManifest(
                 origin=origin,
@@ -396,11 +417,12 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
                 configuration_digest=digest(configuration),
                 source_snapshot=Snapshot(
                     origin=origin,
-                    kind="manual",
+                    kind=source_kind,
                     inventory=inventory_digest(InventoryV1(files=(*inventory.files, *workspace.files))),
                 ),
                 inventory=inventory,
                 workspace_inventory=workspace,
+                source_provenance=provenance,
                 gaps=tuple(sorted(gaps)),
                 workspace_relation="selected_unverified_changes" if request.workspace else "not_selected",
             )
