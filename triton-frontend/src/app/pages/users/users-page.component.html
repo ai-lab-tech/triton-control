@@ -62,6 +62,9 @@
               <button class="name-link" type="button" (click)="openDetails(details, row)">
                 {{ row.name }}</button
               ><span class="user-email">{{ row.email }}</span>
+              @if (isEngineer(row.id)) {
+                <span class="chip">ML engineer</span>
+              }
             </td>
             <td class="optional">{{ row.role }}</td>
             <td>

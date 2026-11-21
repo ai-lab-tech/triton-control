@@ -1,0 +1,154 @@
+@if (allowed()) {
+  @if (expanded()) {
+    <section class="card" aria-labelledby="capture-title">
+      <h2 class="card-title" id="capture-title">Prepare for production</h2>
+      <p>
+        Capture the selected model versions in an immutable snapshot for an engineering preparation
+        task.
+      </p>
+      @if (error()) {
+        <p role="alert">{{ error() }}</p>
+      }
+      @if (operation(); as op) {
+        <p role="status">Snapshot capture: {{ op.state }} · {{ op.message }}</p>
+        <a [routerLink]="['/instances', instance().id]">Original development experiment</a>
+        @if (taskId()) {
+          <a [routerLink]="['/preparation/tasks', taskId()]">Open preparation task and snapshot</a>
+        }
+        @if (op.state === "failed") {
+          <button mat-button (click)="act('retry')" [disabled]="busy()">Retry snapshot</button>
+        }
+        @if (!terminal()) {
+          <button mat-button (click)="act('cancel')" [disabled]="busy()">Cancel snapshot</button>
+        }
+        @if (terminal()) {
+          <button mat-button (click)="newCapture()" [disabled]="busy()">New capture</button>
+        }
+        <button mat-stroked-button (click)="monitor(op.id)" [disabled]="busy()">
+          <span class="material-icons action-glyph" aria-hidden="true">refresh</span> Refresh
+          snapshot status
+        </button>
+      } @else {
+        <form (ngSubmit)="submit()">
+          @if (pending()) {
+            <p>Retry the saved selection to recover the original capture request.</p>
+          }
+          <fieldset [disabled]="busy() || pending()">
+            <label
+              >Task title<input name="title" [(ngModel)]="title" maxlength="200" required
+            /></label>
+            <label
+              >Models and versions (one model:version per line)<textarea
+                rows="4"
+                name="models"
+                [(ngModel)]="models"
+                required
+                placeholder="iris:1"
+              ></textarea>
+            </label>
+            <p>
+              Leave repository fields empty for a managed Kubernetes experiment. External endpoints
+              require an S3 repository or selected workspace model files.
+            </p>
+            <label
+              >Source repository profile
+              <select name="profile" [(ngModel)]="profileId">
+                <option [ngValue]="null">Use managed experiment repository</option>
+                @for (profile of profiles(); track profile.id) {
+                  <option [ngValue]="profile.id">{{ profile.name }} · {{ profile.bucket }}</option>
+                }
+              </select>
+            </label>
+            <label>Repository prefix<input name="prefix" [(ngModel)]="prefix" /></label>
+            <label
+              >Experiment source
+              <select name="sourceKind" [(ngModel)]="kind">
+                <option value="">Unspecified</option>
+                <option value="hf">Hugging Face</option>
+                <option value="example">Git example</option>
+                <option value="manual">Manual or AI-assisted</option>
+              </select>
+            </label>
+            @if (kind) {
+              <p>
+                Enter workspace-relative paths. Include any model card, license, source document,
+                serving manifest, or acquisition record in the workspace file list.
+              </p>
+              <label
+                >Workspace ID<input
+                  type="number"
+                  min="1"
+                  name="workspaceId"
+                  [(ngModel)]="workspaceId"
+              /></label>
+              <label
+                >Workspace files (one path per line)<textarea
+                  name="workspaceFiles"
+                  [(ngModel)]="workspaceFiles"
+                ></textarea>
+              </label>
+              @for (field of sourceFields[kind]; track field.key) {
+                <label
+                  >{{ field.label }}<input [name]="field.key" [(ngModel)]="values[field.key]"
+                /></label>
+              }
+              @if (kind === "manual") {
+                <label
+                  >AI assistance<select name="aiAssisted" [(ngModel)]="aiAssisted">
+                    <option [ngValue]="null">Undisclosed</option>
+                    <option [ngValue]="true">Yes</option>
+                    <option [ngValue]="false">No</option>
+                  </select></label
+                >
+              }
+              @if (kind === "hf") {
+                <label
+                  >Checkpoint files (one inventory path per line)<textarea
+                    name="checkpoints"
+                    [(ngModel)]="checkpoints"
+                  ></textarea>
+                </label>
+              }
+              <label
+                >Workspace model root<input
+                  name="modelRoot"
+                  [(ngModel)]="values.workspace_model_root"
+              /></label>
+              <label>Model card path<input name="card" [(ngModel)]="values.model_card" /></label>
+              <label>License path<input name="license" [(ngModel)]="values.license_file" /></label>
+              <label
+                >Source documents (one workspace path per line)<textarea
+                  name="documents"
+                  [(ngModel)]="documents"
+                ></textarea>
+              </label>
+            }
+            <label
+              >Expected behavior<textarea
+                name="behavior"
+                [(ngModel)]="behavior"
+                maxlength="8000"
+              ></textarea>
+            </label>
+            <label
+              >Acceptance criteria<textarea
+                name="criteria"
+                [(ngModel)]="criteria"
+                maxlength="8000"
+              ></textarea>
+            </label>
+            <p>
+              Missing evaluation evidence and unknown runtime changes remain visible as task
+              blockers.
+            </p>
+          </fieldset>
+          <div class="form-actions">
+            <button mat-flat-button type="submit" [disabled]="busy() || !valid()" color="primary">
+              {{ pending() ? "Retry capture request" : "Capture snapshot" }}
+            </button>
+          </div>
+        </form>
+      }
+    </section>
+  }
+}
