@@ -89,7 +89,11 @@
               </label>
               @for (field of sourceFields[kind]; track field.key) {
                 <label
-                  >{{ field.label }}<input [name]="field.key" [(ngModel)]="values[field.key]"
+                  >{{ field.label
+                  }}<input
+                    [name]="field.key"
+                    [attr.name]="field.key"
+                    [(ngModel)]="values[field.key]"
                 /></label>
               }
               @if (kind === "manual") {
