@@ -37,6 +37,12 @@ and task authorization.
 
 ## Request capture
 
+In the UI, open **Serving → Instances**, select the development instance, and
+choose **Prepare for production**. Set the intended models and versions. Under
+**Experiment source**, choose **Hugging Face**, **Git example**, or **Manual or
+AI-assisted** to enter provenance. Select **Capture snapshot**. When capture
+succeeds, select **Open preparation task and snapshot** to inspect the result.
+
 `POST /api/instances/{instance_id}/preparation-requests` requires an interactive,
 currently active member/admin, instance access, and `Idempotency-Key` (1–128
 characters). Engineering-team membership alone grants no instance or workspace
@@ -130,7 +136,7 @@ bytes. Pass the previous snapshot ID to link the new preparation task to the
 earlier capture. Existing requests and receipts that omit `source` retain their
 behavior and digest format. No database migration is required.
 
-See the [YOLOv8 object detection example](../examples/onnx/yolov8-object-detection-ensemble/README.md#6-capture-the-experiment-for-engineering)
+See the [YOLOv8 object detection example](https://github.com/ai-lab-tech/triton-control/blob/main/examples/onnx/yolov8-object-detection-ensemble/README.md#6-capture-the-experiment-for-engineering)
 for a capture based on an existing Git example and a locally edited model config.
 
 ## Consistency and security boundaries

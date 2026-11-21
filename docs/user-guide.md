@@ -48,16 +48,15 @@ verifying your identity.
 
 ## Navigation Map
 
-Main sidebar entries:
+The sidebar groups pages by workflow. Available actions depend on your access role,
+installation capabilities, and Kubernetes availability.
 
-- Dashboard
-- Triton Instances
-- Workspaces (when Kubernetes actions are available)
-- Add Deployment (when Kubernetes actions are available)
-- Workflows (when Kubernetes actions and Argo Workflows are available)
-- Add Instance (button, last nav action): creates a manually managed Triton instance entry.
-- S3 Profiles (existing account menu entry, `admin`): manage reusable S3 connections.
-- Error Logs (admin only)
+- **Dashboard** opens the fleet overview.
+- **Serving → Instances** lists Triton endpoints. Select **Connect existing instance** to register a running server, or **Serving → Add deployment** to deploy one.
+- **Development → Engineering queue → Submit model** opens the handoff form. Select **Submit to engineering** to send it.
+- **Serving → Instances → select an instance → Prepare for production** opens snapshot capture. Choose an experiment source and select **Capture snapshot**.
+- Under **Development**, select **Workspaces**, **Argo Workflows**, or **MLflow** for the corresponding development tool.
+- Administrators can open **User Management**, **Settings**, and **Error Logs** from the account menu at the bottom of the sidebar. **S3 Profiles** appears there when credential administration is enabled.
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
 pages for Inference, Profile, and S3 Browser.
@@ -134,7 +133,7 @@ permissions, you will see:
 - S3 Connection
 - Logs (self-deployed instances)
 
-For instances added via **Add Instance** (existing Triton endpoints), profiling
+For instances added via **Connect existing instance** (existing Triton endpoints), profiling
 can still be executed from the **Models** tab using **Profile** when Perf
 Analyzer is installed.
 
@@ -541,9 +540,11 @@ fixed template; use the Docker config JSON required by your registry:
 }
 ```
 
-## Workflows (Sidebar Entry)
+<a id="workflows-sidebar-entry"></a>
 
-**Workflows** embeds the single global Argo Workflows server installed by the
+## Argo Workflows
+
+**Development → Argo Workflows** embeds the single global Argo Workflows server installed by the
 Triton Control Helm release. The browser connects only to Triton Control:
 
 ```text
@@ -571,10 +572,11 @@ With multiple linked profiles, specify the profile name in the workflow annotati
 An explicit `artifactRepositoryRef` remains available for direct Argo submissions.
 See [S3 profile linking and synchronization](argo-workflows.md#s3-credentials).
 
-## Add Instance (Sidebar Action)
+<a id="add-instance-sidebar-action"></a>
 
-**Add Instance** is a dedicated sidebar action (shown as the last nav action).
-It is used to register an already running Triton endpoint in Triton Control.
+## Connect an existing instance
+
+Open **Serving → Instances → Connect existing instance** to register a running Triton endpoint.
 
 Use this path when:
 
@@ -583,7 +585,7 @@ Use this path when:
 
 Behavior after creation:
 
-- the instance appears in **Triton Instances** like other instances
+- the instance appears in **Instances** like other instances
 - **Perf** can be opened from the **Models** tab without a global analyzer installation
 - the **Logs** tab is not shown for these manually added instances
 

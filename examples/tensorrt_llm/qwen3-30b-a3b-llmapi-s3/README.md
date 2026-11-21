@@ -18,16 +18,16 @@ model repository path.
 
 ## 1. Create Development Workspace
 
-In Triton Control, open **Development** and create the workspace:
+In Triton Control, open **Development → Workspaces** and create the workspace:
 
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:26.06-trtllm-python-py3` |
-| Image already has Development installed | Disabled |
+| Use preinstalled code-server | Disabled |
 | Workspace storage | At least `80Gi`; use `96Gi` if available |
 | GPU count | `0` is enough for prepare; `1` is also fine |
 
-When the workspace is ready, open code-server from **Development**.
+When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 
 Install the Jupyter extension if needed. If the kernel is missing, run:
 

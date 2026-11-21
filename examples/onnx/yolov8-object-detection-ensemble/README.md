@@ -22,16 +22,16 @@ preprocess -> yolov8_onnx -> postprocess
 
 ## 1. Create Development Workspace
 
-In Triton Control, open **Development** and create the workspace:
+In Triton Control, open **Development → Workspaces** and create the workspace:
 
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/tritonserver:26.06-py3` |
-| Image already has Development installed | Disabled |
+| Use preinstalled code-server | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `0` |
 
-When the workspace is ready, open code-server from **Development**.
+When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 
 Install the Jupyter extension if needed. If the Python notebook kernel is
 missing, run:
@@ -150,7 +150,12 @@ After running inference, change `yolov8_onnx/config.pbtxt` in the workspace, for
 example by changing `KIND_GPU` to `KIND_CPU` for a proposed CPU deployment. Keep
 the live experiment deployed while you capture the edited config.
 
-Send the following JSON to `POST /api/instances/{instance_id}/preparation-requests`
+To capture through the UI, open **Serving → Instances**, select **Details** on the
+deployed detector, and choose **Prepare for production**. Select **Git example**
+as the experiment source and enter the model versions, workspace paths, and
+checkout details shown below. Select **Capture snapshot**.
+
+To use the API, send the following JSON to `POST /api/instances/{instance_id}/preparation-requests`
 with your authenticated session and a new `Idempotency-Key`. Replace the
 deployment UID and generation with the values from
 `GET /api/instances/{instance_id}/pods`. Use your actual workspace ID, adjust the

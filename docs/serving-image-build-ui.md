@@ -11,10 +11,10 @@ A preparation task records the model you are working on and who is responsible
 for it. Claiming the task assigns it to you. Image builds must run from that
 assigned task's workspace, not a personal workspace.
 
-1. **Enable engineering access.** Ask an administrator to open **Users** and
-   check **ML engineer** for your account. Your account must also have member or
+1. **Enable engineering access.** Ask an administrator to open **User Management** from the account menu,
+   select your name, and check **ML engineer**. Your account must also have member or
    administrator access.
-2. **Open Submit model** from the Triton Control sidebar.
+2. Open **Development → Engineering queue → Submit model**.
 3. **Choose your model.** Enter a handoff title, select an S3 profile, enter the
    model's object path and set a submission revision, for example `1`. The object
    must already exist, and the bucket must have versioning enabled. Paths are

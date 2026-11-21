@@ -13,16 +13,16 @@ TorchScript ResNet18 classifier.
 
 ## 1. Create Development Workspace
 
-In Triton Control, open **Development** and create the workspace:
+In Triton Control, open **Development → Workspaces** and create the workspace:
 
 | Field | Value |
 | --- | --- |
 | Image | `nvcr.io/nvidia/pytorch:26.06-py3` |
-| Image already has Development installed | Disabled |
+| Use preinstalled code-server | Disabled |
 | Workspace storage | At least `20Gi` |
 | GPU count | `0` |
 
-When the workspace is ready, open code-server from **Development**.
+When the workspace is ready, select **Open in new tab** on the **Workspaces** page.
 
 Use NVIDIA's PyTorch image for the workspace because the notebook exports a
 TorchScript artifact with Python `torch` and `torchvision`. Do not install
