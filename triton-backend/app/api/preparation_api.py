@@ -3,13 +3,14 @@
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlmodel import Session
 
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.schemas.engineering_queue import QueueEntry, TaskOverview
+from app.schemas.operations import OperationResponse
 from app.schemas.preparation import (
     AttemptDTO,
     InformationRequest,
@@ -20,7 +21,9 @@ from app.schemas.preparation import (
     TaskEventDTO,
     TaskRevision,
 )
+from app.schemas.validation import ValidationManifest
 from app.services import engineering_queue, preparation
+from app.services.candidate_validation import attempts as validation
 
 router = APIRouter(prefix="/api/preparation-tasks", tags=["preparation"])
 
@@ -150,3 +153,23 @@ def reassign(
     claims: dict[str, Any] = Depends(get_claims),
 ) -> TaskDTO:
     return preparation.reassign(session, claims, task_id, request)
+
+@router.post("/{task_id}/validations", status_code=202, response_model=OperationResponse)
+@translate_app_errors
+def start_candidate_validation(
+    task_id: UUID, manifest: ValidationManifest, response: Response,
+    idempotency_key: str = Header(min_length=1, max_length=128), session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> OperationResponse:
+    operation = validation.submit(session, claims, task_id, manifest, idempotency_key)
+    response.headers["Location"] = operation.status_url
+    return operation
+
+
+@router.get("/{task_id}/validations", response_model=list[OperationResponse])
+@translate_app_errors
+def validation_history(
+    task_id: UUID, limit: int = Query(default=10, ge=1, le=25), offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims),
+) -> list[OperationResponse]:
+    return validation.history(session, claims, task_id, limit, offset)

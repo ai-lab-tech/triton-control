@@ -136,10 +136,16 @@ class ExecutionContext:
     def checkpoint(self) -> None:
         with self.sessions() as session:
             current = repo.owned(session, self.row.id, self.row.worker or "", self.row.generation)
-            self.service.authorize(session, users.find_by_id(session, current.actor_id),
-                                   current.kind, current.target, "execute", current)
             if current.cancel_requested != self.row.cancel_requested:
                 raise ConflictError("Cancellation requires a new reconciliation pass")
+            adapter = self.service.adapter(current.kind)
+            if current.cancel_requested and getattr(adapter, "cleanup_after_authorized_cancel", False):
+                # cancel() checked the caller. UID-fenced cleanup must still work
+                # after reassignment or deactivation of the original submitter.
+                installation_policy.require("development_jobs")
+            else:
+                self.service.authorize(session, users.find_by_id(session, current.actor_id),
+                                       current.kind, current.target, "execute", current)
             repo.heartbeat(session, current.id, self.row.worker or "", self.row.generation, 30)
 
 
@@ -172,11 +178,15 @@ class OperationWorker:
             return True
         except ForbiddenError:
             # Preserve intent, including cancellation, until access is restored.
-            outcome = ReconcileResult(message="Execution blocked by current authorization", retry_after=60)
+            outcome = ReconcileResult(
+                result=row.result, message="Execution blocked by current authorization", retry_after=60,
+            )
         except Exception:
             # Provider errors can contain credentials; never persist their raw text.
-            outcome = ReconcileResult(message="External outcome uncertain; reconciliation will retry",
-                                      retry_after=min(300, 2 ** min(row.attempts, 8)))
+            outcome = ReconcileResult(
+                result=row.result, message="External outcome uncertain; reconciliation will retry",
+                retry_after=min(300, 2 ** min(row.attempts, 8)),
+            )
         try:
             with self.sessions() as session:
                 repo.complete(session, row.id, self.identity, row.generation, outcome.state,

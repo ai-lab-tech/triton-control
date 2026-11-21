@@ -78,6 +78,10 @@ spec:
               value: {{ .Values.buildQualification.contextRetentionDays | quote }}
             {{- end }}
             {{- if $development }}
+            {{- with .Values.candidateValidation.namespace }}
+            - name: TRITON_VALIDATION_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
             - name: PERF_ANALYZER_IMAGE
               value: {{ .Values.perfAnalyzer.image | quote }}
             - name: PERF_ANALYZER_DEADLINE_SECONDS

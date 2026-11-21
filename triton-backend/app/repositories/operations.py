@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import Any, cast
+from uuid import UUID
 
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +11,7 @@ from sqlmodel import Session, col, select
 from app.db.entities import OperationEntity
 from app.exceptions import ConflictError, NotFoundError
 
+VALIDATION_KIND = "candidate.validate.v1"
 HANDOFF_CAPTURE_KIND = "handoff.capture"
 
 TERMINAL = {"succeeded", "failed", "cancelled"}
@@ -125,3 +127,10 @@ def retry(session: Session, operation_id: str) -> OperationEntity:
     session.commit()
     session.refresh(row)
     return row
+
+def validation_attempts(session: Session, task_id: UUID, limit: int, offset: int) -> list[OperationEntity]:
+    query = select(OperationEntity).where(
+        OperationEntity.kind == VALIDATION_KIND, OperationEntity.target == str(task_id),
+    )
+    return list(session.exec(query.order_by(col(OperationEntity.created_at).desc(), col(OperationEntity.id).desc())
+                             .limit(limit).offset(offset)).all())

@@ -3668,6 +3668,148 @@
         }
       }
     },
+    "/api/preparation-tasks/{task_id}/validations": {
+      "post": {
+        "tags": [
+          "preparation"
+        ],
+        "summary": "Start Candidate Validation",
+        "operationId": "start_candidate_validation_api_preparation_tasks__task_id__validations_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationManifest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "preparation"
+        ],
+        "summary": "Validation History",
+        "operationId": "validation_history_api_preparation_tasks__task_id__validations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationResponse"
+                  },
+                  "title": "Response Validation History Api Preparation Tasks  Task Id  Validations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preparation/handoff-submission-policy": {
       "get": {
         "tags": [
@@ -9255,6 +9397,57 @@
         ],
         "title": "Credentials"
       },
+      "Criterion": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Metric"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "correctness",
+              "performance"
+            ],
+            "title": "Category"
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Unit"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "gte",
+              "lte",
+              "eq"
+            ],
+            "title": "Operator"
+          },
+          "threshold": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+            "title": "Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "metric",
+          "category",
+          "unit",
+          "operator",
+          "threshold"
+        ],
+        "title": "Criterion"
+      },
       "DashboardAlertDTO": {
         "properties": {
           "id": {
@@ -10124,6 +10317,42 @@
         ],
         "title": "ErrorEventDTO"
       },
+      "EvaluatorIdentity": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Version"
+          },
+          "image": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+            "title": "Image"
+          },
+          "code": {
+            "$ref": "#/components/schemas/Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "image",
+          "code"
+        ],
+        "title": "EvaluatorIdentity"
+      },
       "Evidence": {
         "properties": {
           "uri": {
@@ -10884,6 +11113,96 @@
           "architecture"
         ],
         "title": "Hardware"
+      },
+      "HardwareRuntime": {
+        "properties": {
+          "architecture": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64"
+            ],
+            "title": "Architecture"
+          },
+          "operatingSystem": {
+            "type": "string",
+            "const": "linux",
+            "title": "Operatingsystem"
+          },
+          "cpuModel": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Cpumodel"
+          },
+          "gpuModel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpumodel"
+          },
+          "gpuCount": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Gpucount"
+          },
+          "driverVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driverversion"
+          },
+          "cudaVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cudaversion"
+          },
+          "tritonVersion": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+            "title": "Tritonversion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "architecture",
+          "operatingSystem",
+          "cpuModel",
+          "gpuCount",
+          "tritonVersion"
+        ],
+        "title": "HardwareRuntime",
+        "description": "Exact supported profiles in v1alpha1; no inferred GPU/driver compatibility."
       },
       "InformationRequest": {
         "properties": {
@@ -14443,6 +14762,33 @@
         ],
         "title": "StartModelPerfRequest"
       },
+      "StartupConfiguration": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/StartupModel"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Models"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/Reference"
+          },
+          "resourcesPerReplica": {
+            "$ref": "#/components/schemas/Resources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "models",
+          "configuration",
+          "resourcesPerReplica"
+        ],
+        "title": "StartupConfiguration"
+      },
       "StartupModel": {
         "properties": {
           "name": {
@@ -16052,6 +16398,90 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValidationManifest": {
+        "properties": {
+          "apiVersion": {
+            "type": "string",
+            "const": "validation.triton-control/v1alpha1",
+            "title": "Apiversion"
+          },
+          "kind": {
+            "type": "string",
+            "const": "ValidationManifest",
+            "title": "Kind"
+          },
+          "image": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+            "title": "Image"
+          },
+          "repository": {
+            "$ref": "#/components/schemas/Repository"
+          },
+          "sourceCode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/Reference"
+          },
+          "expectedOutputs": {
+            "$ref": "#/components/schemas/Reference"
+          },
+          "evaluator": {
+            "$ref": "#/components/schemas/EvaluatorIdentity"
+          },
+          "criteria": {
+            "items": {
+              "$ref": "#/components/schemas/Criterion"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Criteria"
+          },
+          "startup": {
+            "$ref": "#/components/schemas/StartupConfiguration"
+          },
+          "supportedTargets": {
+            "items": {
+              "$ref": "#/components/schemas/HardwareRuntime"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Supportedtargets"
+          },
+          "performanceScope": {
+            "type": "string",
+            "const": "single-replica",
+            "title": "Performancescope",
+            "default": "single-replica"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "apiVersion",
+          "kind",
+          "image",
+          "repository",
+          "dataset",
+          "expectedOutputs",
+          "evaluator",
+          "criteria",
+          "startup",
+          "supportedTargets"
+        ],
+        "title": "ValidationManifest"
       },
       "WorkflowS3CredentialDTO": {
         "properties": {
