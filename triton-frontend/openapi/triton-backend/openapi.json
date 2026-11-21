@@ -3668,6 +3668,32 @@
         }
       }
     },
+    "/api/preparation/handoff-submission-policy": {
+      "get": {
+        "tags": [
+          "handoffs"
+        ],
+        "summary": "Submission Policy",
+        "operationId": "submission_policy_api_preparation_handoff_submission_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffSubmissionPolicy"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/preparation/handoff-captures": {
       "post": {
         "tags": [
@@ -10807,6 +10833,20 @@
         ],
         "title": "HandoffRequest"
       },
+      "HandoffSubmissionPolicy": {
+        "properties": {
+          "require_s3_versioning": {
+            "type": "boolean",
+            "title": "Require S3 Versioning"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "require_s3_versioning"
+        ],
+        "title": "HandoffSubmissionPolicy"
+      },
       "Hardware": {
         "properties": {
           "architecture": {
@@ -12515,6 +12555,11 @@
             "minimum": 60.0,
             "title": "Transfer Timeout Seconds",
             "default": 3600
+          },
+          "require_s3_versioning": {
+            "type": "boolean",
+            "title": "Require S3 Versioning",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -13191,7 +13236,14 @@
             "title": "Endpoint"
           },
           "version_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Version Id"
           },
           "file": {

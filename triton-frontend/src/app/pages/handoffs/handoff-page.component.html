@@ -112,11 +112,18 @@
           </div>
           <div class="source-note">
             <span class="material-icons" aria-hidden="true">verified_user</span>
-            <p>
-              <strong>Exact inputs, preserved.</strong> Enable bucket versioning and finish
-              uploading before submitting. Source versions and checksums are recorded with your
-              handoff.
-            </p>
+            @if (requireS3Versioning()) {
+              <p>
+                Enable bucket versioning and finish uploading before submitting. Source versions and
+                checksums are recorded with your handoff.
+              </p>
+            } @else {
+              <p role="status">
+                <strong>Unversioned S3 inputs are allowed.</strong> Finish uploading before
+                submitting and keep the files available. If anyone overwrites or deletes them,
+                engineering may need a new handoff.
+              </p>
+            }
           </div>
           @if (sourceKind === "s3_repository") {
             <p class="repository-note">
@@ -358,6 +365,12 @@
         </p>
       }
       <h3>Verified source inputs</h3>
+      @if (hasUnversionedInputs(item)) {
+        <p class="notice">
+          This handoff includes unversioned files. If a file changes or disappears, submit a new
+          handoff so engineering can access it.
+        </p>
+      }
       @if (item.request.source.kind === "s3_repository") {
         <p>
           The repository structure is restored under /inputs/verified/source in the task workspace.
@@ -375,7 +388,7 @@
               <dd>{{ value.key }}</dd>
               <dt>Version</dt>
               <dd>
-                <code>{{ value.version_id }}</code>
+                <code>{{ value.version_id ?? "Unversioned" }}</code>
               </dd>
               <dt>SHA-256</dt>
               <dd>

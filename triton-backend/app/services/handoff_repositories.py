@@ -1,7 +1,7 @@
-"""Capture bounded Triton repository prefixes as inventories of exact S3 versions."""
+"""Capture bounded Triton repository prefixes as inventories of verified bytes."""
 
 import time
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
@@ -19,15 +19,21 @@ MAX_FILES = 998  # Workspace input limit leaves room for dataset and baseline.
 MAX_MANIFEST_BYTES = 512 * 1024
 
 
+class ListedObject(NamedTuple):
+    version: str | None
+    size: int
+    etag: str | None
+
+
 def _check_deadline(deadline: float) -> None:
     if time.monotonic() > deadline:
         raise BadRequestError("Repository capture exceeded its time limit")
 
 
 def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int,
-          checkpoint: Callable[[int], None]) -> dict[str, tuple[str, int]]:
-    """List only descendants; HEAD pins each current object, including empty files."""
-    files: dict[str, tuple[str, int]] = {}
+          checkpoint: Callable[[int], None], *, require_versioning: bool) -> dict[str, ListedObject]:
+    """List only descendants and record each current object's identity."""
+    files: dict[str, ListedObject] = {}
     entries, total = 0, 0
     pages = client.get_paginator("list_objects_v2").paginate(
         Bucket=bucket, Prefix=prefix, PaginationConfig={"PageSize": 100},
@@ -53,13 +59,16 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int
             if relative in files or len(files) >= MAX_FILES:
                 raise BadRequestError("Repository contains duplicate paths or too many files")
             head = client.head_object(Bucket=bucket, Key=key)
-            version, size = head.get("VersionId"), head["ContentLength"]
-            if not version or version == "null":
+            version, size = handoff_sources.version_id(head), head["ContentLength"]
+            if version is None and require_versioning:
                 raise BadRequestError("Enable S3 bucket versioning before submitting a repository")
+            etag = head.get("ETag") if version is None else None
+            if version is None and not etag:
+                raise BadRequestError("Source storage must provide an ETag for unversioned repository files")
             total += size
             if size < 0 or total > max_bytes:
                 raise BadRequestError("Repository exceeds the configured capture size limit")
-            files[relative] = (version, size)
+            files[relative] = ListedObject(version, size, etag)
     # Prevent a file/directory collision before writing anything into the workspace.
     for name in files:
         parts = name.split("/")
@@ -81,19 +90,21 @@ def resolve(session: Session, source: S3RepositoryInput, *,
         client = build_s3_client(config, client_config=Config(
             connect_timeout=3, read_timeout=10, retries={"max_attempts": 1},
         ))
-        selected = _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint)
+        selected = _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint,
+                         require_versioning=limits.require_s3_versioning)
         captured = []
-        for relative, (version, size) in sorted(selected.items()):
+        for relative, (version, size, etag) in sorted(selected.items()):
             _check_deadline(deadline)
             artifact = handoff_sources.resolve(session, S3Input(
                 profile_id=source.profile_id, path=source.path + "/" + relative, version_id=version,
-            ), deadline=deadline, allow_empty=True, checkpoint=checkpoint)
-            if (artifact.endpoint, artifact.bucket, artifact.key, artifact.file.size) != (
-                config["s3_endpoint"], bucket, key + "/" + relative, size,
+            ), deadline=deadline, allow_empty=True, expected_etag=etag, checkpoint=checkpoint)
+            if (artifact.endpoint, artifact.bucket, artifact.key, artifact.file.size, artifact.version_id) != (
+                config["s3_endpoint"], bucket, key + "/" + relative, size, version,
             ):
                 raise ConflictError("Repository source changed during capture; retry after publishing finishes")
             captured.append(artifact.model_copy(update={"file": artifact.file.model_copy(update={"path": relative})}))
-        if _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint) != selected:
+        if _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint,
+                 require_versioning=limits.require_s3_versioning) != selected:
             raise ConflictError("Repository changed during capture; retry after publishing finishes")
         result = ResolvedRepository(source=source, endpoint=config["s3_endpoint"] or "",
                                     bucket=bucket, key=key, files=captured)

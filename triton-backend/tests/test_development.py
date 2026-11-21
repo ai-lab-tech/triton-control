@@ -998,6 +998,27 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(status, "missing")
         self.assertIn("not found", message)
 
+    def test_read_status_shows_changed_unversioned_input_during_stager_backoff(self) -> None:
+        # Arrange
+        message = "Unversioned task input 'source/model.onnx' changed or disappeared. Submit a new handoff revision."
+        init = SimpleNamespace(
+            name="stage-task-inputs",
+            state=SimpleNamespace(waiting=SimpleNamespace(reason="CrashLoopBackOff")),
+            last_state=SimpleNamespace(terminated=SimpleNamespace(exit_code=42, message=message)),
+        )
+        pod = SimpleNamespace(status=SimpleNamespace(init_container_statuses=[init]))
+        self.enterContext(patch.object(k8s, "api_client"))
+        self.enterContext(patch("kubernetes.client.AppsV1Api"))
+        core_api = self.enterContext(patch("kubernetes.client.CoreV1Api"))
+        core_api.return_value.list_namespaced_pod.return_value.items = [pod]
+
+        # Act
+        status, detail = k8s.read_status("triton-control", "code-7-dev-workspace")
+
+        # Assert
+        self.assertEqual(status, "blocked")
+        self.assertEqual(detail, message)
+
     def test_WorkspaceUrl_RewritesServicePort(self) -> None:
         self.assertEqual(
             k8s.workspace_url("ns", "svc"),

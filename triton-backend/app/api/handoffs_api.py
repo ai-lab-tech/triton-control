@@ -9,11 +9,18 @@ from sqlmodel import Session
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
-from app.schemas.handoffs import HandoffReceipt, HandoffRequest, NotificationDTO
+from app.schemas.handoffs import HandoffReceipt, HandoffRequest, HandoffSubmissionPolicy, NotificationDTO
 from app.schemas.operations import OperationResponse
 from app.services import handoff_capture, handoffs
 
 router = APIRouter(prefix="/api/preparation", tags=["handoffs"])
+
+
+@router.get("/handoff-submission-policy", response_model=HandoffSubmissionPolicy)
+@translate_app_errors
+def submission_policy(session: Session = Depends(get_session),
+                      claims: dict[str, Any] = Depends(get_claims)) -> HandoffSubmissionPolicy:
+    return handoffs.submission_policy(session, claims)
 
 
 @router.post("/handoff-captures", response_model=OperationResponse, status_code=202)

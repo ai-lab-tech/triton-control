@@ -42,7 +42,7 @@ export interface HandoffRequest {
   acceptance_criteria: string | null;
 }
 export interface ResolvedInput {
-  version_id: string;
+  version_id: string | null;
   key: string;
   file: { path?: string; digest: string; size: number };
 }
@@ -133,6 +133,11 @@ export class HandoffsApiService {
   }
   profiles() {
     return this.http.get<SourceProfile[]>(this.base + "/api/s3-profiles");
+  }
+  submissionPolicy() {
+    return this.http.get<{ require_s3_versioning: boolean }>(
+      this.base + "/api/preparation/handoff-submission-policy",
+    );
   }
   notifications() {
     return this.http.get<HandoffNotification[]>(

@@ -30,7 +30,7 @@ const receipt = {
 
 describe("HandoffPageComponent", () => {
   let http: HttpTestingController;
-  async function setup(id: string | null = null, role = "member") {
+  async function setup(id: string | null = null, role = "member", requireS3Versioning = true) {
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -52,9 +52,29 @@ describe("HandoffPageComponent", () => {
       role,
     });
     http = TestBed.inject(HttpTestingController);
-    return TestBed.createComponent(HandoffPageComponent);
+    const fixture = TestBed.createComponent(HandoffPageComponent);
+    if (!id && (role === "member" || role === "admin")) {
+      http
+        .expectOne("/api/preparation/handoff-submission-policy")
+        .flush({ require_s3_versioning: requireS3Versioning });
+    }
+    return fixture;
   }
   afterEach(() => http.verify());
+
+  it("warns about overwritten or deleted files when unversioned inputs are allowed", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", false);
+    http.expectOne("/api/s3-profiles").flush([]);
+
+    // Act
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Assert
+    expect(fixture.nativeElement.textContent).toContain("Unversioned S3 inputs are allowed.");
+    expect(fixture.nativeElement.textContent).toContain("engineering may need a new handoff.");
+  });
 
   it("shows the source form with no team picker", async () => {
     const fixture = await setup();

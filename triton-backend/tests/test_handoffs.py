@@ -2,7 +2,9 @@
 
 import hashlib
 import io
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
@@ -17,7 +19,8 @@ from app.db.entities import HandoffEntity, HandoffNotificationEntity, Preparatio
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.schemas.handoffs import HandoffRequest, ResolvedInput, S3Input
 from app.schemas.preparation import InformationRequest, ResolveInputsRequest
-from app.services import handoff_sources, handoffs, preparation, teams
+from app.schemas.preparation_settings import PreparationLimits
+from app.services import handoff_sources, handoffs, preparation, preparation_settings, teams
 from tests.test_preparation import PreparationFixture
 
 
@@ -364,6 +367,87 @@ class SourceTests(HandoffFixture, unittest.TestCase):
         for version in (None, "null"):
             with self.assertRaises(BadRequestError):
                 self.resolve(self.client(version=version))
+
+    def test_unversioned_opt_in_captures_checksum_using_conditional_get(self):
+        for version in (None, "null"):
+            with self.subTest(version=version):
+                # Arrange
+                preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+                client = self.client(version=version)
+                client.head_object.return_value["ETag"] = '"snapshot"'
+
+                # Act
+                result = self.resolve(client)
+
+                # Assert
+                self.assertIsNone(result.version_id)
+                self.assertEqual(result.file.digest, "sha256:" + hashlib.sha256(b"model").hexdigest())
+                client.get_object.assert_called_once_with(Bucket="models", Key="allowed/model.onnx",
+                                                          IfMatch='"snapshot"')
+
+    def test_unversioned_download_after_reset_requires_original_bytes(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        client = self.client(version=None)
+        client.head_object.return_value["ETag"] = '"snapshot"'
+        artifact = self.resolve(client)
+        preparation_settings.update(self.session, self.admin, None)
+        destination = Path(self.enterContext(tempfile.TemporaryDirectory())) / "model"
+        self.enterContext(patch.object(handoff_sources, "build_s3_client", return_value=client))
+
+        # Act
+        client.get_object.return_value = {"Body": io.BytesIO(b"model")}
+        handoff_sources.download(self.session, artifact, destination)
+
+        # Assert
+        self.assertEqual(destination.read_bytes(), b"model")
+        client.get_object.assert_called_with(Bucket="models", Key="allowed/model.onnx")
+
+    def test_unversioned_download_rejects_changed_or_missing_input(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        client = self.client(version=None)
+        client.head_object.return_value["ETag"] = '"snapshot"'
+        artifact = self.resolve(client)
+        destination = Path(self.enterContext(tempfile.TemporaryDirectory())) / "model"
+        self.enterContext(patch.object(handoff_sources, "build_s3_client", return_value=client))
+
+        for response in ({"Body": io.BytesIO(b"other")}, ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")):
+            with self.subTest(response=response):
+                # Act
+                client.get_object.side_effect = [response]
+                with self.assertRaises(ConflictError) as error:
+                    handoff_sources.download(self.session, artifact, destination)
+
+                # Assert
+                self.assertIn("model.onnx changed or disappeared. Submit a new handoff.", str(error.exception))
+
+    def test_unversioned_capture_rejects_overwrite_between_head_and_get(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        client = self.client(version=None)
+        client.head_object.return_value["ETag"] = '"snapshot"'
+        client.get_object.side_effect = ClientError({"Error": {"Code": "PreconditionFailed"}}, "GetObject")
+
+        # Act
+        with self.assertRaises(ConflictError) as error:
+            self.resolve(client)
+
+        # Assert
+        self.assertIn("changed during capture", str(error.exception))
+
+    def test_explicit_null_version_is_rejected_even_with_unversioned_opt_in(self):
+        # Arrange
+        preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        client = self.client(version="null")
+
+        # Act
+        with self.assertRaises(BadRequestError) as error:
+            self.resolve(client, version_id="null")
+
+        # Assert
+        self.assertIn("Omit the version ID", str(error.exception))
+        client.head_object.assert_not_called()
 
     def test_checksum_mismatch_and_size_bounds(self):
         for client, changes in [

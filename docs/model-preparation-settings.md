@@ -7,6 +7,7 @@ Administrators configure model capture in **Settings → Model preparation**.
 | Maximum total task inputs (model, dataset and baseline) | 15 GiB |
 | Maximum writable workspace storage | 50 GiB |
 | Shared transfer timeout | 3,600 seconds (1 hour) |
+| Require S3 versioning for handoff inputs | On |
 
 The total input ceiling applies to all files combined. There are no separate
 per-file or repository size settings. For a 20 GiB model plus 4 GiB of evaluation
@@ -29,10 +30,17 @@ The chart maps these to `PREPARATION_MAX_INPUT_GIB`,
 `PREPARATION_MAX_WORKSPACE_STORAGE_GIB`, and `PREPARATION_TRANSFER_TIMEOUT_SECONDS`.
 These three environment variables also work without Helm.
 
-**Save limits** stores an administrator override in the database. All backend
+**Save settings** stores an administrator override in the database. All backend
 replicas read it; no restart is required. **Reset to deployment defaults** removes
 the override and restores the current Helm/environment values. A Helm upgrade does
 not silently overwrite saved admin settings. The UI shows which source is active.
+
+Turn off **Require S3 versioning for handoff inputs** to allow submissions from
+unversioned S3. The form warns users to keep their files available. Workspaces
+verify the original checksums before staging files. If a file changes or
+disappears, submit a new handoff revision. Resetting the setting requires
+versioning for new captures. Existing handoffs retain their original checksums
+and version IDs where available.
 
 Only administrators can read, save or reset these settings through
 `/api/settings/model-preparation` (GET, PUT, DELETE). Values must be whole numbers;
