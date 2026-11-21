@@ -190,7 +190,8 @@ folder name if needed, and replace the commit placeholder with the output of
 
 Follow the returned operation URL and open the snapshot receipt once it
 succeeds. The receipt inventories the S3 model files separately from the edited
-config and lists `workspace_model_bytes_differ` for the differing selections.
+config and lists `workspace_model_bytes_differ` for the edited config. The partial file selection also produces
+`workspace_model_comparison_incomplete`.
 Add any model card and license supplied with your weights to the workspace
 selection and declare their paths in `source`. The preparation task tracks
 missing provenance and evaluation inputs before the CPU configuration can be

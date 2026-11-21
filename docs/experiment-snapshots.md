@@ -109,15 +109,19 @@ Checkpoint paths are relative to the captured model repository. Use the
 fingerprint covers the selected paths and bytes. The revision fingerprint binds
 that inventory to the declared HF revision and commit. The adapter reads
 generator, version, and a bounded set of runtime options from `serving.json` as
-preparation inputs. Source references and static hints are supplied provenance.
+preparation inputs. Set `source.acquisition_record` to a selected workspace JSON file
+such as the HF builder CPU demo’s `demo-source.json` to capture additional
+options such as `max_new_tokens`. Conflicting hints create a review gap and
+serving manifest values take precedence. Omitted manual AI attribution is
+recorded as unknown. Source references and static hints are supplied provenance.
 Capture does not contact upstream services or create validation evidence or
 training runs.
 
 Use `workspace_model_root` to identify the workspace Triton repository, with
 `.` for the workspace root. When a development repository is available, capture
 compares its selected model files against the workspace selection by relative
-path and digest. Missing, additional, or changed selected model files create a
-review gap. Repository equality still leaves the bytes loaded by the running pod
+path and digest. Paths present in only one inventory flag an incomplete comparison. Different
+digests for the same path flag a byte mismatch. Repository equality still leaves the bytes loaded by the running pod
 unverified. For workspace-only capture, select the config and files for each
 intended model version. The original workspace paths remain in the receipt.
 

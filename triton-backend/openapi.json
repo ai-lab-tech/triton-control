@@ -10568,6 +10568,20 @@
             ],
             "title": "Serving Manifest"
           },
+          "acquisition_record": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acquisition Record"
+          },
           "checkpoint_files": {
             "items": {
               "type": "string",
@@ -11312,9 +11326,15 @@
             "title": "Author"
           },
           "ai_assisted": {
-            "type": "boolean",
-            "title": "Ai Assisted",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Assisted"
           }
         },
         "additionalProperties": false,

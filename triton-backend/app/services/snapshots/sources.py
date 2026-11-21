@@ -68,6 +68,20 @@ def _hf_provenance(
 ) -> SourceProvenance:
     manifest = files.get(WORKSPACE_PREFIX + source.serving_manifest) if source.serving_manifest else None
     generator, version, options = _hf_hints(staging, manifest)
+    if source.acquisition_record:
+        record = files[WORKSPACE_PREFIX + source.acquisition_record]
+        record_generator, record_version, acquired_options = _hf_hints(staging, record)
+        if not acquired_options:
+            gaps.add("hf_acquisition_options_missing")
+        if (
+            (record_generator and generator and generator != record_generator)
+            or (record_version and version and version != record_version)
+            or any(options[key] != acquired_options[key] for key in options.keys() & acquired_options.keys())
+        ):
+            gaps.add("hf_generator_metadata_conflict")
+        generator = generator or record_generator
+        version = version or record_version
+        options = {**acquired_options, **options}
     if not generator or not version:
         gaps.add("hf_generator_metadata_missing")
     checkpoint = None

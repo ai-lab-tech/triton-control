@@ -278,7 +278,10 @@ def _capture_gaps(
         if repository_selected:
             repository_hashes = {entry.path: entry.digest for entry in inventory.files}
             workspace_hashes = {path: entry.digest for path, entry in workspace_models.items()}
-            if workspace_hashes != repository_hashes:
+            if workspace_hashes.keys() != repository_hashes.keys():
+                gaps.add("workspace_model_comparison_incomplete")
+            shared = workspace_hashes.keys() & repository_hashes.keys()
+            if any(workspace_hashes[path] != repository_hashes[path] for path in shared):
                 gaps.add("workspace_model_bytes_differ")
         else:
             paths = set(workspace_models)

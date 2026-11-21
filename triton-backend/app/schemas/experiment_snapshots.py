@@ -53,6 +53,7 @@ class HFSource(SourceInput):
     revision: SourceLabel | None = None
     resolved_commit: GitCommit | None = None
     serving_manifest: Path | None = None
+    acquisition_record: Path | None = Field(default=None, exclude_if=lambda value: value is None)
     checkpoint_files: tuple[Path, ...] = Field(default=(), max_length=200)
 
 
@@ -66,7 +67,7 @@ class ExampleSource(SourceInput):
 class ManualSource(SourceInput):
     kind: Literal["manual"]
     author: SourceLabel | None = None
-    ai_assisted: bool = False
+    ai_assisted: bool | None = None
 
 
 CaptureSource = Annotated[HFSource | ExampleSource | ManualSource, Field(discriminator="kind")]
@@ -106,6 +107,8 @@ class PreparationRequest(Contract):
         if self.source:
             selected = set(self.workspace.files) if self.workspace else set()
             documents = (self.source.model_card, self.source.license_file, *self.source.source_documents)
+            if isinstance(self.source, HFSource):
+                documents = (*documents, self.source.acquisition_record)
             if isinstance(self.source, HFSource) and self.source.serving_manifest:
                 if self.source.serving_manifest.rsplit("/", 1)[-1] != "serving.json":
                     raise ValueError("The serving manifest must be named serving.json")

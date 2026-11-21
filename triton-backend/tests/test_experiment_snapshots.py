@@ -246,7 +246,7 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
             model_card: b"Model card",
             license_file: b"License supplied by author",
             source_notes: b"Source notes",
-            "project/iris/1/model.onnx": self.source.data,
+            "project/iris/config.pbtxt": b'name: "iris"',
             "project/iris/2/model.onnx": b"Unselected version",
         }
         source = {
@@ -258,7 +258,7 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
 
         # Act
         partial = self.finish(request=self.request(source=source, workspace=workspace))
-        files["project/iris/config.pbtxt"] = b'name: "iris"'
+        files["project/iris/1/model.onnx"] = self.source.data
         complete = self.finish(key="complete", request=self.request(
             source=source, workspace={**workspace, "files": list(files)},
         ))
@@ -275,7 +275,9 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         self.assertEqual(provenance.documents, tuple(
             entry(".workspace/" + path, files[path]) for path in (model_card, license_file, source_notes)
         ))
-        self.assertIn("workspace_model_bytes_differ", partial.task.missing_inputs)
+        self.assertIn("workspace_model_comparison_incomplete", partial.task.missing_inputs)
+        self.assertNotIn("workspace_model_bytes_differ", partial.task.missing_inputs)
+        self.assertNotIn("workspace_model_comparison_incomplete", complete.task.missing_inputs)
         self.assertNotIn("workspace_model_bytes_differ", complete.task.missing_inputs)
         self.assertIn("workspace_model_bytes_differ", changed.task.missing_inputs)
         self.assertIn("running_model_bytes_unverified", complete.task.missing_inputs)
@@ -338,6 +340,45 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         self.assertIn("hf_checkpoint_fingerprint_missing", receipt.task.missing_inputs)
         self.assertNotIn("hf_source_revision_missing", receipt.task.missing_inputs)
 
+    def test_builder_acquisition_options_survive_capture(self):
+        # Arrange
+        manifest = {"generator": "triton-hf-builder", "generator_version": "1.2.3", "device": "cpu"}
+        record = {"generator_version": "1.2.3", "runtime": "transformers", "device": "cpu", "max_new_tokens": 16}
+        workspace = self.select_workspace({
+            "model_repository/serving.json": json.dumps(manifest).encode(),
+            "demo-source.json": json.dumps(record).encode(),
+        })
+        source = {"kind": "hf", "serving_manifest": "model_repository/serving.json",
+                  "acquisition_record": "demo-source.json"}
+
+        # Act
+        receipt = self.finish(request=self.request(source=source, workspace=workspace))
+
+        # Assert
+        provenance = receipt.manifest.source_provenance
+        assert provenance is not None
+        self.assertEqual(
+            provenance.generator_options, {"runtime": "transformers", "device": "cpu", "max_new_tokens": 16},
+        )
+        self.assertNotIn("hf_generator_metadata_conflict", receipt.task.missing_inputs)
+
+    def test_manual_ai_attribution_round_trips_all_three_states(self):
+        # Arrange
+        workspace = self.select_workspace({"model.py": b"# handwritten or generated"})
+        for value in (None, False, True):
+            with self.subTest(value=value):
+                source: dict[str, str | bool] = {"kind": "manual"}
+                if value is not None:
+                    source["ai_assisted"] = value
+
+                # Act
+                receipt = self.finish(
+                    key=f"attribution-{value}", request=self.request(source=source, workspace=workspace),
+                )
+
+                # Assert
+                self.assertIs(receipt.manifest.model_dump(mode="json")["request"]["source"]["ai_assisted"], value)
+
     def test_declared_source_files_must_be_selected(self):
         # Arrange
         workspace = {"workspace_id": 1, "files": ["project/notes.txt"]}
@@ -345,6 +386,7 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
             {"kind": "example", "license_file": "project/LICENSE"},
             {"kind": "hf", "serving_manifest": "project/serving.json"},
             {"kind": "hf", "serving_manifest": "project/notes.txt"},
+            {"kind": "hf", "acquisition_record": "demo-source.json"},
             {"kind": "manual", "workspace_model_root": "other-project"},
         )
 
