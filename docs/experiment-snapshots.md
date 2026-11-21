@@ -111,7 +111,11 @@ that inventory to the declared HF revision and commit. The adapter reads
 generator, version, and a bounded set of runtime options from `serving.json` as
 preparation inputs. Set `source.acquisition_record` to a selected workspace JSON file
 such as the HF builder CPU demo’s `demo-source.json` to capture additional
-options such as `max_new_tokens`. Conflicting hints create a review gap and
+options such as `max_new_tokens`. The adapter compares `serving_image` from the acquisition record
+with `image` from the serving manifest. Conflicts between the declared origin
+and a comparable acquisition repository or revision create a review gap and
+suppress the revision fingerprint. The checkpoint inventory remains available.
+Conflicting generator hints create a review gap and
 serving manifest values take precedence. Omitted manual AI attribution is
 recorded as unknown. Source references and static hints are supplied provenance.
 Capture does not contact upstream services or create validation evidence or

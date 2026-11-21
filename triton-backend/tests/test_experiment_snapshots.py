@@ -362,6 +362,53 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         )
         self.assertNotIn("hf_generator_metadata_conflict", receipt.task.missing_inputs)
 
+    def test_acquisition_image_alias_reports_conflict_and_preserves_serving_image(self):
+        record = {"serving_image": "registry.example/model:gpu"}
+        files = {"demo-source.json": json.dumps(record).encode()}
+        workspace = self.select_workspace(files)
+        source = {"kind": "hf", "acquisition_record": "demo-source.json"}
+        acquired = self.finish(request=self.request(workspace=workspace, source=source))
+        assert acquired.manifest.source_provenance is not None
+        self.assertEqual(acquired.manifest.source_provenance.generator_options["image"], record["serving_image"])
+        self.assertNotIn("hf_generator_metadata_conflict", acquired.task.missing_inputs)
+
+        files["serving.json"] = b'{"image":"registry.example/model:cpu"}'
+        receipt = self.finish(key="image-conflict", request=self.request(
+            workspace={**workspace, "files": list(files)}, source={**source, "serving_manifest": "serving.json"},
+        ))
+        assert receipt.manifest.source_provenance is not None
+        self.assertEqual(receipt.manifest.source_provenance.generator_options["image"], "registry.example/model:cpu")
+        self.assertIn("hf_generator_metadata_conflict", receipt.task.missing_inputs)
+
+    def test_acquisition_origin_conflicts_with_declared_repository_or_revision(self):
+        commit = "a" * 40
+        files = {"demo-source.json": b"{}"}
+        workspace = self.select_workspace(files)
+        source = {
+            "kind": "hf", "repository": "gpt2", "revision": "main", "resolved_commit": commit,
+            "checkpoint_files": ["iris/1/model.onnx"], "acquisition_record": "demo-source.json",
+        }
+        for repo_id, revision, conflict in [
+            ("gpt2", commit, False), ("gpt2", "main", False), ("other", commit, True),
+            ("gpt2", "b" * 40, True), ("gpt2", "other-branch", True),
+        ]:
+            with self.subTest(repo_id=repo_id, revision=revision):
+                files["demo-source.json"] = json.dumps({"repo_id": repo_id, "revision": revision}).encode()
+                receipt = self.finish(key=f"{repo_id}-{revision}", request=self.request(source=source, workspace=workspace))
+                provenance = receipt.manifest.source_provenance
+                assert provenance is not None
+                self.assertIsNotNone(provenance.checkpoint_inventory)
+                self.assertEqual("hf_source_revision_conflict" in receipt.task.missing_inputs, conflict)
+                self.assertEqual(provenance.revision_fingerprint is None, conflict)
+
+    def test_rejects_invalid_hf_repository_and_wrong_workspace_model_version(self):
+        with self.assertRaises(ValueError):
+            self.request(source={"kind": "hf", "repository": "org/group/model"})
+        for root, path in [(".", "iris/2/model.bin"), ("models", "models/iris/2/model.bin")]:
+            with self.subTest(root=root), self.assertRaises(ValueError):
+                self.request(source={"kind": "manual", "workspace_model_root": root},
+                             workspace={"workspace_id": 1, "files": [path]})
+
     def test_manual_ai_attribution_round_trips_all_three_states(self):
         # Arrange
         workspace = self.select_workspace({"model.py": b"# handwritten or generated"})
