@@ -1,7 +1,7 @@
 # Local credential bindings and capacity admission
 
-S08-B adds installation-local authorization and credential resolution for the
-S08-A serving contracts. It does not deploy workloads or approve changes.
+Local bindings provide installation-local authorization and credential resolution
+for the serving metadata contracts. They do not deploy workloads or approve changes.
 The initial public delivery is the development-side resolver and admin API;
 production reconciliation and independent approval remain separate work.
 
@@ -94,7 +94,7 @@ sanitized handler and do not echo credential values.
 
 ## Admission and authorization
 
-The admission request contains the S08-A `source`, `target` and `release`
+The admission request contains the serving metadata `source`, `target` and `release`
 documents, plus a local `hardware` name. The selected release digest must match
 the canonical, default-expanded release content exactly. Admission uses the
 shared Pydantic serving contracts and their semantic checks. A file/CI consumer
@@ -169,8 +169,8 @@ metadata, exact fetched-byte hashes, approval and operation fencing as appropria
 
 The existing direct deployment, S3 profile and central registry settings flows
 keep their current behavior. Wiring source adapters, release UI, reconciliation
-and build execution to these interfaces belongs to their downstream tickets.
-There is no new UI in S08-B; S08-C covers configuration experience.
+and build execution to these interfaces requires integration by those consumers.
+This module exposes an admin API; source configuration UI is a separate concern.
 
 ## Upgrade and verification
 

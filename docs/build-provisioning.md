@@ -1,10 +1,10 @@
 # Builder qualification and provisioning
 
-This package implements S06-A: qualification of one exact container-image builder
-and its installation policy. Builds remain disabled by default. S06-B supplies
-the [build-context staging API](build-contexts.md). Staging alone does not enable
-execution; the S06-C executor must pass the qualification gate before execution.
-S06-C adds the [runtime-build execution API](runtime-builds.md). It does not deploy images automatically.
+Builder qualification verifies one exact container-image builder and its
+installation policy. Builds remain disabled by default. The
+[build-context staging API](build-contexts.md) prepares inputs; staging alone does
+not enable execution. The [runtime-build executor](runtime-builds.md) must pass
+the qualification gate before execution. It does not deploy images automatically.
 
 ## Candidate and provenance
 
@@ -122,8 +122,9 @@ It stages a bounded allowlisted context in S3, checks the downloaded bytes,
 builds/pushes, compares the executor's reported digest against the registry,
 exports the resulting filesystem to check exclusion, cancels a slow build,
 checks a deadline failure, and probes a forbidden network destination.
-This is a fixed qualification context, not the general user-context packager
-planned for S06-B. Both the application allowlist and registry ACL are required.
+This is a fixed qualification context, not the [user-context
+packager](build-contexts.md). Both the application allowlist and registry ACL are
+required.
 
 Only objects in the automatically created test namespace and this run's random S3 prefix are
 removed. Qualification attempts are appended to `build_qualifications`; the JSON
@@ -147,8 +148,8 @@ same binding. Changing `enabled` alone does not change the execution policy hash
 Credential rotation, registry ACL, CA, cluster/CNI or staging changes must increment
 `provisioning_revision` and trigger qualification. A report from an isolated test
 registry does not approve different production registry credentials or ACLs.
-Provision the target site's real bindings and qualify them before S06-B enables
-builds. Generic build execution and approval workflows are outside this package.
+Provision the target site's real bindings and qualify them before enabling
+build execution. Generic build execution and approval workflows are outside this package.
 The disposable fixture tests the builder contract in isolation; it does not
 validate the persistent namespace's installed secrets or effective network policy.
 Installation validation against those real bindings remains part of the build

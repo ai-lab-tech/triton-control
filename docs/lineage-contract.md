@@ -1,6 +1,6 @@
 # Candidate lineage v1
 
-S05-A introduces contracts under `contracts/lineage/v1`, generated with
+The lineage contracts are under `contracts/lineage/v1`, generated with
 `triton-backend/scripts/export_lineage_schema.py`. No HTTP endpoint is introduced.
 
 Candidates bind an origin installation/record, source snapshot, ordered actual
@@ -72,4 +72,5 @@ rejected by consumers. A structurally valid candidate with a broken attempt chai
 must also be rejected. Implementations in other languages must apply these rules
 in addition to JSON Schema; schema validation is never publication approval.
 
-See [Prepared repository import](candidate-import.md) for S05-B capture providers, structural validation, retained bytes and scoped registration using these identities.
+See [Prepared repository import](candidate-import.md) for capture providers, structural
+validation, retained bytes and scoped registration using these identities.

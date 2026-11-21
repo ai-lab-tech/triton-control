@@ -1,9 +1,5 @@
 # Pod state and container logs
 
-Implements planning stories [S11-A #51](https://github.com/ai-lab-tech/triton-control-concepts/issues/51),
-[S11-B #52](https://github.com/ai-lab-tech/triton-control-concepts/issues/52) and
-[S11-C #53](https://github.com/ai-lab-tech/triton-control-concepts/issues/53).
-
 ## Operator workflow
 
 Open an instance's Overview for desired, updated, ready and available replicas,
@@ -158,7 +154,7 @@ reading/searching without changing the toggle.
 
 ## Replacement of PR #48
 
-This implementation supersedes the overlapping S11-A implementation in
+This implementation supersedes the overlapping pod-visibility implementation in
 [PR #48](https://github.com/ai-lab-tech/triton-control/pull/48). Only one
 `GET /api/instances/{id}/pods` handler and schema should be merged.
 

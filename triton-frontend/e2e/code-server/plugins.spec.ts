@@ -208,7 +208,7 @@ test.describe.serial("code-server plugin workflows", () => {
       const created = await context.request.post("/api/s3-profiles", {
         data: {
           name: "Smoke S3",
-          endpoint: "http://minio:9000",
+          endpoint: "http://seaweedfs:9000",
           bucket: "plugin-smoke",
           prefix,
           access_key: required("PLUGIN_SMOKE_S3_KEY"),

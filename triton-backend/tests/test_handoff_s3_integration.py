@@ -1,4 +1,4 @@
-"""Opt-in real MinIO source capture; uses an isolated disposable bucket."""
+"""Opt-in real S3-compatible source capture; uses an isolated disposable bucket."""
 
 import hashlib
 import os

@@ -1,4 +1,4 @@
-"""Independent S3 assertions against the smoke environment's real MinIO."""
+"""Independent S3 assertions against the smoke environment's real SeaweedFS."""
 
 import os
 import sys

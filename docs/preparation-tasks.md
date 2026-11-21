@@ -1,8 +1,9 @@
 # Preparation tasks
 
-S02-B provides the backend engineering queue, assignment transitions and retained
-history. It does not submit scientist handoffs (S03-A), capture experiment snapshots
-(S03-B), open workspaces (S04-A), or implement the queue/detail UI (S04-B).
+The preparation task service provides the backend engineering queue, assignment
+transitions and retained history. Scientist handoff submission, experiment
+snapshot capture, workspace provisioning and the queue/detail UI are separate
+consumers of this service.
 
 ## Persistence and integration
 
@@ -15,7 +16,7 @@ its identifier. Missing inputs are bounded machine-readable names, not file cont
 
 `app.services.preparation.create_task(session, claims, TaskCreate(...))` is the
 internal creation hook. It routes work to the existing installation engineering
-group from S02-A. Initialize that group through User Management or
+group. Initialize that group through User Management or
 `PUT /api/teams/engineering` before creating tasks. An empty group still accepts tasks
 and exposes `no_eligible_engineers`; adding eligible members makes them actionable.
 No task-creation HTTP endpoint is introduced ahead of the handoff contract.
@@ -26,7 +27,7 @@ transaction. The caller must commit on success or roll back on failure. The task
 service does not invent handoff identities, deduplication receipts or notifications.
 
 `record_attempt(...)` is an internal, revision-checked hook for recording an actual
-completed `EngineeringAttempt` using S05-A's source/input/output identities. It
+completed `EngineeringAttempt` using the lineage source/input/output identities. It
 retains the attempt separately and leaves task state unchanged. Duplicate origins
 within a task conflict. It does not run conversions or fabricate successful
 outputs for failed builds; execution lifecycle and failures belong to their own
@@ -46,7 +47,7 @@ current role and membership. Token role claims alone do not authorize actions.
 | Unrelated/revoked engineer | No team-task access unless independently authorized as submitter/admin | None through the old assignment.                                                                             |
 
 Eligibility requires an active team, active membership and active member/admin
-account, matching S02-A. Retained assignee IDs do not preserve access after
+account. Retained assignee IDs do not preserve access after
 revocation or account deletion. An admin can reassign an orphaned task or release
 its claim; no previous events or attempts are removed. Team membership gives no
 additional access to the source artifact or other resources.

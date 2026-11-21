@@ -56,8 +56,6 @@ resources in configured namespaces, not arbitrary external executors or credenti
 Operators must separately verify external access revocation and namespace/network
 isolation. No database migration is required.
 
-Policy basis: [ADR 001](https://github.com/ai-lab-tech/triton-control-concepts/blob/main/decisions/001-production-capabilities.md).
-
 ## Verification
 
 Policy tests use Arrange–Act–Assert and cover role ceilings, every denied route and
