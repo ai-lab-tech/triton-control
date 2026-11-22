@@ -109,7 +109,7 @@ stored in the existing operation JSON; omitted values preserve existing context
 idempotency identities. Old unbound contexts remain usable by ordinary authorized API
 clients, but workspace credentials can use only contexts bound to their own task.
 New task-list/options/retry routes are additive. Deploy the updated backend, which
-packages extension version 0.4.14 into workspace ConfigMaps. Existing workspaces need their extension
+packages extension version 0.4.15 into workspace ConfigMaps. Existing workspaces need their extension
 ConfigMap refreshed and code-server restarted as part of the workspace rollout;
 backend deployment alone does not modify their existing ConfigMaps.
 

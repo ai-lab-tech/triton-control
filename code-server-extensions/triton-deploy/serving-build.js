@@ -48,7 +48,9 @@ function registerServingBuild(context, vscode) {
     const folder = fromFile ? path.dirname(selectedPath) : selectedPath;
     const dockerfile = fromFile ? path.basename(selectedPath) : await vscode.window.showInputBox({ title: "Dockerfile path relative to context", value: "Dockerfile" });
     if (dockerfile === undefined) return;
-    const repository = await vscode.window.showQuickPick(options.repositories, { title: "Permitted destination repository" });
+    const repository = options.repositories.length === 1 && options.repositories[0] === "local/serving"
+      ? options.repositories[0]
+      : await vscode.window.showQuickPick(options.repositories, { title: "Permitted destination repository" });
     if (!repository) return;
     const bases = await vscode.window.showInputBox({ title: "Exact external base images (comma-separated repository@sha256:digest; empty for FROM scratch)", value: "" });
     if (bases === undefined) return;

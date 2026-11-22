@@ -197,7 +197,7 @@ reusable tests, fixtures and provisioning documentation.
 
 On development installations, open **Admin → Settings → Registries**. Under
 **Push images from builds**, enter the destination registry/repository and build
-namespace. Leave the destination empty to use the cluster-local registry repositories
+namespace. With local archive builds enabled, leave the destination empty to retain the image on a volume. With a registry policy, an empty destination uses the cluster-local registry repositories
 in the installation policy (Service hosts ending in `.svc` or `.svc.cluster.local`).
 Local mode can be saved before the cluster registry is installed. It requires a
 reachable, trusted registry when building and never falls back to a remote repository.

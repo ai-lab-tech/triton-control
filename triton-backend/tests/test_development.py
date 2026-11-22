@@ -541,7 +541,7 @@ class CodeServerTests(unittest.TestCase):
         contributes = package_json["contributes"]
 
         # Assert
-        self.assertEqual(package_json["version"], "0.4.14")
+        self.assertEqual(package_json["version"], "0.4.15")
         self.assertEqual(contributes["viewsContainers"]["activitybar"][0]["id"], "tritonControl")
         self.assertEqual(contributes["views"]["tritonControl"][0]["id"], "tritonControl.workspaceActions")
         self.assertIn("onFileSystem:triton-s3", package_json["activationEvents"])

@@ -80,6 +80,8 @@ def base_policy(session: Session) -> BuildPolicy:
     namespace = os.getenv("TRITON_LOCAL_BUILD_NAMESPACE")
     development = os.getenv("TRITON_CONTROL_MODE", "development") == "development"
     if development and namespace and not os.getenv("TRITON_BUILD_POLICY_FILE"):
+        if namespace in {"default", "kube-system", "kube-public", "kube-node-lease", os.getenv("POD_NAMESPACE")}:
+            raise ForbiddenError("Local builds require a dedicated development namespace")
         name = os.getenv("TRITON_LOCAL_BUILD_PROFILE")
         profiles = s3_profiles.list_by_name(session, name) if name else s3_profiles.list_all(session)
         if len(profiles) != 1:
