@@ -41,31 +41,36 @@ function registerServingBuild(context, vscode) {
   async function start(resource) {
     const { connection, taskId } = await scope();
     const options = await request(connection, `/api/builds/options?task_id=${encodeURIComponent(taskId)}`);
-    const selected = resource ? [resource] : await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: "Select build context" });
+    const selected = resource ? [resource] : await vscode.window.showOpenDialog({ canSelectFolders: false, canSelectFiles: true, canSelectMany: false, openLabel: "Select Dockerfile" });
     if (!selected?.length) return;
     const selectedPath = selected[0].fsPath;
     const fromFile = (await fs.lstat(selectedPath)).isFile();
     const folder = fromFile ? path.dirname(selectedPath) : selectedPath;
-    const dockerfile = fromFile ? path.basename(selectedPath) : await vscode.window.showInputBox({ title: "Dockerfile path relative to context", value: "Dockerfile" });
-    if (dockerfile === undefined) return;
-    const repository = options.repositories.length === 1 && options.repositories[0] === "local/serving"
-      ? options.repositories[0]
-      : await vscode.window.showQuickPick(options.repositories, { title: "Permitted destination repository" });
-    if (!repository) return;
-    const profiles = options.staging_profiles || [];
+    const dockerfile = fromFile ? path.basename(selectedPath) : "Dockerfile";
+    const defaultName = options.local_archive ? "serving" : options.repositories[0];
+    const parseImage = value => {
+      const match = /^([^@\s]+):([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$/.exec(value.trim());
+      if (!match || !/^(?:[a-z0-9.-]+:[0-9]+\/)?[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:\/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$/.test(match[1])) return;
+      if (!options.local_archive && !options.repositories.includes(match[1])) return;
+      return { repository: match[1], tag: match[2] };
+    };
+    const name = await vscode.window.showInputBox({
+      title: "Image name and tag", value: defaultName + ":latest",
+      validateInput: value => parseImage(value) ? undefined : options.local_archive
+        ? "Enter an image name and tag, for example opt-125m:v1."
+        : "Enter a tag for one of these repositories: " + options.repositories.join(", "),
+    });
+    if (!name) return;
+    const image = parseImage(name);
+    if (!image) throw new Error("Invalid image name or tag.");
+    const profiles = fromFile ? [] : options.staging_profiles || [];
     const profile = profiles.length > 1
       ? await vscode.window.showQuickPick(profiles, { title: "Storage for this build context" })
       : profiles[0];
     if (profiles.length && !profile) return;
-    const bases = await vscode.window.showInputBox({ title: "Exact external base images (comma-separated repository@sha256:digest; empty for FROM scratch)", value: "" });
-    if (bases === undefined) return;
-    const deps = await vscode.window.showInputBox({ title: "Dependency lock files relative to context (comma-separated, optional)", value: "" });
-    if (deps === undefined) return;
-    const split = value => value.split(",").map(v => v.trim()).filter(Boolean);
-    const frozen = await snapshot(folder, dockerfile, options.max_context_bytes, split(bases), split(deps), fromFile);
-    const accepted = await vscode.window.showWarningMessage(`Upload a frozen ${frozen.archive.length}-byte context from ${path.basename(folder)} for task ${taskId}? Only include files you intend to send. Known credential files are excluded; the server applies Dockerignore before building.`, { modal: true }, "Build serving image");
-    if (accepted !== "Build serving image") return;
+    const frozen = await snapshot(folder, dockerfile, options.max_context_bytes, [], [], fromFile);
     frozen.request.task_id = taskId;
+    if (fromFile) frozen.request.dockerfile_only = true;
     if (profile) frozen.request.staging_profile = profile;
     output.show(true);
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Preparing serving image build", cancellable: true }, async (progress, cancellation) => {
@@ -96,7 +101,7 @@ function registerServingBuild(context, vscode) {
       if (!staged.ready) throw new Error("Context verification is still pending. Repeat the action with unchanged files to resume.");
       if (disposed || cancellation.isCancellationRequested) return;
       output.appendLine(`Verified context: ${staged.id}`);
-      const body = { task_id: taskId, context_id: staged.id, repository };
+      const body = { task_id: taskId, context_id: staged.id, ...image };
       const build = await request(connection, "/api/builds", { method: "POST", body, key: keyFor(body) });
       output.appendLine(`Task ${taskId}: build ${build.id} queued. Use “Inspect serving builds” for logs, cancellation and retry.`);
       monitor(connection, build.id);

@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError
-from app.repositories import build_config, registry_config, s3_profiles
+from app.repositories import build_config, build_contexts, registry_config, s3_profiles
 from app.schemas.build_contexts import ContextManifest
 from app.schemas.build_policy import (
     BuildDestination,
@@ -270,8 +270,46 @@ class ContextStore:
             raise ServiceUnavailableError("Build context cleanup unavailable") from None
 
 
+class DockerfileStore:
+    ca_certificate = ""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def put(self, key: str, stream: BinaryIO, manifest: ContextManifest) -> str:
+        data = stream.read(131073)
+        if len(data) > 131072 or len(data) != manifest.archive_bytes:
+            raise BadRequestError("Dockerfile archive exceeds the direct build limit")
+        build_contexts.store_archive(self.session, key, data)
+        return manifest.archive_digest
+
+    def content(self, key: str, version: str) -> bytes:
+        data = build_contexts.archive(self.session, key)
+        if data is None or "sha256:" + hashlib.sha256(data).hexdigest() != version:
+            raise BadRequestError("Retained Dockerfile archive is missing or changed")
+        return data
+
+    def verify(self, key: str, version: str, manifest: ContextManifest, checkpoint: Callable[[], None]) -> None:
+        checkpoint()
+        if version != manifest.archive_digest or len(self.content(key, version)) != manifest.archive_bytes:
+            raise BadRequestError("Retained Dockerfile archive differs")
+
+    def recover(self, key: str, manifest: ContextManifest, checkpoint: Callable[[], None]) -> str | None:
+        if build_contexts.archive(self.session, key) is None:
+            return None
+        self.verify(key, manifest.archive_digest, manifest, checkpoint)
+        return manifest.archive_digest
+
+    def delete_prefix(self, prefix: str, checkpoint: Callable[[], None]) -> None:
+        checkpoint()
+        build_contexts.delete_archives(self.session, prefix)
+
+
 @contextmanager
-def storage(session: Session, expected: dict[str, Any]) -> Iterator[ContextStore]:
+def storage(session: Session, expected: dict[str, Any]) -> Iterator[ContextStore | DockerfileStore]:
+    if expected.get("dockerfile_only"):
+        yield DockerfileStore(session)
+        return
     profile = s3_profiles.get(session, expected["profile_id"])
     if profile is None or profile.endpoint != expected["endpoint"] or profile.bucket != expected["bucket"]:
         raise ForbiddenError("Build storage binding changed; restore the original binding before recovery")

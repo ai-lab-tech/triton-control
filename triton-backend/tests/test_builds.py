@@ -134,6 +134,14 @@ class BuildTests(unittest.TestCase):
         self.run_build(build_id)
         return self.run_build(build_id)
 
+    def test_requested_tag_is_used_for_the_attempt(self):
+        self.request = self.request.model_copy(update={"tag": "v2"})
+        build = self.submit_build()
+
+        running = self.run_build(build.id)
+
+        self.assertEqual(running.attempts[0].destination, self.request.repository + ":v2")
+
     def test_success_retains_reported_digest_and_logs_before_cleanup(self):
         # Arrange
         build_id = self.submit_build().id
@@ -613,6 +621,19 @@ class ProviderTests(unittest.TestCase):
                 self.assertEqual("--tar-path=/output/image.tar" in args, archive)
                 self.assertEqual(any("persistentVolumeClaim" in volume for volume in pod["volumes"]), archive)
                 self.assertIn("--destination=" + row.destination, args)
+
+    def test_direct_dockerfile_job_mounts_the_archive_without_a_storage_url(self):
+        from tests.test_build_qualification import policy
+        row = BuildAttemptEntity(operation_id="a" * 32, number=1, job_name="build-test",
+            policy={**policy().model_dump(), "local_archive": True}, destination="opt-125m:v1",
+            context_receipt={"storage_binding": {"dockerfile_only": True}, "dockerfile": "Dockerfile"})
+
+        pod = jobs_kubernetes.manifest(row)["spec"]["template"]["spec"]
+
+        self.assertIn("--context=tar:///kaniko/build-input/context.tar.gz", pod["containers"][0]["args"])
+        self.assertIn("--destination=opt-125m:v1", pod["containers"][0]["args"])
+        self.assertTrue(any(v["name"] == "build-input" for v in pod["volumes"]))
+        self.assertNotIn("BUILD_CONTEXT", str(pod))
 
     def test_redaction_removes_plain_encoded_credentials_and_urls(self):
         # Arrange

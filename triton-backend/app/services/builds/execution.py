@@ -66,7 +66,7 @@ def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key:
     access.task_scope(claims, request.task_id)
     # Validate context ownership and qualification before accepting public API intent.
     settings = qualified(session)
-    if request.repository not in settings.allowed_repositories:
+    if not settings.permits_repository(request.repository):
         raise ForbiddenError("Destination repository is not allowed")
     context_op = contexts.checked(session, claims, request.context_id)
     bound_task = context_op.payload["request"].get("task_id")
@@ -75,7 +75,7 @@ def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key:
     if not contexts.read(session, claims, request.context_id).ready:
         raise ConflictError("A verified retained build context is required")
     result = service.submit(session, claims, OperationRequest(
-        kind=KIND, target=str(request.task_id), payload=request.model_dump(mode="json"),
+        kind=KIND, target=str(request.task_id), payload=request.model_dump(mode="json", exclude_none=True),
     ), key)
     return response(session, operations.get(session, result.id))
 
@@ -135,10 +135,11 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
     if retained.expired:
         raise ConflictError("Build context expired during admission")
     number = existing.number + 1 if existing else 1
+    tag = request.tag or f"build-{op.id}-{number}"
     row = BuildAttemptEntity(
         operation_id=op.id, number=number, context_id=request.context_id,
         policy=settings.model_dump(mode="json"), context_receipt=receipt, executor_image=settings.executor_image,
-        destination=f"{request.repository}:build-{op.id}-{number}", namespace=settings.namespace,
+        destination=f"{request.repository}:{tag}", namespace=settings.namespace,
         job_name=f"build-{op.id}-{number}", created_at=operations.now(session),
         deadline_at=operations.now(session) + timedelta(seconds=settings.timeout_seconds + 120),
     )
@@ -168,9 +169,9 @@ class BuildAdapter:
         except ValidationError:
             raise BadRequestError("Invalid image build request") from None
         policy = contexts_storage.policy(session)
-        if request.repository not in policy.allowed_repositories:
+        if not policy.permits_repository(request.repository):
             raise ForbiddenError("Destination repository is not allowed")
-        return {"request": request.model_dump(mode="json"), "policy_hash": policy.fingerprint()}
+        return {"request": request.model_dump(mode="json", exclude_none=True), "policy_hash": policy.fingerprint()}
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:
         contexts.authorize_actor(session, actor)
@@ -252,8 +253,13 @@ def reconcile_attempt(
         if settings.fingerprint() != op.payload["policy_hash"]:
             raise ForbiddenError("Build policy changed before execution")
         receipt = row.context_receipt
+        archive = None
+        url = ca_certificate = ""
         with contexts_storage.storage(session, receipt["storage_binding"]) as store:
-            url = store.download_url(receipt["key"], receipt["version_id"], settings.timeout_seconds + 180)
+            if isinstance(store, contexts_storage.DockerfileStore):
+                archive = store.content(receipt["key"], receipt["version_id"])
+            else:
+                url = store.download_url(receipt["key"], receipt["version_id"], settings.timeout_seconds + 180)
             ca_certificate = store.ca_certificate
         destination = None if isinstance(settings, LocalArchivePolicy) else build_config.get_destination(session)
         push_config = None
@@ -266,7 +272,10 @@ def reconcile_attempt(
             if destination.push_secret != settings.push_secret or destination.namespace != settings.namespace:
                 raise ForbiddenError("Build credentials changed before execution")
             push_config = decrypt_registry_secret(destination.push_config_enc)
-        provider.provision(row, url, ca_certificate, push_config)
+        if archive is None:
+            provider.provision(row, url, ca_certificate, push_config)
+        else:
+            provider.provision(row, url, ca_certificate, push_config, archive=archive)
         resource = provider.create(row)  # Suspended: cannot start until its UID is committed.
         row.job_uid = resource.metadata.uid
         session.add(row)
@@ -314,6 +323,7 @@ def options(session: Session, claims: dict[str, Any], task_id: UUID) -> BuildOpt
     settings = qualified(session)
     return BuildOptions(task_id=task_id, repositories=settings.allowed_repositories,
                         max_context_bytes=settings.max_context_bytes,
+                        local_archive=isinstance(settings, LocalArchivePolicy),
                         staging_profiles=contexts_storage.available_profiles(session)
                         if contexts_storage.reviewed_policy(session, settings) is None else ())
 

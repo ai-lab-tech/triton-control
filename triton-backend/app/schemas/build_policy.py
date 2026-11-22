@@ -108,12 +108,15 @@ class BuildPolicy(BuilderImage):
             data.pop("anonymous_push")  # Preserve existing qualification fingerprints.
         return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
+    def permits_repository(self, repository: str) -> bool:
+        return repository in self.allowed_repositories
+
     def permits_destination(self, destination: str) -> bool:
         repository, separator, tag = destination.rpartition(":")
         return bool(
             separator
             and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag)
-            and repository in self.allowed_repositories
+            and self.permits_repository(repository)
         )
 
 
@@ -127,6 +130,10 @@ class LocalArchivePolicy(BuildPolicy):
     """Installation-generated development contract; never accepted by the policy settings API."""
 
     local_archive: Literal[True] = True
+
+    def permits_repository(self, repository: str) -> bool:
+        component = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+        return bool(re.fullmatch(rf"(?:[a-z0-9.-]+:[0-9]+/)?{component}(?:/{component})*", repository))
 
 
 class BuildPolicySettings(BaseModel):

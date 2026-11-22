@@ -44,9 +44,13 @@ def ensure(session: Session, op: OperationEntity) -> BuildContextEntity:
     if settings.fingerprint() != op.payload["policy_hash"]:
         raise ForbiddenError("Build policy changed; submit a new context under the current policy")
     if session.get(BuildContextEntity, op.id) is None:
+        request = op.payload["request"]
+        if request.get("dockerfile_only"):
+            binding = {"dockerfile_only": True, "prefix": "build-contexts/"}
+        else:
+            binding = provider.binding(session, settings, request.get("staging_profile"))
         return repo.ensure(
-            session, op.id, policy_hash=settings.fingerprint(), storage_binding=provider.binding(
-                session, settings, op.payload["request"].get("staging_profile")),
+            session, op.id, policy_hash=settings.fingerprint(), storage_binding=binding,
             expires_at=op.created_at + timedelta(seconds=op.payload["retention_seconds"]),
             upload_until=op.created_at + timedelta(minutes=30),
         )
@@ -162,7 +166,8 @@ def finish_upload(
             last_check = time.monotonic()
 
     with tempfile.TemporaryDirectory(prefix="triton-build-context-") as scratch, tempfile.TemporaryFile() as output:
-        manifest = prepare(source, Path(scratch), output, request, settings.max_context_bytes, checkpoint)
+        manifest = prepare(source, Path(scratch), output, request, settings.max_context_bytes, checkpoint,
+                           allow_tags=provider.reviewed_policy(session, settings) is None)
         row = upload_guard(session, claims, context_id, token)
         row.manifest = manifest.model_dump(mode="json")
         key = str(row.storage_binding["prefix"]) + context_id + "/" + token + "/context.tar.gz"

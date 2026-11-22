@@ -8202,6 +8202,18 @@
             ],
             "title": "Task Id"
           },
+          "dockerfile_only": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerfile Only"
+          },
           "staging_profile": {
             "anyOf": [
               {
@@ -8503,6 +8515,11 @@
             "type": "integer",
             "title": "Max Context Bytes"
           },
+          "local_archive": {
+            "type": "boolean",
+            "title": "Local Archive",
+            "default": false
+          },
           "staging_profiles": {
             "items": {
               "type": "string"
@@ -8736,6 +8753,18 @@
             "maxLength": 256,
             "minLength": 1,
             "title": "Repository"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
           }
         },
         "additionalProperties": false,

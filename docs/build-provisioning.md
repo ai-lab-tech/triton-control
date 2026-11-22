@@ -18,7 +18,7 @@ Failed or cancelled attempts clean up their claims. Local archives cannot be
 used as published registry evidence.
 
 `imageBuilds.namespace` sets the namespace for this installation. Use a separate
-namespace for each installation. The build command reads the current HTTPS S3 profiles when it starts. It uses
+namespace for each installation. Dockerfile builds need no S3 profile. Folder builds read the current HTTPS S3 profiles at runtime. It uses
 a single profile automatically or offers a choice when several exist. The
 selected bucket must support versioning. Local archive builds require neither a
 registry nor a fixture revision. Production omits this build workflow.

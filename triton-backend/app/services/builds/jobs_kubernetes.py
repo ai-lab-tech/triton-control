@@ -15,7 +15,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from app.db.entities import BuildAttemptEntity
 from app.exceptions import ConflictError
 from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy, ManagedRegistryPolicy
-from app.services.builds.manifests import job
+from app.services.builds.manifests import DOCKERFILE_CONTEXT, job
 from app.services.kubernetes_client import api_client
 
 TIMEOUT = (3, 10)
@@ -46,10 +46,12 @@ def attempt_policy(row: BuildAttemptEntity) -> BuildPolicy:
 def manifest(row: BuildAttemptEntity) -> dict[str, Any]:
     policy = attempt_policy(row)
     receipt = row.context_receipt
-    bucket, key = receipt["storage_binding"]["bucket"], receipt["key"]
+    binding = receipt["storage_binding"]
+    direct = binding.get("dockerfile_only")
+    source = DOCKERFILE_CONTEXT if direct else f"s3://{binding['bucket']}/{receipt['key']}"
     if receipt["storage_binding"].get("prefix"):
         policy = policy.model_copy(update={"staging_prefix": receipt["storage_binding"]["prefix"]})
-    body = job(policy, row.job_name, f"s3://{bucket}/{key}", row.destination, row.job_name)
+    body = job(policy, row.job_name, source, row.destination, row.job_name)
     body["metadata"]["labels"] = {LABEL: identity(row)}
     spec = body["spec"]
     spec.pop("ttlSecondsAfterFinished")  # Evidence must commit before deletion, even during outages.
@@ -58,11 +60,16 @@ def manifest(row: BuildAttemptEntity) -> dict[str, Any]:
     pod["metadata"]["labels"][LABEL] = identity(row)
     container = pod["spec"]["containers"][0]
     container.pop("envFrom")  # No ambient S3 credentials in the executor.
-    container["args"][0] = "--context=$(BUILD_CONTEXT)"
+    container["args"][0] = "--context=" + (DOCKERFILE_CONTEXT if direct else "$(BUILD_CONTEXT)")
     container["args"][1] = "--dockerfile=" + receipt["dockerfile"]
     container["env"] = [{"name": "BUILD_CONTEXT", "valueFrom": {
         "secretKeyRef": {"name": row.job_name, "key": "context"},
     }}]
+    if direct:
+        container["env"] = []
+        container["volumeMounts"].append({"name": "build-input", "mountPath": "/kaniko/build-input", "readOnly": True})
+        pod["spec"]["volumes"].append({"name": "build-input", "secret": {"secretName": row.job_name,
+                                      "items": [{"key": "context.tar.gz", "path": "context.tar.gz"}]}})
     container["env"].append({"name": "SSL_CERT_DIR", "value": "/kaniko/ssl/certs:/build-ca"})
     container["volumeMounts"].append({"name": "context-ca", "mountPath": "/build-ca", "readOnly": True})
     pod["spec"]["volumes"].append({"name": "context-ca", "secret": {
@@ -133,7 +140,7 @@ class Jobs:
         return result
 
     def provision(self, row: BuildAttemptEntity, context_url: str, ca_certificate: str = "",
-                  push_config: str | None = None) -> None:
+                  push_config: str | None = None, *, archive: bytes | None = None) -> None:
         if row.policy.get("local_archive") or row.policy.get("managed_registry"):
             self.ensure_local_network(row, context_url)
         if row.policy.get("local_archive"):
@@ -171,6 +178,9 @@ class Jobs:
         body: dict[str, Any] = {"apiVersion": "v1", "kind": "Secret", "immutable": True,
                 "metadata": {"name": row.job_name, "namespace": row.namespace, "labels": {LABEL: identity(row)}},
                 "stringData": {"context": context_url, "config.json": json.dumps({"auths": auths})}}
+        if archive is not None:
+            body["data"] = {"context.tar.gz": base64.b64encode(archive).decode("ascii")}
+            del body["stringData"]["context"]
         if ca_certificate:
             body["stringData"]["ca.pem"] = ca_certificate
         try:
@@ -182,15 +192,6 @@ class Jobs:
 
     def ensure_local_network(self, row: BuildAttemptEntity, context_url: str) -> None:
         """Only the staging endpoint, cluster DNS and public HTTPS are needed by this build."""
-        endpoint = urlsplit(context_url)
-        if endpoint.scheme != "https" or not endpoint.hostname:
-            raise ConflictError("Local build inputs require HTTPS")
-        port = endpoint.port or 443
-        addresses = {ip_address(str(item[4][0])) for item in
-                     socket.getaddrinfo(endpoint.hostname, port, type=socket.SOCK_STREAM)}
-        if any(ip.is_link_local or ip.is_loopback or ip.is_multicast or ip.is_unspecified for ip in addresses):
-            raise ConflictError("Staging endpoint must be reachable from the build namespace")
-        storage = [{"ipBlock": {"cidr": f"{ip}/{ip.max_prefixlen}"}} for ip in sorted(addresses, key=str)]
         labels = {LABEL: identity(row)}
         dns = {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
                "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}
@@ -199,12 +200,22 @@ class Jobs:
                            "ingress": [], "egress": [
                                {"to": [dns],
                                 "ports": [{"port": 53, "protocol": proto} for proto in ("UDP", "TCP")]},
-                               {"to": storage, "ports": [{"port": port, "protocol": "TCP"}]},
                                {"to": [{"ipBlock": {"cidr": "0.0.0.0/0", "except": [
                                    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
                                    "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4",
                                ]}}], "ports": [{"port": 443, "protocol": "TCP"}]},
                            ]}}
+        if not row.context_receipt.get("storage_binding", {}).get("dockerfile_only"):
+            endpoint = urlsplit(context_url)
+            if endpoint.scheme != "https" or not endpoint.hostname:
+                raise ConflictError("Local build inputs require HTTPS")
+            port = endpoint.port or 443
+            addresses = {ip_address(str(item[4][0])) for item in
+                         socket.getaddrinfo(endpoint.hostname, port, type=socket.SOCK_STREAM)}
+            if any(ip.is_link_local or ip.is_loopback or ip.is_multicast or ip.is_unspecified for ip in addresses):
+                raise ConflictError("Staging endpoint must be reachable from the build namespace")
+            storage = [{"ipBlock": {"cidr": f"{ip}/{ip.max_prefixlen}"}} for ip in sorted(addresses, key=str)]
+            policy["spec"]["egress"].append({"to": storage, "ports": [{"port": port, "protocol": "TCP"}]})
         if row.policy.get("managed_registry"):
             registry = urlsplit("//" + row.destination.split("/", 1)[0])
             registry_port = registry.port or 443
@@ -261,7 +272,7 @@ class Jobs:
         secret = self.secret(row)
         if secret is None:
             raise ConflictError("Build log redaction credentials are unavailable")
-        values = [base64.b64decode(v).decode() for v in (secret.data or {}).values()]
+        values = [base64.b64decode(v).decode() for k, v in (secret.data or {}).items() if k != "context.tar.gz"]
         config = json.loads(base64.b64decode(secret.data["config.json"]))
         for auth in config["auths"].values():
             for key, value in auth.items():

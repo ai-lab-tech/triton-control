@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
-from app.db.entities import BuildAttemptEntity, BuildContextEntity, BuildContextReceiptEntity
+from app.db.entities import BuildAttemptEntity, BuildContextEntity, BuildContextReceiptEntity, DockerfileArchiveEntity
 from app.exceptions import NotFoundError
 
 
@@ -47,3 +47,19 @@ def due(session: Session, stamp: datetime, limit: int = 100) -> list[str]:
             col(BuildAttemptEntity.cleaned).is_(False),
         )),
     ).order_by(col(BuildContextEntity.expires_at)).limit(limit)).all())
+
+
+def store_archive(session: Session, key: str, data: bytes) -> None:
+    session.add(DockerfileArchiveEntity(key=key, content=data))
+    session.commit()
+
+
+def archive(session: Session, key: str) -> bytes | None:
+    row = session.get(DockerfileArchiveEntity, key)
+    return row.content if row else None
+
+
+def delete_archives(session: Session, prefix: str) -> None:
+    for row in session.exec(select(DockerfileArchiveEntity).where(col(DockerfileArchiveEntity.key).startswith(prefix))):
+        session.delete(row)
+    session.commit()

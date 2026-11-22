@@ -13,6 +13,7 @@ class BuildRequest(BaseModel):
     task_id: UUID
     context_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     repository: str = Field(min_length=1, max_length=256)
+    tag: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 
 
 class BuildAttemptResponse(BaseModel):
@@ -51,4 +52,5 @@ class BuildOptions(BaseModel):
     task_id: UUID
     repositories: tuple[str, ...]
     max_context_bytes: int
+    local_archive: bool = False
     staging_profiles: tuple[str, ...] = ()

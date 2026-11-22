@@ -729,6 +729,14 @@ class BuildContextEntity(SQLModel, table=True):
     expired: bool = False
 
 
+class DockerfileArchiveEntity(SQLModel, table=True):
+    """Small verified Dockerfile archives retained until context cleanup."""
+
+    __tablename__ = "build_dockerfile_archives"
+    key: str = Field(primary_key=True)
+    content: bytes
+
+
 class BuildContextReceiptEntity(SQLModel, table=True):
     """Append-only verified receipt; retained after the temporary context is deleted."""
     __tablename__ = "build_context_receipts"

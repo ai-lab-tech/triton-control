@@ -40,7 +40,7 @@ async function snapshot(folder, dockerfile, maxBytes, baseImages = [], dependenc
   const root = await fs.realpath(folder);
   const limit = Math.min(maxBytes, 64 * 1024 * 1024);
   if (!Number.isSafeInteger(limit) || limit < 1024) throw new Error("Invalid build context limit.");
-  const included = new Set([dockerfile, ...dependencies, ".dockerignore", dockerfile + ".dockerignore"]);
+  const included = new Set([dockerfile, ...dependencies]);
   const ancestors = new Set();
   if (selectedFilesOnly) {
     for (const file of included) {

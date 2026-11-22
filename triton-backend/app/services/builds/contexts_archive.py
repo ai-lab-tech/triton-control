@@ -56,7 +56,20 @@ def _credential_assignment(instruction: str, words: list[str]) -> bool:
                          name, re.IGNORECASE) for name in names)
 
 
-def _dockerfile(data: bytes, declared: tuple[str, ...]) -> None:
+def _dockerfile(data: bytes, declared: tuple[str, ...], *, allow_tags: bool = False) -> tuple[str, ...]:
+    def external(reference: str) -> None:
+        if declared:
+            valid = reference in declared
+        else:
+            repository = r"(?:[a-z0-9.-]+:[0-9]+/)?[a-z0-9]+(?:[._/-]+[a-z0-9]+)*"
+            tag = r"(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?"
+            digest = r"@sha256:[0-9a-f]{64}"
+            suffix = rf"(?:{digest})?" if allow_tags else digest
+            valid = re.fullmatch(repository + tag + suffix, reference) is not None
+        if not valid:
+            raise BadRequestError("Dockerfile base image must be a supported image reference with an exact digest")
+        found.add(reference)
+
     try:
         text = data.decode("utf-8")
         if re.search(r"^\s*#\s*(syntax|escape)\s*=", text, re.MULTILINE | re.IGNORECASE):
@@ -79,9 +92,7 @@ def _dockerfile(data: bytes, declared: tuple[str, ...]) -> None:
                     if word.startswith("--from="):
                         origin = word.split("=", 1)[1]
                         if origin.lower() not in stages and not (origin.isdigit() and int(origin) < count):
-                            if origin not in declared:
-                                raise BadRequestError("External COPY images require a declared exact digest")
-                            found.add(origin)
+                            external(origin)
             if words[0].upper() != "FROM":
                 continue
             count += 1
@@ -94,22 +105,21 @@ def _dockerfile(data: bytes, declared: tuple[str, ...]) -> None:
                 raise BadRequestError("Unsupported Dockerfile FROM instruction")
             image = words[0]
             if image.lower() not in stages and image != "scratch":
-                if image not in declared:
-                    raise BadRequestError("Every external FROM image must have a declared exact digest")
-                found.add(image)
+                external(image)
             if len(words) == 3:
                 if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", words[2]):
                     raise BadRequestError("Invalid Dockerfile stage name")
                 stages.add(words[2].lower())
-        if not count or found != set(declared):
+        if not count or (declared and found != set(declared)):
             raise BadRequestError("Declared base images differ from Dockerfile FROM instructions")
+        return tuple(sorted(found))
     except (UnicodeError, ValueError):
         raise BadRequestError("Invalid UTF-8 Dockerfile") from None
 
 
 def prepare(
     source: BinaryIO, directory: Path, output: BinaryIO, request: BuildContextRequest,
-    max_bytes: int, checkpoint: Callable[[], None] = lambda: None,
+    max_bytes: int, checkpoint: Callable[[], None] = lambda: None, *, allow_tags: bool = False,
 ) -> ContextManifest:
     """Input is a complete, already size/hash-checked uncompressed POSIX tar."""
     started = time.monotonic()
@@ -226,7 +236,7 @@ def prepare(
         raise BadRequestError("Dockerfile or dependency files missing from the selected context")
     if chosen[request.dockerfile].size > MAX_CONTROL_BYTES:
         raise BadRequestError("Dockerfile exceeds limit")
-    _dockerfile((directory / request.dockerfile).read_bytes(), request.base_images)
+    bases = _dockerfile((directory / request.dockerfile).read_bytes(), request.base_images, allow_tags=allow_tags)
     with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as compressed:
         with tarfile.open(fileobj=cast(BinaryIO, compressed), mode="w|", format=tarfile.USTAR_FORMAT) as tar:
             for item in selected:
@@ -250,6 +260,6 @@ def prepare(
         files=tuple(selected), inventory_digest=digest([item.model_dump(mode="json") for item in selected]),
         dockerfile_digest=chosen[request.dockerfile].digest,
         dependencies={path: chosen[path].digest for path in request.dependency_files},
-        base_images=tuple(sorted(request.base_images)),
+        base_images=bases,
         archive_digest="sha256:" + hasher.hexdigest(), archive_bytes=size,
     )

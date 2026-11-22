@@ -28,6 +28,7 @@ from app.schemas.build_contexts import BuildContextRequest
 from app.schemas.build_policy import BuildPolicy
 from app.services.builds import contexts, contexts_cleanup
 from app.services.builds.contexts_archive import prepare, sha
+from app.services.builds.contexts_storage import DockerfileStore, storage as context_storage
 from app.services.operations import OperationService, OperationWorker
 
 IMAGE = "example.invalid/base@sha256:" + hashlib.sha256(b"synthetic base").hexdigest()
@@ -129,6 +130,15 @@ class ArchiveTests(unittest.TestCase):
     def test_dockerfile_accepts_scratch_without_external_images(self):
         raw = archive({"Dockerfile": b"FROM scratch\n", "requirements.txt": b"x"})
         self.prepare(raw, request(raw).model_copy(update={"base_images": ()}))
+
+    def test_managed_build_records_base_tag_from_dockerfile(self):
+        raw = archive({"Dockerfile": b"FROM python:3.12-slim AS base\nFROM base\n"})
+        req = request(raw).model_copy(update={"base_images": (), "dependency_files": ()})
+
+        with tempfile.TemporaryDirectory() as temp, io.BytesIO() as out:
+            result = prepare(io.BytesIO(raw), Path(temp), out, req, 10485760, allow_tags=True)
+
+        self.assertEqual(result.base_images, ("python:3.12-slim",))
 
     def test_each_env_assignment_is_checked_for_credentials(self):
         for instruction in ("ENV NORMAL=1 PASSWORD=fixture", "ENV NORMAL=1 API_TOKEN=fixture",
@@ -295,6 +305,26 @@ class ContextTests(unittest.TestCase):
             self.assertNotIn("secret_key", json.dumps(saved.payload))
         with self.assertRaises(ConflictError):
             self.upload(result.id)
+
+    def test_direct_dockerfile_is_retained_and_verified_without_an_s3_profile(self):
+        raw = archive({"Dockerfile": b"FROM scratch\n"})
+        req = BuildContextRequest(dockerfile_only=True, dockerfile="Dockerfile", allowed_paths=("Dockerfile",),
+                                  archive_digest=sha(raw), archive_bytes=len(raw))
+        with Session(self.engine) as session:
+            session.delete(session.get(S3ProfileEntity, 1))
+            session.commit()
+        with patch("app.services.builds.contexts_storage.storage", context_storage):
+            context_id = self.submit(req).id
+            self.upload(context_id, raw)
+            result = self.run_worker(context_id)
+
+        self.assertTrue(result.ready)
+        with Session(self.engine) as session:
+            receipt = repo.receipt(session, context_id).payload
+            self.assertTrue(receipt["storage_binding"]["dockerfile_only"])
+            data = DockerfileStore(session).content(receipt["key"], receipt["version_id"])
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as stored:
+                self.assertEqual(stored.getnames(), ["Dockerfile"])
 
     def test_idempotency_conflict_and_user_scoping(self):
         first = self.submit()

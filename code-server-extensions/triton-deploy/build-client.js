@@ -10,6 +10,20 @@ function workspaceConnection(env = process.env) {
 }
 function buildErrorMessage(status, chunks) {
   if (status === 401) return "Workspace access expired. Reopen your task workspace.";
+  if (status === 400) {
+    let reason;
+    try { reason = JSON.parse(Buffer.concat(chunks).toString("utf8")).detail; } catch {}
+    const known = new Set([
+      "Build staging bucket versioning must be enabled",
+      "Select an available HTTPS S3 profile for this build",
+      "Dockerfile base image must be a supported image reference with an exact digest",
+      "Every external FROM image must have a declared exact digest",
+      "Dockerfile or dependency files missing from the selected context",
+      "Build archive is incomplete or its checksum differs",
+      "Credential arguments must not be embedded in the Dockerfile",
+    ]);
+    return known.has(reason) ? reason : "The server rejected the build input (HTTP 400).";
+  }
   if (status === 403) {
     let detail;
     try { detail = JSON.parse(Buffer.concat(chunks).toString("utf8"))?.detail; }

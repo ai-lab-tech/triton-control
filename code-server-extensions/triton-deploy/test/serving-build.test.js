@@ -210,7 +210,7 @@ test("build command submits a frozen task-bound context and displays the exact c
   await fs.rename(path.join(root, "Dockerfile"), path.join(root, "dockerfile"));
   await fs.writeFile(path.join(root, "dockerfile"), "FROM scratch\n");
   await fs.writeFile(path.join(root, "weights.bin"), Buffer.alloc(20000));
-  const inputs = ["", ""];
+  const inputs = ["registry/model:v2"];
   const vscode = { ProgressLocation: { Notification: 1 }, window: {
     createOutputChannel: () => ({ dispose() {}, show() {}, appendLine(line) { outputLines.push(line); if (line.startsWith("Candidate runtime:")) shown(); } }),
     showInputBox: async () => inputs.shift(), showQuickPick: async () => "registry/model",
@@ -227,11 +227,13 @@ test("build command submits a frozen task-bound context and displays the exact c
   const admission = calls.find(call => call.url === "/api/build-contexts");
   const upload = calls.find(call => call.url.endsWith("/archive"));
   const build = calls.find(call => call.url === "/api/builds" && call.method === "POST");
+  assert.equal(JSON.parse(admission.body).dockerfile_only, true);
+  assert.equal(JSON.parse(admission.body).staging_profile, undefined);
   assert.equal(JSON.parse(admission.body).dockerfile, "dockerfile");
   assert.ok(!JSON.parse(admission.body).allowed_paths.includes("weights.bin"));
   assert.equal(JSON.parse(admission.body).task_id, taskId);
   assert.equal(JSON.parse(admission.body).archive_digest, "sha256:" + crypto.createHash("sha256").update(upload.body).digest("hex"));
-  assert.deepEqual(JSON.parse(build.body), { task_id: taskId, context_id: contextId, repository: "registry/model" });
+  assert.deepEqual(JSON.parse(build.body), { task_id: taskId, context_id: contextId, repository: "registry/model", tag: "v2" });
   assert.equal(build.headers["x-triton-build-workspace"], "dev/code");
   assert.ok(build.headers["idempotency-key"]);
   assert.ok(outputLines.some(line => line.includes("registry/model@" + digest)));

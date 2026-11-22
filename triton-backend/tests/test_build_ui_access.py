@@ -68,7 +68,7 @@ class BuildUiTests(fixtures.BuildTests):
             result = execution.options(session, self.claims, self.task_id)
             # Assert
             self.assertEqual(result.repositories, self.policy.allowed_repositories)
-            self.assertEqual(set(result.model_dump()), {"task_id", "repositories", "max_context_bytes", "staging_profiles"})
+            self.assertEqual(set(result.model_dump()), {"task_id", "repositories", "max_context_bytes", "staging_profiles", "local_archive"})
 
     def test_ui_retry_keeps_failed_attempt_and_creates_distinct_attempt(self):
         # Arrange
