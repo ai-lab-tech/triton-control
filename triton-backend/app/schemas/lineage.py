@@ -6,7 +6,8 @@ from unicodedata import normalize
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Self
 
-Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+DIGEST_PATTERN = r"^sha256:[0-9a-f]{64}$"
+Digest = Annotated[str, Field(pattern=DIGEST_PATTERN)]
 Identity = Annotated[str, Field(min_length=1, max_length=256)]
 
 

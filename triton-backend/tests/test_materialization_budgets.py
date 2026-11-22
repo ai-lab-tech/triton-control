@@ -14,12 +14,11 @@ from app.services.materialization.budgets import configured_limits
 from app.services.materialization.kubernetes import manifests
 from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.runtime import materialize
-from tests import test_materialization as fixtures
-from tests.materialization_fixtures import IMAGE, LIMITS, plan, policy
+from tests.materialization_fixtures import IMAGE, LIMITS, plan, policy, serving_release
 
 
 def render(desired, name="iris", limits=LIMITS):
-    release = fixtures.MaterializerPodTests().release()
+    release = serving_release()
     repository = release.spec.repository.model_copy(
         update={
             "inventory_digest": inventory_digest(desired.source_inventory),

@@ -1,4 +1,4 @@
-"""Read-only instance workload evidence and bounded runtime logs."""
+"""Instance workload evidence, bounded logs, and model-state controls."""
 
 from datetime import datetime
 from typing import Any
@@ -9,8 +9,9 @@ from sqlmodel import Session
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
+from app.schemas.model_state import DeclareModelState, ModelState, ScaleModelState
 from app.schemas.pods import InstancePods, PodLogs
-from app.services.deployment import pods
+from app.services.deployment import model_state, pods
 
 router = APIRouter(prefix="/api/instances", tags=["pods"])
 
@@ -53,3 +54,47 @@ def instance_pod_logs(
         lines=lines,
         byte_limit=byte_limit,
     )
+
+
+@router.get("/{instance_id}/model-state", response_model=ModelState)
+@translate_app_errors
+def instance_model_state(
+    instance_id: int,
+    response: Response,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> ModelState:
+    response.headers["Cache-Control"] = "no-store"
+    return model_state.get_state(session, claims, instance_id)
+
+
+@router.post("/{instance_id}/model-state/declare", response_model=ModelState, status_code=202)
+@translate_app_errors
+def declare_instance_model_state(
+    instance_id: int,
+    request: DeclareModelState,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> ModelState:
+    return model_state.change(session, claims, instance_id, action="declare", release_digest=request.release_digest)
+
+
+@router.post("/{instance_id}/model-state/interactive", response_model=ModelState, status_code=202)
+@translate_app_errors
+def restore_instance_model_state(
+    instance_id: int,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> ModelState:
+    return model_state.change(session, claims, instance_id, action="restore")
+
+
+@router.put("/{instance_id}/model-state/replicas", response_model=ModelState, status_code=202)
+@translate_app_errors
+def scale_instance_model_state(
+    instance_id: int,
+    request: ScaleModelState,
+    session: Session = Depends(get_session),
+    claims: dict[str, Any] = Depends(get_claims),
+) -> ModelState:
+    return model_state.change(session, claims, instance_id, action="scale", replicas=request.replicas)

@@ -66,6 +66,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     metrics_last_checked_at: Optional[datetime] = Field(default=None)
     metrics_error: Optional[str] = None
 
+    model_state: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     deployment_runtime: str = Field(default="external")
     deployment_namespace: Optional[str] = None
     deployment_name: Optional[str] = None

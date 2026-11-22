@@ -4,8 +4,8 @@ import { DeploymentOperationComponent } from "../../../shared/deployment-operati
 import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { HttpClient } from "@angular/common/http";
 import { MatSelectModule } from "@angular/material/select";
-import { BASE_PATH } from "../../../api/generated";
-import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core";
+import { BASE_PATH, ModelState, PodsService } from "../../../api/generated";
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { firstValueFrom, interval } from "rxjs";
 
@@ -109,6 +109,7 @@ export class InstanceDetailPageComponent implements OnInit {
     }
   }
   private readonly instancesApi = inject(InstancesService);
+  private readonly podsApi = inject(PodsService);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
@@ -195,6 +196,129 @@ export class InstanceDetailPageComponent implements OnInit {
       !this.loadError(),
   );
 
+  readonly managedModelState = computed(
+    () => this.instance()?.isSelfDeployed && this.instance()?.deploymentRuntime === "kubernetes",
+  );
+  readonly deploymentModelState = signal<ModelState | null>(null);
+  readonly modelStateError = signal("");
+  readonly modelStateReadError = signal("");
+  readonly modelStateSaving = signal(false);
+  readonly canControlModels = computed(
+    () =>
+      this.canWriteInstances() &&
+      (!this.managedModelState() ||
+        (!!this.deploymentModelState()?.interactive_allowed && !this.modelStateSaving())),
+  );
+  startupReleaseDigest = "";
+  desiredReplicas: number | null = null;
+  private modelStateReadPending = false;
+  private modelStateRevision = 0;
+
+  private async refreshModelState(): Promise<void> {
+    const instanceId = this.instanceId();
+    if (!this.managedModelState() || !instanceId || this.modelStateReadPending) return;
+
+    this.modelStateReadPending = true;
+    const revision = this.modelStateRevision;
+    try {
+      const state = await firstValueFrom(
+        this.podsApi.instanceModelStateApiInstancesInstanceIdModelStateGet(instanceId),
+      );
+      if (revision === this.modelStateRevision) {
+        this.deploymentModelState.set(state);
+        this.modelStateReadError.set("");
+      }
+    } catch (error) {
+      if (revision === this.modelStateRevision) {
+        this.deploymentModelState.set(null);
+        this.modelStateReadError.set(
+          mapApiErrorMessage(error, "Unable to read deployment model state."),
+        );
+      }
+    } finally {
+      this.modelStateReadPending = false;
+    }
+  }
+
+  validStartupDigest(): boolean {
+    return /^sha256:[a-f0-9]{64}$/.test(this.startupReleaseDigest.trim());
+  }
+
+  validReplicaChange(state: ModelState): boolean {
+    const replicas = this.desiredReplicas;
+    return (
+      replicas !== null &&
+      Number.isInteger(replicas) &&
+      replicas >= 1 &&
+      replicas <= 100 &&
+      replicas !== state.replicas &&
+      (replicas === 1 || state.can_scale_above_one)
+    );
+  }
+
+  async updateModelState(action: "declare" | "interactive" | "replicas"): Promise<void> {
+    const instanceId = this.instanceId();
+    const current = this.deploymentModelState();
+    if (
+      !instanceId ||
+      !this.managedModelState() ||
+      this.modelStateSaving() ||
+      !this.canWriteInstances() ||
+      current?.capacity_owner !== "manual"
+    ) {
+      return;
+    }
+
+    const request = this.modelStateRequest(action, instanceId, current);
+    if (!request) return;
+
+    this.modelStateError.set("");
+    this.modelStateRevision += 1;
+    this.modelStateSaving.set(true);
+    try {
+      const state = await firstValueFrom(request);
+      this.deploymentModelState.set(state);
+      this.modelStateReadError.set("");
+      this.desiredReplicas = null;
+      if (action === "declare") this.startupReleaseDigest = "";
+      this.refreshAfterAccessChange();
+    } catch (error) {
+      this.deploymentModelState.set(null);
+      this.modelStateError.set(
+        mapApiErrorMessage(error, "Unable to update deployment model state."),
+      );
+    } finally {
+      this.modelStateSaving.set(false);
+      void this.refreshModelState();
+    }
+  }
+
+  private modelStateRequest(
+    action: "declare" | "interactive" | "replicas",
+    instanceId: string,
+    state: ModelState,
+  ) {
+    switch (action) {
+      case "declare":
+        if (!state.can_declare || !this.validStartupDigest()) return;
+        return this.podsApi.declareInstanceModelStateApiInstancesInstanceIdModelStateDeclarePost(
+          { release_digest: this.startupReleaseDigest.trim() },
+          instanceId,
+        );
+      case "interactive":
+        if (!state.can_restore) return;
+        return this.podsApi.restoreInstanceModelStateApiInstancesInstanceIdModelStateInteractivePost(
+          instanceId,
+        );
+      case "replicas":
+        if (!this.validReplicaChange(state)) return;
+        return this.podsApi.scaleInstanceModelStateApiInstancesInstanceIdModelStateReplicasPut(
+          { replicas: this.desiredReplicas },
+          instanceId,
+        );
+    }
+  }
+
   readonly metadataJson = computed(() => {
     const metadata = this.instance()?.serverMetadata;
     if (!metadata) {
@@ -230,6 +354,9 @@ export class InstanceDetailPageComponent implements OnInit {
   });
 
   constructor() {
+    effect(() => {
+      if (this.managedModelState()) void this.refreshModelState();
+    });
     this.openLogsOnce =
       !!this.router.getCurrentNavigation()?.extras.state?.["openLogsOnce"] ||
       !!window.history.state?.["openLogsOnce"];
@@ -557,6 +684,7 @@ export class InstanceDetailPageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.store.dispatch(instanceDetailRefreshRequested({ instanceId }));
+        if (!this.modelStateSaving()) void this.refreshModelState();
       });
   }
 
@@ -566,7 +694,7 @@ export class InstanceDetailPageComponent implements OnInit {
     version: string,
   ): Promise<void> {
     const instanceId = this.instanceId();
-    if (!instanceId || !this.canWriteInstances()) {
+    if (!instanceId || !this.canControlModels()) {
       return;
     }
 

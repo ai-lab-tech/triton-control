@@ -5431,6 +5431,214 @@
         }
       }
     },
+    "/api/instances/{instance_id}/model-state": {
+      "get": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Instance Model State",
+        "operationId": "instance_model_state_api_instances__instance_id__model_state_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/model-state/declare": {
+      "post": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Declare Instance Model State",
+        "operationId": "declare_instance_model_state_api_instances__instance_id__model_state_declare_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareModelState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/model-state/interactive": {
+      "post": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Restore Instance Model State",
+        "operationId": "restore_instance_model_state_api_instances__instance_id__model_state_interactive_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/instances/{instance_id}/model-state/replicas": {
+      "put": {
+        "tags": [
+          "pods"
+        ],
+        "summary": "Scale Instance Model State",
+        "operationId": "scale_instance_model_state_api_instances__instance_id__model_state_replicas_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaleModelState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/development": {
       "get": {
         "tags": [
@@ -10347,6 +10555,20 @@
         ],
         "title": "DashboardAlertDTO"
       },
+      "DeclareModelState": {
+        "properties": {
+          "release_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Release Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "release_digest"
+        ],
+        "title": "DeclareModelState"
+      },
       "DeploymentAccessRequest": {
         "properties": {
           "access_mode": {
@@ -13011,6 +13233,75 @@
         ],
         "title": "ModelRepositoryActionResponse"
       },
+      "ModelState": {
+        "properties": {
+          "capacity_owner": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "source",
+              "autoscaler"
+            ],
+            "title": "Capacity Owner"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "interactive",
+              "declared"
+            ],
+            "title": "Mode"
+          },
+          "replicas": {
+            "type": "integer",
+            "title": "Replicas"
+          },
+          "release_digest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Digest"
+          },
+          "rollout_complete": {
+            "type": "boolean",
+            "title": "Rollout Complete"
+          },
+          "interactive_allowed": {
+            "type": "boolean",
+            "title": "Interactive Allowed"
+          },
+          "can_declare": {
+            "type": "boolean",
+            "title": "Can Declare"
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore"
+          },
+          "can_scale_above_one": {
+            "type": "boolean",
+            "title": "Can Scale Above One"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capacity_owner",
+          "mode",
+          "replicas",
+          "rollout_complete",
+          "interactive_allowed",
+          "can_declare",
+          "can_restore",
+          "can_scale_above_one"
+        ],
+        "title": "ModelState"
+      },
       "NeutralRecoveryResponse": {
         "properties": {
           "message": {
@@ -15054,6 +15345,21 @@
           "path"
         ],
         "title": "S3RepositoryInput"
+      },
+      "ScaleModelState": {
+        "properties": {
+          "replicas": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Replicas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "replicas"
+        ],
+        "title": "ScaleModelState"
       },
       "SelfRegisterRequest": {
         "properties": {
