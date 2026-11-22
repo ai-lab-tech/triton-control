@@ -1,5 +1,5 @@
 import { TestBed } from "@angular/core/testing";
-import { ActivatedRoute, convertToParamMap } from "@angular/router";
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from "@angular/router";
 import { BehaviorSubject, Subject, of, throwError } from "rxjs";
 import {
   BuildsApiService,
@@ -40,6 +40,7 @@ describe("Task serving builds", () => {
     await TestBed.configureTestingModule({
       imports: [TaskBuildsPageComponent],
       providers: [
+        provideRouter([]),
         { provide: BuildsApiService, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params } },
       ],
@@ -55,7 +56,34 @@ describe("Task serving builds", () => {
     expect(fixture.nativeElement.textContent).toContain("Retry as new attempt");
     expect(fixture.nativeElement.textContent).toContain("Attempt 1");
     expect(fixture.nativeElement.textContent).not.toContain("Candidate runtime image:");
-    expect(fixture.nativeElement.textContent).toContain("does not grant production readiness");
+    expect(fixture.nativeElement.textContent).toContain("Build again with saved files");
+  });
+  it("selects a previous attempt's context without submitting a build", async () => {
+    const fixture = TestBed.createComponent(TaskBuildsPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const buttons: HTMLButtonElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll("button"),
+    );
+
+    buttons.find((button) => button.textContent?.includes("Use these files"))!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector("#saved-context").value).toBe(
+      failed.attempts[0].context_id,
+    );
+    expect(api.submit).not.toHaveBeenCalled();
+  });
+  it("links back to the task when the build page was opened directly", async () => {
+    const fixture = TestBed.createComponent(TaskBuildsPageComponent);
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    fixture.nativeElement.querySelector("a").click();
+
+    expect(navigate).toHaveBeenCalledWith(["/preparation/tasks", taskId]);
   });
   it("production or denied options hide build submission", async () => {
     // Arrange

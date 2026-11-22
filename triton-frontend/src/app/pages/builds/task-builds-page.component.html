@@ -1,10 +1,11 @@
+<a [href]="taskUrl()" (click)="goBack($event)">← Back</a>
 <h1 class="page-title">Build serving image</h1>
 <p>
   Engineering task: <code>{{ taskId() }}</code>
 </p>
 <p>
-  A successful build creates a candidate runtime image. Validate that exact digest with the model
-  before release; build success does not grant production readiness or approval.
+  To build your current files, right-click the Dockerfile in code-server and choose
+  <strong>Build serving image</strong>.
 </p>
 @if (accessMessage()) {
   <p role="note">{{ accessMessage() }}</p>
@@ -13,29 +14,53 @@
   <p class="error" role="alert">{{ error() }}</p>
 }
 @if (options(); as policy) {
-  <form (ngSubmit)="submit()">
-    <h2>Build from a verified context</h2>
+  <form (ngSubmit)="submit()" #buildForm="ngForm">
+    <h2>Build again with saved files</h2>
     <p>
-      In your assigned task workspace, select “Triton Control: Build serving image” to choose a
-      folder and Dockerfile and upload a frozen snapshot. You can also reuse its verified context ID
-      below.
+      Choose <strong>Use these files</strong> on a previous attempt below, or paste its context ID.
     </p>
-    <label
-      >Verified context ID
-      <input name="context" [(ngModel)]="contextId" required pattern="[a-f0-9]{32}" maxlength="32"
-    /></label>
-    <label
-      >Permitted destination repository
-      <select name="repository" [(ngModel)]="repository" required>
-        @for (repo of policy.repositories; track repo) {
-          <option [value]="repo">{{ repo }}</option>
-        }
-      </select></label
-    >
-    <p>Each attempt gets its own destination tag. Use the reported digest for validation.</p>
+    <div class="field-heading">
+      <label for="saved-context">Context ID</label>
+      <details>
+        <summary aria-label="Help with context ID">?</summary>
+        <p>
+          A context ID identifies a saved copy of the build files. In code-server, find it in
+          <strong>Output → Triton Control Builds</strong> on the “Verified context” line.
+        </p>
+      </details>
+    </div>
+    <input
+      #contextInput
+      id="saved-context"
+      name="context"
+      [(ngModel)]="contextId"
+      required
+      pattern="[a-f0-9]{32}"
+      maxlength="32"
+    />
+    <div class="field-heading">
+      <label for="image-destination">Save image to</label>
+      <details>
+        <summary aria-label="Help with image destination">?</summary>
+        <p>
+          {{
+            policy.local_archive
+              ? "The build saves image.tar on a volume in this cluster."
+              : "The build pushes the image to the selected registry repository. Admins configure destinations under Settings → Registries."
+          }}
+        </p>
+      </details>
+    </div>
+    <select id="image-destination" name="repository" [(ngModel)]="repository" required>
+      @for (repo of policy.repositories; track repo) {
+        <option [value]="repo">
+          {{ policy.local_archive ? "Local archive in this cluster" : repo }}
+        </option>
+      }
+    </select>
     <div class="form-actions">
-      <button mat-flat-button color="primary" type="submit" [disabled]="busy()">
-        Build serving image
+      <button mat-flat-button color="primary" type="submit" [disabled]="busy() || !buildForm.valid">
+        Build with these files
       </button>
     </div>
   </form>
@@ -69,11 +94,22 @@
       <section>
         <h3>Attempt {{ attempt.number }} · {{ attempt.state }}</h3>
         <p>
-          Context: <code>{{ attempt.context_id }}</code>
+          Context ID: <code>{{ attempt.context_id }}</code>
         </p>
+        @if (options()) {
+          <button
+            mat-button
+            type="button"
+            (click)="useFiles(attempt.context_id)"
+            [disabled]="busy()"
+          >
+            Use these files
+          </button>
+        }
         @if (image(attempt); as exact) {
           <p>
-            Candidate runtime image: <code>{{ exact }}</code>
+            Candidate runtime image: <code>{{ exact }}</code
+            >. Validate this image with the model before release.
           </p>
         }
         <button mat-button type="button" (click)="showLogs(build, attempt.number)">

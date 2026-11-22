@@ -25,6 +25,7 @@ export interface TaskBuild {
 export interface BuildOptions {
   task_id: string;
   repositories: string[];
+  local_archive?: boolean;
   max_context_bytes: number;
 }
 export interface BuildLogs {

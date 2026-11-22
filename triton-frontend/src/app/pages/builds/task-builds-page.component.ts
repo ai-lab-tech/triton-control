@@ -1,7 +1,8 @@
 import { MatButtonModule } from "@angular/material/button";
-import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
+import { Location } from "@angular/common";
+import { ActivatedRoute, Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
 import {
@@ -35,9 +36,23 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
         box-shadow: var(--shadow-card);
         border-radius: var(--radius-lg);
       }
-      label {
-        display: block;
-        margin: 12px 0;
+      .field-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin: 14px 0 4px;
+      }
+      summary {
+        cursor: pointer;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        width: 1.35rem;
+        text-align: center;
+        list-style: none;
+      }
+      details p {
+        max-width: 32rem;
+        margin: 6px 0;
       }
       input,
       select {
@@ -71,6 +86,20 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
   ],
 })
 export class TaskBuildsPageComponent {
+  private readonly location = inject(Location);
+  private readonly router = inject(Router);
+  taskUrl() {
+    return this.location.prepareExternalUrl(
+      "/preparation/tasks/" + encodeURIComponent(this.taskId()),
+    );
+  }
+  goBack(event: MouseEvent) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    if (this.router.lastSuccessfulNavigation()?.previousNavigation) this.location.back();
+    else void this.router.navigate(["/preparation/tasks", this.taskId()]);
+  }
   private readonly api = inject(BuildsApiService);
   readonly taskId = signal("");
   readonly builds = signal<TaskBuild[]>([]);
@@ -83,6 +112,7 @@ export class TaskBuildsPageComponent {
   readonly offset = signal(0);
   readonly label = buildLabel;
   readonly image = imageReference;
+  private readonly contextInput = viewChild<ElementRef<HTMLInputElement>>("contextInput");
   contextId = "";
   repository = "";
   private generation = 0;
@@ -162,6 +192,10 @@ export class TaskBuildsPageComponent {
     this.offset.set(Math.max(0, this.offset() + delta));
     await this.refresh();
   }
+  useFiles(id: string) {
+    this.contextId = id;
+    this.contextInput()?.nativeElement.focus();
+  }
   async submit() {
     if (
       this.busy() ||
@@ -172,11 +206,14 @@ export class TaskBuildsPageComponent {
     const payload = JSON.stringify([this.taskId(), this.contextId, this.repository]);
     if (this.submission?.payload !== payload)
       this.submission = { payload, key: crypto.randomUUID() };
-    await this.mutate(() =>
-      firstValueFrom(
-        this.api.submit(this.taskId(), this.contextId, this.repository, this.submission!.key),
-      ),
-    );
+    const submission = this.submission;
+    await this.mutate(async () => {
+      const build = await firstValueFrom(
+        this.api.submit(this.taskId(), this.contextId, this.repository, submission.key),
+      );
+      if (this.submission === submission) this.submission = undefined;
+      return build;
+    });
   }
   async action(build: TaskBuild, action: "cancel" | "retry") {
     if (this.busy() || build.task_id !== this.taskId()) return;
