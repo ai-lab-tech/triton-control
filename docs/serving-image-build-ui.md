@@ -63,8 +63,7 @@ For more detail, see [engineering access](user-management.md),
    key; a failed build is retried explicitly as a new numbered attempt.
 
 The handoff receipt links to `/preparation/tasks/:taskId/builds`. This task page lists
-build history, logs, exact candidate image references and cancel/retry actions. It can
-also start a build from an existing verified context ID and permitted repository.
+build history, logs, exact candidate image references and cancel/retry actions. After cleanup, **Retry build** starts another attempt using the same saved files.
 Each page contains up to 50 builds. Use the extension to capture a new local context.
 Expired contexts require a new snapshot: repeat **Build serving image**, even if the files are unchanged. An expired, failed or cancelled context
 is replaced with a new context key. That key is saved before admission so a lost

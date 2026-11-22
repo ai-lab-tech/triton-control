@@ -1,7 +1,6 @@
 import { MatButtonModule } from "@angular/material/button";
-import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from "@angular/core";
-import { FormsModule } from "@angular/forms";
-import { Location } from "@angular/common";
+import { Component, DestroyRef, inject, signal } from "@angular/core";
+import { DatePipe, Location } from "@angular/common";
 import { ActivatedRoute, Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
@@ -18,7 +17,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 @Component({
   selector: "app-task-builds-page",
   standalone: true,
-  imports: [FormsModule, MatButtonModule],
+  imports: [DatePipe, MatButtonModule],
   templateUrl: "./task-builds-page.component.html",
   styles: [
     `
@@ -28,44 +27,12 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
         margin: auto;
         padding: var(--card-padding);
       }
-      article,
-      form {
+      article {
         padding: var(--card-padding);
         margin: 16px 0;
         background: white;
         box-shadow: var(--shadow-card);
         border-radius: var(--radius-lg);
-      }
-      .field-heading {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        margin: 14px 0 4px;
-      }
-      summary {
-        cursor: pointer;
-        border: 1px solid currentColor;
-        border-radius: 50%;
-        width: 1.35rem;
-        text-align: center;
-        list-style: none;
-      }
-      details p {
-        max-width: 32rem;
-        margin: 6px 0;
-      }
-      input,
-      select {
-        display: block;
-        width: min(100%, 32rem);
-        min-height: var(--control-height);
-        border: 1px solid var(--mist-200);
-        border-radius: 10px;
-        background: white;
-        color: inherit;
-        font: inherit;
-        max-width: 100%;
-        padding: 8px;
       }
       button {
         margin: 4px;
@@ -112,14 +79,10 @@ export class TaskBuildsPageComponent {
   readonly offset = signal(0);
   readonly label = buildLabel;
   readonly image = imageReference;
-  private readonly contextInput = viewChild<ElementRef<HTMLInputElement>>("contextInput");
-  contextId = "";
-  repository = "";
   private generation = 0;
   private logVersion = 0;
   private refreshVersion = 0;
   private timer?: ReturnType<typeof setTimeout>;
-  private submission?: { payload: string; key: string };
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -136,9 +99,6 @@ export class TaskBuildsPageComponent {
         this.options.set(null);
         this.log.set(null);
         this.offset.set(0);
-        this.contextId = "";
-        this.repository = "";
-        this.submission = undefined;
         this.busy.set(false);
         this.error.set("");
         this.accessMessage.set("");
@@ -152,7 +112,6 @@ export class TaskBuildsPageComponent {
       const options = await firstValueFrom(this.api.options(this.taskId()));
       if (generation !== this.generation) return;
       this.options.set(options);
-      this.repository = options.repositories[0] ?? "";
     } catch (error) {
       if (generation === this.generation)
         this.accessMessage.set(
@@ -191,29 +150,6 @@ export class TaskBuildsPageComponent {
     this.log.set(null);
     this.offset.set(Math.max(0, this.offset() + delta));
     await this.refresh();
-  }
-  useFiles(id: string) {
-    this.contextId = id;
-    this.contextInput()?.nativeElement.focus();
-  }
-  async submit() {
-    if (
-      this.busy() ||
-      !this.options()?.repositories.includes(this.repository) ||
-      !/^[a-f0-9]{32}$/.test(this.contextId)
-    )
-      return;
-    const payload = JSON.stringify([this.taskId(), this.contextId, this.repository]);
-    if (this.submission?.payload !== payload)
-      this.submission = { payload, key: crypto.randomUUID() };
-    const submission = this.submission;
-    await this.mutate(async () => {
-      const build = await firstValueFrom(
-        this.api.submit(this.taskId(), this.contextId, this.repository, submission.key),
-      );
-      if (this.submission === submission) this.submission = undefined;
-      return build;
-    });
   }
   async action(build: TaskBuild, action: "cancel" | "retry") {
     if (this.busy() || build.task_id !== this.taskId()) return;

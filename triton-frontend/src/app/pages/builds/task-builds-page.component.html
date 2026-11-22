@@ -13,65 +13,12 @@
 @if (error()) {
   <p class="error" role="alert">{{ error() }}</p>
 }
-@if (options(); as policy) {
-  <form (ngSubmit)="submit()" #buildForm="ngForm">
-    <h2>Build again with saved files</h2>
-    <p>
-      Create a new image from the Dockerfile and source files saved with an earlier build. Choose
-      <strong>Use these files</strong> on a previous attempt below, or paste its context ID.
-    </p>
-    <div class="field-heading">
-      <label for="saved-context">Context ID</label>
-      <details>
-        <summary aria-label="Help with context ID">?</summary>
-        <p>
-          A context ID identifies a saved copy of the build files. In code-server, find it in
-          <strong>Output → Triton Control Builds</strong> on the “Verified context” line.
-        </p>
-      </details>
-    </div>
-    <input
-      #contextInput
-      id="saved-context"
-      name="context"
-      [(ngModel)]="contextId"
-      required
-      pattern="[a-f0-9]{32}"
-      maxlength="32"
-    />
-    <div class="field-heading">
-      <label for="image-destination">Save image to</label>
-      <details>
-        <summary aria-label="Help with image destination">?</summary>
-        <p>
-          {{
-            policy.local_archive
-              ? "The build saves image.tar on a volume in this cluster."
-              : "The build pushes the image to the selected registry repository. Admins configure destinations under Settings → Registries."
-          }}
-        </p>
-      </details>
-    </div>
-    <select id="image-destination" name="repository" [(ngModel)]="repository" required>
-      @for (repo of policy.repositories; track repo) {
-        <option [value]="repo">
-          {{ policy.local_archive ? "Local archive in this cluster" : repo }}
-        </option>
-      }
-    </select>
-    <div class="form-actions">
-      <button mat-flat-button color="primary" type="submit" [disabled]="busy() || !buildForm.valid">
-        Build with these files
-      </button>
-    </div>
-  </form>
-}
 <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">
   <span class="material-icons action-glyph" aria-hidden="true">refresh</span> Refresh builds
 </button>
 @for (build of builds(); track build.id) {
   <article>
-    <h2>{{ label(build) }}</h2>
+    <h2>{{ build.attempts.at(-1)?.destination || "Image build" }} · {{ label(build) }}</h2>
     <p>
       Build <code>{{ build.id }}</code>
     </p>
@@ -88,25 +35,15 @@
     }
     @if (build.operation.state === "failed" && build.attempts.at(-1)?.cleaned && options()) {
       <button mat-button type="button" (click)="action(build, 'retry')" [disabled]="busy()">
-        Retry as new attempt
+        Retry build
       </button>
     }
     @for (attempt of build.attempts; track attempt.number) {
       <section>
         <h3>Attempt {{ attempt.number }} · {{ attempt.state }}</h3>
         <p>
-          Context ID: <code>{{ attempt.context_id }}</code>
+          <code>{{ attempt.destination }}</code> · {{ attempt.created_at | date: "medium" }}
         </p>
-        @if (options()) {
-          <button
-            mat-button
-            type="button"
-            (click)="useFiles(attempt.context_id)"
-            [disabled]="busy()"
-          >
-            Use these files
-          </button>
-        }
         @if (image(attempt); as exact) {
           <p>
             Candidate runtime image: <code>{{ exact }}</code
