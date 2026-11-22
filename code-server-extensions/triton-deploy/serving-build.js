@@ -20,11 +20,15 @@ function registerServingBuild(context, vscode) {
   }
   function monitor(connection, id) {
     if (monitors.has(id) || disposed) return;
+    let lastStatus, interrupted = false;
     async function refresh() {
       try {
         const build = await request(connection, `/api/builds/${id}`);
         if (disposed) return;
-        output.appendLine(`${id} · ${buildState(build)} · attempt ${build.attempts.at(-1)?.number ?? "pending"}`);
+        const status = `${id} · ${buildState(build)} · attempt ${build.attempts.at(-1)?.number ?? "pending"}`;
+        if (interrupted || status !== lastStatus) output.appendLine(status);
+        lastStatus = status;
+        interrupted = false;
         if (["succeeded", "failed", "cancelled"].includes(build.operation.state)) {
           if (build.operation.result?.archive) output.appendLine(`Local image archive (namespace/claim/file): ${build.operation.result.archive}`);
           const image = exactImage(build, build.attempts.at(-1)?.number);
@@ -33,6 +37,13 @@ function registerServingBuild(context, vscode) {
         }
         monitors.set(id, setTimeout(refresh, 3000));
       } catch (error) {
+        if (disposed) return;
+        if (error.retryable || error.status === 429 || error.status >= 500) {
+          if (!interrupted) output.appendLine(`${id} · Status unavailable. Reconnecting…`);
+          interrupted = true;
+          monitors.set(id, setTimeout(refresh, 10000));
+          return;
+        }
         output.appendLine(error.message); monitors.delete(id);
       }
     }

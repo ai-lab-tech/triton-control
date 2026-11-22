@@ -453,6 +453,21 @@ class BuildTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_cleanup_continues_when_job_and_secret_disappear_after_read(self):
+        jobs = object.__new__(jobs_kubernetes.Jobs)
+        jobs.batch, jobs.core = MagicMock(), MagicMock()
+        row = BuildAttemptEntity(job_name="build", namespace="builds", policy={})
+        job, secret = NS(metadata=NS(uid="job-uid")), NS(metadata=NS(uid="secret-uid"))
+        jobs.batch.delete_namespaced_job.side_effect = jobs_kubernetes.ApiException(status=404)
+        jobs.core.delete_namespaced_secret.side_effect = jobs_kubernetes.ApiException(status=404)
+
+        with patch.object(jobs, "read", return_value=job), patch.object(jobs, "secret", return_value=secret):
+            cleaned = jobs.cleanup(row)
+
+        self.assertTrue(cleaned)
+        self.assertEqual(jobs.batch.delete_namespaced_job.call_args.kwargs["body"].preconditions.uid, "job-uid")
+        self.assertEqual(jobs.core.delete_namespaced_secret.call_args.kwargs["body"].preconditions.uid, "secret-uid")
+
     def test_provision_uses_only_base_and_push_credentials_and_recovers_existing_secret(self):
         # Arrange
         from tests.test_build_qualification import policy

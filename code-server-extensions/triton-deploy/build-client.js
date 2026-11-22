@@ -49,7 +49,7 @@ function request(connection, route, { method = "GET", body, key } = {}) {
     } }, res => {
       const chunks = []; let size = 0;
       res.on("data", chunk => { size += chunk.length; if (size > 4 * 1024 * 1024) req.destroy(new Error("Build response too large.")); else chunks.push(chunk); });
-      res.on("error", () => reject(new Error("Build response interrupted.")));
+      res.on("error", () => reject(Object.assign(new Error("Build response interrupted."), { retryable: true })));
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           const error = new Error(buildErrorMessage(res.statusCode, chunks));
@@ -61,7 +61,9 @@ function request(connection, route, { method = "GET", body, key } = {}) {
     });
     const timer = setTimeout(() => req.destroy(new Error("Build request timed out. Refresh before resubmitting.")), binary ? 120000 : 15000);
     req.on("close", () => clearTimeout(timer));
-    req.on("error", () => reject(new Error("Build connection failed. Check connectivity and refresh before resubmitting.")));
+    req.on("error", () => reject(Object.assign(
+      new Error("Build connection failed. Check connectivity and refresh before resubmitting."), { retryable: true },
+    )));
     req.end(payload);
   });
 }
