@@ -1,4 +1,4 @@
-"""Job outcomes survive a pod disappearing between listing and log retrieval."""
+"""Build observation and cleanup tolerate disappearing Kubernetes resources."""
 
 import unittest
 from types import SimpleNamespace as NS
@@ -74,3 +74,21 @@ class JobObservationTests(unittest.TestCase):
                     jobs.observe(row, resource)
                 # Assert
                 self.assertEqual(error.exception.status, status)
+
+
+class JobCleanupTests(unittest.TestCase):
+    def test_resources_disappear_between_read_and_delete(self):
+        jobs = object.__new__(Jobs)
+        jobs.batch = MagicMock()
+        jobs.core = MagicMock()
+        row = BuildAttemptEntity(operation_id="a" * 32, number=1, namespace="build-test", job_name="build")
+        metadata = NS(uid="job-uid", labels={"triton-control/build-attempt": f"{row.operation_id}-1"})
+        jobs.batch.read_namespaced_job.side_effect = [NS(metadata=metadata), ApiException(status=404)]
+        jobs.batch.delete_namespaced_job.side_effect = ApiException(status=404)
+        jobs.core.read_namespaced_secret.return_value = NS(metadata=metadata)
+        jobs.core.delete_namespaced_secret.side_effect = ApiException(status=404)
+
+        self.assertFalse(jobs.cleanup(row))
+        jobs.core.delete_namespaced_secret.assert_not_called()
+        self.assertTrue(jobs.cleanup(row))
+        jobs.core.delete_namespaced_secret.assert_called_once()
