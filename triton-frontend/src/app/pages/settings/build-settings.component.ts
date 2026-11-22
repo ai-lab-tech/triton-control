@@ -9,13 +9,18 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 const textFields = {
   namespace: "Dedicated build namespace",
   staging_prefix: "Staging prefix (ending in /)",
-  executor_image: "Executor image (pinned by digest)",
-  release: "Executor release",
   provisioning_revision: "Provisioning revision",
   base_pull_secret: "Base image pull secret name",
   push_secret: "Build push secret name",
   runtime_pull_secret: "Runtime pull secret name",
 } as const;
+
+// Candidate documented in docs/build-provisioning.md. Activation still requires qualification.
+const defaultBuilder = {
+  image:
+    "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37",
+  release: "v1.29.1",
+};
 
 interface Settings {
   source: "admin" | "deployment" | "unconfigured";
@@ -60,14 +65,25 @@ interface Profile {
           <textarea required id="build-repos" name="repos" [(ngModel)]="repositories"></textarea>
           <label for="build-networks">Allowed egress CIDRs (one per line)</label>
           <textarea required id="build-networks" name="networks" [(ngModel)]="networks"></textarea>
-          <label for="build-advanced">Executor limits, platform and network ports (JSON)</label>
-          <textarea
-            required
-            id="build-advanced"
-            rows="6"
-            name="advanced"
-            [(ngModel)]="advanced"
-          ></textarea>
+          <details>
+            <summary>Advanced builder settings</summary>
+            <p>
+              The builder reads your Dockerfile and creates the serving image. A fingerprint
+              (digest) selects the exact builder version.
+            </p>
+            <label for="build-image">Builder image and digest</label>
+            <input required id="build-image" name="builderImage" [(ngModel)]="builderImage" />
+            <label for="build-release">Builder release</label>
+            <input required id="build-release" name="builderRelease" [(ngModel)]="builderRelease" />
+            <label for="build-advanced">Executor limits, platform and network ports (JSON)</label>
+            <textarea
+              required
+              id="build-advanced"
+              rows="6"
+              name="advanced"
+              [(ngModel)]="advanced"
+            ></textarea>
+          </details>
           <label
             ><input type="checkbox" name="enabled" [(ngModel)]="enabled" /> Enable qualified
             builds</label
@@ -101,6 +117,10 @@ interface Profile {
         padding: 0;
         margin-bottom: 1rem;
       }
+      details[open] {
+        display: grid;
+        gap: 0.5rem;
+      }
       input,
       textarea,
       select {
@@ -123,6 +143,8 @@ export class BuildSettingsComponent {
   readonly labels = textFields;
   readonly fields = Object.keys(textFields) as (keyof typeof textFields)[];
   values: Record<string, string> = {};
+  builderImage = defaultBuilder.image;
+  builderRelease = defaultBuilder.release;
   profile = "";
   profiles: Profile[] = [];
   repositories = "";
@@ -136,6 +158,10 @@ export class BuildSettingsComponent {
   private accept(settings: Settings): void {
     const policy = { ...settings.policy };
     this.source.set(settings.source);
+    this.builderImage = String(policy["executor_image"] ?? defaultBuilder.image);
+    this.builderRelease = String(policy["release"] ?? defaultBuilder.release);
+    delete policy["executor_image"];
+    delete policy["release"];
     for (const key of this.fields) {
       this.values[key] = String(policy[key] ?? "");
       delete policy[key];
@@ -188,6 +214,8 @@ export class BuildSettingsComponent {
     await this.write({
       ...options,
       ...this.values,
+      executor_image: this.builderImage,
+      release: this.builderRelease,
       s3_profile_name: this.profile,
       enabled: this.enabled,
       allowed_repositories: lines(this.repositories),

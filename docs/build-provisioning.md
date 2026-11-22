@@ -174,7 +174,7 @@ reusable tests, fixtures and provisioning documentation.
 
 ## Manage the policy in Admin Settings
 
-On development installations, open **Admin → Settings → Serving image builds**.
+On development installations, open **Admin → Settings → Registry** and find **Serving image builds**.
 Select the versioned storage profile used for build inputs, enter its dedicated
 prefix, and specify the registry repositories, Kubernetes secret names and
 executor settings for the installation. Save the policy with builds disabled
