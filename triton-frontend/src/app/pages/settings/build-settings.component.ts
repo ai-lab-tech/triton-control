@@ -50,7 +50,8 @@ interface Settings {
               [disabled]="busy()"
             ></textarea>
             <mat-hint
-              >Leave blank to save image.tar in the cluster. To push images, enter one repository per line.</mat-hint
+              >Leave blank to save image.tar in the cluster. To push images, enter one repository
+              per line.</mat-hint
             >
           </mat-form-field>
           <mat-form-field appearance="outline">

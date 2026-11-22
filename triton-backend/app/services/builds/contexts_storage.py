@@ -113,7 +113,8 @@ def base_policy(session: Session) -> BuildPolicy:
             **default_executor().model_dump(), namespace=namespace, enabled=True, anonymous_push=True,
             allowed_repositories=repositories or ("local/serving",), s3_profile_name="runtime",
             staging_prefix="build-contexts/",
-            base_pull_secret="unused-base", runtime_pull_secret="unused-runtime", push_secret="unused-push",
+            # These are Kubernetes Secret reference names. Credential contents are supplied at build time.
+            base_pull_secret="unused-base", runtime_pull_secret="unused-runtime", push_secret="unused-push",  # nosec B106
             provisioning_revision="local-archive-v1", egress_cidrs=("127.0.0.1/32",),
             timeout_seconds=2400, memory_mib=3072, cpu_millis=2000,
         )
