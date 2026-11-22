@@ -200,11 +200,16 @@ for the backend. The GatePolicy document contains `identity` (name and version),
 category, unit, operator, and threshold entries), and `maxValiditySeconds`.
 The release publisher must have no write access to this file or to issuer keys.
 
-An independent issuer signs the bytes returned by `signing_message` after
-verifying the exact validation result. Retain the manifest, report, envelope,
-and lowercase hex signature together using `package_evidence`. Store those
-bytes alongside the release metadata so admission can run offline. The release
-validation digest continues to reference the envelope.
+Before signing, the independent issuer must verify the exact validation result
+and check the manifest's dataset and expected-output digests against artifacts
+approved independently of the release publisher. Verify that the bytes used by
+the evaluator match those approved digests. Sign the bytes returned by
+`signing_message` only after completing these checks.
+
+Retain the manifest, report, envelope, and lowercase hex signature together using
+`package_evidence`. Store those bytes alongside the release metadata so admission
+can run offline. The release validation digest continues to reference the
+envelope. The gate rejects duplicate JSON keys in the archive and policy.
 
 The approval flow records the binding returned by `verify_release_evidence`
 for the reviewed release and exact target profile. The executor calls

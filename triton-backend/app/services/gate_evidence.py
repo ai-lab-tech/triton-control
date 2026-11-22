@@ -12,7 +12,7 @@ from app.core.canonical import digest
 from app.schemas.gate_evidence import EvidenceArchive, GatePolicy
 from app.schemas.serving_metadata import ServingRelease
 from app.schemas.validation import EvidenceEnvelope, HardwareRuntime, ValidationManifest, ValidationReport
-from app.services.contract_io import MetadataError
+from app.services.contract_io import MetadataError, parse_json_document
 from app.services.validation import check_evidence_consistency, check_release_binding, document_digest
 
 POLICY_FILE = "TRITON_GATE_POLICY_FILE"
@@ -44,8 +44,8 @@ def _load_policy() -> GatePolicy:
         with Path(path).open("rb") as stream:
             raw = stream.read(MAX_POLICY_BYTES + 1)
         if len(raw) <= MAX_POLICY_BYTES:
-            return GatePolicy.model_validate_json(raw)
-    except (OSError, ValidationError):
+            return GatePolicy.model_validate(parse_json_document(raw))
+    except (OSError, MetadataError, ValidationError):
         pass
     raise MetadataError("invalid-gate-policy")
 
@@ -62,8 +62,8 @@ def verify_release_evidence(
     if len(archive_bytes) > MAX_ARCHIVE_BYTES:
         raise MetadataError("evidence-archive-too-large")
     try:
-        archive = EvidenceArchive.model_validate_json(archive_bytes)
-    except ValidationError:
+        archive = EvidenceArchive.model_validate(parse_json_document(archive_bytes))
+    except (MetadataError, ValidationError):
         raise MetadataError("invalid-evidence-archive") from None
 
     envelope = archive.envelope

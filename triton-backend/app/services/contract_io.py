@@ -111,12 +111,37 @@ def parse_document(raw: bytes, format: Format) -> Any:
         if is_json:
             # The bounded event pass already checked duplicates/depth/counts.
             # Also enforce JSON grammar instead of accepting YAML in a .json file.
-            result = json.loads(text, parse_constant=_reject_constant, parse_float=_reject_constant)
+            result = parse_json_document(text)
         return result
     except MetadataError:
         raise
     except (UnicodeError, yaml.YAMLError, ValueError, RecursionError, StopIteration):
         raise MetadataError("invalid-document") from None
+
+
+def parse_json_document(raw: bytes | str) -> Any:
+    """Decode size-checked JSON while rejecting ambiguous object keys."""
+    try:
+        text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        return json.loads(
+            text,
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_constant,
+            parse_float=_reject_constant,
+        )
+    except MetadataError:
+        raise
+    except (ValueError, RecursionError):
+        raise MetadataError("invalid-document") from None
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise MetadataError("duplicate-key")
+        result[key] = value
+    return result
 
 
 def _reject_constant(value: str) -> Any:
