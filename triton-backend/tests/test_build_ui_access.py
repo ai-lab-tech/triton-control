@@ -122,9 +122,9 @@ class BuildUiTests(fixtures.BuildTests):
         with Session(self.engine) as session:
             op = operations.get(session, self.request.context_id)
             payload = dict(op.payload["request"])
-        payload.pop("task_id", None)
-        # Act
-        normalized = contexts.adapter.normalize(payload)
+            payload.pop("task_id", None)
+            # Act
+            normalized = contexts.adapter.normalize(session, payload)
         # Assert
         self.assertNotIn("task_id", normalized["request"])
 

@@ -230,7 +230,7 @@ class ContextTests(unittest.TestCase):
         self.service.register(contexts.KIND, contexts.adapter)
         self.worker = OperationWorker(self.service, lambda: Session(self.engine))
         patches = [patch.object(contexts, "service", self.service),
-                   patch("app.services.builds.contexts_storage.policy", side_effect=lambda: self.policy),
+                   patch("app.services.builds.contexts_storage.policy", side_effect=lambda session: self.policy),
                    patch("app.services.builds.contexts_storage.storage", self.storage),
                    patch.object(contexts_cleanup, "storage", self.storage)]
         for p in patches:

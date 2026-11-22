@@ -8,6 +8,19 @@ function workspaceConnection(env = process.env) {
   if (!match || !env.TRITON_CONTROL_PROFILE_TOKEN) throw new Error("Open an assigned task workspace from Triton Control first.");
   return { endpoint: url.origin + match[1], workload: `${decodeURIComponent(match[2])}/${decodeURIComponent(match[3])}`, token: env.TRITON_CONTROL_PROFILE_TOKEN };
 }
+function buildErrorMessage(status, chunks) {
+  if (status === 401) return "Workspace access expired. Reopen your task workspace.";
+  if (status === 403) {
+    let detail;
+    try { detail = JSON.parse(Buffer.concat(chunks).toString("utf8"))?.detail; }
+    catch { /* Proxies may return plain text. Never display an untrusted response body. */ }
+    if (detail === "Build context staging has not been configured") {
+      return "Build context staging is missing. Ask an administrator to configure the development installation's build policy.";
+    }
+    return "Build access denied. Check task assignment and installation build policy.";
+  }
+  return `Build request failed (HTTP ${status}). Refresh before retrying; the request may already exist.`;
+}
 function request(connection, route, { method = "GET", body, key } = {}) {
   if (!/^\/api\/(builds|build-contexts)([/?]|$)/.test(route)) throw new Error("Invalid build API route.");
   const url = new URL(connection.endpoint + route);
@@ -25,7 +38,7 @@ function request(connection, route, { method = "GET", body, key } = {}) {
       res.on("error", () => reject(new Error("Build response interrupted.")));
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const error = new Error(res.statusCode === 401 ? "Workspace access expired. Reopen your task workspace." : res.statusCode === 403 ? "Build access denied. Check task assignment and development capability." : `Build request failed (HTTP ${res.statusCode}). Refresh before retrying; the request may already exist.`);
+          const error = new Error(buildErrorMessage(res.statusCode, chunks));
           error.status = res.statusCode; reject(error); return;
         }
         try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }

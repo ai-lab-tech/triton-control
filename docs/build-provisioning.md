@@ -171,3 +171,18 @@ failure history and the development-only gate. Generated live reports are local
 artifacts and are excluded from Git under `docs/evidence/builder-qualification/`.
 Attach reports to the related issue or retain them as CI artifacts; commit only
 reusable tests, fixtures and provisioning documentation.
+
+## Manage the policy in Admin Settings
+
+On development installations, open **Admin → Settings → Serving image builds**.
+Select the versioned storage profile used for build inputs, enter its dedicated
+prefix, and specify the registry repositories, Kubernetes secret names and
+executor settings for the installation. Save the policy with builds disabled
+while preparing the namespace, RBAC, network policy and credentials. Saving
+the form persists the policy in the application database. Cluster provisioning
+and qualification use the operator workflow above.
+
+The saved policy takes precedence over the deployment policy file. Selecting
+**Enable qualified builds** requires a passing receipt for the exact policy
+and deployed fixture revision. Resetting to installation defaults restores the
+file-backed policy, or leaves builds unconfigured when no file is mounted.

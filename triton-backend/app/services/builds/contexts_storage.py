@@ -14,13 +14,22 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError
-from app.repositories import s3_profiles
+from app.repositories import build_config, s3_profiles
 from app.schemas.build_contexts import ContextManifest
 from app.schemas.build_policy import BuildPolicy
 from app.services.storage.s3_client import S3Config, build_s3_client
 
 
-def policy() -> BuildPolicy:
+def policy(session: Session) -> BuildPolicy:
+    if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
+        raise ForbiddenError("Build context staging is available only in development")
+    row = build_config.get(session)
+    if row:
+        return BuildPolicy.model_validate(row.policy)
+    return deployment_policy()
+
+
+def deployment_policy() -> BuildPolicy:
     if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
         raise ForbiddenError("Build context staging is available only in development")
     filename = os.getenv("TRITON_BUILD_POLICY_FILE", "")

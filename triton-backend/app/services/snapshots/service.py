@@ -445,7 +445,7 @@ def operation_actor_email(context: ExecutionContext, operation: OperationEntity)
 
 
 class SnapshotAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             return PreparationRequest.model_validate(payload).model_dump(mode="json")
         except ValidationError:

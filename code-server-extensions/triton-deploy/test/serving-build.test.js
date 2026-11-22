@@ -84,6 +84,20 @@ for (const status of [401, 403]) {
     await assert.rejects(result, error => error.status === status && !error.message.includes("sensitive"));
   });
 }
+test("missing staging policy identifies the administrator action", async t => {
+  // Arrange
+  const server = http.createServer((req, res) => {
+    res.writeHead(403);
+    res.end(JSON.stringify({ detail: "Build context staging has not been configured" }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const connection = { endpoint: `http://127.0.0.1:${server.address().port}`, workload: "dev/code", token: "fixture" };
+  // Act
+  const result = request(connection, "/api/builds/options");
+  // Assert
+  await assert.rejects(result, /administrator to configure.*build policy/);
+});
 test("failed attempts cannot expose a candidate digest", () => {
   // Arrange
   const build = { attempts: [{ number: 1, state: "failed", destination: "registry:5000/model:attempt", final_digest: "sha256:" + "a".repeat(64) }] };

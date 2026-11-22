@@ -191,7 +191,7 @@ def prepare_deletion(session: Session, instance_id: int) -> bool:
 
 
 class DeploymentAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         raise BadRequestError("Submit deployment creation through /api/deployments")
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:

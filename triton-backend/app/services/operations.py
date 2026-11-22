@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class Adapter(Protocol):
     """Registered by application code, never selected as arbitrary executable code."""
 
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         """Validate domain input, apply defaults; return JSON without credential values."""
         ...
 
@@ -83,7 +83,7 @@ class OperationService:
             raise UnprocessableEntityError("A nonempty Idempotency-Key of at most 128 characters is required")
         actor = require_user_entity(session, claims)
         self.authorize(session, actor, request.kind, request.target, "submit")
-        payload = self.adapter(request.kind).normalize(request.payload)
+        payload = self.adapter(request.kind).normalize(session, request.payload)
         try:
             canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
         except (ValueError, TypeError) as exc:

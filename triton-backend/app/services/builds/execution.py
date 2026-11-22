@@ -25,7 +25,7 @@ KIND = "build.image"
 
 
 def qualified(session: Session) -> BuildPolicy:
-    settings = contexts_storage.policy()
+    settings = contexts_storage.policy(session)
     if settings.namespace in {"default", "kube-system", "kube-public", os.getenv("POD_NAMESPACE", "")}:
         raise ForbiddenError("Runtime builds require a dedicated development namespace")
     revision = os.getenv("TRITON_BUILD_FIXTURE_REVISION", "")
@@ -154,12 +154,12 @@ def outcome(row: BuildAttemptEntity) -> ReconcileResult:
 
 
 class BuildAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             request = BuildRequest.model_validate(payload)
         except ValidationError:
             raise BadRequestError("Invalid image build request") from None
-        policy = contexts_storage.policy()
+        policy = contexts_storage.policy(session)
         if request.repository not in policy.allowed_repositories:
             raise ForbiddenError("Destination repository is not allowed")
         return {"request": request.model_dump(mode="json"), "policy_hash": policy.fingerprint()}

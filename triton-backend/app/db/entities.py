@@ -801,3 +801,10 @@ class PreparationConfigEntity(SQLModel, table=True):
     __tablename__ = "preparation_config"
     id: int = Field(default=1, primary_key=True)
     limits: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+
+
+class BuildConfigEntity(SQLModel, table=True):
+    """Administrator-managed installation policy for development image builds."""
+    __tablename__ = "build_config"
+    id: int = Field(default=1, primary_key=True)
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))

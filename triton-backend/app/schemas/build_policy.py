@@ -61,3 +61,8 @@ class BuildPolicy(BaseModel):
             and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag)
             and repository in self.allowed_repositories
         )
+
+
+class BuildPolicySettings(BaseModel):
+    policy: BuildPolicy | None
+    source: Literal["admin", "deployment", "unconfigured"]

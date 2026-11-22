@@ -1,3 +1,4 @@
+import { BuildSettingsComponent } from "./build-settings.component";
 import { PreparationSettingsComponent } from "./preparation-settings.component";
 import { InstallationService } from "../../shared/installation/installation.service";
 import { RegistrySettingsComponent } from "./registry-settings.component";
@@ -59,6 +60,7 @@ type EmailValidationField = (typeof EMAIL_VALIDATION_FIELDS)[number];
   selector: "app-settings-page",
   standalone: true,
   imports: [
+    BuildSettingsComponent,
     RegistrySettingsComponent,
     PreparationSettingsComponent,
     ReleaseSourceSettingsComponent,

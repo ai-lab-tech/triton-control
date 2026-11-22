@@ -41,6 +41,7 @@ from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.build_api import router as build_router
 from app.api.build_context_api import router as build_context_router
+from app.api.build_settings_api import router as build_settings_router
 from app.api.capabilities_api import router as capabilities_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
@@ -259,6 +260,7 @@ app.include_router(release_sources_router)
 app.include_router(oidc_router)
 app.include_router(registry_router)
 app.include_router(preparation_settings_router)
+app.include_router(build_settings_router)
 app.include_router(local_bindings_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])

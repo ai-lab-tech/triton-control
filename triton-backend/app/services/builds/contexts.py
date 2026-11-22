@@ -40,7 +40,7 @@ def authorize_actor(session: Session, actor: UserEntity) -> None:
 def ensure(session: Session, op: OperationEntity) -> BuildContextEntity:
     if session.get(BuildContextEntity, op.id) is not None:
         return repo.get(session, op.id)
-    settings = provider.policy()
+    settings = provider.policy(session)
     if settings.fingerprint() != op.payload["policy_hash"]:
         raise ForbiddenError("Build policy changed; submit a new context under the current policy")
     if session.get(BuildContextEntity, op.id) is None:
@@ -109,7 +109,7 @@ def begin_upload(session: Session, claims: dict[str, Any], context_id: str) -> t
     row.upload_token, row.upload_until = token, stamp + timedelta(minutes=5)
     session.add(row)
     session.commit()
-    return token, BuildContextRequest.model_validate(op.payload["request"]), provider.policy().max_context_bytes
+    return token, BuildContextRequest.model_validate(op.payload["request"]), provider.policy(session).max_context_bytes
 
 
 def upload_guard(session: Session, claims: dict[str, Any], context_id: str, token: str) -> BuildContextEntity:
@@ -139,7 +139,7 @@ def finish_upload(
     installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "submit")
     request = BuildContextRequest.model_validate(op.payload["request"])
-    settings = provider.policy()
+    settings = provider.policy(session)
     hasher = hashlib.sha256()
     size = 0
     source.seek(0)
@@ -180,12 +180,12 @@ def finish_upload(
 
 
 class ContextAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             request = BuildContextRequest.model_validate(payload)
         except ValidationError:
             raise BadRequestError("Invalid build context request") from None
-        settings = provider.policy()
+        settings = provider.policy(session)
         if request.archive_bytes > settings.max_context_bytes:
             raise BadRequestError("Build archive exceeds installation byte limit")
         return {"request": request.model_dump(mode="json", exclude_none=True), "policy_hash": settings.fingerprint(),
@@ -196,7 +196,7 @@ class ContextAdapter:
             raise ForbiddenError("Invalid build context target")
         authorize_actor(session, actor)
         if action not in {"read", "cancel", "execute"}:
-            provider.policy()
+            provider.policy(session)
 
     def authorize_operation(self, session: Session, actor: UserEntity, op: OperationEntity, action: Action) -> None:
         self.authorize(session, actor, op.target, action)
@@ -204,7 +204,7 @@ class ContextAdapter:
             raise ForbiddenError("Build context belongs to another user")
         cleanup = action == "execute" and op.cancel_requested
         if (action not in {"read", "cancel"} and not cleanup
-                and provider.policy().fingerprint() != op.payload["policy_hash"]):
+                and provider.policy(session).fingerprint() != op.payload["policy_hash"]):
             raise ForbiddenError("Build policy changed; submit a new context")
 
     def prepare_retry(self, session: Session, op: OperationEntity) -> None:
@@ -284,7 +284,7 @@ def consume_for_build(
     """
     installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "execute")
-    settings = provider.policy()
+    settings = provider.policy(session)
     require_qualified(session, settings, fixture_revision, mode="development")
     row = repo.get(session, context_id, lock=True)
     receipt = repo.receipt(session, context_id)
