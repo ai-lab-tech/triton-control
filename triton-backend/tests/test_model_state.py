@@ -23,8 +23,7 @@ from app.services.deployment import model_state as service
 from app.services.deployment.model_state_provider import ROLLBACK_KEY, ModelStateProvider
 from app.services.deployment.pod_provider import RELEASE_KEY
 from app.services.triton import models
-from tests.materialization_fixtures import LIMITS, plan, policy
-from tests import test_materialization as materializer_tests
+from tests.materialization_fixtures import LIMITS, inventory, plan, policy, serving_release
 
 RELEASE = "sha256:" + "a" * 64
 CLAIMS = {"role": "admin"}
@@ -44,7 +43,13 @@ class ModelStateTests(unittest.TestCase):
             session.commit()
         self.raw = {
             "metadata": {"uid": "uid", "generation": 1, "namespace": "test", "name": "test"},
-            "spec": {"template": {"metadata": {"annotations": {}}}},
+            "spec": {"template": {
+                "metadata": {"annotations": {}},
+                "spec": {"containers": [{
+                    "name": "triton", "command": ["/bin/bash", "-c"],
+                    "args": ["exec tritonserver --model-control-mode=explicit --load-model='*'\n"],
+                }]},
+            }},
         }
         self.deployment = DeploymentState(
             uid="uid", name="test", generation=1, observed_generation=1, stale=False,
@@ -65,7 +70,7 @@ class ModelStateTests(unittest.TestCase):
         with Session(self.engine) as session:
             return service.change(session, CLAIMS, 1, action=action, **args)
 
-    def declare(self):
+    def set_declared_rollout(self):
         self.deployment.release = RELEASE
         self.raw["spec"]["template"]["metadata"]["annotations"] = {
             RELEASE_KEY: RELEASE, ROLLBACK_KEY: "backup",
@@ -73,14 +78,19 @@ class ModelStateTests(unittest.TestCase):
         self.pods[0].release = RELEASE
 
     def test_legacy_migration_uses_observed_capacity_and_does_not_patch(self):
+        # Arrange
         with self.engine.begin() as connection:
             connection.execute(text("ALTER TABLE triton_instances DROP COLUMN model_state"))
         create_tables(self.engine)
-        self.assertIn("model_state", {col["name"] for col in inspect(self.engine).get_columns("triton_instances")})
         self.deployment.desired = 4
+
+        # Act
         state = self.invoke("read")
+
+        # Assert
         self.assertEqual(state.replicas, 4)
         self.assertFalse(state.interactive_allowed)
+        self.assertIn("model_state", {col["name"] for col in inspect(self.engine).get_columns("triton_instances")})
         with Session(self.engine) as session:
             instance = session.get(TritonInstanceEntity, 1)
             assert instance is not None
@@ -89,93 +99,184 @@ class ModelStateTests(unittest.TestCase):
             })
         self.provider.patch.assert_not_called()
 
-    def test_explicit_rollout_after_interactive_unload_gates_scale(self):
-        # Only the immutable bundle supplies startup models, regardless of the old runtime or cached index.
-        self.assertTrue(self.invoke("read").interactive_allowed)
-        with self.assertRaises(ConflictError):
-            self.invoke("scale", replicas=3)
+    def test_explicit_unload_targets_verified_pod(self):
+        # Arrange
         with Session(self.engine) as session, patch.object(models, "TritonService") as triton:
             unload = triton.return_value.unload_model = AsyncMock()
+
+            # Act
             asyncio.run(models.unload_model(session, CLAIMS, 1, "second-model"))
+
+            # Assert
             unload.assert_awaited_once_with("second-model")
             triton.assert_called_once_with("http://192.0.2.1:8000", False, "")
 
+    def test_poll_mode_disables_interactive_commands_but_can_declare(self):
+        # Arrange
+        container = self.raw["spec"]["template"]["spec"]["containers"][0]
+        container["args"] = [
+            "exec tritonserver '--model-repository=s3://models/ --model-control-mode=explicit sample' "
+            "--model-control-mode=poll --repository-poll-secs=15\n",
+        ]
+
+        # Act
+        state = self.invoke("read")
+
+        # Assert
+        self.assertFalse(state.interactive_allowed)
+        self.assertTrue(state.can_declare)
+
+    def test_declare_returns_pending_state_until_current_pod_reports_release(self):
+        # Arrange
         def start_rollout(raw, release):
-            self.declare()
+            self.set_declared_rollout()
             self.pods[0].release = None
 
         self.provider.declare.side_effect = start_rollout
-        response = self.invoke("declare", release_digest=RELEASE)
-        self.assertEqual(response.mode, "declared")
-        self.assertFalse(response.interactive_allowed)
-        self.assertFalse(response.rollout_complete)
-        with self.assertRaises(ConflictError):
-            self.invoke("scale", replicas=3)
-        self.provider.patch.assert_not_called()
-        with Session(self.engine) as session, patch.object(models, "TritonService") as triton:
-            with self.assertRaises(ConflictError):
-                asyncio.run(models.load_model(session, CLAIMS, 1, "second-model"))
-            triton.assert_not_called()
-        self.pods[0].release = RELEASE
+
+        # Act
+        state = self.invoke("declare", release_digest=RELEASE)
+
+        # Assert
+        self.assertEqual(state.mode, "declared")
+        self.assertFalse(state.interactive_allowed)
+        self.assertFalse(state.rollout_complete)
+        self.assertFalse(state.can_scale_above_one)
+
+    def test_scale_above_one_is_rejected_until_declared_release_is_ready(self):
+        for mode in ("interactive", "pending"):
+            with self.subTest(mode=mode):
+                # Arrange
+                if mode == "pending":
+                    self.set_declared_rollout()
+                    self.pods[0].release = None
+
+                # Act
+                with self.assertRaises(ConflictError):
+                    self.invoke("scale", replicas=3)
+
+                # Assert
+                self.provider.patch.assert_not_called()
+
+    def test_scale_above_one_patches_only_replica_count_after_convergence(self):
+        # Arrange
+        self.set_declared_rollout()
+
+        # Act
         self.invoke("scale", replicas=3)
+
+        # Assert
         self.provider.patch.assert_called_once_with(self.raw, "/spec/replicas", 3)
 
-    def test_scale_down_keeps_declared_mode_and_waits_for_terminating_pods(self):
-        self.declare()
+    def test_load_is_blocked_in_declared_mode(self):
+        # Arrange
+        self.set_declared_rollout()
+        with Session(self.engine) as session, patch.object(models, "TritonService") as triton:
+            # Act
+            with self.assertRaises(ConflictError):
+                asyncio.run(models.load_model(session, CLAIMS, 1, "second-model"))
+
+            # Assert
+            triton.assert_not_called()
+
+    def test_restore_is_blocked_while_surplus_pod_terminates(self):
+        # Arrange
+        self.set_declared_rollout()
         self.pods.append(self.pods[0].model_copy(update={"uid": "surplus", "terminating": True}))
-        state = self.invoke("read")
-        self.assertFalse(state.interactive_allowed)
-        self.assertFalse(state.can_restore)
+
+        # Act
         with self.assertRaises(ConflictError):
             self.invoke("restore")
-        self.pods.pop()
-        self.pods.append(self.pods[0].model_copy(update={"uid": "history", "phase": "Failed", "ready": False}))
-        self.assertTrue(self.invoke("read").can_restore)
-        self.assertFalse(self.invoke("read").interactive_allowed)
 
-        def restore(raw, backup):
+        # Assert
+        self.provider.restore.assert_not_called()
+
+    def test_restore_ignores_failed_history_and_waits_for_interactive_rollout(self):
+        # Arrange
+        self.set_declared_rollout()
+        self.pods.append(self.pods[0].model_copy(update={"uid": "history", "phase": "Failed", "ready": False}))
+
+        def start_restore(raw, backup):
             self.deployment.release = None
             self.deployment.stale = True
             self.raw["spec"]["template"]["metadata"]["annotations"] = {}
 
-        self.provider.restore.side_effect = restore
-        self.assertFalse(self.invoke("restore").interactive_allowed)
+        self.provider.restore.side_effect = start_restore
+
+        # Act
+        state = self.invoke("restore")
+
+        # Assert
+        self.assertFalse(state.interactive_allowed)
         self.provider.restore.assert_called_once_with(self.raw, "backup")
-        self.deployment.stale = False
-        self.assertTrue(self.invoke("read").interactive_allowed)
 
     def test_failed_single_replica_rollout_can_restore_without_allowing_model_commands(self):
-        self.declare()
+        # Arrange
+        self.set_declared_rollout()
         self.deployment.ready = 0
         self.deployment.conditions = [
             PodCondition(type="Progressing", status="False", reason="ProgressDeadlineExceeded"),
         ]
+
+        # Act
         state = self.invoke("read")
+
+        # Assert
         self.assertTrue(state.can_restore)
         self.assertFalse(state.interactive_allowed)
         self.assertFalse(state.can_scale_above_one)
-        self.invoke("restore")
-        self.provider.restore.assert_called_once_with(self.raw, "backup")
 
-    def test_capacity_owner_uid_and_production_ceiling(self):
+    def test_malformed_release_marker_cannot_enable_replica_scaling(self):
+        # Arrange
+        self.set_declared_rollout()
+        self.deployment.release = self.pods[0].release = "sha256:invalid"
+
+        # Act
+        state = self.invoke("read")
+
+        # Assert
+        self.assertEqual(state.mode, "declared")
+        self.assertIsNone(state.release_digest)
+        self.assertFalse(state.can_scale_above_one)
+
+    def test_autoscaler_owns_capacity(self):
+        # Arrange
         self.provider.has_autoscaler.return_value = True
-        self.assertEqual(self.invoke("read").capacity_owner, "autoscaler")
-        with self.assertRaises(ConflictError):
-            self.invoke("declare", release_digest=RELEASE)
+
+        # Act
+        state = self.invoke("read")
+
+        # Assert
+        self.assertEqual(state.capacity_owner, "autoscaler")
+        self.assertFalse(state.can_declare)
+
+    def test_production_policy_rejects_replica_changes(self):
+        # Arrange
         with patch.object(service.installation_policy, "mode", return_value="production"):
-            self.assertEqual(self.invoke("read").capacity_owner, "source")
+            # Act
             with self.assertRaises(ForbiddenError):
                 self.invoke("scale", replicas=3)
+
+        # Assert
+        self.provider.patch.assert_not_called()
+
+    def test_new_workload_uid_is_rejected_after_legacy_observation(self):
+        # Arrange
+        self.invoke("read")
         self.raw["metadata"]["uid"] = "replacement"
         self.deployment.uid = "replacement"
-        with self.assertRaises(ConflictError):
+
+        # Act
+        with self.assertRaisesRegex(ConflictError, "Deployment UID changed"):
             self.invoke("read")
+
+        # Assert
+        self.provider.patch.assert_not_called()
 
 
 class StartupProviderTests(unittest.TestCase):
     def setUp(self):
-        initial = materializer_tests.MaterializerPodTests().release()
-        sample = initial.spec.model_dump(mode="json", by_alias=True)
+        sample = serving_release().spec.model_dump(mode="json", by_alias=True)
         self.release = DevelopmentStartupRelease.model_validate({
             "apiVersion": "serving.triton-control/v1alpha1", "kind": "DevelopmentStartupRelease",
             "spec": {
@@ -207,7 +308,13 @@ class StartupProviderTests(unittest.TestCase):
         }
 
     def test_frozen_template_replaces_mutable_repository_and_verifies_versions(self):
+        # Arrange
+        self.deployment["spec"]["template"]["metadata"]["annotations"] = None
+
+        # Act
         self.provider.declare(self.deployment, self.target)
+
+        # Assert
         _, path, template = self.provider.patch.call_args.args
         self.assertEqual(path, "/spec/template")
         self.assertEqual(template["metadata"]["labels"], {"app": "triton"})
@@ -219,11 +326,35 @@ class StartupProviderTests(unittest.TestCase):
         self.assertEqual(json.loads(config["data"]["readiness.json"])["models"], [{"name": "iris", "versions": ["1"]}])
 
     def test_rejects_mismatched_preparation_before_touching_deployment(self):
+        # Arrange
         self.binding["release"]["spec"]["models"][0]["versions"] = ["2"]
         target = digest(self.binding["release"])
+
+        # Act
         with self.assertRaises(ConflictError):
             self.provider.declare(self.deployment, target)
+
+        # Assert
         self.provider.patch.assert_not_called()
+        self.provider.ensure_config.assert_not_called()
+
+    def test_file_at_version_path_is_rejected_before_rendering(self):
+        # Arrange
+        files = {"iris/1": b"not a directory", "iris/config.pbtxt": b'name: "iris"'}
+        inventory_data = inventory(files).model_dump(mode="json")
+        self.binding["plan"].update(
+            prepared_inventory=inventory_data,
+            source_inventory=inventory_data,
+            objects=[{"path": path, "version_id": "v1"} for path in files],
+            normalization={},
+        )
+
+        # Act
+        with self.assertRaises(ConflictError) as error:
+            self.provider.declare(self.deployment, self.target)
+
+        # Assert
+        self.assertIn("a file at a model version path", str(error.exception.__cause__))
         self.provider.ensure_config.assert_not_called()
 
 

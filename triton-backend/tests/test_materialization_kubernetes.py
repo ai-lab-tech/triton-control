@@ -17,9 +17,8 @@ from kubernetes import client, config  # type: ignore[import-untyped]
 from app.core.canonical import inventory_digest
 from app.schemas.materialization import StorageBinding
 from app.schemas.serving_metadata import StartupModel
-from app.services.materialization.kubernetes import manifests
-from tests import test_materialization as unit
-from tests.materialization_fixtures import FILES, LIMITS, plan, policy
+from app.services.materialization.kubernetes import manifests, serving_manifests
+from tests.materialization_fixtures import FILES, LIMITS, plan, policy, serving_release
 
 IMAGE = os.getenv("MATERIALIZER_TEST_IMAGE", "")
 KUBECONFIG = os.getenv("MATERIALIZER_TEST_KUBECONFIG", "")
@@ -107,7 +106,7 @@ class MaterializerKubernetesTests(MaterializerKubernetesFixture):
             payload = desired.model_dump(mode="json")
             payload["prepared_inventory"]["files"][0]["digest"] = "sha256:" + "0" * 64
             desired = type(desired).model_validate(payload)
-        release = unit.MaterializerPodTests().release()
+        release = serving_release()
         repository = release.spec.repository.model_copy(
             update={
                 "uri": f"s3://fixture/{case}",
@@ -418,13 +417,17 @@ print(Path('/var/run/triton-materialization/receipt.json').read_text())
             "spec": {"replicas": 1, "selector": {"matchLabels": labels}, "template": {
                 "metadata": {"labels": labels},
                 "spec": {"terminationGracePeriodSeconds": 1, "containers": [
-                    {"name": "triton", "image": IMAGE, "command": ["python", "-c", "import signal; signal.pause()"]},
+                    {
+                        "name": "triton", "image": IMAGE,
+                        "command": ["python", "-c", "import signal; signal.pause()"],
+                        "args": ["--model-control-mode=explicit"],
+                    },
                 ]},
             }},
         })
         self.addCleanup(provider.apps.delete_namespaced_deployment, name, self.ns)
         desired = plan(IMAGE)
-        fixture = unit.MaterializerPodTests().release().spec.model_dump(mode="json", by_alias=True)
+        fixture = serving_release().spec.model_dump(mode="json", by_alias=True)
         fixture["repository"].update(uri="s3://fixture/valid", materializerImage=IMAGE)
         fixture["resourcesPerReplica"]["gpuCount"] = 0
         payload = {
@@ -473,7 +476,7 @@ print(Path('/var/run/triton-materialization/receipt.json').read_text())
             def render(*args, **kwargs):
                 # Keep the actual init container and readiness sidecar. Substitute
                 # synthetic Triton HTTP responses for GPU-dependent Triton.
-                cm, pod = manifests(*args, **kwargs)
+                cm, pod = serving_manifests(*args, **kwargs)
                 cm["data"]["fixture.py"] = Path(__file__).with_name("readiness_triton_server.py").read_text()
                 main = pod["spec"]["containers"][0]
                 main.update(image=IMAGE, command=["python", "/fixture/fixture.py"], args=["slow"])
@@ -484,7 +487,7 @@ print(Path('/var/run/triton-materialization/receipt.json').read_text())
             from contextlib import nullcontext
 
             with patch.object(model_state, "api_client", side_effect=lambda: nullcontext(self.api)), patch.object(
-                provider_module, "manifests", side_effect=render,
+                provider_module, "serving_manifests", side_effect=render,
             ):
                 await_state(lambda state: state.interactive_allowed)
                 with self.assertRaises(ConflictError):

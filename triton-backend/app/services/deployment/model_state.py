@@ -1,18 +1,23 @@
 """Serialize development model commands and keep scaling behind a verified startup rollout."""
 
+import re
+import shlex
 from collections.abc import Iterator
 from contextlib import contextmanager
 from ipaddress import ip_address
 from typing import Any, Literal
 
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+from kubernetes.config import ConfigException  # type: ignore[import-untyped]
 from sqlmodel import Session
+from urllib3.exceptions import HTTPError
 
 from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.db.entities import TritonInstanceEntity
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
 from app.repositories import deployment_intents, instances, operations
+from app.schemas.lineage import DIGEST_PATTERN
 from app.schemas.model_state import ModelState
 from app.schemas.pods import DeploymentState, PodState
 from app.services.access import get_instance_or_404
@@ -30,8 +35,10 @@ def converged(deployment: DeploymentState, pods: list[PodState], release: str | 
         not deployment.stale
         and deployment.updated == deployment.ready == deployment.available == len(pods) == count
         and count > 0
-        and all(pod.ready and not pod.terminating and pod.current_revision
-                and (release is None or pod.release == release) for pod in pods)
+        and all(
+            pod.ready and not pod.terminating and pod.current_revision and pod.release == release
+            for pod in pods
+        )
     )
 
 
@@ -56,9 +63,10 @@ def observe(
         raise ConflictError("Managed Deployment UID changed")
     if meta["generation"] != deployment.generation:
         raise ConflictError("Deployment changed during observation; refresh its state")
-    annotations = raw["spec"]["template"]["metadata"].get("annotations") or {}
+    template = raw["spec"]["template"]
+    annotations = template["metadata"].get("annotations") or {}
     release = deployment.release
-    release_digest = release if release and release.startswith("sha256:") else None
+    release_digest = release if release and re.fullmatch(DIGEST_PATTERN, release) else None
     backup = annotations.get(ROLLBACK_KEY)
     production = installation_policy.mode() == "production"
     owner: Literal["manual", "source", "autoscaler"] = "source" if production else "manual"
@@ -75,7 +83,7 @@ def observe(
         capacity_owner=owner, mode="declared" if declared else "interactive",
         replicas=deployment.desired, release_digest=release_digest,
         rollout_complete=stable,
-        interactive_allowed=single and not declared,
+        interactive_allowed=single and not declared and supports_interactive_control(template),
         can_declare=single and not declared,
         can_restore=(
             bool(backup) and owner == "manual" and deployment.desired == 1
@@ -92,6 +100,24 @@ def observe(
         instance.model_state = persisted
         session.add(instance)
     return raw, state, pods
+
+
+def supports_interactive_control(template: dict[str, Any]) -> bool:
+    for container in template.get("spec", {}).get("containers", []):
+        if container["name"] != "triton":
+            continue
+        arguments = container.get("args") or []
+        if container.get("command") == ["/bin/bash", "-c"] and arguments:
+            script = arguments[0]
+            launch = re.search(r"(?m)^exec tritonserver[ \t]+", script)
+            if launch is None:
+                return False
+            try:
+                arguments = shlex.split(script[launch.end():])
+            except ValueError:
+                return False
+        return "--model-control-mode=explicit" in arguments
+    return False
 
 
 @contextmanager
@@ -112,7 +138,7 @@ def interactive_endpoint(session: Session, instance: TritonInstanceEntity) -> st
             provider = ModelStateProvider(api)
             raw, state, pods = observe(session, instance, provider)
             if not state.interactive_allowed:
-                raise ConflictError("Interactive control requires one stable pod in interactive mode")
+                raise ConflictError("Interactive control requires one stable pod running Triton in explicit mode")
             deployment = raw["metadata"]
             pod = provider.verify(
                 deployment["namespace"], deployment["name"], deployment["uid"], pods[0],
@@ -129,7 +155,7 @@ def interactive_endpoint(session: Session, instance: TritonInstanceEntity) -> st
                 raise ConflictError("The interactive pod has no network address") from error
             host = f"[{address}]" if address.version == 6 else str(address)
             return f"http://{host}:8000"
-    except ApiException as error:
+    except (ApiException, ConfigException, HTTPError) as error:
         raise BadGatewayError("Could not verify the managed deployment before model control") from error
 
 
@@ -145,10 +171,11 @@ def change(
         installation_policy.require("direct_deployment")
         require_member_or_admin(claims)
     try:
+        instance = get_instance_or_404(session, instance_id, claims)
+        if not managed(instance):
+            raise BadRequestError("Model state and replica controls require a managed Kubernetes deployment")
         with locked(session, instance_id):
-            instance = get_instance_or_404(session, instance_id, claims)
-            if not managed(instance):
-                raise BadRequestError("Model state and replica controls require a managed Kubernetes deployment")
+            session.refresh(instance)
             with api_client() as api:
                 provider = ModelStateProvider(api)
                 raw, state, _ = observe(session, instance, provider)
@@ -184,3 +211,5 @@ def change(
         if error.status == 404:
             raise ConflictError("Managed Kubernetes deployment is unavailable") from error
         raise BadGatewayError("Could not read or update the managed Kubernetes deployment") from error
+    except (ConfigException, HTTPError) as error:
+        raise BadGatewayError("Could not connect to the managed Kubernetes deployment") from error

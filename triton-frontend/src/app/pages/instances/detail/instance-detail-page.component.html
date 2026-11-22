@@ -235,6 +235,8 @@
                       }}
                     </p>
                   }
+                } @else if (modelStateReadError(); as error) {
+                  <p class="panel-hint health-error" role="alert">{{ error }}</p>
                 } @else {
                   <p class="panel-hint">Waiting for deployment model state.</p>
                 }

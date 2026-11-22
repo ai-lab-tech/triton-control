@@ -17,7 +17,6 @@ from pydantic import ValidationError
 from app.core.canonical import inventory_digest
 from app.exceptions import BadRequestError
 from app.schemas.materialization import MaterializationPlan, StorageBinding
-from app.schemas.serving_metadata import ServingRelease
 from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.filesystem import inventory
 from app.services.materialization.kubernetes import manifests
@@ -25,7 +24,7 @@ from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
 from app.services.materialization.runtime import materialize, receipt_for
 from app.services.materialization.s3 import VersionedS3
-from tests.materialization_fixtures import FILES, IMAGE, LIMITS, DirectoryFixture, plan, policy
+from tests.materialization_fixtures import FILES, IMAGE, LIMITS, DirectoryFixture, plan, policy, serving_release
 
 
 class MaterializationTests(unittest.TestCase):
@@ -279,29 +278,9 @@ class MaterializationTests(unittest.TestCase):
 
 
 class MaterializerPodTests(unittest.TestCase):
-    def release(self):
-        path = Path(__file__).resolve().parents[2] / "contracts/serving/v1alpha1/fixtures/release-manual.json"
-        payload = json.loads(path.read_text())
-        spec = payload["spec"]
-        repository = spec["repository"]
-        repository.update(
-            uri="s3://models/repository",
-            inventoryDigest=inventory_digest(plan().source_inventory),
-            preparedInventoryDigest=inventory_digest(plan().prepared_inventory),
-            materializerImage=IMAGE,
-        )
-        for name in ("validation", "security"):
-            if spec.get(name):
-                spec[name]["subjects"].update(
-                    inventoryDigest=repository["inventoryDigest"],
-                    preparedInventoryDigest=repository["preparedInventoryDigest"],
-                    materializerImage=IMAGE.split("@", 1)[1],
-                )
-        return ServingRelease.model_validate(payload)
-
     def test_shared_path_uses_init_readonly_models_and_no_mutable_runtime(self):
         # Arrange
-        release, desired, qualified = self.release(), plan(), policy()
+        release, desired, qualified = serving_release(), plan(), policy()
         binding = StorageBinding(bucket="models", prefix="repository", secret_name="read-only-models")
         # Act
         docs = manifests(
@@ -331,7 +310,7 @@ class MaterializerPodTests(unittest.TestCase):
         from app.schemas.serving_metadata import StartupModel
         from app.services.materialization.runtime import receipt_for
 
-        release = self.release()
+        release = serving_release()
         spec = release.spec.model_copy(update={"models": (StartupModel(name="iris", versions=("1", "2")),)})
         binding = StorageBinding(bucket="models", prefix="repository", secret_name="read-only-models")
         config, pod = manifests(
@@ -379,4 +358,4 @@ class MaterializerPodTests(unittest.TestCase):
         binding = StorageBinding(bucket="other", prefix="repository", secret_name="read-only")
         # Act / Assert
         with self.assertRaises(MaterializationError):
-            manifests(self.release(), plan(), policy(), binding, name="iris", namespace="test", limits=LIMITS)
+            manifests(serving_release(), plan(), policy(), binding, name="iris", namespace="test", limits=LIMITS)

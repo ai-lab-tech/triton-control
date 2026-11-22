@@ -4,7 +4,7 @@ import { DeploymentOperationComponent } from "../../../shared/deployment-operati
 import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.component";
 import { HttpClient } from "@angular/common/http";
 import { MatSelectModule } from "@angular/material/select";
-import { BASE_PATH } from "../../../api/generated";
+import { BASE_PATH, ModelState, PodsService } from "../../../api/generated";
 import { Component, computed, DestroyRef, effect, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { firstValueFrom, interval } from "rxjs";
@@ -60,18 +60,6 @@ import {
 } from "../../../state/instances-detail/instances-detail.selectors";
 import { isSelfDeployedStarting } from "../../../state/instances.utils";
 
-interface DeploymentModelState {
-  capacity_owner: "manual" | "source" | "autoscaler";
-  mode: "interactive" | "declared";
-  replicas: number;
-  release_digest: string | null;
-  rollout_complete: boolean;
-  interactive_allowed: boolean;
-  can_declare: boolean;
-  can_restore: boolean;
-  can_scale_above_one: boolean;
-}
-
 @Component({
   selector: "app-instance-detail-page",
   standalone: true,
@@ -121,6 +109,7 @@ export class InstanceDetailPageComponent implements OnInit {
     }
   }
   private readonly instancesApi = inject(InstancesService);
+  private readonly podsApi = inject(PodsService);
   private readonly deploymentsApi = inject(DeploymentsService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly store = inject(Store);
@@ -210,8 +199,9 @@ export class InstanceDetailPageComponent implements OnInit {
   readonly managedModelState = computed(
     () => this.instance()?.isSelfDeployed && this.instance()?.deploymentRuntime === "kubernetes",
   );
-  readonly deploymentModelState = signal<DeploymentModelState | null>(null);
+  readonly deploymentModelState = signal<ModelState | null>(null);
   readonly modelStateError = signal("");
+  readonly modelStateReadError = signal("");
   readonly modelStateSaving = signal(false);
   readonly canControlModels = computed(
     () =>
@@ -225,28 +215,36 @@ export class InstanceDetailPageComponent implements OnInit {
   private modelStateRevision = 0;
 
   private async refreshModelState(): Promise<void> {
-    if (!this.managedModelState() || !this.instanceId() || this.modelStateReadPending) return;
+    const instanceId = this.instanceId();
+    if (!this.managedModelState() || !instanceId || this.modelStateReadPending) return;
+
     this.modelStateReadPending = true;
     const revision = this.modelStateRevision;
     try {
-      const state = await firstValueFrom(this.http.get<DeploymentModelState>(this.modelStateUrl()));
-      if (revision === this.modelStateRevision) this.deploymentModelState.set(state);
-    } catch {
-      if (revision === this.modelStateRevision) this.deploymentModelState.set(null);
+      const state = await firstValueFrom(
+        this.podsApi.instanceModelStateApiInstancesInstanceIdModelStateGet(instanceId),
+      );
+      if (revision === this.modelStateRevision) {
+        this.deploymentModelState.set(state);
+        this.modelStateReadError.set("");
+      }
+    } catch (error) {
+      if (revision === this.modelStateRevision) {
+        this.deploymentModelState.set(null);
+        this.modelStateReadError.set(
+          mapApiErrorMessage(error, "Unable to read deployment model state."),
+        );
+      }
     } finally {
       this.modelStateReadPending = false;
     }
-  }
-
-  private modelStateUrl(): string {
-    return `${this.apiBase}/api/instances/${this.instanceId()}/model-state`;
   }
 
   validStartupDigest(): boolean {
     return /^sha256:[a-f0-9]{64}$/.test(this.startupReleaseDigest.trim());
   }
 
-  validReplicaChange(state: DeploymentModelState): boolean {
+  validReplicaChange(state: ModelState): boolean {
     const replicas = this.desiredReplicas;
     return (
       replicas !== null &&
@@ -259,31 +257,65 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   async updateModelState(action: "declare" | "interactive" | "replicas"): Promise<void> {
-    if (this.modelStateSaving() || !this.canWriteInstances()) return;
-    const url = `${this.modelStateUrl()}/${action}`;
+    const instanceId = this.instanceId();
+    const current = this.deploymentModelState();
+    if (
+      !instanceId ||
+      !this.managedModelState() ||
+      this.modelStateSaving() ||
+      !this.canWriteInstances() ||
+      current?.capacity_owner !== "manual"
+    ) {
+      return;
+    }
+
+    const request = this.modelStateRequest(action, instanceId, current);
+    if (!request) return;
+
     this.modelStateError.set("");
     this.modelStateRevision += 1;
     this.modelStateSaving.set(true);
     try {
-      const state = await firstValueFrom(
-        action === "replicas"
-          ? this.http.put<DeploymentModelState>(url, { replicas: this.desiredReplicas })
-          : this.http.post<DeploymentModelState>(
-              url,
-              action === "declare" ? { release_digest: this.startupReleaseDigest.trim() } : null,
-            ),
-      );
+      const state = await firstValueFrom(request);
       this.deploymentModelState.set(state);
+      this.modelStateReadError.set("");
       this.desiredReplicas = null;
       if (action === "declare") this.startupReleaseDigest = "";
       this.refreshAfterAccessChange();
     } catch (error) {
+      this.deploymentModelState.set(null);
       this.modelStateError.set(
         mapApiErrorMessage(error, "Unable to update deployment model state."),
       );
     } finally {
       this.modelStateSaving.set(false);
       void this.refreshModelState();
+    }
+  }
+
+  private modelStateRequest(
+    action: "declare" | "interactive" | "replicas",
+    instanceId: string,
+    state: ModelState,
+  ) {
+    switch (action) {
+      case "declare":
+        if (!state.can_declare || !this.validStartupDigest()) return;
+        return this.podsApi.declareInstanceModelStateApiInstancesInstanceIdModelStateDeclarePost(
+          { release_digest: this.startupReleaseDigest.trim() },
+          instanceId,
+        );
+      case "interactive":
+        if (!state.can_restore) return;
+        return this.podsApi.restoreInstanceModelStateApiInstancesInstanceIdModelStateInteractivePost(
+          instanceId,
+        );
+      case "replicas":
+        if (!this.validReplicaChange(state)) return;
+        return this.podsApi.scaleInstanceModelStateApiInstancesInstanceIdModelStateReplicasPut(
+          { replicas: this.desiredReplicas },
+          instanceId,
+        );
     }
   }
 

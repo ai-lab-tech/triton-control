@@ -130,10 +130,9 @@ class ReleaseReadinessTests(unittest.TestCase):
         from app.schemas.materialization import StorageBinding
         from app.schemas.serving_metadata import StartupModel
         from app.services.materialization.kubernetes import manifests
-        from tests.materialization_fixtures import LIMITS, plan, policy
-        from tests.test_materialization import MaterializerPodTests
+        from tests.materialization_fixtures import LIMITS, plan, policy, serving_release
 
-        release = MaterializerPodTests().release()
+        release = serving_release()
         models = (StartupModel(name="iris", versions=tuple(str(i) for i in range(1, 11))),)
         release = release.model_copy(update={"spec": release.spec.model_copy(update={"models": models})})
         config, pod = manifests(

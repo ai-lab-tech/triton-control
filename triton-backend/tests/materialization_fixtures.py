@@ -1,11 +1,13 @@
 """Synthetic bytes and identities for materializer tests; not deployable models."""
 
 import hashlib
+import json
 from pathlib import Path
 
-from app.core.canonical import digest
+from app.core.canonical import digest, inventory_digest
 from app.schemas.lineage import FileEntry, InventoryV1
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, Normalization, ObjectVersion
+from app.schemas.serving_metadata import ServingRelease
 from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.qualification import REQUIRED_CHECKS
 
@@ -65,6 +67,26 @@ def policy(image=IMAGE, platform="linux/amd64"):
         },
     )
 
+
+def serving_release() -> ServingRelease:
+    path = Path(__file__).resolve().parents[2] / "contracts/serving/v1alpha1/fixtures/release-manual.json"
+    payload = json.loads(path.read_text())
+    spec = payload["spec"]
+    repository = spec["repository"]
+    repository.update(
+        uri="s3://models/repository",
+        inventoryDigest=inventory_digest(plan().source_inventory),
+        preparedInventoryDigest=inventory_digest(plan().prepared_inventory),
+        materializerImage=IMAGE,
+    )
+    for name in ("validation", "security"):
+        if spec.get(name):
+            spec[name]["subjects"].update(
+                inventoryDigest=repository["inventoryDigest"],
+                preparedInventoryDigest=repository["preparedInventoryDigest"],
+                materializerImage=IMAGE.split("@", 1)[1],
+            )
+    return ServingRelease.model_validate(payload)
 
 class DirectoryFixture:
     def download(self, plan, destination, limits):

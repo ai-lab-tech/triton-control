@@ -1,7 +1,8 @@
 # Declared startup model state
 
-A Kubernetes-managed development deployment starts with interactive control when it
-has one stable pod. Load and Unload go directly to that owned pod on port 8000,
+A Kubernetes-managed development deployment running Triton in explicit mode
+allows interactive control when it has one stable pod. Load and Unload go
+directly to that owned pod on port 8000,
 which the backend must be able to reach. To scale
 above one, first roll out a pinned runtime and a frozen repository with an explicit
 list of model names and versions. A previously unloaded model is included only if

@@ -14,7 +14,7 @@ from app.schemas.model_state import DevelopmentStartupRelease
 from app.schemas.serving_metadata import ServingRelease
 from app.services.deployment.pod_provider import RELEASE_KEY, TIMEOUT, PodProvider, controlled_by
 from app.services.materialization.budgets import configured_limits
-from app.services.materialization.kubernetes import manifests
+from app.services.materialization.kubernetes import serving_manifests
 from app.services.materialization.normalization import MaterializationError
 
 ROLLBACK_KEY = "triton-control/interactive-template"
@@ -96,15 +96,20 @@ class ModelStateProvider(PodProvider):
                 if len(parts) < 2 or parts[0] not in expected:
                     raise MaterializationError("Prepared repository contains undeclared model content")
                 versions = entries.setdefault(parts[0], set())
-                if parts[1].isdigit():
+                if parts[1].isascii() and parts[1].isdigit():
+                    if len(parts) == 2:
+                        raise MaterializationError("Prepared repository has a file at a model version path")
                     versions.add(parts[1])
             if entries != expected:
                 raise MaterializationError("Prepared model versions differ from the declared startup set")
             render_id = digest({"uid": meta["uid"], "release": release_digest, "binding": binding})
-            config, pod = manifests(
-                release, plan, policy, storage,
+            config, pod = serving_manifests(
+                plan, policy, storage,
                 name=f"startup-{render_id.removeprefix('sha256:')[:22]}",
                 namespace=namespace, limits=configured_limits(binding["limits"]),
+                identity_digest=release_digest, image=release.spec.image,
+                repository=release.spec.repository, models=release.spec.models,
+                resources=release.spec.resources_per_replica,
             )
         except (KeyError, TypeError, ValueError) as error:
             raise ConflictError("Prepared startup release or materialization binding is invalid") from error
@@ -119,10 +124,11 @@ class ModelStateProvider(PodProvider):
         })
         self.ensure_config(deployment, config)
         template = {"metadata": deepcopy(old["metadata"]), "spec": pod["spec"]}
-        template["metadata"].setdefault("annotations", {}).update({
+        template["metadata"]["annotations"] = {
+            **(old["metadata"].get("annotations") or {}),
             RELEASE_KEY: release_digest,
             ROLLBACK_KEY: rollback_name,
-        })
+        }
         for key in ("imagePullSecrets", "runtimeClassName", "tolerations", "affinity", "priorityClassName"):
             if key in old_spec:
                 template["spec"][key] = old_spec[key]

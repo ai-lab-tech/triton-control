@@ -1,4 +1,4 @@
-"""Read-only instance workload evidence and bounded runtime logs."""
+"""Instance workload evidence, bounded logs, and model-state controls."""
 
 from datetime import datetime
 from typing import Any
