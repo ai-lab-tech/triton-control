@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from "@angular/core/testing";
-import { of } from "rxjs";
+import { of, throwError } from "rxjs";
 import { ReleaseSourcesService } from "../../api/generated";
 import { InstallationService } from "../../shared/installation/installation.service";
 import { ReleaseSourceSettingsComponent } from "./release-source-settings.component";
@@ -67,6 +67,31 @@ describe("ReleaseSourceSettingsComponent", () => {
     expect(section?.textContent).toContain("read-metadata");
     expect(section?.textContent).toContain("86400 seconds");
     expect(section?.querySelector("button")).toBeNull();
+  });
+
+  it("blocks creation after a failed load until reload succeeds", async () => {
+    // Arrange
+    api.listReleaseSourcesApiReleaseSourcesGet.and.returnValues(
+      throwError(() => new Error("unavailable")),
+      of([configured]),
+    );
+    fixture = TestBed.createComponent(ReleaseSourceSettingsComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const add = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll("button")).find(
+      (button) => button.textContent.trim() === "Add source",
+    )!;
+
+    // Act
+    fixture.componentInstance.edit();
+
+    // Assert
+    expect(add.disabled).toBeTrue();
+    expect(fixture.componentInstance.draft()).toBeNull();
+    await fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(add.disabled).toBeFalse();
+    expect(fixture.componentInstance.sources()?.length).toBe(1);
   });
 
   it("sends the original revision when disabling and removing a source", async () => {

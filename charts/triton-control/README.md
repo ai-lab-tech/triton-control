@@ -588,7 +588,10 @@ deployments. Re-register a retired ID through its original ownership channel.
 Configuration-owned sources are read-only in the admin UI.
 
 All app replicas sharing a database must start with the same release source
-configuration. For a configuration change, stop replicas with the old
+configuration. The chart uses the Kubernetes Recreate deployment strategy.
+An upgrade that replaces app pods stops the old pods before starting the
+new ones, briefly interrupting the Control UI and API. Outside Helm,
+stop replicas with the old
 configuration before starting replacements so a restarting old replica cannot
 reapply an outdated snapshot. Startup applies a complete configuration snapshot
 in one transaction. Duplicate IDs and target ownership collisions fail startup

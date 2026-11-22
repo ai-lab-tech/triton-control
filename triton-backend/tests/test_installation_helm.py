@@ -14,9 +14,9 @@ CHART = Path(__file__).resolve().parents[2] / "charts/triton-control"
 
 @unittest.skipUnless(shutil.which("helm"), "Helm required for chart rendering")
 class InstallationHelmTests(unittest.TestCase):
-    def render(self, *args):
+    def render(self, *args, release="policy-test"):
         return subprocess.run(
-            ["helm", "template", "policy-test", str(CHART), *args],
+            ["helm", "template", release, str(CHART), *args],
             capture_output=True, text=True, check=False,
         )
 
@@ -89,3 +89,22 @@ class InstallationHelmTests(unittest.TestCase):
         # Assert
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("TRITON_RELEASE_SOURCES_", result.stdout)
+
+    def test_source_rollout_excludes_old_pods_even_when_removing_last_source(self):
+        for args in ([], ["--set-json", 'releaseSources.file=[{"kind":"MetadataSource"}]']):
+            with self.subTest(args=args):
+                result = self.render("--show-only", "templates/deployment.yaml", *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(yaml.safe_load(result.stdout)["spec"]["strategy"], {"type": "Recreate"})
+
+    def test_long_release_names_get_distinct_source_config_maps(self):
+        names = []
+        for region in ("east", "west"):
+            result = self.render(
+                "--show-only", "templates/release-sources.yaml", "--set-json",
+                'releaseSources.file=[{"kind":"MetadataSource"}]',
+                release=f"triton-control-release-registration-environment-{region}",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            names.append(yaml.safe_load(result.stdout)["metadata"]["name"])
+        self.assertNotEqual(*names)

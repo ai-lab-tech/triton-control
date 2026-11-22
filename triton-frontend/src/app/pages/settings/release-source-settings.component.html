@@ -5,7 +5,14 @@
 <div class="actions">
   <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">Reload</button>
   @if (canWrite()) {
-    <button mat-flat-button type="button" (click)="edit()" [disabled]="busy()">Add source</button>
+    <button
+      mat-flat-button
+      type="button"
+      (click)="edit()"
+      [disabled]="busy() || sources() === null"
+    >
+      Add source
+    </button>
   }
 </div>
 @if (sources(); as registrations) {

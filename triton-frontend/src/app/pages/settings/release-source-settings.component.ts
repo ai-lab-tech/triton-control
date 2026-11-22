@@ -133,7 +133,8 @@ export class ReleaseSourceSettingsComponent {
   }
 
   edit(source?: Registration): void {
-    if (!this.canWrite() || this.busy() || (source && !source.editable)) return;
+    if (!this.canWrite() || this.busy() || this.sources() === null || (source && !source.editable))
+      return;
     this.removal.set(null);
     this.draft.set(new SourceDraft(source));
   }

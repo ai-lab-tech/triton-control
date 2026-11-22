@@ -11,6 +11,10 @@ metadata:
     {{- include "triton-control.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
 spec:
+  # Startup reconciles a complete source snapshot into the shared database.
+  # This also applies when an upgrade removes the last configured source.
+  strategy:
+    type: Recreate
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
