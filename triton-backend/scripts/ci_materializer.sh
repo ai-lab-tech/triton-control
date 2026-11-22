@@ -45,3 +45,10 @@ export MATERIALIZER_TEST_PLATFORM
 cd triton-backend
 python scripts/export_materialization_schema.py --check
 python scripts/qualify_materializer.py --output "${MATERIALIZER_EVIDENCE_DIR:-$root/materializer-evidence}"
+
+# Exercise a complete owned evaluator Job against the qualified materializer.
+docker build --build-arg "HELPER=$MATERIALIZER_TEST_IMAGE" -t localhost:5001/validation-runtime:test tests/validation_runtime
+docker push localhost:5001/validation-runtime:test
+VALIDATION_TEST_RUNTIME=$(docker image inspect localhost:5001/validation-runtime:test --format '{{index .RepoDigests 0}}')
+export VALIDATION_TEST_RUNTIME
+python -m unittest tests.test_candidate_validation_kubernetes -v

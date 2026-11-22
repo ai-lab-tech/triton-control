@@ -1,0 +1,52 @@
+{{- if and .Values.candidateValidation.namespace (eq (include "triton-control.installationMode" .) "development") }}
+{{- if has .Values.candidateValidation.namespace (list .Release.Namespace "default" "kube-system" "kube-public" "kube-node-lease") }}
+{{- fail "Validation requires a dedicated namespace" }}
+{{- end }}
+{{- $name := printf "%s-validation" (include "triton-control.fullname" .) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.candidateValidation.namespace | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      triton-control/workload: candidate-validation
+  policyTypes: [Ingress]
+  ingress: []
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.candidateValidation.namespace | quote }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.candidateValidation.namespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    namespace: {{ .Release.Namespace }}
+    name: {{ include "triton-control.serviceAccountName" . }}
+{{- end }}
+{{- end }}

@@ -14,7 +14,7 @@ from app.db.entities import (
     WorkflowS3CredentialEntity,
 )
 from app.repositories.deployment_intents import KIND as DEPLOYMENT_KIND
-from app.repositories.operations import HANDOFF_CAPTURE_KIND
+from app.repositories.operations import HANDOFF_CAPTURE_KIND, VALIDATION_KIND
 
 
 def cutover_blockers(session: Session) -> list[str]:
@@ -25,7 +25,9 @@ def cutover_blockers(session: Session) -> list[str]:
         if session.exec(select(entity).limit(1)).first() is not None:
             blockers.append(label)
     if session.exec(select(OperationEntity).where(
-        col(OperationEntity.kind).in_([DEPLOYMENT_KIND, "build.context.stage", "build.image", HANDOFF_CAPTURE_KIND]),
+        col(OperationEntity.kind).in_(
+            [DEPLOYMENT_KIND, "build.context.stage", "build.image", HANDOFF_CAPTURE_KIND, VALIDATION_KIND]
+        ),
         col(OperationEntity.state).notin_(["succeeded", "failed", "cancelled"]),
     ).limit(1)).first():
         blockers.append("queued development operations")

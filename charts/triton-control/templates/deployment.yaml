@@ -94,6 +94,10 @@ spec:
               value: {{ .Values.buildQualification.contextRetentionDays | quote }}
             {{- end }}
             {{- if $development }}
+            {{- with .Values.candidateValidation.namespace }}
+            - name: TRITON_VALIDATION_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
             {{- if include "triton-control.localBuildsEnabled" . }}
             - name: TRITON_LOCAL_BUILD_NAMESPACE
               value: {{ (include "triton-control.imageBuilds" . | fromJson).namespace | quote }}

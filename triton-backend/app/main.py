@@ -230,6 +230,11 @@ async def on_startup() -> None:
     if SNAPSHOT_KIND not in operation_service.adapters:
         operation_service.register(SNAPSHOT_KIND, SnapshotAdapter())
 
+    from app.repositories.operations import VALIDATION_KIND
+    from app.services.candidate_validation.execution import ValidationAdapter
+    if VALIDATION_KIND not in operation_service.adapters:
+        operation_service.register(VALIDATION_KIND, ValidationAdapter())
+
     if BUILD_CONTEXT_KIND not in operation_service.adapters:
         operation_service.register(BUILD_CONTEXT_KIND, build_context_adapter)
     if HANDOFF_CAPTURE_KIND not in operation_service.adapters:
