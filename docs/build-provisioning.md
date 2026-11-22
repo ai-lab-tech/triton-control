@@ -1,10 +1,27 @@
 # Builder qualification and provisioning
 
 Builder qualification verifies one exact container-image builder and its
-installation policy. Builds remain disabled by default. The
+installation policy when an operator configures a reviewed policy. The
 [build-context staging API](build-contexts.md) prepares inputs; staging alone does
-not enable execution. The [runtime-build executor](runtime-builds.md) must pass
-the qualification gate before execution. It does not deploy images automatically.
+not enable execution. The [runtime-build executor](runtime-builds.md) uses that qualification gate for reviewed policies. It does not deploy images automatically.
+
+## Local builds in a development installation
+
+With no registry policy or destination, Helm provisions the dedicated
+`triton-builds` namespace and namespace-scoped build permissions. The
+code-server **Build serving image** command uses the packaged Kaniko release,
+the task's verified build context and an isolated volume for each build attempt.
+Jobs write a Docker archive named `image.tar` to that volume with pushing
+disabled. The task's build result identifies the namespace and volume claim.
+Successful archives remain on their claims until removed by the operator.
+Failed or cancelled attempts clean up their claims. Local archives cannot be
+used as published registry evidence.
+
+`imageBuilds.namespace` sets the namespace for this installation. Use a separate
+namespace for each installation. Dockerfile builds need no S3 profile. Folder builds read the current HTTPS S3 profiles at runtime. It uses
+a single profile automatically or offers a choice when several exist. The
+selected bucket must support versioning. Local archive builds require neither a
+registry nor a fixture revision. Production omits this build workflow.
 
 ## Candidate and provenance
 
@@ -49,7 +66,10 @@ receipt including version-pinned HTTPS context transport; configure
 `buildQualification.fixtureRevision` from that receipt. Review rendered manifests
 before installing them.
 
-Required fields:
+The chart sets the pinned builder in `buildQualification.kaniko.version` and
+`buildQualification.kaniko.image`. The backend uses this pair when the executor image and release are omitted. **Registries → Advanced** displays the effective release and digest.
+
+Policy fields:
 
 | Field | Provisioning requirement |
 | --- | --- |
@@ -171,3 +191,28 @@ failure history and the development-only gate. Generated live reports are local
 artifacts and are excluded from Git under `docs/evidence/builder-qualification/`.
 Attach reports to the related issue or retain them as CI artifacts; commit only
 reusable tests, fixtures and provisioning documentation.
+
+## Manage the policy in Admin Settings
+
+On development installations, open **Admin → Settings → Registries**. Under
+**Push images from builds**, enter the destination registry/repository and build
+namespace. Leave the destination empty to save a local archive, or enter a repository
+such as `ghcr.io/my-org/serving` to publish there. Helm uses the same rule for
+`imageBuilds.destinationRepositories`. Saving in the UI overrides the Helm list,
+including when you save an empty list. Resetting the override restores the Helm list.
+
+New destinations use anonymous publishing by default. Open **Push credentials
+(optional)** to reuse saved workload pull credentials or enter separate Docker
+config JSON. The selected account needs write access to the image repository.
+Removing separate credentials or turning off reuse restores anonymous publishing.
+Triton Control encrypts the credentials and creates the builder's Kubernetes
+Secret when the build starts. Leaving the credential editor empty preserves
+saved credentials. Workload pull credentials are managed independently.
+The destination can be saved before cluster setup. The builder
+uses the installation's storage, credentials, network and executor settings.
+Changing the destination changes the policy fingerprint and requires matching
+qualification. **Use installation defaults** removes the destination override.
+
+The full build policy can still be managed through the admin settings API or
+the deployment policy file. Replacing or resetting the full policy also clears
+the destination override.

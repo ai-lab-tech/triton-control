@@ -2,7 +2,7 @@
 
 Open a model's **Perf** view to configure the analyzer image, batch size, concurrency range, request count, and input data. Start creates a dedicated Kubernetes Job without a global installation. Different models can benchmark concurrently. Within one Triton instance, all versions of the same model share one active-run slot.
 
-The analyzer image appears above the benchmark parameters. Registry credentials are configured once by an administrator under **Settings → Registry** and applied automatically to new Jobs. The Perf view has no registry credential field. A pulsing speedometer and **Benchmark running** badge follow the job status returned by the backend. Preparing and stopping have separate indicators; the badge disappears after completion, failure, or cancellation. The icon does not animate when reduced motion is requested.
+The analyzer image appears above the benchmark parameters. Registry credentials are configured once by an administrator under **Settings → Registries** and applied automatically to new Jobs. The Perf view has no registry credential field. A pulsing speedometer and **Benchmark running** badge follow the job status returned by the backend. Preparing and stopping have separate indicators; the badge disappears after completion, failure, or cancellation. The icon does not animate when reduced motion is requested.
 
 Creating, pending, running, and stopping runs occupy that slot. Stop targets a specific run, retains available partial output, and keeps Start disabled until its workload has terminated. Reloading or reopening the view recovers server state. Completed or failed output remains available after Job cleanup. Kubernetes scheduling and contention on the target Triton server can affect benchmark results.
 

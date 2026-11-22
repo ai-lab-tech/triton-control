@@ -41,6 +41,7 @@ from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.build_api import router as build_router
 from app.api.build_context_api import router as build_context_router
+from app.api.build_settings_api import router as build_settings_router
 from app.api.capabilities_api import router as capabilities_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.deployment_api import router as deployment_router
@@ -60,6 +61,7 @@ from app.api.pod_api import router as pod_router
 from app.api.preparation_api import router as preparation_router
 from app.api.preparation_settings_api import router as preparation_settings_router
 from app.api.registry_api import router as registry_router
+from app.api.release_sources_api import router as release_sources_router
 from app.api.s3_api import router as s3_router
 from app.api.s3_profile_api import router as s3_profile_router
 from app.api.task_workspaces_api import router as task_workspaces_router
@@ -88,6 +90,7 @@ from app.services.operations import OperationWorker
 from app.services.operations import service as operation_service
 from app.services.operations import worker as operation_worker
 from app.services.perf_analyzer.jobs import reconciler as perf_job_reconciler
+from app.services.release_sources import sync_configuration as sync_release_sources
 from app.services.triton.client import TritonService
 from app.services.triton.health import instance_health_refresher
 
@@ -215,6 +218,7 @@ async def on_startup() -> None:
     init_db()
     with session_factory() as session:
         verify_cutover(session)
+        sync_release_sources(session)
     instance_health_refresher.start()
     if installation_policy.mode() == "production":
         return
@@ -252,9 +256,11 @@ async def on_shutdown() -> None:
 
 
 app.include_router(capabilities_router)
+app.include_router(release_sources_router)
 app.include_router(oidc_router)
 app.include_router(registry_router)
 app.include_router(preparation_settings_router)
+app.include_router(build_settings_router)
 app.include_router(local_bindings_router)
 app.include_router(public_auth_router)
 app.include_router(protected_auth_router, dependencies=[Depends(get_claims)])

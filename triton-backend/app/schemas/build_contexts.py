@@ -18,6 +18,8 @@ class BuildContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal[1] = 1
     task_id: UUID | None = None
+    dockerfile_only: Literal[True] | None = None
+    staging_profile: str | None = Field(default=None, min_length=1, max_length=128)
     archive_digest: Digest
     archive_bytes: Annotated[int, Field(strict=True, ge=1024, le=1073741824)]
     dockerfile: Path = "Dockerfile"
@@ -31,6 +33,9 @@ class BuildContextRequest(BaseModel):
             FileEntry(path=path, size=0, digest=self.archive_digest)
             if len(path.encode("utf-8")) > 1024 or len(path.split("/")) > 32:
                 raise ValueError("Build path exceeds limits")
+        if self.dockerfile_only and (self.staging_profile or self.allowed_paths != (self.dockerfile,)
+                                    or self.dependency_files or self.archive_bytes > 131072):
+            raise ValueError("A Dockerfile build accepts only the selected Dockerfile")
         if len(set(self.base_images)) != len(self.base_images):
             raise ValueError("Duplicate base image")
         return self

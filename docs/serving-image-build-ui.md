@@ -35,10 +35,6 @@ required inputs are missing. Only the current assignee can open its normal task
 workspace. If you submitted incomplete inputs, select **Add missing information**.
 Complete the prefilled form, submit the revision and claim the new task.
 
-Before an image build can start, an administrator must also configure an enabled,
-qualified build policy with registry and staging storage access. Creating a task
-does not enable this installation configuration automatically.
-
 For more detail, see [engineering access](user-management.md),
 [model handoffs](scientist-handoffs.md) and [task workspaces](task-workspaces.md).
 
@@ -46,30 +42,30 @@ For more detail, see [engineering access](user-management.md),
 
 1. Claim a preparation task and open its verified task workspace.
 2. In code-server choose **Triton Control: Build serving image**, from the command
-   palette, Workspace toolbar or folder context menu.
-3. Select a context directory, its relative Dockerfile path, a permitted destination
-   repository, exact external base image references (`repository@sha256:...`) and
-   optional dependency lock files. Use no base references for `FROM scratch`.
-4. Review the upload confirmation. The extension freezes file bytes in a bounded
-   POSIX tar, rejects links/special files and common embedded credential signatures,
-   and excludes known credential paths. The backend verifies the archive hash,
-   applies Dockerignore and records the retained immutable context and its hashes.
-   Dockerignore is applied on the server: select a directory containing only files
-   you intend to upload. Unknown secrets cannot be detected reliably by patterns.
+   palette, Workspace toolbar or the context menu on a Dockerfile or its folder. The file action accepts lowercase
+   `dockerfile` and builds directly from that file without S3.
+   The folder action sends files from the selected folder and its subfolders to the
+   Triton Control backend for `COPY` and `ADD`. Before sending them, the extension
+   excludes known credential paths such as `.env`, `.ssh/` and `.aws/`.
+   The backend then applies `.dockerignore` and uploads the filtered archive to S3.
+   For example, model weights excluded by `.dockerignore` still count toward the
+   upload limit between code-server and the backend. The S3 archive omits them.
+3. Enter the image name and tag, for example `opt-125m:v1` for a local archive.
+   For registry publishing, the field starts with the configured repository.
+4. Only the folder action uses S3. If several storage profiles are available, select one for the folder.
+   The extension uploads the context and starts the build.
 5. Watch queued/building/pushing progress in **Triton Control Builds**. Pushing is
    informational progress observed from executor output; only a successful owned
    executor termination with a valid digest can produce a candidate result.
 6. Use **Inspect serving builds** for refresh, authorized attempt logs, cancellation,
    retry, or copying an exact candidate image. Reopen this command after editor restart
    to recover task history. Repeating an unchanged submission reuses its idempotency
-   key; a failed build is retried explicitly as a new numbered attempt and unique tag.
+   key; a failed build is retried explicitly as a new numbered attempt.
 
 The handoff receipt links to `/preparation/tasks/:taskId/builds`. This task page lists
-build history, logs, exact candidate image references and cancel/retry actions. It can
-also start a build from an existing verified context ID and permitted repository.
+build history, logs, exact candidate image references and cancel/retry actions. After cleanup, **Retry build** starts another attempt using the same saved files.
 Each page contains up to 50 builds. Use the extension to capture a new local context.
-Expired contexts require a new snapshot: repeat **Build serving image** and confirm
-the upload, even if the files are unchanged. An expired, failed or cancelled context
+Expired contexts require a new snapshot: repeat **Build serving image**, even if the files are unchanged. An expired, failed or cancelled context
 is replaced with a new context key. That key is saved before admission so a lost
 response or editor restart resumes the same replacement. Pending and usable contexts
 retain their keys; build retries never silently recapture source files.
@@ -107,7 +103,7 @@ stored in the existing operation JSON; omitted values preserve existing context
 idempotency identities. Old unbound contexts remain usable by ordinary authorized API
 clients, but workspace credentials can use only contexts bound to their own task.
 New task-list/options/retry routes are additive. Deploy the updated backend, which
-packages extension version 0.4.12 into workspace ConfigMaps. Existing workspaces need their extension
+packages extension version 0.4.15 into workspace ConfigMaps. Existing workspaces need their extension
 ConfigMap refreshed and code-server restarted as part of the workspace rollout;
 backend deployment alone does not modify their existing ConfigMaps.
 
@@ -144,8 +140,8 @@ The browser tests exercise the deployed VSIX in real code-server: both commands
 explain the task requirement in a personal workspace. A versioned SeaweedFS handoff,
 engineering-group membership and claimed task provision a real task workspace;
 its extension reads empty build history using the managed workspace credential.
-Build submission is denied before context selection because this installation has
-no qualified build policy. The task workspace is removed after the suite so the
+The default development builder opens the Dockerfile picker for the assigned task.
+Cancelling the picker leaves the task’s build history empty. The task workspace is removed after the suite so the
 existing personal-workspace restart/upgrade smoke remains independent.
 
 This smoke does not build or push an image. Successful execution, progress, logs,

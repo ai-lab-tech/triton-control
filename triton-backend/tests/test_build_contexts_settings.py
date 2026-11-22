@@ -16,21 +16,21 @@ class BuildContextSettingsTests(unittest.TestCase):
     def test_development_mode_and_explicit_policy_required(self):
         with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "production"}):
             with self.assertRaises(ForbiddenError):
-                provider.policy()
+                provider.deployment_policy()
         with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "development", "TRITON_BUILD_POLICY_FILE": ""}):
             with self.assertRaises(ForbiddenError):
-                provider.policy()
+                provider.deployment_policy()
 
     def test_bounded_policy_file_uses_same_qualification_contract(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "policy.json"
             with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "development", "TRITON_BUILD_POLICY_FILE": str(path)}):
                 path.write_text(policy().model_dump_json())
-                self.assertEqual(provider.policy().fingerprint(), policy().fingerprint())
+                self.assertEqual(provider.deployment_policy().fingerprint(), policy().fingerprint())
                 for raw in ("[", "{}", " " * 65537):
                     path.write_text(raw)
                     with self.assertRaises(ServiceUnavailableError):
-                        provider.policy()
+                        provider.deployment_policy()
 
     def test_retention_is_configurable_and_bounded(self):
         for days, expected in (("7", 604800), ("1", 86400), ("365", 365 * 86400)):

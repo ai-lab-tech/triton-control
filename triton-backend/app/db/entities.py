@@ -671,6 +671,30 @@ class PreparationSnapshotEntity(SQLModel, table=True):
     manifest: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     artifacts: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
 
+class ReleaseSourceEntity(SQLModel, table=True):
+    """Current registration, including a tombstone for retired source identities."""
+
+    __tablename__ = "release_sources"
+    name: str = Field(primary_key=True)
+    provenance: str
+    revision: int
+    retired: bool = False
+    document: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class ReleaseSourceEventEntity(SQLModel, table=True):
+    """Full registration snapshot at each revision, including retirement."""
+
+    __tablename__ = "release_source_events"
+    source_name: str = Field(primary_key=True, foreign_key="release_sources.name")
+    revision: int = Field(primary_key=True)
+    provenance: str
+    retired: bool
+    actor_id: int | None = None
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    document: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
 class LocalBindingPolicyEntity(SQLModel, table=True):
     """Versioned local allowlist; never contains credential values."""
 
@@ -703,6 +727,14 @@ class BuildContextEntity(SQLModel, table=True):
     object_version: str | None = None
     manifest: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     expired: bool = False
+
+
+class DockerfileArchiveEntity(SQLModel, table=True):
+    """Small verified Dockerfile archives retained until context cleanup."""
+
+    __tablename__ = "build_dockerfile_archives"
+    key: str = Field(primary_key=True)
+    content: bytes
 
 
 class BuildContextReceiptEntity(SQLModel, table=True):
@@ -777,3 +809,20 @@ class PreparationConfigEntity(SQLModel, table=True):
     __tablename__ = "preparation_config"
     id: int = Field(default=1, primary_key=True)
     limits: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+
+
+class BuildConfigEntity(SQLModel, table=True):
+    """Administrator-managed installation policy for development image builds."""
+    __tablename__ = "build_config"
+    id: int = Field(default=1, primary_key=True)
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class BuildDestinationEntity(SQLModel, table=True):
+    __tablename__ = "build_destination"
+    id: int = Field(default=1, primary_key=True)
+    namespace: str
+    repositories: list[str] = Field(sa_column=Column(JSON, nullable=False))
+    push_secret: str | None = None
+    push_config_enc: str | None = None
+    reuse_pull_credentials: bool = False

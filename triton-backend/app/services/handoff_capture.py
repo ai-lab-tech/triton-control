@@ -65,7 +65,7 @@ def keep_lease(context: ExecutionContext) -> Iterator[Callable[[], None]]:
 
 
 class CaptureAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             request = HandoffRequest.model_validate(payload)
             normalized = request.model_dump(mode="json")

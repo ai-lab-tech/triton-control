@@ -2,10 +2,38 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "releaseSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    },
+    "localBuilds": {"$ref": "#/properties/imageBuilds"},
+    "imageBuilds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {"type": "string", "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "destinationRepositories": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+$"}}
+      }
+    },
     "buildQualification": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "kaniko": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "image"],
+          "properties": {
+            "version": { "$ref": "#/properties/buildQualification/properties/policy/anyOf/1/properties/release" },
+            "image": { "$ref": "#/properties/buildQualification/properties/policy/anyOf/1/properties/executor_image" }
+          }
+        },
         "contextRetentionDays": {
           "type": "integer",
           "minimum": 1,
@@ -19,6 +47,7 @@
             },
             {
               "additionalProperties": false,
+              "dependencies": {"executor_image": ["release"], "release": ["executor_image"]},
               "properties": {
                 "enabled": {
                   "default": false,
@@ -167,8 +196,6 @@
                 }
               },
               "required": [
-                "executor_image",
-                "release",
                 "namespace",
                 "s3_profile_name",
                 "staging_prefix",

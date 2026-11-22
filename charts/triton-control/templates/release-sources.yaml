@@ -1,0 +1,21 @@
+{{- $releaseSourceFile := (default dict .Values.releaseSources).file -}}
+{{- $declared := list -}}
+{{- range .Values.app.env -}}
+{{- if has .name (list "TRITON_RELEASE_SOURCES_JSON" "TRITON_RELEASE_SOURCES_FILE") -}}
+{{- $declared = append $declared .name -}}
+{{- end -}}
+{{- end -}}
+{{- if or (gt (len $declared) 1) (and $releaseSourceFile $declared) -}}
+{{- fail "Choose one release source input: releaseSources.file, TRITON_RELEASE_SOURCES_JSON, or TRITON_RELEASE_SOURCES_FILE" -}}
+{{- end -}}
+{{- if $releaseSourceFile }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "triton-control.releaseSourcesConfigMapName" . }}
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+immutable: true
+data:
+  sources.json: {{ $releaseSourceFile | mustToJson | quote }}
+{{- end }}

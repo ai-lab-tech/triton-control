@@ -1,6 +1,7 @@
 """Administrator-owned staging configuration and version-pinned S3 I/O."""
 
 import hashlib
+import json
 import os
 import time
 from contextlib import contextmanager
@@ -14,13 +15,113 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError
-from app.repositories import s3_profiles
+from app.repositories import build_config, build_contexts, registry_config, s3_profiles
 from app.schemas.build_contexts import ContextManifest
-from app.schemas.build_policy import BuildPolicy
+from app.schemas.build_policy import (
+    BuildDestination,
+    BuilderImage,
+    BuildPolicy,
+    LocalArchivePolicy,
+    ManagedRegistryPolicy,
+)
 from app.services.storage.s3_client import S3Config, build_s3_client
 
 
-def policy() -> BuildPolicy:
+def saved_pull_credentials(session: Session) -> tuple[str, str]:
+    row = registry_config.get(session)
+    if not row or not row.dockerconfigjson_enc:
+        raise ForbiddenError("Save pull credentials first, or uncheck the option to reuse them")
+    encrypted = row.dockerconfigjson_enc
+    revision = hashlib.sha256(encrypted.encode()).hexdigest()
+    return "pull-" + revision, encrypted
+
+
+def policy(session: Session) -> BuildPolicy:
+    if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
+        raise ForbiddenError("Build context staging is available only in development")
+    base = base_policy(session)
+    destination = build_config.get_destination(session)
+    managed = isinstance(base, (LocalArchivePolicy, ManagedRegistryPolicy))
+    if destination:
+        if managed and destination.namespace != base.namespace:
+            raise ForbiddenError("Use the build namespace provisioned by the installation")
+        if not destination.repositories:
+            return LocalArchivePolicy.model_validate({
+                **base.model_dump(exclude={"managed_registry"}), "namespace": destination.namespace,
+                "allowed_repositories": ("local/serving",), "anonymous_push": True,
+            })
+        push_secret = destination.push_secret or base.push_secret
+        if destination.reuse_pull_credentials:
+            push_secret, _ = saved_pull_credentials(session)
+        if push_secret in (base.base_pull_secret, base.runtime_pull_secret):
+            raise ForbiddenError("Choose a push secret separate from the builder pull secrets")
+        repositories = tuple(destination.repositories)
+        if managed:
+            base = ManagedRegistryPolicy.model_validate(base.model_dump(exclude={"local_archive"}))
+        return base.model_copy(update={
+            "namespace": destination.namespace, "push_secret": push_secret,
+            "anonymous_push": not (destination.push_secret or destination.reuse_pull_credentials),
+            "allowed_repositories": repositories,
+        })
+    return base
+
+
+def installation_destination(namespace: str) -> BuildDestination:
+    try:
+        repositories = json.loads(os.getenv("TRITON_BUILD_DESTINATION_REPOSITORIES", "[]"))
+        return BuildDestination(namespace=namespace, allowed_repositories=repositories)
+    except ValueError:
+        raise ServiceUnavailableError("Invalid imageBuilds destination repositories") from None
+
+
+def reviewed_policy(session: Session, settings: BuildPolicy) -> BuildPolicy | None:
+    if isinstance(settings, ManagedRegistryPolicy):
+        return None
+    if isinstance(settings, LocalArchivePolicy):
+        if not (build_config.get(session) or os.getenv("TRITON_BUILD_POLICY_FILE")):
+            return None
+        return base_policy(session).model_copy(update={"namespace": settings.namespace})
+    return settings
+
+
+def default_executor() -> BuilderImage:
+    configured = os.getenv("TRITON_BUILD_DEFAULT_EXECUTOR")
+    try:
+        return BuilderImage.model_validate_json(configured) if configured is not None else BuilderImage()
+    except ValidationError:
+        raise ServiceUnavailableError("Invalid installation default build executor") from None
+
+
+def with_default_executor(policy: BuildPolicy) -> BuildPolicy:
+    if "executor_image" in policy.model_fields_set:
+        return policy
+    return policy.model_copy(update=default_executor().model_dump())
+
+
+def base_policy(session: Session) -> BuildPolicy:
+    row = build_config.get(session)
+    if row:
+        return with_default_executor(BuildPolicy.model_validate(row.policy))
+    namespace = os.getenv("TRITON_LOCAL_BUILD_NAMESPACE")
+    development = os.getenv("TRITON_CONTROL_MODE", "development") == "development"
+    if development and namespace and not os.getenv("TRITON_BUILD_POLICY_FILE"):
+        if namespace in {"default", "kube-system", "kube-public", "kube-node-lease", os.getenv("POD_NAMESPACE")}:
+            raise ForbiddenError("Local builds require a dedicated development namespace")
+        repositories = installation_destination(namespace).allowed_repositories
+        model = ManagedRegistryPolicy if repositories else LocalArchivePolicy
+        return model(
+            **default_executor().model_dump(), namespace=namespace, enabled=True, anonymous_push=True,
+            allowed_repositories=repositories or ("local/serving",), s3_profile_name="runtime",
+            staging_prefix="build-contexts/",
+            # These are Kubernetes Secret reference names. Credential contents are supplied at build time.
+            base_pull_secret="unused-base", runtime_pull_secret="unused-runtime", push_secret="unused-push",  # nosec B106
+            provisioning_revision="local-archive-v1", egress_cidrs=("127.0.0.1/32",),
+            timeout_seconds=2400, memory_mib=3072, cpu_millis=2000,
+        )
+    return deployment_policy()
+
+
+def deployment_policy() -> BuildPolicy:
     if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
         raise ForbiddenError("Build context staging is available only in development")
     filename = os.getenv("TRITON_BUILD_POLICY_FILE", "")
@@ -31,7 +132,7 @@ def policy() -> BuildPolicy:
             raw = stream.read(65537)
         if len(raw) > 65536:
             raise ValueError("Oversized policy")
-        return BuildPolicy.model_validate_json(raw)
+        return with_default_executor(BuildPolicy.model_validate_json(raw))
     except (OSError, ValueError, ValidationError):
         raise ServiceUnavailableError("Invalid installation build policy") from None
 
@@ -46,7 +147,27 @@ def retention_seconds() -> int:
         raise ServiceUnavailableError("Build context retention must be between 1 and 365 days") from None
 
 
-def binding(session: Session, settings: BuildPolicy) -> dict[str, Any]:
+def available_profiles(session: Session) -> tuple[str, ...]:
+    return tuple(p.name for p in s3_profiles.list_all(session) if urlparse(p.endpoint).scheme == "https")
+
+
+def binding(session: Session, settings: BuildPolicy, selected: str | None = None) -> dict[str, Any]:
+    prefix = settings.staging_prefix
+    if reviewed_policy(session, settings) is None:
+        profiles = available_profiles(session)
+        if selected is None and len(profiles) == 1:
+            selected = profiles[0]
+        if selected not in profiles or selected is None:
+            raise BadRequestError("Select an available HTTPS S3 profile for this build")
+        rows = s3_profiles.list_by_name(session, selected)
+        if len(rows) != 1:
+            raise BadRequestError("Selected build storage profile is unavailable")
+        profile = rows[0]
+        root = profile.prefix.strip("/")
+        return {"profile_id": profile.id, "endpoint": profile.endpoint, "bucket": profile.bucket,
+                "prefix": f"{root}/{prefix}" if root else prefix}
+    if selected and selected != settings.s3_profile_name:
+        raise ForbiddenError("This installation uses a fixed build storage profile")
     rows = s3_profiles.list_by_name(session, settings.s3_profile_name)
     if len(rows) != 1:
         raise ServiceUnavailableError("One unambiguous build staging S3 profile is required")
@@ -150,8 +271,46 @@ class ContextStore:
             raise ServiceUnavailableError("Build context cleanup unavailable") from None
 
 
+class DockerfileStore:
+    ca_certificate = ""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def put(self, key: str, stream: BinaryIO, manifest: ContextManifest) -> str:
+        data = stream.read(131073)
+        if len(data) > 131072 or len(data) != manifest.archive_bytes:
+            raise BadRequestError("Dockerfile archive exceeds the direct build limit")
+        build_contexts.store_archive(self.session, key, data)
+        return manifest.archive_digest
+
+    def content(self, key: str, version: str) -> bytes:
+        data = build_contexts.archive(self.session, key)
+        if data is None or "sha256:" + hashlib.sha256(data).hexdigest() != version:
+            raise BadRequestError("Retained Dockerfile archive is missing or changed")
+        return data
+
+    def verify(self, key: str, version: str, manifest: ContextManifest, checkpoint: Callable[[], None]) -> None:
+        checkpoint()
+        if version != manifest.archive_digest or len(self.content(key, version)) != manifest.archive_bytes:
+            raise BadRequestError("Retained Dockerfile archive differs")
+
+    def recover(self, key: str, manifest: ContextManifest, checkpoint: Callable[[], None]) -> str | None:
+        if build_contexts.archive(self.session, key) is None:
+            return None
+        self.verify(key, manifest.archive_digest, manifest, checkpoint)
+        return manifest.archive_digest
+
+    def delete_prefix(self, prefix: str, checkpoint: Callable[[], None]) -> None:
+        checkpoint()
+        build_contexts.delete_archives(self.session, prefix)
+
+
 @contextmanager
-def storage(session: Session, expected: dict[str, Any]) -> Iterator[ContextStore]:
+def storage(session: Session, expected: dict[str, Any]) -> Iterator[ContextStore | DockerfileStore]:
+    if expected.get("dockerfile_only"):
+        yield DockerfileStore(session)
+        return
     profile = s3_profiles.get(session, expected["profile_id"])
     if profile is None or profile.endpoint != expected["endpoint"] or profile.bucket != expected["bucket"]:
         raise ForbiddenError("Build storage binding changed; restore the original binding before recovery")

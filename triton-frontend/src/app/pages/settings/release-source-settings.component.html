@@ -1,0 +1,162 @@
+<h2 class="card-title">Release sources</h2>
+@if (!canWrite()) {
+  <p>Production source changes require independent review.</p>
+}
+<div class="actions">
+  <button mat-stroked-button type="button" (click)="load()" [disabled]="busy()">Reload</button>
+  @if (canWrite()) {
+    <button
+      mat-flat-button
+      type="button"
+      (click)="edit()"
+      [disabled]="busy() || sources() === null"
+    >
+      Add source
+    </button>
+  }
+</div>
+@if (sources(); as registrations) {
+  @for (item of registrations; track item.source.metadata.name) {
+    <section [attr.aria-label]="item.source.metadata.name">
+      <h3>{{ item.source.metadata.name }}</h3>
+      @let spec = item.source.spec;
+      @if (spec.location.type === "git") {
+        <p>
+          Git · {{ spec.location.repository }} · {{ spec.location.ref }} · {{ spec.location.path }}
+        </p>
+      } @else {
+        <p>S3 · {{ spec.location.bucket }}/{{ spec.location.key }}</p>
+      }
+      <p>
+        {{ spec.enabled ? "Enabled" : "Disabled" }} · Poll every {{ spec.intervalSeconds }} seconds
+      </p>
+      <p>Read binding {{ spec.readCredential }} · Targets {{ spec.allowedTargets.join(", ") }}</p>
+      <p>
+        {{ origins[item.provenance] }} ·
+        {{ spec.approval.mode === "manual" ? "Manual approval" : "Independent approval" }}
+        @if (!item.editable) {
+          · Read-only
+        }
+      </p>
+      @if (canWrite() && item.editable) {
+        <div class="actions">
+          <button mat-button type="button" (click)="edit(item)" [disabled]="busy()">Edit</button>
+          <button mat-button type="button" (click)="requestRemoval(item)" [disabled]="busy()">
+            Remove
+          </button>
+        </div>
+      }
+    </section>
+  } @empty {
+    <p>No release sources registered.</p>
+  }
+}
+@if (removal(); as source) {
+  <p>
+    Remove {{ source.source.metadata.name }}? Existing deployments and source history are retained.
+  </p>
+  <div class="actions">
+    <button mat-stroked-button type="button" (click)="removal.set(null)" [disabled]="busy()">
+      Cancel
+    </button>
+    <button mat-flat-button type="button" (click)="remove(source)" [disabled]="busy()">
+      Remove source
+    </button>
+  </div>
+}
+@if (draft(); as values) {
+  <form #form="ngForm" (ngSubmit)="save(values)">
+    <h3>{{ values.original ? "Edit release source" : "Register release source" }}</h3>
+    <div class="limits-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Source ID</mat-label>
+        <input
+          matInput
+          name="sourceId"
+          [(ngModel)]="values.name"
+          [readonly]="!!values.original"
+          required
+          maxlength="63"
+          pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+          [disabled]="busy()"
+        />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Provider</mat-label>
+        <mat-select name="provider" [(ngModel)]="values.type" [disabled]="busy()">
+          <mat-option value="git">Git</mat-option>
+          <mat-option value="s3">S3</mat-option>
+        </mat-select>
+      </mat-form-field>
+      @if (values.type === "git") {
+        <mat-form-field appearance="outline">
+          <mat-label>Git HTTPS repository</mat-label>
+          <input
+            matInput
+            name="repository"
+            [(ngModel)]="values.repository"
+            required
+            [disabled]="busy()"
+          />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Git ref</mat-label>
+          <input matInput name="ref" [(ngModel)]="values.ref" required [disabled]="busy()" />
+        </mat-form-field>
+      } @else {
+        <mat-form-field appearance="outline">
+          <mat-label>S3 bucket</mat-label>
+          <input matInput name="bucket" [(ngModel)]="values.bucket" required [disabled]="busy()" />
+        </mat-form-field>
+      }
+      <mat-form-field appearance="outline">
+        <mat-label>{{
+          values.type === "git" ? "Target document path" : "Target object key"
+        }}</mat-label>
+        <input matInput name="path" [(ngModel)]="values.path" required [disabled]="busy()" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Read binding name</mat-label>
+        <input matInput name="binding" [(ngModel)]="values.binding" required [disabled]="busy()" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Allowed target IDs</mat-label>
+        <input matInput name="targets" [(ngModel)]="values.targets" required [disabled]="busy()" />
+        <mat-hint>Separate target IDs with commas</mat-hint>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Polling interval in seconds</mat-label>
+        <input
+          matInput
+          name="interval"
+          type="number"
+          min="1"
+          max="2592000"
+          step="1"
+          [(ngModel)]="values.interval"
+          required
+          [disabled]="busy()"
+        />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Approval mode</mat-label>
+        <mat-select name="approval" [(ngModel)]="values.approval" [disabled]="busy()">
+          <mat-option value="manual">Manual</mat-option>
+          <mat-option value="independently-approved">Independently approved</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <mat-checkbox name="enabled" [(ngModel)]="values.enabled" [disabled]="busy()"
+      >Enable source</mat-checkbox
+    >
+    <div class="actions">
+      <button mat-stroked-button type="button" (click)="draft.set(null)" [disabled]="busy()">
+        Cancel
+      </button>
+      <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">Save source</button>
+    </div>
+  </form>
+}
+@if (message()) {
+  <p role="status">{{ message() }}</p>
+}

@@ -25,7 +25,7 @@ class ExampleAdapter:
         self.lose_ack = False
         self.allowed = True
 
-    def normalize(self, payload):
+    def normalize(self, session, payload):
         return payload
 
     def authorize(self, session, actor, target, action):

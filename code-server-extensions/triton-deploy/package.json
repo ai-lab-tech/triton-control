@@ -2,7 +2,7 @@
   "name": "triton-control-deploy",
   "displayName": "Triton Control Deploy",
   "description": "Browse S3 profiles and upload workspace files and folders with drag and drop; deploy Triton model repositories.",
-  "version": "0.4.12",
+  "version": "0.4.15",
   "publisher": "triton-control",
   "engines": {
     "vscode": "^1.92.0"
@@ -222,6 +222,13 @@
           "group": "navigation@92"
         }
       ],
+      "editor/context": [
+        {
+          "command": "tritonControl.buildServingImage",
+          "when": "(resourceScheme == file || resourceScheme == vscode-remote) && resourceFilename =~ /^dockerfile([.].+)?$/i",
+          "group": "navigation@92"
+        }
+      ],
       "explorer/context": [
         {
           "command": "tritonControl.buildHuggingFaceRepository",
@@ -250,7 +257,7 @@
         },
         {
           "command": "tritonControl.buildServingImage",
-          "when": "explorerResourceIsFolder && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "when": "(resourceScheme == file || resourceScheme == vscode-remote) && (explorerResourceIsFolder || resourceFilename =~ /^dockerfile([.].+)?$/i)",
           "group": "navigation@92"
         }
       ],

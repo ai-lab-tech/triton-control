@@ -12,26 +12,30 @@ from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.entities import BuildAttemptEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
-from app.repositories import build_contexts, builds, operations, preparation, users
-from app.schemas.build_policy import BuildPolicy
+from app.repositories import build_config, build_contexts, builds, operations, preparation, users
+from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy
 from app.schemas.builds import BuildAttemptResponse, BuildLogsResponse, BuildOptions, BuildRequest, BuildResponse
 from app.schemas.operations import OperationRequest, ReconcileResult
 from app.services import preparation as tasks
 from app.services.builds import access, contexts, contexts_storage, jobs_kubernetes
 from app.services.builds.qualification import require_qualified
 from app.services.operations import Action, ExecutionContext, dto, service
+from app.services.registry_settings import decrypt_registry_secret
 
 KIND = "build.image"
 
 
 def qualified(session: Session) -> BuildPolicy:
-    settings = contexts_storage.policy()
+    settings = contexts_storage.policy(session)
     if settings.namespace in {"default", "kube-system", "kube-public", os.getenv("POD_NAMESPACE", "")}:
         raise ForbiddenError("Runtime builds require a dedicated development namespace")
+    reviewed = contexts_storage.reviewed_policy(session, settings)
+    if reviewed is None:
+        return settings
     revision = os.getenv("TRITON_BUILD_FIXTURE_REVISION", "")
     if not revision:
         raise ForbiddenError("Configure the reviewed build fixture revision before enabling builds")
-    require_qualified(session, settings, revision, mode=os.getenv("TRITON_CONTROL_MODE", "development"))
+    require_qualified(session, reviewed, revision, mode=os.getenv("TRITON_CONTROL_MODE", "development"))
     return settings
 
 
@@ -62,7 +66,7 @@ def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key:
     access.task_scope(claims, request.task_id)
     # Validate context ownership and qualification before accepting public API intent.
     settings = qualified(session)
-    if request.repository not in settings.allowed_repositories:
+    if not settings.permits_repository(request.repository):
         raise ForbiddenError("Destination repository is not allowed")
     context_op = contexts.checked(session, claims, request.context_id)
     bound_task = context_op.payload["request"].get("task_id")
@@ -71,7 +75,7 @@ def submit(session: Session, claims: dict[str, Any], request: BuildRequest, key:
     if not contexts.read(session, claims, request.context_id).ready:
         raise ConflictError("A verified retained build context is required")
     result = service.submit(session, claims, OperationRequest(
-        kind=KIND, target=str(request.task_id), payload=request.model_dump(mode="json"),
+        kind=KIND, target=str(request.task_id), payload=request.model_dump(mode="json", exclude_none=True),
     ), key)
     return response(session, operations.get(session, result.id))
 
@@ -125,16 +129,17 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
     if bound_task is not None and bound_task != str(request.task_id):
         raise ForbiddenError("Build context belongs to a different task")
     receipt = contexts.consume_for_build(session, claims_from_user(actor, {}), request.context_id,
-                                          os.environ["TRITON_BUILD_FIXTURE_REVISION"], context.checkpoint)
+                                          os.getenv("TRITON_BUILD_FIXTURE_REVISION", ""), context.checkpoint)
     fence(session, op)
     retained = build_contexts.get(session, request.context_id, lock=True)
     if retained.expired:
         raise ConflictError("Build context expired during admission")
     number = existing.number + 1 if existing else 1
+    tag = request.tag or f"build-{op.id}-{number}"
     row = BuildAttemptEntity(
         operation_id=op.id, number=number, context_id=request.context_id,
         policy=settings.model_dump(mode="json"), context_receipt=receipt, executor_image=settings.executor_image,
-        destination=f"{request.repository}:build-{op.id}-{number}", namespace=settings.namespace,
+        destination=f"{request.repository}:{tag}", namespace=settings.namespace,
         job_name=f"build-{op.id}-{number}", created_at=operations.now(session),
         deadline_at=operations.now(session) + timedelta(seconds=settings.timeout_seconds + 120),
     )
@@ -150,19 +155,23 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
 def outcome(row: BuildAttemptEntity) -> ReconcileResult:
     result = {"attempt": row.number, "job_uid": row.job_uid, "final_digest": row.final_digest,
               "image": row.destination.rsplit(":", 1)[0] + "@" + row.final_digest if row.final_digest else None}
+    if row.policy.get("local_archive"):
+        result["image"] = None
+        if row.state == "succeeded":
+            result["archive"] = f"{row.namespace}/{row.job_name}/image.tar"
     return ReconcileResult.model_validate({"state": row.state, "result": result, "message": "Build " + row.state})
 
 
 class BuildAdapter:
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             request = BuildRequest.model_validate(payload)
         except ValidationError:
             raise BadRequestError("Invalid image build request") from None
-        policy = contexts_storage.policy()
-        if request.repository not in policy.allowed_repositories:
+        policy = contexts_storage.policy(session)
+        if not policy.permits_repository(request.repository):
             raise ForbiddenError("Destination repository is not allowed")
-        return {"request": request.model_dump(mode="json"), "policy_hash": policy.fingerprint()}
+        return {"request": request.model_dump(mode="json", exclude_none=True), "policy_hash": policy.fingerprint()}
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:
         contexts.authorize_actor(session, actor)
@@ -244,10 +253,29 @@ def reconcile_attempt(
         if settings.fingerprint() != op.payload["policy_hash"]:
             raise ForbiddenError("Build policy changed before execution")
         receipt = row.context_receipt
+        archive = None
+        url = ca_certificate = ""
         with contexts_storage.storage(session, receipt["storage_binding"]) as store:
-            url = store.download_url(receipt["key"], receipt["version_id"], settings.timeout_seconds + 180)
+            if isinstance(store, contexts_storage.DockerfileStore):
+                archive = store.content(receipt["key"], receipt["version_id"])
+            else:
+                url = store.download_url(receipt["key"], receipt["version_id"], settings.timeout_seconds + 180)
             ca_certificate = store.ca_certificate
-        provider.provision(row, url, ca_certificate)
+        destination = None if isinstance(settings, LocalArchivePolicy) else build_config.get_destination(session)
+        push_config = None
+        if destination and destination.reuse_pull_credentials:
+            reference, encrypted = contexts_storage.saved_pull_credentials(session)
+            if reference != settings.push_secret:
+                raise ForbiddenError("Pull credentials changed before execution")
+            push_config = decrypt_registry_secret(encrypted)
+        elif destination and destination.push_config_enc:
+            if destination.push_secret != settings.push_secret or destination.namespace != settings.namespace:
+                raise ForbiddenError("Build credentials changed before execution")
+            push_config = decrypt_registry_secret(destination.push_config_enc)
+        if archive is None:
+            provider.provision(row, url, ca_certificate, push_config)
+        else:
+            provider.provision(row, url, ca_certificate, push_config, archive=archive)
         resource = provider.create(row)  # Suspended: cannot start until its UID is committed.
         row.job_uid = resource.metadata.uid
         session.add(row)
@@ -294,7 +322,10 @@ def options(session: Session, claims: dict[str, Any], task_id: UUID) -> BuildOpt
     adapter.authorize(session, actor, str(task_id), "submit")
     settings = qualified(session)
     return BuildOptions(task_id=task_id, repositories=settings.allowed_repositories,
-                        max_context_bytes=settings.max_context_bytes)
+                        max_context_bytes=settings.max_context_bytes,
+                        local_archive=isinstance(settings, LocalArchivePolicy),
+                        staging_profiles=contexts_storage.available_profiles(session)
+                        if contexts_storage.reviewed_policy(session, settings) is None else ())
 
 
 def list_for_task(session: Session, claims: dict[str, Any], task_id: UUID,
