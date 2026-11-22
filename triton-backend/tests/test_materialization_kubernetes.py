@@ -17,9 +17,8 @@ from kubernetes import client, config  # type: ignore[import-untyped]
 from app.core.canonical import inventory_digest
 from app.schemas.materialization import StorageBinding
 from app.schemas.serving_metadata import StartupModel
-from app.services.materialization.kubernetes import manifests
-from tests import test_materialization as unit
-from tests.materialization_fixtures import FILES, LIMITS, plan, policy
+from app.services.materialization.kubernetes import manifests, serving_manifests
+from tests.materialization_fixtures import FILES, LIMITS, plan, policy, serving_release
 
 IMAGE = os.getenv("MATERIALIZER_TEST_IMAGE", "")
 KUBECONFIG = os.getenv("MATERIALIZER_TEST_KUBECONFIG", "")
@@ -107,7 +106,7 @@ class MaterializerKubernetesTests(MaterializerKubernetesFixture):
             payload = desired.model_dump(mode="json")
             payload["prepared_inventory"]["files"][0]["digest"] = "sha256:" + "0" * 64
             desired = type(desired).model_validate(payload)
-        release = unit.MaterializerPodTests().release()
+        release = serving_release()
         repository = release.spec.repository.model_copy(
             update={
                 "uri": f"s3://fixture/{case}",
@@ -397,3 +396,114 @@ print(Path('/var/run/triton-materialization/receipt.json').read_text())
         result = self.execute(case)
         # Assert
         self.assertIsNone(result)
+
+    def test_declared_startup_rollout_gates_replica_changes(self):
+        from dataclasses import asdict
+        from unittest.mock import patch
+
+        from sqlmodel import Session, SQLModel, create_engine
+
+        from app.core.canonical import digest
+        from app.db.entities import TritonInstanceEntity
+        from app.exceptions import ConflictError
+        from app.services.deployment import model_state
+        from app.services.deployment import model_state_provider as provider_module
+
+        provider = provider_module.ModelStateProvider(self.api)
+        name = "declared-" + uuid4().hex[:8]
+        labels = {"test": name}
+        provider.apps.create_namespaced_deployment(self.ns, {
+            "metadata": {"name": name},
+            "spec": {"replicas": 1, "selector": {"matchLabels": labels}, "template": {
+                "metadata": {"labels": labels},
+                "spec": {"terminationGracePeriodSeconds": 1, "containers": [
+                    {
+                        "name": "triton", "image": IMAGE,
+                        "command": ["python", "-c", "import signal; signal.pause()"],
+                        "args": ["--model-control-mode=explicit"],
+                    },
+                ]},
+            }},
+        })
+        self.addCleanup(provider.apps.delete_namespaced_deployment, name, self.ns)
+        desired = plan(IMAGE)
+        fixture = serving_release().spec.model_dump(mode="json", by_alias=True)
+        fixture["repository"].update(uri="s3://fixture/valid", materializerImage=IMAGE)
+        fixture["resourcesPerReplica"]["gpuCount"] = 0
+        payload = {
+            "apiVersion": "serving.triton-control/v1alpha1", "kind": "DevelopmentStartupRelease",
+            "spec": {
+                "image": fixture["image"], "repository": fixture["repository"],
+                "resourcesPerReplica": fixture["resourcesPerReplica"],
+                "models": [{"name": "iris", "versions": ["1"]}],
+            },
+        }
+        binding = {
+            "release": payload, "plan": desired.model_dump(mode="json"),
+            "policy": policy(IMAGE, PLATFORM).model_dump(mode="json"), "limits": asdict(LIMITS),
+            "storage": StorageBinding(
+                bucket="fixture", prefix="valid", secret_name="fixture",
+                endpoint="http://fixture:8080", allow_http=True,
+            ).model_dump(mode="json"),
+        }
+        release = digest(payload)
+        self.core.create_namespaced_config_map(self.ns, {
+            "metadata": {"name": f"{name}.startup.{release.split(':')[1][:32]}"},
+            "immutable": True, "data": {"startup.json": json.dumps(binding)},
+        })
+        engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            session.add(TritonInstanceEntity(
+                id=1, name=name, url="http://fixture:18000", is_self_deployed=True,
+                deployment_runtime="kubernetes", deployment_name=name, deployment_namespace=self.ns,
+            ))
+            session.commit()
+
+            def change(action, **kwargs):
+                return model_state.change(session, {"role": "admin"}, 1, action=action, **kwargs)
+
+            def await_state(predicate):
+                deadline = time.monotonic() + 160
+                while time.monotonic() < deadline:
+                    state = change("read")
+                    if predicate(state):
+                        return state
+                    time.sleep(1)
+                self.fail(f"Deployment did not reach expected state: {state}")
+
+            def render(*args, **kwargs):
+                # Keep the actual init container and readiness sidecar. Substitute
+                # synthetic Triton HTTP responses for GPU-dependent Triton.
+                cm, pod = serving_manifests(*args, **kwargs)
+                cm["data"]["fixture.py"] = Path(__file__).with_name("readiness_triton_server.py").read_text()
+                main = pod["spec"]["containers"][0]
+                main.update(image=IMAGE, command=["python", "/fixture/fixture.py"], args=["slow"])
+                main["volumeMounts"].append({"name": "materialization-plan", "mountPath": "/fixture", "readOnly": True})
+                pod["spec"]["terminationGracePeriodSeconds"] = 1
+                return [cm, pod]
+
+            from contextlib import nullcontext
+
+            with patch.object(model_state, "api_client", side_effect=lambda: nullcontext(self.api)), patch.object(
+                provider_module, "serving_manifests", side_effect=render,
+            ):
+                await_state(lambda state: state.interactive_allowed)
+                with self.assertRaises(ConflictError):
+                    change("scale", replicas=2)
+                declared = change("declare", release_digest=release)
+                self.assertEqual(declared.mode, "declared")
+                self.assertFalse(declared.can_scale_above_one)
+                with self.assertRaises(ConflictError):
+                    change("scale", replicas=2)
+                await_state(lambda state: state.can_scale_above_one)
+                change("scale", replicas=2)
+                await_state(lambda state: state.replicas == 2 and state.rollout_complete)
+                _, replicas = provider.snapshot(self.ns, name)
+                self.assertEqual([pod.release for pod in replicas], [release, release])
+                change("scale", replicas=1)
+                stable = await_state(lambda state: state.can_restore)
+                self.assertFalse(stable.interactive_allowed)
+                change("restore")
+                await_state(lambda state: state.interactive_allowed)

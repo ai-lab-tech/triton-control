@@ -50,6 +50,7 @@ Operations:
 - [Configuration](configuration.md): backend environment variables, OIDC and email source modes, SMTP settings, and GitOps examples.
 - [Deployment](deployment.md): Kubernetes prerequisites, Helm deployment, Docker Compose, and Podman Compose.
 - [Security](security.md): secrets, OIDC, lifecycle links, SMTP, TLS, S3 credentials, and proxy headers.
+- [Declared startup model state](declared-model-state.md): prepare a frozen startup release and scale a managed development deployment.
 - [Troubleshooting](troubleshooting.md): common Docker, database, and Triton issues.
 
 Reference:

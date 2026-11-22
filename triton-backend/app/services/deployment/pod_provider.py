@@ -161,7 +161,9 @@ class PodProvider:
         )
         return state, sorted(pods, key=lambda p: (p.name, p.uid))
 
-    def verify(self, namespace: str, name: str, deployment_uid: str, pod: PodState) -> None:
+    def verify(
+        self, namespace: str, name: str, deployment_uid: str, pod: PodState, *, generation: int | None = None,
+    ) -> dict[str, Any]:
         current = self.data(self.core.read_namespaced_pod(pod.name, namespace, _request_timeout=TIMEOUT))
         if current["metadata"]["uid"] != pod.uid:
             raise NotFoundError("Selected pod was removed or replaced; select a current pod")
@@ -172,8 +174,12 @@ class PodProvider:
         rs = self.data(self.apps.read_namespaced_replica_set(owner["name"], namespace, _request_timeout=TIMEOUT))
         if rs["metadata"]["uid"] != owner["uid"] or not controlled_by(rs, "Deployment", deployment_uid):
             raise NotFoundError("Selected pod no longer belongs to this deployment")
-        if self.deployment(namespace, name)["metadata"]["uid"] != deployment_uid:
+        metadata = self.deployment(namespace, name)["metadata"]
+        if metadata["uid"] != deployment_uid:
             raise NotFoundError("Deployment was replaced; refresh pod state")
+        if generation is not None and metadata["generation"] != generation:
+            raise ConflictError("Deployment changed during observation; refresh pod state")
+        return current
 
     def logs(
         self,

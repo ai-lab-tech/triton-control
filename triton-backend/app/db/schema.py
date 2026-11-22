@@ -18,6 +18,10 @@ def create_tables(engine: Engine) -> None:
         if connection.dialect.name == "postgresql":
             connection.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": SCHEMA_LOCK_ID})
         SQLModel.metadata.create_all(connection)
+        instance_columns = inspect(connection).get_columns("triton_instances")
+        if not any(column["name"] == "model_state" for column in instance_columns):
+            connection.execute(text("ALTER TABLE triton_instances ADD COLUMN model_state JSON"))
+
         columns = inspect(connection).get_columns("build_destination")
         if not any(column["name"] == "push_secret" for column in columns):
             connection.execute(text("ALTER TABLE build_destination ADD COLUMN push_secret VARCHAR"))

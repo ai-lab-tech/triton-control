@@ -100,11 +100,12 @@ test.describe.serial("code-server plugin workflows", () => {
     // A restored workbench can render Explorer before extension commands are ready.
     await command("Triton Control: Refresh Repositories");
     await explorer();
-    const localRoot = row("workspace");
+    const localRoot = workspaceRow();
     if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
       await localRoot.locator(".monaco-tl-twistie").click();
     }
-    await expect(row(hfSource)).toBeVisible();
+    const sourceFolder = workspaceRow(hfSource);
+    await expect(sourceFolder).toBeVisible();
     const action = workbench.getByRole("menuitem", {
       name: "Triton Control: Build Repository from Hugging Face",
       exact: true,
@@ -115,8 +116,8 @@ test.describe.serial("code-server plugin workflows", () => {
     // activated, inspect may take time: do not cancel/relaunch it every two seconds.
     await expect(async () => {
       await workbench.locator("body").press("Escape");
-      await row(hfSource).click({ timeout: 2000 });
-      await row(hfSource).click({ button: "right", timeout: 2000 });
+      await sourceFolder.click({ timeout: 2000 });
+      await sourceFolder.click({ button: "right", timeout: 2000 });
       await expect(action).toBeVisible({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
     // Hover updates Monaco's active menu item; DOM focus alone does not update
@@ -178,6 +179,20 @@ test.describe.serial("code-server plugin workflows", () => {
   function row(name: string) {
     return workbench.locator('.monaco-list-row[role="treeitem"]').filter({
       has: workbench.getByText(name, { exact: true }),
+    });
+  }
+
+  function workspaceRow(path = "") {
+    // Explorer uses ~ for workspace descendants and can append decoration text.
+    const labels = path ? [`~/${path}`, `/workspace/${path}`] : ["/workspace"];
+    const pathSelector = labels
+      .flatMap((label) => [
+        `[aria-label=${JSON.stringify(label)}]`,
+        `[aria-label^=${JSON.stringify(`${label} • `)}]`,
+      ])
+      .join(", ");
+    return workbench.locator('.monaco-list-row[role="treeitem"]').filter({
+      has: workbench.locator(`.explorer-item:is(${pathSelector})`),
     });
   }
 
@@ -355,17 +370,18 @@ test.describe.serial("code-server plugin workflows", () => {
       .toBe("edited smoke content");
     await explorer();
     // Showing Explorer does not expand the local workspace after editing S3 files.
-    const localRoot = row("workspace");
+    const localRoot = workspaceRow();
     await expect(localRoot).toBeVisible();
     if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
       await localRoot.locator(".monaco-tl-twistie").click();
     }
-    await expect(row(repository)).toBeVisible();
-    if ((await row(repository).getAttribute("aria-expanded")) === "true") {
-      await row(repository).locator(".monaco-tl-twistie").click();
+    const localRepository = workspaceRow(repository);
+    await expect(localRepository).toBeVisible();
+    if ((await localRepository.getAttribute("aria-expanded")) === "true") {
+      await localRepository.locator(".monaco-tl-twistie").click();
     }
-    await expect(row(repository)).toHaveAttribute("aria-expanded", "false");
-    await row(repository).getByText(repository, { exact: true }).dragTo(root);
+    await expect(localRepository).toHaveAttribute("aria-expanded", "false");
+    await localRepository.getByText(repository, { exact: true }).dragTo(root);
     await expect
       .poll(() => probe(() => s3("get", `${prefix}/${repository}/${model}/config.pbtxt`)), {
         timeout: 60_000,
@@ -382,22 +398,15 @@ test.describe.serial("code-server plugin workflows", () => {
       .poll(() => probe(() => readFile(`/workspace/${filename}`)))
       .toBe("edited smoke content");
     expect(s3("get", `${prefix}/${filename}`)).toBe("edited smoke content");
-    // Hide the remote repository copy before selecting the local repository for deployment.
-    await root.click();
-    await page.keyboard.press("ArrowLeft");
   });
 
   test("deployment webview uploads the repository and creates a deployment", async () => {
     await explorer();
-    const localRoot = row("workspace");
+    const localRoot = workspaceRow();
     if ((await localRoot.getAttribute("aria-expanded")) !== "true") {
       await localRoot.locator(".monaco-tl-twistie").click();
     }
-    const remoteRoot = row("S3 · Smoke S3 · plugin-smoke");
-    if ((await remoteRoot.getAttribute("aria-expanded")) === "true") {
-      await remoteRoot.locator(".monaco-tl-twistie").click();
-    }
-    await row(repository).click({ button: "right" });
+    await workspaceRow(repository).click({ button: "right" });
     await workbench
       .getByRole("menuitem", { name: "Triton Control: Deploy Model Repository", exact: true })
       .hover();
@@ -534,19 +543,15 @@ test.describe.serial("code-server plugin workflows", () => {
     ).toBeVisible();
     await command("Triton Control: Refresh Repositories");
     await explorer();
-    // Quick Open can still be indexing after restart, with only S3 history available.
-    // Open the persisted file from the local tree, hiding its uploaded S3 copy.
-    const remoteRoot = row("S3 · Smoke S3 · plugin-smoke");
-    if ((await remoteRoot.getAttribute("aria-expanded")) === "true") {
-      await remoteRoot.locator(".monaco-tl-twistie").click();
-    }
-    for (const name of ["workspace", repository, model]) {
-      const folder = row(name);
+    // Quick Open can still be indexing after restart. Open the persisted file
+    // through its local Explorer path, even when the uploaded S3 copy is visible.
+    for (const path of ["", repository, `${repository}/${model}`]) {
+      const folder = workspaceRow(path);
       if ((await folder.getAttribute("aria-expanded")) !== "true") {
         await folder.locator(".monaco-tl-twistie").click();
       }
     }
-    await row("config.pbtxt").dblclick();
+    await workspaceRow(`${repository}/${model}/config.pbtxt`).dblclick();
     await expect(workbench.locator(".monaco-editor").first()).toContainText("python");
     expect(JSON.parse(readFile(`/workspace/${hfRepository}/serving.json`)).generator_version).toBe(
       required("PLUGIN_SMOKE_HF_BUILDER_VERSION"),

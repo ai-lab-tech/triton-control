@@ -10,7 +10,9 @@ import { AuthStore } from "../../../shared/auth/auth.store";
 import {
   DeploymentsService,
   InstancesService,
+  ModelState,
   PerfAnalyzersService,
+  PodsService,
   UsersService,
 } from "../../../api/generated/index";
 import { InstanceDetailPageComponent } from "./instance-detail-page.component";
@@ -57,8 +59,21 @@ const MOCK_INSTANCE = {
   repositoryModels: [],
 };
 
+const DECLARED_STATE: ModelState = {
+  mode: "declared",
+  capacity_owner: "manual",
+  replicas: 1,
+  release_digest: "sha256:" + "a".repeat(64),
+  rollout_complete: true,
+  interactive_allowed: false,
+  can_declare: false,
+  can_restore: true,
+  can_scale_above_one: true,
+};
+
 describe("InstanceDetailPageComponent", () => {
   let instancesApiMock: jasmine.SpyObj<InstancesService>;
+  let podsApiMock: jasmine.SpyObj<PodsService>;
   let deploymentsApiMock: jasmine.SpyObj<DeploymentsService>;
   let perfAnalyzersApiMock: jasmine.SpyObj<PerfAnalyzersService>;
   let usersApiMock: jasmine.SpyObj<UsersService>;
@@ -75,6 +90,13 @@ describe("InstanceDetailPageComponent", () => {
       "loadInstanceModelApiInstancesInstanceIdModelsModelNameLoadPost",
       "unloadInstanceModelApiInstancesInstanceIdModelsModelNameUnloadPost",
     ]);
+    podsApiMock = jasmine.createSpyObj<PodsService>("PodsService", [
+      "instanceModelStateApiInstancesInstanceIdModelStateGet",
+      "scaleInstanceModelStateApiInstancesInstanceIdModelStateReplicasPut",
+    ]);
+    podsApiMock.instanceModelStateApiInstancesInstanceIdModelStateGet.and.returnValue(
+      of(DECLARED_STATE) as any,
+    );
     usersApiMock = jasmine.createSpyObj<UsersService>("UsersService", ["listUsersApiAuthUsersGet"]);
     deploymentsApiMock = jasmine.createSpyObj<DeploymentsService>("DeploymentsService", [
       "getDeploymentLogsApiDeploymentsInstanceIdLogsGet",
@@ -99,6 +121,7 @@ describe("InstanceDetailPageComponent", () => {
         provideMockActions(() => EMPTY),
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => "7" } } } },
         { provide: InstancesService, useValue: instancesApiMock },
+        { provide: PodsService, useValue: podsApiMock },
         { provide: DeploymentsService, useValue: deploymentsApiMock },
         { provide: PerfAnalyzersService, useValue: perfAnalyzersApiMock },
         { provide: UsersService, useValue: usersApiMock },
@@ -585,6 +608,52 @@ describe("InstanceDetailPageComponent", () => {
 
     // Assert
     expect(component.getModelActionMessage("resnet", "1")).toContain("load requested");
+  });
+
+  it("blocks model commands on a managed deployment in declared mode", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      isSelfDeployed: true,
+      deploymentRuntime: "kubernetes",
+    } as any);
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
+    component.deploymentModelState.set(DECLARED_STATE);
+
+    // Act
+    await component.loadModel("resnet", "1");
+
+    // Assert
+    expect(
+      instancesApiMock.loadInstanceModelApiInstancesInstanceIdModelsModelNameLoadPost,
+    ).not.toHaveBeenCalled();
+    expect(component.canControlModels()).toBeFalse();
+  });
+
+  it("sends the requested count through the generated replica endpoint", async () => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      isSelfDeployed: true,
+      deploymentRuntime: "kubernetes",
+    } as any);
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
+    const accepted = { ...DECLARED_STATE, replicas: 3, rollout_complete: false };
+    const scale = podsApiMock.scaleInstanceModelStateApiInstancesInstanceIdModelStateReplicasPut;
+    scale.and.returnValue(of(accepted) as any);
+    podsApiMock.instanceModelStateApiInstancesInstanceIdModelStateGet.and.returnValue(
+      of(accepted) as any,
+    );
+    component.deploymentModelState.set(DECLARED_STATE);
+    component.desiredReplicas = 3;
+
+    // Act
+    await component.updateModelState("replicas");
+
+    // Assert
+    expect(scale).toHaveBeenCalledOnceWith({ replicas: 3 }, "7");
+    expect(component.deploymentModelState()).toEqual(accepted);
+    expect(component.desiredReplicas).toBeNull();
   });
 
   it("UnloadModel_ApiFails_SetsMappedActionError", async () => {
