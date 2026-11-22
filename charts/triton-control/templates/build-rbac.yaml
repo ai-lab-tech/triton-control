@@ -1,13 +1,20 @@
-{{- if and .Values.rbac.create .Values.buildQualification.policy }}
-{{- if eq .Values.buildQualification.policy.namespace .Release.Namespace }}
+{{- $local := include "triton-control.localBuildsEnabled" . }}
+{{- if and .Values.rbac.create (or .Values.buildQualification.policy $local) }}
+{{- $namespace := default .Values.localBuilds.namespace (get (default dict .Values.buildQualification.policy) "namespace") }}
+{{- if eq $namespace .Release.Namespace }}
 {{- fail "Build execution requires a namespace separate from the application namespace" }}
 {{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "triton-control.fullname" . }}-builds
-  namespace: {{ .Values.buildQualification.policy.namespace | quote }}
+  namespace: {{ $namespace | quote }}
 rules:
+  {{- if $local }}
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "get", "delete"]
+  {{- end }}
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "create", "patch", "delete"]
@@ -25,7 +32,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "triton-control.fullname" . }}-builds
-  namespace: {{ .Values.buildQualification.policy.namespace | quote }}
+  namespace: {{ $namespace | quote }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

@@ -2,241 +2,188 @@ import { HttpClient } from "@angular/common/http";
 import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
+import { MatFormFieldModule } from "@angular/material/form-field";
+import { MatInputModule } from "@angular/material/input";
 import { firstValueFrom } from "rxjs";
 import { BASE_PATH } from "../../api/generated";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 
-const textFields = {
-  namespace: "Dedicated build namespace",
-  staging_prefix: "Staging prefix (ending in /)",
-  provisioning_revision: "Provisioning revision",
-  base_pull_secret: "Base image pull secret name",
-  push_secret: "Build push secret name",
-  runtime_pull_secret: "Runtime pull secret name",
-} as const;
-
-// Candidate documented in docs/build-provisioning.md. Activation still requires qualification.
-const defaultBuilder = {
-  image:
-    "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37",
-  release: "v1.29.1",
-};
-
-interface Settings {
-  source: "admin" | "deployment" | "unconfigured";
-  policy: Record<string, unknown> | null;
+interface Destination {
+  reuse_pull_credentials?: boolean;
+  dockerconfigjson?: string;
+  namespace: string;
+  allowed_repositories: string[];
 }
 
-interface Profile {
-  name: string;
-  bucket: string;
-  prefix: string;
+interface Settings {
+  builder: { executor_image: string; release: string };
+  destination: Destination | null;
+  status: string;
+  has_override: boolean;
+  push_credentials_saved: boolean;
+  reuse_pull_credentials: boolean;
 }
 
 @Component({
   selector: "app-build-settings",
   standalone: true,
-  imports: [FormsModule, MatButtonModule],
+  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   styleUrl: "./settings-form.scss",
   template: `
-    <h2>Serving image builds</h2>
+    <h2 class="card-title">Push images from builds</h2>
     <p>
-      Configure the Kubernetes builder for task workspaces. Provision the build namespace, network
-      policy and registry secrets before enabling builds.
+      Choose where to publish images built in code-server. Leave credentials empty for anonymous
+      access.
     </p>
-    @if (loaded()) {
-      <p>Policy source: {{ source() }}</p>
+    @if (settings(); as current) {
+      <p>{{ current.status }}</p>
       <form #form="ngForm" (ngSubmit)="save()">
-        <fieldset [disabled]="busy()">
-          <label for="build-profile">Build input storage profile</label>
-          <select required id="build-profile" name="profile" [(ngModel)]="profile">
-            <option value="">Choose a versioned S3 or MinIO profile</option>
-            @for (item of profiles; track $index) {
-              <option [value]="item.name">
-                {{ item.name }} — {{ item.bucket }}/{{ item.prefix }}
-              </option>
-            }
-          </select>
-          @for (field of fields; track field) {
-            <label [for]="'build-' + field">{{ labels[field] }}</label>
-            <input required [id]="'build-' + field" [name]="field" [(ngModel)]="values[field]" />
-          }
-          <label for="build-repos">Allowed registry repositories (one per line)</label>
-          <textarea required id="build-repos" name="repos" [(ngModel)]="repositories"></textarea>
-          <label for="build-networks">Allowed egress CIDRs (one per line)</label>
-          <textarea required id="build-networks" name="networks" [(ngModel)]="networks"></textarea>
-          <details>
-            <summary>Advanced builder settings</summary>
-            <p>
-              The builder reads your Dockerfile and creates the serving image. A fingerprint
-              (digest) selects the exact builder version.
-            </p>
-            <label for="build-image">Builder image and digest</label>
-            <input required id="build-image" name="builderImage" [(ngModel)]="builderImage" />
-            <label for="build-release">Builder release</label>
-            <input required id="build-release" name="builderRelease" [(ngModel)]="builderRelease" />
-            <label for="build-advanced">Executor limits, platform and network ports (JSON)</label>
+        <div class="limits-grid">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Destination repositories (optional)</mat-label>
             <textarea
-              required
-              id="build-advanced"
-              rows="6"
-              name="advanced"
-              [(ngModel)]="advanced"
+              matInput
+              name="repositories"
+              rows="2"
+              placeholder="ghcr.io/my-team/models"
+              [(ngModel)]="repositories"
+              [disabled]="busy()"
             ></textarea>
+            <mat-hint
+              >Leave blank for local builds. For registry publishing, enter one repository per line.</mat-hint
+            >
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Build namespace</mat-label>
+            <input matInput required name="namespace" [(ngModel)]="namespace" [disabled]="busy()" />
+          </mat-form-field>
+        </div>
+        <details>
+          <summary class="app-disclosure">Push credentials (optional)</summary>
+          <label>
+            <input type="checkbox" name="reusePull" [(ngModel)]="reusePull" [disabled]="busy()" />
+            Use the saved pull credentials for pushing
+          </label>
+          @if (reusePull) {
+            <p>The registry account must have write access to the destination.</p>
+          } @else {
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Push credentials (Docker config JSON)</mat-label>
+              <textarea
+                matInput
+                rows="3"
+                name="pushCredentials"
+                [(ngModel)]="pushCredentials"
+                autocomplete="off"
+                spellcheck="false"
+                [disabled]="busy()"
+              ></textarea>
+              <mat-hint>
+                @if (current.push_credentials_saved) {
+                  Push credentials saved. Paste new JSON to replace them.
+                } @else {
+                  For a private registry, paste Docker config JSON with write access. Triton Control
+                  creates the build secret.
+                }
+              </mat-hint>
+            </mat-form-field>
+          }
+        </details>
+        @if (current.builder; as builder) {
+          <details>
+            <summary class="app-disclosure">Advanced</summary>
+            <p>
+              Build executor:
+              <strong>{{ builder.executor_image.split("@")[0] }} {{ builder.release }}</strong>
+            </p>
+            <p>
+              Image digest: <code>{{ builder.executor_image.split("@")[1] }}</code>
+            </p>
           </details>
-          <label
-            ><input type="checkbox" name="enabled" [(ngModel)]="enabled" /> Enable qualified
-            builds</label
-          >
-        </fieldset>
-        <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">
-          Save policy
-        </button>
-        <button
-          mat-stroked-button
-          type="button"
-          [disabled]="busy() || source() !== 'admin'"
-          (click)="reset()"
-        >
-          Reset to installation defaults
-        </button>
+        }
+        <div class="actions form-actions">
+          @if (current.push_credentials_saved && !reusePull) {
+            <button
+              mat-stroked-button
+              type="button"
+              [disabled]="busy() || form.invalid"
+              (click)="save(true)"
+            >
+              Remove saved push credentials
+            </button>
+          }
+          @if (current.has_override) {
+            <button mat-stroked-button type="button" [disabled]="busy()" (click)="reset()">
+              Use installation defaults
+            </button>
+          }
+          <button mat-flat-button type="submit" [disabled]="busy() || form.invalid">
+            Save destination
+          </button>
+        </div>
       </form>
     } @else if (!busy()) {
-      <button mat-stroked-button (click)="load()">Retry loading settings</button>
+      <button mat-stroked-button (click)="load()">Retry loading destination</button>
     }
     @if (message()) {
       <p role="status">{{ message() }}</p>
     }
   `,
-  styles: [
-    `
-      fieldset {
-        display: grid;
-        gap: 0.5rem;
-        border: 0;
-        padding: 0;
-        margin-bottom: 1rem;
-      }
-      details[open] {
-        display: grid;
-        gap: 0.5rem;
-      }
-      input,
-      textarea,
-      select {
-        font: inherit;
-      }
-      label {
-        margin-top: 0.5rem;
-      }
-    `,
-  ],
 })
 export class BuildSettingsComponent {
   private readonly http = inject(HttpClient);
-  private readonly base = (inject(BASE_PATH, { optional: true }) ?? "").replace(/\/$/, "");
-  private readonly url = this.base + "/api/settings/serving-image-builds";
+  private readonly url =
+    (inject(BASE_PATH, { optional: true }) ?? "").replace(/\/$/, "") +
+    "/api/settings/serving-image-builds/destination";
+  readonly settings = signal<Settings | null>(null);
   readonly busy = signal(false);
-  readonly loaded = signal(false);
   readonly message = signal("");
-  readonly source = signal<Settings["source"]>("unconfigured");
-  readonly labels = textFields;
-  readonly fields = Object.keys(textFields) as (keyof typeof textFields)[];
-  values: Record<string, string> = {};
-  builderImage = defaultBuilder.image;
-  builderRelease = defaultBuilder.release;
-  profile = "";
-  profiles: Profile[] = [];
+  namespace = "triton-builds";
   repositories = "";
-  networks = "";
-  advanced = "{}";
-  enabled = false;
+  pushCredentials = "";
+  reusePull = false;
 
   constructor() {
     void this.load();
   }
-  private accept(settings: Settings): void {
-    const policy = { ...settings.policy };
-    this.source.set(settings.source);
-    this.builderImage = String(policy["executor_image"] ?? defaultBuilder.image);
-    this.builderRelease = String(policy["release"] ?? defaultBuilder.release);
-    delete policy["executor_image"];
-    delete policy["release"];
-    for (const key of this.fields) {
-      this.values[key] = String(policy[key] ?? "");
-      delete policy[key];
-    }
-    this.profile = String(policy["s3_profile_name"] ?? "");
-    this.enabled = policy["enabled"] === true;
-    this.repositories = (policy["allowed_repositories"] as string[] | undefined)?.join("\n") ?? "";
-    this.networks = (policy["egress_cidrs"] as string[] | undefined)?.join("\n") ?? "";
-    for (const key of ["s3_profile_name", "enabled", "allowed_repositories", "egress_cidrs"])
-      delete policy[key];
-    this.advanced = JSON.stringify(
-      { platform: "linux/amd64", egress_ports: [443], ...policy },
-      null,
-      2,
-    );
+
+  load(): Promise<void> {
+    return this.request("GET");
   }
-  async load(): Promise<void> {
+  reset(): Promise<void> {
+    return this.request("DELETE");
+  }
+  save(removeCredentials = false): Promise<void> {
+    return this.request("PUT", {
+      namespace: this.namespace.trim(),
+      reuse_pull_credentials: this.reusePull,
+      dockerconfigjson: this.reusePull
+        ? undefined
+        : removeCredentials
+          ? ""
+          : this.pushCredentials.trim() || undefined,
+      allowed_repositories: this.repositories
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    });
+  }
+
+  private async request(method: "GET" | "PUT" | "DELETE", body?: Destination): Promise<void> {
+    if (this.busy()) return;
     this.busy.set(true);
     this.message.set("");
     try {
-      const [settings, profiles] = await Promise.all([
-        firstValueFrom(this.http.get<Settings>(this.url)),
-        firstValueFrom(this.http.get<Profile[]>(this.base + "/api/s3-profiles")),
-      ]);
-      this.profiles = profiles;
-      this.accept(settings);
-      this.loaded.set(true);
+      const result = await firstValueFrom(this.http.request<Settings>(method, this.url, { body }));
+      this.settings.set(result);
+      this.reusePull = result.reuse_pull_credentials ?? false;
+      this.pushCredentials = "";
+      this.namespace = result.destination?.namespace ?? "triton-builds";
+      this.repositories = result.destination?.allowed_repositories.join("\n") ?? "";
+      if (method === "PUT") this.message.set("Build destination saved.");
+      if (method === "DELETE") this.message.set("Using installation defaults.");
     } catch (error) {
-      this.message.set(mapApiErrorMessage(error, "Could not load build settings."));
-    } finally {
-      this.busy.set(false);
-    }
-  }
-  async save(): Promise<void> {
-    let options: unknown;
-    try {
-      options = JSON.parse(this.advanced);
-    } catch {
-      options = null;
-    }
-    if (!options || typeof options !== "object" || Array.isArray(options)) {
-      this.message.set("Enter a JSON object for the executor options.");
-      return;
-    }
-    const lines = (value: string) =>
-      value
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-    await this.write({
-      ...options,
-      ...this.values,
-      executor_image: this.builderImage,
-      release: this.builderRelease,
-      s3_profile_name: this.profile,
-      enabled: this.enabled,
-      allowed_repositories: lines(this.repositories),
-      egress_cidrs: lines(this.networks),
-    });
-  }
-  async reset(): Promise<void> {
-    await this.write(null);
-  }
-  private async write(policy: Record<string, unknown> | null): Promise<void> {
-    if (this.busy() || !this.loaded()) return;
-    this.busy.set(true);
-    try {
-      this.accept(
-        await firstValueFrom(
-          policy ? this.http.put<Settings>(this.url, policy) : this.http.delete<Settings>(this.url),
-        ),
-      );
-      this.message.set(policy ? "Build policy saved." : "Using installation defaults.");
-    } catch (error) {
-      this.message.set(mapApiErrorMessage(error, "Could not update the build policy."));
+      this.message.set(mapApiErrorMessage(error, "Could not access the build destination."));
     } finally {
       this.busy.set(false);
     }

@@ -9,5 +9,5 @@ metadata:
   name: {{ include "triton-control.fullname" . }}-build-context-policy
   namespace: {{ .Release.Namespace }}
 data:
-  policy.json: {{ toJson .Values.buildQualification.policy | quote }}
+  policy.json: {{ include "triton-control.buildPolicyJson" $ | quote }}
 {{- end }}

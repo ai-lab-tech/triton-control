@@ -17,6 +17,7 @@ from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import build_contexts as repo
 from app.repositories import operations, teams
 from app.schemas.build_contexts import BuildContextRequest, BuildContextResponse, ContextManifest
+from app.schemas.build_policy import LocalArchivePolicy
 from app.schemas.operations import OperationRequest, ReconcileResult
 from app.services.builds import access
 from app.services.builds import contexts_storage as provider
@@ -285,7 +286,8 @@ def consume_for_build(
     installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "execute")
     settings = provider.policy(session)
-    require_qualified(session, settings, fixture_revision, mode="development")
+    if not isinstance(settings, LocalArchivePolicy):
+        require_qualified(session, settings, fixture_revision, mode="development")
     row = repo.get(session, context_id, lock=True)
     receipt = repo.receipt(session, context_id)
     if op.state != "succeeded" or receipt is None or row.expired or row.expires_at <= operations.now(session):

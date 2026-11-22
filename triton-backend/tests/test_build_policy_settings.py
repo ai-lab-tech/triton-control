@@ -13,6 +13,9 @@ from app.api.build_settings_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import S3ProfileEntity, UserEntity
+from app.exceptions import ForbiddenError
+from app.services.registry_settings import encrypt_registry_secret
+from app.repositories import build_config, registry_config
 from app.services.builds.contexts_storage import policy as runtime_policy
 from tests.test_build_contexts import policy
 
@@ -67,3 +70,123 @@ class BuildSettingsTests(unittest.TestCase):
             for response in (self.client.get(self.url), self.client.put(self.url, json=policy().model_dump(mode="json")),
                              self.client.delete(self.url)):
                 self.assertEqual(response.status_code, 403)
+
+    def test_destination_can_be_saved_before_cluster_setup(self):
+        url = self.url + "/destination"
+        destination = {"namespace": "triton-builds", "allowed_repositories": ["registry.test/team/image"]}
+
+        response = self.client.put(url, json=destination)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.client.get(url).json()["destination"], {**destination, "push_secret": None})
+        self.assertIn("needs setup", response.json()["status"])
+        self.assertIsNone(self.client.get(self.url).json()["policy"])
+
+    def test_destination_overrides_only_runtime_target_and_reset_restores_it(self):
+        candidate = policy()
+        self.client.put(self.url, json=candidate.model_dump(mode="json")).raise_for_status()
+        url = self.url + "/destination"
+        destination = {"namespace": "other-builds", "push_secret": "writer", "allowed_repositories": ["registry.test/team/image"]}
+
+        self.client.put(url, json=destination).raise_for_status()
+
+        with Session(self.engine) as session:
+            result = runtime_policy(session)
+            self.assertEqual(result.push_secret, "writer")
+            self.assertEqual(result.runtime_pull_secret, candidate.runtime_pull_secret)
+            self.assertEqual(result.namespace, destination["namespace"])
+            self.assertEqual(list(result.allowed_repositories), destination["allowed_repositories"])
+            self.assertEqual(result.s3_profile_name, candidate.s3_profile_name)
+            self.assertNotEqual(result.fingerprint(), candidate.fingerprint())
+        self.client.delete(url).raise_for_status()
+        with Session(self.engine) as session:
+            self.assertEqual(runtime_policy(session), candidate)
+
+    def test_empty_destination_is_local_and_never_falls_back_to_remote(self):
+        url = self.url + "/destination"
+        candidate = policy().model_dump(mode="json")
+        self.client.put(self.url, json=candidate).raise_for_status()
+        local = {"namespace": "builds", "allowed_repositories": []}
+
+        response = self.client.put(url, json=local)
+
+        response.raise_for_status()
+        self.assertEqual(response.json()["destination"]["allowed_repositories"], [])
+        with Session(self.engine) as session, self.assertRaisesRegex(ForbiddenError, "local|Local"):
+            runtime_policy(session)
+        service_repo = "registry.builds.svc:5000/models"
+        candidate["allowed_repositories"].append(service_repo)
+        self.client.put(self.url, json=candidate).raise_for_status()
+        self.client.put(url, json=local).raise_for_status()
+        with Session(self.engine) as session:
+            self.assertEqual(runtime_policy(session).allowed_repositories, (service_repo,))
+
+    def test_credentials_are_write_only_and_survive_destination_only_edits(self):
+        self.enterContext(patch.dict(os.environ, REGISTRY_SECRET_ENCRYPTION_KEY="unit-test"))
+        url = self.url + "/destination"
+        local = {"namespace": "builds", "allowed_repositories": []}
+        credentials = '{"auths":{"registry.test":{"auth":"fixture-private-token"}}}'
+
+        saved = self.client.put(url, json={**local, "dockerconfigjson": credentials})
+
+        saved.raise_for_status()
+        self.assertTrue(saved.json()["push_credentials_saved"])
+        self.assertNotIn("fixture-private-token", saved.text)
+        self.assertTrue(self.client.put(url, json=local).json()["push_credentials_saved"])
+        with Session(self.engine) as session:
+            row = build_config.get_destination(session)
+            self.assertIsNotNone(row)
+            self.assertNotIn("fixture-private-token", row.push_config_enc)
+        self.assertFalse(self.client.put(url, json={**local, "dockerconfigjson": ""}).json()["push_credentials_saved"])
+
+    def test_reuse_tracks_saved_pull_credentials_and_unchecking_selects_anonymous(self):
+        self.enterContext(patch.dict(os.environ, REGISTRY_SECRET_ENCRYPTION_KEY="unit-test"))
+        candidate = policy()
+        self.client.put(self.url, json=candidate.model_dump(mode="json")).raise_for_status()
+        url = self.url + "/destination"
+        destination = {"namespace": candidate.namespace, "allowed_repositories": candidate.allowed_repositories}
+        reuse = {**destination, "reuse_pull_credentials": True}
+        self.assertEqual(self.client.put(url, json=reuse).status_code, 403)
+        with Session(self.engine) as session:
+            registry_config.save(session, encrypt_registry_secret('{"auths":{"registry.test":{"auth":"fixture"}}}'))
+
+        saved = self.client.put(url, json=reuse)
+        saved.raise_for_status()
+
+        self.assertTrue(self.client.get(url).json()["reuse_pull_credentials"])
+        self.assertFalse(saved.json()["push_credentials_saved"])
+        with Session(self.engine) as session:
+            original = runtime_policy(session)
+            self.assertFalse(original.anonymous_push)
+            registry_config.save(session, encrypt_registry_secret('{"auths":{"registry.test":{"auth":"changed"}}}'))
+            self.assertNotEqual(original.fingerprint(), runtime_policy(session).fingerprint())
+        self.client.put(url, json={**destination, "reuse_pull_credentials": False}).raise_for_status()
+        with Session(self.engine) as session:
+            self.assertTrue(runtime_policy(session).anonymous_push)
+
+    def test_default_executor_matches_the_published_release_and_configured_overrides_are_reported(self):
+        candidate = policy().model_dump(mode="json")
+        default = self.client.get(self.url + "/destination").json()["builder"]
+
+        without_builder = {key: value for key, value in candidate.items() if key not in {"executor_image", "release"}}
+        self.client.put(self.url, json=without_builder).raise_for_status()
+
+        self.assertEqual(default["release"], "v1.29.1")
+        self.assertTrue(default["executor_image"].startswith("ghcr.io/osscontainertools/kaniko@sha256:"))
+        with Session(self.engine) as session:
+            self.assertEqual(runtime_policy(session).executor_image, default["executor_image"])
+        self.client.put(self.url, json=candidate).raise_for_status()
+        self.assertEqual(self.client.get(self.url + "/destination").json()["builder"]["executor_image"],
+                         candidate["executor_image"])
+
+    def test_helm_builder_is_used_by_admin_policy_and_advanced_view(self):
+        candidate = policy().model_dump(mode="json", exclude={"executor_image", "release"})
+        builder = '{"release":"v2.0.1","executor_image":"mirror.test/kaniko@sha256:' + "1" * 64 + '"}'
+
+        with patch.dict(os.environ, TRITON_BUILD_DEFAULT_EXECUTOR=builder):
+            self.assertEqual(self.client.get(self.url + "/destination").json()["builder"]["release"], "v2.0.1")
+            self.client.put(self.url, json=candidate).raise_for_status()
+            with Session(self.engine) as session:
+                self.assertEqual(runtime_policy(session).release, "v2.0.1")
+        with Session(self.engine) as session:
+            self.assertEqual(runtime_policy(session).release, "v1.29.1")

@@ -70,3 +70,20 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $identity := list .Release.Name .Values.releaseSources.file | mustToJson | sha256sum | trunc 12 -}}
 {{- printf "%s-sources-%s" (include "triton-control.fullname" . | trunc 42 | trimSuffix "-") $identity -}}
 {{- end -}}
+
+{{- define "triton-control.builderImage" -}}
+{{- $kaniko := .Values.buildQualification.kaniko -}}
+{{- dict "release" $kaniko.version "executor_image" $kaniko.image | toJson -}}
+{{- end -}}
+
+{{- define "triton-control.buildPolicyJson" -}}
+{{- $defaults := include "triton-control.builderImage" . | fromJson -}}
+{{- mergeOverwrite $defaults .Values.buildQualification.policy | toJson -}}
+{{- end -}}
+
+{{/* A registry policy takes precedence. Production installations cannot build local images. */}}
+{{- define "triton-control.localBuildsEnabled" -}}
+{{- if and (eq (include "triton-control.installationMode" .) "development") .Values.localBuilds.enabled (not .Values.buildQualification.policy) -}}
+true
+{{- end -}}
+{{- end -}}

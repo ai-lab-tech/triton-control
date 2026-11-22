@@ -94,6 +94,14 @@ spec:
               value: {{ .Values.buildQualification.contextRetentionDays | quote }}
             {{- end }}
             {{- if $development }}
+            {{- if include "triton-control.localBuildsEnabled" . }}
+            - name: TRITON_LOCAL_BUILD_NAMESPACE
+              value: {{ .Values.localBuilds.namespace | quote }}
+            - name: TRITON_LOCAL_BUILD_PROFILE
+              value: {{ .Values.localBuilds.stagingProfile | quote }}
+            {{- end }}
+            - name: TRITON_BUILD_DEFAULT_EXECUTOR
+              value: {{ include "triton-control.builderImage" . | quote }}
             - name: PERF_ANALYZER_IMAGE
               value: {{ .Values.perfAnalyzer.image | quote }}
             - name: PERF_ANALYZER_DEADLINE_SECONDS

@@ -35,19 +35,28 @@ function header(name, size, executable) {
   block.write(checksum.toString(8).padStart(6, "0") + "\0 ", 148, 8);
   return block;
 }
-async function snapshot(folder, dockerfile, maxBytes, baseImages = [], dependencies = []) {
+async function snapshot(folder, dockerfile, maxBytes, baseImages = [], dependencies = [], selectedFilesOnly = false) {
   safePath(dockerfile); dependencies.forEach(safePath);
   const root = await fs.realpath(folder);
   const limit = Math.min(maxBytes, 64 * 1024 * 1024);
   if (!Number.isSafeInteger(limit) || limit < 1024) throw new Error("Invalid build context limit.");
+  const included = new Set([dockerfile, ...dependencies, ".dockerignore", dockerfile + ".dockerignore"]);
+  const ancestors = new Set();
+  if (selectedFilesOnly) {
+    for (const file of included) {
+      for (let parent = path.posix.dirname(file); parent !== "."; parent = path.posix.dirname(parent))
+        ancestors.add(parent);
+    }
+  }
   const chunks = [], names = new Set();
   let bytes = 1024, entries = 0;
   async function visit(relative = "") {
     const directory = path.join(root, relative);
     if (await fs.realpath(directory) !== directory) throw new Error("Context directories must not be symlinks.");
     for (const name of (await fs.readdir(directory)).sort()) {
-      if (++entries > 10000) throw new Error("Context contains too many entries.");
       const entry = relative ? `${relative}/${name}` : name;
+      if (selectedFilesOnly && !included.has(entry) && !ancestors.has(entry)) continue;
+      if (++entries > 10000) throw new Error("Context contains too many entries.");
       safePath(entry);
       if (secretPath(entry)) continue;
       const file = path.join(root, entry), info = await fs.lstat(file);
@@ -84,6 +93,6 @@ async function snapshot(folder, dockerfile, maxBytes, baseImages = [], dependenc
   if (!names.has(dockerfile) || dependencies.some(name => !names.has(name))) throw new Error("Dockerfile or dependency file is missing or excluded.");
   const archive = Buffer.concat([...chunks, Buffer.alloc(1024)]);
   return { archive, request: { schema_version: 1, archive_digest: "sha256:" + crypto.createHash("sha256").update(archive).digest("hex"),
-    archive_bytes: archive.length, dockerfile, allowed_paths: ["."], dependency_files: dependencies, base_images: baseImages } };
+    archive_bytes: archive.length, dockerfile, allowed_paths: selectedFilesOnly ? [...names] : ["."], dependency_files: dependencies, base_images: baseImages } };
 }
 module.exports = { snapshot, safePath, secretPath };

@@ -808,3 +808,13 @@ class BuildConfigEntity(SQLModel, table=True):
     __tablename__ = "build_config"
     id: int = Field(default=1, primary_key=True)
     policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class BuildDestinationEntity(SQLModel, table=True):
+    __tablename__ = "build_destination"
+    id: int = Field(default=1, primary_key=True)
+    namespace: str
+    repositories: list[str] = Field(sa_column=Column(JSON, nullable=False))
+    push_secret: str | None = None
+    push_config_enc: str | None = None
+    reuse_pull_credentials: bool = False

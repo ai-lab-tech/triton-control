@@ -61,6 +61,7 @@ function buildState(build) {
 }
 function exactImage(build, number) {
   const attempt = build.attempts.find(item => item.number === number);
+  if (build.operation?.result?.archive) return null;
   if (!attempt || attempt.state !== "succeeded" || !/^sha256:[a-f0-9]{64}$/.test(attempt.final_digest || "")) return null;
   return attempt.destination.replace(/:[^/:]+$/, "") + "@" + attempt.final_digest;
 }

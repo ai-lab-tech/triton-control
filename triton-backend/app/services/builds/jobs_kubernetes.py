@@ -5,13 +5,14 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.db.entities import BuildAttemptEntity
 from app.exceptions import ConflictError
-from app.schemas.build_policy import BuildPolicy
+from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy
 from app.services.builds.manifests import job
 from app.services.kubernetes_client import api_client
 
@@ -22,12 +23,24 @@ LOG_LINES = 10000
 DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
 
 
+def registry_host(address: str) -> str:
+    host = urlsplit(address if "://" in address else "//" + address).netloc.lower()
+    if host in {"index.docker.io", "registry-1.docker.io"}:
+        return "docker.io"
+    return host
+
+
 def identity(row: BuildAttemptEntity) -> str:
     return f"{row.operation_id}-{row.number}"
 
 
+def attempt_policy(row: BuildAttemptEntity) -> BuildPolicy:
+    model = LocalArchivePolicy if row.policy.get("local_archive") else BuildPolicy
+    return model.model_validate(row.policy)
+
+
 def manifest(row: BuildAttemptEntity) -> dict[str, Any]:
-    policy = BuildPolicy.model_validate(row.policy)
+    policy = attempt_policy(row)
     receipt = row.context_receipt
     bucket, key = receipt["storage_binding"]["bucket"], receipt["key"]
     body = job(policy, row.job_name, f"s3://{bucket}/{key}", row.destination, row.job_name)
@@ -49,6 +62,10 @@ def manifest(row: BuildAttemptEntity) -> dict[str, Any]:
     pod["spec"]["volumes"].append({"name": "context-ca", "secret": {
         "secretName": row.job_name, "optional": True, "items": [{"key": "ca.pem", "path": "ca.pem"}],
     }})
+    if isinstance(policy, LocalArchivePolicy):
+        container["args"].extend(["--no-push", "--no-push-cache", "--tar-path=/output/image.tar"])
+        container["volumeMounts"].append({"name": "output", "mountPath": "/output"})
+        pod["spec"]["volumes"].append({"name": "output", "persistentVolumeClaim": {"claimName": row.job_name}})
     container["terminationMessagePolicy"] = "File"
     pod["spec"]["volumes"][0]["secret"]["items"] = [{"key": "config.json", "path": "config.json"}]
     return body
@@ -108,18 +125,35 @@ class Jobs:
         self.check(result, row)
         return result
 
-    def provision(self, row: BuildAttemptEntity, context_url: str, ca_certificate: str = "") -> None:
+    def provision(self, row: BuildAttemptEntity, context_url: str, ca_certificate: str = "",
+                  push_config: str | None = None) -> None:
+        if row.policy.get("local_archive"):
+            self.ensure_output_claim(row)
         if self.secret(row) is not None:
             return
-        policy = BuildPolicy.model_validate(row.policy)
+        policy = attempt_policy(row)
+        # Admin-supplied credentials go directly into the immutable per-build Secret.
         auths: dict[str, Any] = {}
-        for name in (policy.base_pull_secret, policy.push_secret):
-            secret = self.core.read_namespaced_secret(name, row.namespace, _request_timeout=TIMEOUT)
+        names: tuple[str, ...] = (policy.base_pull_secret,)
+        if not policy.anonymous_push:
+            auths = json.loads(push_config)["auths"] if push_config else {}
+            names = (policy.base_pull_secret,) if push_config else (policy.base_pull_secret, policy.push_secret)
+        if isinstance(policy, LocalArchivePolicy):
+            names = ()
+        for name in names:
+            try:
+                secret = self.core.read_namespaced_secret(name, row.namespace, _request_timeout=TIMEOUT)
+            except ApiException as error:
+                if policy.anonymous_push and error.status == 404:
+                    continue
+                raise
             data = secret.data or {}
             config = json.loads(base64.b64decode(data.get(".dockerconfigjson", data.get("config.json", ""))))
             if set(config) != {"auths"} or not isinstance(config["auths"], dict):
                 raise ConflictError("Provision explicit registry auths without external credential helpers")
             for host, value in config["auths"].items():
+                if policy.anonymous_push and registry_host(host) == registry_host(row.destination):
+                    continue
                 if host in auths and auths[host] != value:
                     raise ConflictError("Base and push registry credential scopes overlap")
                 auths[host] = value
@@ -134,6 +168,17 @@ class Jobs:
             if error.status != 409:
                 raise
             self.secret(row)
+
+    def ensure_output_claim(self, row: BuildAttemptEntity) -> None:
+        claim = {"metadata": {"name": row.job_name, "labels": {LABEL: identity(row)}},
+                 "spec": {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": "35Gi"}}}}
+        try:
+            self.core.create_namespaced_persistent_volume_claim(row.namespace, claim, _request_timeout=TIMEOUT)
+        except ApiException as error:
+            if error.status != 409:
+                raise
+            self.check(self.core.read_namespaced_persistent_volume_claim(
+                row.job_name, row.namespace, _request_timeout=TIMEOUT), row)
 
     def create(self, row: BuildAttemptEntity) -> Any:
         try:
@@ -226,4 +271,16 @@ class Jobs:
             self.core.delete_namespaced_secret(row.job_name, row.namespace,
                 body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=secret.metadata.uid)),
                 _request_timeout=TIMEOUT)
+        if row.policy.get("local_archive") and row.state != "succeeded":
+            try:
+                claim = self.core.read_namespaced_persistent_volume_claim(row.job_name, row.namespace,
+                                                                          _request_timeout=TIMEOUT)
+                self.check(claim, row)
+                self.core.delete_namespaced_persistent_volume_claim(row.job_name, row.namespace,
+                    body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=claim.metadata.uid)),
+                    _request_timeout=TIMEOUT)
+                return False
+            except ApiException as error:
+                if error.status != 404:
+                    raise
         return True

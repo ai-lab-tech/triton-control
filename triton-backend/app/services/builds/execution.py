@@ -12,14 +12,15 @@ from app.core import installation_policy
 from app.core.identity import claims_from_user
 from app.db.entities import BuildAttemptEntity, OperationEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
-from app.repositories import build_contexts, builds, operations, preparation, users
-from app.schemas.build_policy import BuildPolicy
+from app.repositories import build_config, build_contexts, builds, operations, preparation, users
+from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy
 from app.schemas.builds import BuildAttemptResponse, BuildLogsResponse, BuildOptions, BuildRequest, BuildResponse
 from app.schemas.operations import OperationRequest, ReconcileResult
 from app.services import preparation as tasks
 from app.services.builds import access, contexts, contexts_storage, jobs_kubernetes
 from app.services.builds.qualification import require_qualified
 from app.services.operations import Action, ExecutionContext, dto, service
+from app.services.registry_settings import decrypt_registry_secret
 
 KIND = "build.image"
 
@@ -28,6 +29,8 @@ def qualified(session: Session) -> BuildPolicy:
     settings = contexts_storage.policy(session)
     if settings.namespace in {"default", "kube-system", "kube-public", os.getenv("POD_NAMESPACE", "")}:
         raise ForbiddenError("Runtime builds require a dedicated development namespace")
+    if isinstance(settings, LocalArchivePolicy):
+        return settings
     revision = os.getenv("TRITON_BUILD_FIXTURE_REVISION", "")
     if not revision:
         raise ForbiddenError("Configure the reviewed build fixture revision before enabling builds")
@@ -125,7 +128,7 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
     if bound_task is not None and bound_task != str(request.task_id):
         raise ForbiddenError("Build context belongs to a different task")
     receipt = contexts.consume_for_build(session, claims_from_user(actor, {}), request.context_id,
-                                          os.environ["TRITON_BUILD_FIXTURE_REVISION"], context.checkpoint)
+                                          os.getenv("TRITON_BUILD_FIXTURE_REVISION", ""), context.checkpoint)
     fence(session, op)
     retained = build_contexts.get(session, request.context_id, lock=True)
     if retained.expired:
@@ -150,6 +153,10 @@ def admit(session: Session, op: OperationEntity, context: ExecutionContext) -> B
 def outcome(row: BuildAttemptEntity) -> ReconcileResult:
     result = {"attempt": row.number, "job_uid": row.job_uid, "final_digest": row.final_digest,
               "image": row.destination.rsplit(":", 1)[0] + "@" + row.final_digest if row.final_digest else None}
+    if row.policy.get("local_archive"):
+        result["image"] = None
+        if row.state == "succeeded":
+            result["archive"] = f"{row.namespace}/{row.job_name}/image.tar"
     return ReconcileResult.model_validate({"state": row.state, "result": result, "message": "Build " + row.state})
 
 
@@ -247,7 +254,18 @@ def reconcile_attempt(
         with contexts_storage.storage(session, receipt["storage_binding"]) as store:
             url = store.download_url(receipt["key"], receipt["version_id"], settings.timeout_seconds + 180)
             ca_certificate = store.ca_certificate
-        provider.provision(row, url, ca_certificate)
+        destination = None if isinstance(settings, LocalArchivePolicy) else build_config.get_destination(session)
+        push_config = None
+        if destination and destination.reuse_pull_credentials:
+            reference, encrypted = contexts_storage.saved_pull_credentials(session)
+            if reference != settings.push_secret:
+                raise ForbiddenError("Pull credentials changed before execution")
+            push_config = decrypt_registry_secret(encrypted)
+        elif destination and destination.push_config_enc:
+            if destination.push_secret != settings.push_secret or destination.namespace != settings.namespace:
+                raise ForbiddenError("Build credentials changed before execution")
+            push_config = decrypt_registry_secret(destination.push_config_enc)
+        provider.provision(row, url, ca_certificate, push_config)
         resource = provider.create(row)  # Suspended: cannot start until its UID is committed.
         row.job_uid = resource.metadata.uid
         session.add(row)

@@ -8,7 +8,7 @@ from sqlmodel import Session
 from app.api.errors import translate_app_errors
 from app.core.security import get_claims
 from app.db.database import get_session
-from app.schemas.build_policy import BuildPolicy, BuildPolicySettings
+from app.schemas.build_policy import BuildDestinationSettings, BuildDestinationUpdate, BuildPolicy, BuildPolicySettings
 from app.services.builds import settings
 
 
@@ -37,3 +37,23 @@ def update(policy: BuildPolicy, session: Session = Depends(admin_session)) -> Bu
 @translate_app_errors
 def reset(session: Session = Depends(admin_session)) -> BuildPolicySettings:
     return settings.update(session, None)
+
+
+@router.get("/destination", response_model=BuildDestinationSettings)
+@translate_app_errors
+def read_destination(session: Session = Depends(admin_session)) -> BuildDestinationSettings:
+    return settings.destination_settings(session)
+
+
+@router.put("/destination", response_model=BuildDestinationSettings)
+@translate_app_errors
+def save_destination(
+    destination: BuildDestinationUpdate, session: Session = Depends(admin_session),
+) -> BuildDestinationSettings:
+    return settings.set_destination(session, destination)
+
+
+@router.delete("/destination", response_model=BuildDestinationSettings)
+@translate_app_errors
+def reset_destination(session: Session = Depends(admin_session)) -> BuildDestinationSettings:
+    return settings.set_destination(session, None)

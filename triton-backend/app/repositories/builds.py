@@ -41,6 +41,8 @@ def referenced(session: Session, row: BuildAttemptEntity) -> bool:
 def retain_for_release(session: Session, operation_id: str, number: int, release_digest: str) -> None:
     """Trusted release service hook, in the same transaction as release publication."""
     row = get(session, operation_id, number, lock=True)
+    if row.policy.get("local_archive"):
+        raise ConflictError("A local archive must be published before it can become a release image")
     if row.state != "succeeded" or row.logs_expired:
         raise ConflictError("Complete retained build evidence is required")
     key = (operation_id, number, release_digest)

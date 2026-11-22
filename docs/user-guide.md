@@ -235,7 +235,7 @@ Reference:
 Current behavior:
 
 - configure the analyzer image above batch size, concurrency range, and request count
-- private registry authentication uses the central credentials configured by an administrator under **Settings → Registry**
+- private registry authentication uses the central credentials configured by an administrator under **Settings → Registries**
 - each run creates its own non-root Kubernetes Job; no global installation is required
 - different models run concurrently, with one active run per model within an instance across all versions
 - while this model is creating, pending, running, or stopping, Start is disabled
@@ -291,7 +291,7 @@ through the authenticated backend proxy, refresh its readiness state, and
 uninstall it.
 
 Installation requires an available S3 profile and a Kubernetes resource name.
-Private images use the central credentials from **Settings → Registry**. MLflow stores all artifacts in `s3://<bucket>/<profile-prefix>/mlflow`,
+Private images use the central credentials from **Settings → Registries**. MLflow stores all artifacts in `s3://<bucket>/<profile-prefix>/mlflow`,
 with paths allocated per experiment and logged model. Credentials, the endpoint,
 path-style configuration, and an optional CA certificate are stored in a
 server-only Kubernetes Secret. Workflows upload through the tracking proxy.
@@ -312,7 +312,7 @@ before upgrading.
 
 ## Registry Credentials
 
-Administrators configure a shared image pull secret under **Settings → Registry**.
+Administrators configure a shared image pull secret under **Settings → Registries**.
 Paste a Docker config JSON containing a non-empty `auths` object and choose
 **Save secret** to create or replace it. **Remove secret** clears it. The page
 shows whether credentials are configured without returning their contents.
@@ -429,7 +429,7 @@ pod.
 | Resources (GPU/CPU/Memory)       | Optional              | Kubernetes GPU limit and CPU/memory resource settings.                                                   | Enter memory as a whole Gi number; the form adds the `Gi` unit. Set GPU count to at least `1` for vLLM; the form defaults this when vLLM is enabled. |
 
 For private container registries, an administrator saves Docker registry
-authentication JSON under **Settings → Registry**. The following JSON is only
+authentication JSON under **Settings → Registries**. The following JSON is only
 an example of the expected Docker config shape; replace it with the registry,
 credentials, and optional email value for your own registry:
 
@@ -525,7 +525,7 @@ Current scope:
 - they are not positioned as full production orchestration in this version
 
 Perf Analyzer automatically uses the central image pull secret from
-**Settings → Registry** when creating a benchmark Job. There is no per-run
+**Settings → Registries** when creating a benchmark Job. There is no per-run
 registry credential field. This example is not a
 fixed template; use the Docker config JSON required by your registry:
 

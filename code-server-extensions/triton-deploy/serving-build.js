@@ -26,6 +26,7 @@ function registerServingBuild(context, vscode) {
         if (disposed) return;
         output.appendLine(`${id} · ${buildState(build)} · attempt ${build.attempts.at(-1)?.number ?? "pending"}`);
         if (["succeeded", "failed", "cancelled"].includes(build.operation.state)) {
+          if (build.operation.result?.archive) output.appendLine(`Local image archive (namespace/claim/file): ${build.operation.result.archive}`);
           const image = exactImage(build, build.attempts.at(-1)?.number);
           if (image) output.appendLine(`Candidate runtime: ${image}\nBuild success is not production readiness. Validate this exact digest with the model.`);
           monitors.delete(id); return;
@@ -42,8 +43,10 @@ function registerServingBuild(context, vscode) {
     const options = await request(connection, `/api/builds/options?task_id=${encodeURIComponent(taskId)}`);
     const selected = resource ? [resource] : await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: "Select build context" });
     if (!selected?.length) return;
-    const folder = selected[0].fsPath;
-    const dockerfile = await vscode.window.showInputBox({ title: "Dockerfile path relative to context", value: "Dockerfile" });
+    const selectedPath = selected[0].fsPath;
+    const fromFile = (await fs.lstat(selectedPath)).isFile();
+    const folder = fromFile ? path.dirname(selectedPath) : selectedPath;
+    const dockerfile = fromFile ? path.basename(selectedPath) : await vscode.window.showInputBox({ title: "Dockerfile path relative to context", value: "Dockerfile" });
     if (dockerfile === undefined) return;
     const repository = await vscode.window.showQuickPick(options.repositories, { title: "Permitted destination repository" });
     if (!repository) return;
@@ -52,7 +55,7 @@ function registerServingBuild(context, vscode) {
     const deps = await vscode.window.showInputBox({ title: "Dependency lock files relative to context (comma-separated, optional)", value: "" });
     if (deps === undefined) return;
     const split = value => value.split(",").map(v => v.trim()).filter(Boolean);
-    const frozen = await snapshot(folder, dockerfile, options.max_context_bytes, split(bases), split(deps));
+    const frozen = await snapshot(folder, dockerfile, options.max_context_bytes, split(bases), split(deps), fromFile);
     const accepted = await vscode.window.showWarningMessage(`Upload a frozen ${frozen.archive.length}-byte context from ${path.basename(folder)} for task ${taskId}? Only include files you intend to send. Known credential files are excluded; the server applies Dockerignore before building.`, { modal: true }, "Build serving image");
     if (accepted !== "Build serving image") return;
     frozen.request.task_id = taskId;

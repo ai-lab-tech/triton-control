@@ -1,6 +1,6 @@
 """Serialized, additive table creation for repeatable multi-worker startup."""
 
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, inspect, text
 from sqlmodel import SQLModel
 
 # Stable application-wide key, not Python's process-randomized hash().
@@ -18,6 +18,16 @@ def create_tables(engine: Engine) -> None:
         if connection.dialect.name == "postgresql":
             connection.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": SCHEMA_LOCK_ID})
         SQLModel.metadata.create_all(connection)
+        columns = inspect(connection).get_columns("build_destination")
+        if not any(column["name"] == "push_secret" for column in columns):
+            connection.execute(text("ALTER TABLE build_destination ADD COLUMN push_secret VARCHAR"))
+
+        if not any(column["name"] == "push_config_enc" for column in columns):
+            connection.execute(text("ALTER TABLE build_destination ADD COLUMN push_config_enc TEXT"))
+
+        if not any(column["name"] == "reuse_pull_credentials" for column in columns):
+            connection.execute(text("ALTER TABLE build_destination ADD COLUMN reuse_pull_credentials "
+                                    "BOOLEAN NOT NULL DEFAULT FALSE"))
 
         # The audit trail and completed attempt records cannot be rewritten by
         # application DML. Re-running startup leaves their contents untouched.

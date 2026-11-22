@@ -15,53 +15,74 @@ describe("BuildSettingsComponent", () => {
       ],
     });
   });
-  it("starts a new policy with a pinned builder and advanced settings closed", async () => {
+  it("saves a blank local destination and clears the submitted credential editor", async () => {
     const fixture = TestBed.createComponent(BuildSettingsComponent);
     const http = TestBed.inject(HttpTestingController);
-    http
-      .expectOne("/api/settings/serving-image-builds")
-      .flush({ policy: null, source: "unconfigured" });
-    http.expectOne("/api/s3-profiles").flush([]);
+    const url = "/api/settings/serving-image-builds/destination";
+    const state = {
+      destination: null,
+      has_override: false,
+      status: "The cluster builder still needs setup.",
+      builder: { executor_image: "registry.example/kaniko@sha256:fixture", release: "v1.29.1" },
+    };
+    http.expectOne(url).flush(state);
     await fixture.whenStable();
     fixture.detectChanges();
-
-    expect(fixture.componentInstance.builderImage).toMatch(
-      /^ghcr\.io\/osscontainertools\/kaniko@sha256:[a-f0-9]{64}$/,
-    );
-    expect(fixture.componentInstance.builderRelease).toBe("v1.29.1");
-    expect(fixture.nativeElement.querySelector("#build-image").closest("details").open).toBeFalse();
-    expect(fixture.componentInstance.enabled).toBeFalse();
-    http.verify();
-  });
-
-  it("round trips policy fields and keeps the draft when qualification fails", async () => {
-    const fixture = TestBed.createComponent(BuildSettingsComponent);
     const component = fixture.componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const url = "/api/settings/serving-image-builds";
-    const policy = {
-      namespace: "builds",
-      executor_image: "registry.test/builder@sha256:" + "a".repeat(64),
-      release: "v2.0.0",
-      s3_profile_name: "staging",
-      allowed_repositories: ["registry.test/team/images"],
-      egress_cidrs: ["10.10.1.0/24"],
-      memory_mib: 1024,
-    };
-    http.expectOne(url).flush({ policy, source: "deployment" });
-    http.expectOne("/api/s3-profiles").flush([{ name: "staging", bucket: "builds", prefix: "" }]);
     await fixture.whenStable();
+    fixture.detectChanges();
+    const saveButton: HTMLButtonElement =
+      fixture.nativeElement.querySelector('button[type="submit"]');
+    expect(saveButton.disabled).toBeFalse();
+    const advanced = Array.from(
+      fixture.nativeElement.querySelectorAll("details") as NodeListOf<HTMLDetailsElement>,
+    ).find((element) => element.querySelector("summary")?.textContent?.trim() === "Advanced");
+    expect(advanced?.open).toBeFalse();
+    expect(advanced?.textContent).toContain("registry.example/kaniko v1.29.1");
+    expect(advanced?.textContent).toContain("sha256:fixture");
+    expect(fixture.nativeElement.querySelector("details").open).toBeFalse();
 
-    component.enabled = true;
+    component.pushCredentials = '{"auths":{"registry":{"auth":"fixture"}}}';
     const saved = component.save();
     const request = http.expectOne(url);
-    request.flush({ detail: "Qualification required" }, { status: 403, statusText: "Forbidden" });
+    const expected = {
+      reuse_pull_credentials: false,
+      dockerconfigjson: component.pushCredentials,
+      namespace: "triton-builds",
+      allowed_repositories: [],
+    };
+    request.flush({
+      ...state,
+      destination: { namespace: expected.namespace, allowed_repositories: [] },
+      push_credentials_saved: true,
+      has_override: true,
+    });
     await saved;
 
-    expect(request.request.body).toEqual(jasmine.objectContaining({ ...policy, enabled: true }));
-    expect(component.message()).toBe("Qualification required");
-    expect(component.values["namespace"]).toBe("builds");
-    expect(component.source()).toBe("deployment");
+    expect(component.pushCredentials).toBe("");
+    expect(request.request.body).toEqual(expected);
+    expect(component.settings()?.status).toBe(state.status);
+    http.verify();
+  });
+  it("submits reuse without sending credentials typed before checking the box", async () => {
+    const fixture = TestBed.createComponent(BuildSettingsComponent);
+    const http = TestBed.inject(HttpTestingController);
+    const url = "/api/settings/serving-image-builds/destination";
+    const state = { destination: null, status: "", has_override: false };
+    http.expectOne(url).flush(state);
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    component.pushCredentials = "unused";
+    component.reusePull = true;
+
+    const saved = component.save();
+    const req = http.expectOne(url);
+    req.flush({ ...state, reuse_pull_credentials: true });
+    await saved;
+
+    expect(req.request.body.reuse_pull_credentials).toBeTrue();
+    expect(req.request.body.dockerconfigjson).toBeUndefined();
+    expect(component.reusePull).toBeTrue();
     http.verify();
   });
 });

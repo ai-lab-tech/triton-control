@@ -226,7 +226,7 @@ describe("SettingsPageComponent", () => {
       "Endpoints",
       "Release sources",
       "Model preparation",
-      "Registry",
+      "Registries",
     ]);
   });
 

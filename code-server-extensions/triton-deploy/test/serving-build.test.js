@@ -207,7 +207,10 @@ test("build command submits a frozen task-bound context and displays the exact c
   });
   const readFile = fs.readFile;
   t.mock.method(fs, "readFile", (...args) => args[0] === "/inputs/verified/task.json" ? Promise.resolve(JSON.stringify({ task_id: taskId })) : readFile(...args));
-  const inputs = ["Dockerfile", "", ""];
+  await fs.rename(path.join(root, "Dockerfile"), path.join(root, "dockerfile"));
+  await fs.writeFile(path.join(root, "dockerfile"), "FROM scratch\n");
+  await fs.writeFile(path.join(root, "weights.bin"), Buffer.alloc(20000));
+  const inputs = ["", ""];
   const vscode = { ProgressLocation: { Notification: 1 }, window: {
     createOutputChannel: () => ({ dispose() {}, show() {}, appendLine(line) { outputLines.push(line); if (line.startsWith("Candidate runtime:")) shown(); } }),
     showInputBox: async () => inputs.shift(), showQuickPick: async () => "registry/model",
@@ -218,12 +221,14 @@ test("build command submits a frozen task-bound context and displays the exact c
   registerServingBuild(context, vscode);
   t.after(() => context.subscriptions.forEach(item => item.dispose()));
   // Act
-  await commands.get("tritonControl.buildServingImage")({ fsPath: root });
+  await commands.get("tritonControl.buildServingImage")({ fsPath: path.join(root, "dockerfile") });
   await displayed;
   // Assert
   const admission = calls.find(call => call.url === "/api/build-contexts");
   const upload = calls.find(call => call.url.endsWith("/archive"));
   const build = calls.find(call => call.url === "/api/builds" && call.method === "POST");
+  assert.equal(JSON.parse(admission.body).dockerfile, "dockerfile");
+  assert.ok(!JSON.parse(admission.body).allowed_paths.includes("weights.bin"));
   assert.equal(JSON.parse(admission.body).task_id, taskId);
   assert.equal(JSON.parse(admission.body).archive_digest, "sha256:" + crypto.createHash("sha256").update(upload.body).digest("hex"));
   assert.deepEqual(JSON.parse(build.body), { task_id: taskId, context_id: contextId, repository: "registry/model" });
@@ -388,4 +393,15 @@ test("pending context is resumed without replacing its idempotency key", async t
   assert.equal(fixture.calls.filter(call => call.route === "/api/build-contexts").length, 1);
   assert.ok(fixture.calls.some(call => call.route === `/api/build-contexts/${fixture.oldId}/archive`));
   assert.deepEqual(fixture.errors, []);
+});
+
+test("Dockerfile menus match the workspace filename regardless of case", () => {
+  const menus = require("../package.json").contributes.menus;
+  for (const location of ["explorer/context", "editor/context"]) {
+    const rule = menus[location].find(item => item.command === "tritonControl.buildServingImage").when;
+    const [, expression, flags] = rule.match(/resourceFilename =~ \/(.+?)\/(i?)/);
+    const matches = new RegExp(expression, flags);
+    for (const name of ["dockerfile", "Dockerfile", "Dockerfile.gpu"]) assert.ok(matches.test(name));
+    assert.ok(!matches.test("requirements.txt"));
+  }
 });

@@ -619,6 +619,100 @@
         ]
       }
     },
+    "/api/settings/serving-image-builds/destination": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read Destination",
+        "operationId": "read_destination_api_settings_serving_image_builds_destination_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Save Destination",
+        "operationId": "save_destination_api_settings_serving_image_builds_destination_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildDestinationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset Destination",
+        "operationId": "reset_destination_api_settings_serving_image_builds_destination_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/local-bindings/policy": {
       "get": {
         "tags": [
@@ -8212,6 +8306,139 @@
         ],
         "title": "BuildContextResponse"
       },
+      "BuildDestination": {
+        "properties": {
+          "push_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Push Secret"
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Namespace"
+          },
+          "allowed_repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Repositories",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "title": "BuildDestination"
+      },
+      "BuildDestinationSettings": {
+        "properties": {
+          "builder": {
+            "$ref": "#/components/schemas/BuilderImage"
+          },
+          "reuse_pull_credentials": {
+            "type": "boolean",
+            "title": "Reuse Pull Credentials",
+            "default": false
+          },
+          "push_credentials_saved": {
+            "type": "boolean",
+            "title": "Push Credentials Saved",
+            "default": false
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildDestination"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_override": {
+            "type": "boolean",
+            "title": "Has Override"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "destination",
+          "has_override",
+          "status"
+        ],
+        "title": "BuildDestinationSettings"
+      },
+      "BuildDestinationUpdate": {
+        "properties": {
+          "push_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Push Secret"
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Namespace"
+          },
+          "allowed_repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Repositories",
+            "default": []
+          },
+          "reuse_pull_credentials": {
+            "type": "boolean",
+            "title": "Reuse Pull Credentials",
+            "default": false
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "title": "BuildDestinationUpdate"
+      },
       "BuildLogsResponse": {
         "properties": {
           "attempt": {
@@ -8274,20 +8501,27 @@
       },
       "BuildPolicy": {
         "properties": {
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "default": false
-          },
           "executor_image": {
             "type": "string",
             "pattern": "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
-            "title": "Executor Image"
+            "title": "Executor Image",
+            "default": "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37"
           },
           "release": {
             "type": "string",
             "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
-            "title": "Release"
+            "title": "Release",
+            "default": "v1.29.1"
+          },
+          "anonymous_push": {
+            "type": "boolean",
+            "title": "Anonymous Push",
+            "default": false
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
           },
           "namespace": {
             "type": "string",
@@ -8423,8 +8657,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "executor_image",
-          "release",
           "namespace",
           "s3_profile_name",
           "staging_prefix",
@@ -8529,6 +8761,24 @@
           "attempts"
         ],
         "title": "BuildResponse"
+      },
+      "BuilderImage": {
+        "properties": {
+          "executor_image": {
+            "type": "string",
+            "pattern": "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
+            "title": "Executor Image",
+            "default": "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37"
+          },
+          "release": {
+            "type": "string",
+            "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Release",
+            "default": "v1.29.1"
+          }
+        },
+        "type": "object",
+        "title": "BuilderImage"
       },
       "CandidateSummary": {
         "properties": {

@@ -46,7 +46,9 @@ For more detail, see [engineering access](user-management.md),
 
 1. Claim a preparation task and open its verified task workspace.
 2. In code-server choose **Triton Control: Build serving image**, from the command
-   palette, Workspace toolbar or folder context menu.
+   palette, Workspace toolbar or the context menu on a Dockerfile or its folder. The file action accepts lowercase
+   `dockerfile` and snapshots the file, ignore rules and explicitly selected dependencies.
+   Choose the folder action when the Dockerfile needs other local files for COPY or ADD.
 3. Select a context directory, its relative Dockerfile path, a permitted destination
    repository, exact external base image references (`repository@sha256:...`) and
    optional dependency lock files. Use no base references for `FROM scratch`.
@@ -107,7 +109,7 @@ stored in the existing operation JSON; omitted values preserve existing context
 idempotency identities. Old unbound contexts remain usable by ordinary authorized API
 clients, but workspace credentials can use only contexts bound to their own task.
 New task-list/options/retry routes are additive. Deploy the updated backend, which
-packages extension version 0.4.12 into workspace ConfigMaps. Existing workspaces need their extension
+packages extension version 0.4.14 into workspace ConfigMaps. Existing workspaces need their extension
 ConfigMap refreshed and code-server restarted as part of the workspace rollout;
 backend deployment alone does not modify their existing ConfigMaps.
 

@@ -39,7 +39,7 @@ Open **Workspaces** in the sidebar and configure the workspace:
 | CPU request | No | unset | CPU request and limit for the workspace container. |
 | Memory request | No | unset | Memory request and limit for the workspace container. |
 | GPU count | No | unset | Adds an `nvidia.com/gpu` resource limit when greater than zero. |
-| Registry credentials | Centrally managed | unset | Uses the administrator's **Settings → Registry** configuration for new workspaces. |
+| Registry credentials | Centrally managed | unset | Uses the administrator's **Settings → Registries** configuration for new workspaces. |
 
 This option refers to the code-server runtime. Enable
 **Use preinstalled code-server** only if `code-server` is available

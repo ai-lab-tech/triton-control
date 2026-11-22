@@ -41,7 +41,7 @@ class FakeJobs:
             raise ConflictError("UID changed")
         return self.resource
 
-    def provision(self, row, url, ca_certificate=""):
+    def provision(self, row, url, ca_certificate="", push_config=None):
         pass
 
     def create(self, row):
@@ -473,6 +473,43 @@ class ProviderTests(unittest.TestCase):
         with patch.object(jobs, "secret", return_value=NS()):
             jobs.provision(row, "https://storage.test/new-signature")
         self.assertEqual(jobs.core.create_namespaced_secret.call_count, 1)
+
+    def test_uploaded_push_credentials_create_job_secret_without_existing_push_secret(self):
+        from tests.test_build_qualification import policy
+
+        jobs = object.__new__(jobs_kubernetes.Jobs)
+        jobs.core = MagicMock()
+        jobs.core.read_namespaced_secret.return_value = NS(data={
+            "config.json": base64.b64encode(b'{"auths":{}}').decode(),
+        })
+        row = BuildAttemptEntity(operation_id="a" * 32, number=1, namespace="build-test",
+                                 job_name="fixture-job", policy=policy().model_dump())
+        with patch.object(jobs, "secret", return_value=None):
+            jobs.provision(row, "https://storage.test/version", push_config='{"auths":{"registry":{"auth":"fixture"}}}')
+
+        self.assertEqual([c.args[0] for c in jobs.core.read_namespaced_secret.call_args_list], ["base"])
+        namespace, secret = jobs.core.create_namespaced_secret.call_args.args
+        self.assertEqual(namespace, "build-test")
+        self.assertEqual(json.loads(secret["stringData"]["config.json"])["auths"]["registry"]["auth"], "fixture")
+
+    def test_anonymous_build_omits_credentials_for_push_host_and_preserves_private_base_access(self):
+        from tests.test_build_qualification import policy
+
+        jobs = object.__new__(jobs_kubernetes.Jobs)
+        jobs.core = MagicMock()
+        row = BuildAttemptEntity(operation_id="a" * 32, number=1, namespace="build-test",
+                                 job_name="anonymous-job", destination="docker.io/team/image:built",
+                                 policy=policy(anonymous_push=True).model_dump())
+        auths = {"https://index.docker.io/v1/": {"auth": "omit"}, "base.example": {"auth": "base"}}
+        jobs.core.read_namespaced_secret.return_value = NS(data={
+            "config.json": base64.b64encode(json.dumps({"auths": auths}).encode()).decode(),
+        })
+        with patch.object(jobs, "secret", return_value=None):
+            jobs.provision(row, "https://storage.test/version")
+
+        self.assertEqual([c.args[0] for c in jobs.core.read_namespaced_secret.call_args_list], ["base"])
+        secret = jobs.core.create_namespaced_secret.call_args.args[1]
+        self.assertEqual(json.loads(secret["stringData"]["config.json"]), {"auths": {"base.example": {"auth": "base"}}})
 
     def test_conflicting_credential_scopes_are_rejected_before_secret_write(self):
         # Arrange

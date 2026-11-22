@@ -14,18 +14,87 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.exceptions import BadRequestError, ForbiddenError, ServiceUnavailableError
-from app.repositories import build_config, s3_profiles
+from app.repositories import build_config, registry_config, s3_profiles
 from app.schemas.build_contexts import ContextManifest
-from app.schemas.build_policy import BuildPolicy
+from app.schemas.build_policy import BuilderImage, BuildPolicy, LocalArchivePolicy
 from app.services.storage.s3_client import S3Config, build_s3_client
+
+
+def saved_pull_credentials(session: Session) -> tuple[str, str]:
+    row = registry_config.get(session)
+    if not row or not row.dockerconfigjson_enc:
+        raise ForbiddenError("Save pull credentials first, or uncheck the option to reuse them")
+    encrypted = row.dockerconfigjson_enc
+    revision = hashlib.sha256(encrypted.encode()).hexdigest()
+    return "pull-" + revision, encrypted
 
 
 def policy(session: Session) -> BuildPolicy:
     if os.getenv("TRITON_CONTROL_MODE", "development") != "development":
         raise ForbiddenError("Build context staging is available only in development")
+    base = base_policy(session)
+    destination = build_config.get_destination(session)
+    if isinstance(base, LocalArchivePolicy):
+        if destination and (destination.namespace != base.namespace or destination.repositories):
+            raise ForbiddenError("Registry publishing or a different namespace requires a configured registry builder")
+        return base
+    if destination:
+        push_secret = destination.push_secret or base.push_secret
+        if destination.reuse_pull_credentials:
+            push_secret, _ = saved_pull_credentials(session)
+        if push_secret in (base.base_pull_secret, base.runtime_pull_secret):
+            raise ForbiddenError("Choose a push secret separate from the builder pull secrets")
+        repositories = tuple(destination.repositories)
+        if not repositories:
+            # Use only cluster Service destinations from the qualified installation policy.
+            repositories = tuple(repo for repo in base.allowed_repositories
+                                 if repo.split("/", 1)[0].split(":")[0].endswith((".svc", ".svc.cluster.local")))
+            if not repositories:
+                raise ForbiddenError("Local builds require a cluster registry in the installation build policy")
+        return base.model_copy(update={
+            "namespace": destination.namespace, "push_secret": push_secret,
+            "anonymous_push": not (destination.push_secret or destination.reuse_pull_credentials),
+            "allowed_repositories": repositories,
+        })
+    return base
+
+
+def default_executor() -> BuilderImage:
+    configured = os.getenv("TRITON_BUILD_DEFAULT_EXECUTOR")
+    try:
+        return BuilderImage.model_validate_json(configured) if configured is not None else BuilderImage()
+    except ValidationError:
+        raise ServiceUnavailableError("Invalid installation default build executor") from None
+
+
+def with_default_executor(policy: BuildPolicy) -> BuildPolicy:
+    if "executor_image" in policy.model_fields_set:
+        return policy
+    return policy.model_copy(update=default_executor().model_dump())
+
+
+def base_policy(session: Session) -> BuildPolicy:
     row = build_config.get(session)
     if row:
-        return BuildPolicy.model_validate(row.policy)
+        return with_default_executor(BuildPolicy.model_validate(row.policy))
+    namespace = os.getenv("TRITON_LOCAL_BUILD_NAMESPACE")
+    if namespace and not os.getenv("TRITON_BUILD_POLICY_FILE") and os.getenv("TRITON_CONTROL_MODE", "development") == "development":
+        name = os.getenv("TRITON_LOCAL_BUILD_PROFILE")
+        profiles = s3_profiles.list_by_name(session, name) if name else s3_profiles.list_all(session)
+        if len(profiles) != 1:
+            raise ServiceUnavailableError("Select a single staging S3 profile using localBuilds.stagingProfile")
+        profile = profiles[0]
+        if urlparse(profile.endpoint).scheme != "https":
+            raise ServiceUnavailableError("Local build staging requires an HTTPS S3 profile")
+        prefix = profile.prefix.strip("/")
+        return LocalArchivePolicy(
+            **default_executor().model_dump(), namespace=namespace, enabled=True, anonymous_push=True,
+            allowed_repositories=("local/serving",), s3_profile_name=profile.name,
+            staging_prefix=(prefix + "/" if prefix else "") + "build-contexts/",
+            base_pull_secret="unused-base", runtime_pull_secret="unused-runtime", push_secret="unused-push",
+            provisioning_revision="local-archive-v1", egress_cidrs=("127.0.0.1/32",),
+            timeout_seconds=2400, memory_mib=3072, cpu_millis=2000,
+        )
     return deployment_policy()
 
 
@@ -40,7 +109,7 @@ def deployment_policy() -> BuildPolicy:
             raw = stream.read(65537)
         if len(raw) > 65536:
             raise ValueError("Oversized policy")
-        return BuildPolicy.model_validate_json(raw)
+        return with_default_executor(BuildPolicy.model_validate_json(raw))
     except (OSError, ValueError, ValidationError):
         raise ServiceUnavailableError("Invalid installation build policy") from None
 

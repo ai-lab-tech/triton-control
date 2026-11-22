@@ -1,5 +1,5 @@
 {{- with .Values.buildQualification.policy }}
-{{- if not (regexMatch "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$" (required "executor_image must be pinned" .executor_image)) }}
+{{- if and (hasKey . "executor_image") (not (regexMatch "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$" (required "executor_image must be pinned" .executor_image))) }}
 {{- fail "executor_image must be a registry image pinned by sha256 digest" }}
 {{- end }}
 {{- if or (eq .base_pull_secret .push_secret) (eq .push_secret .runtime_pull_secret) (eq .base_pull_secret .runtime_pull_secret) }}
@@ -18,7 +18,7 @@ metadata:
   name: triton-build-policy
   namespace: {{ .namespace | quote }}
 data:
-  policy.json: {{ toJson . | quote }}
+  policy.json: {{ include "triton-control.buildPolicyJson" $ | quote }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

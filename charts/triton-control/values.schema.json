@@ -12,10 +12,29 @@
         }
       }
     },
+    "localBuilds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "namespace", "stagingProfile"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "namespace": {"type": "string", "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "stagingProfile": {"type": "string"}
+      }
+    },
     "buildQualification": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "kaniko": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "image"],
+          "properties": {
+            "version": { "$ref": "#/properties/buildQualification/properties/policy/anyOf/1/properties/release" },
+            "image": { "$ref": "#/properties/buildQualification/properties/policy/anyOf/1/properties/executor_image" }
+          }
+        },
         "contextRetentionDays": {
           "type": "integer",
           "minimum": 1,
@@ -29,6 +48,7 @@
             },
             {
               "additionalProperties": false,
+              "dependencies": {"executor_image": ["release"], "release": ["executor_image"]},
               "properties": {
                 "enabled": {
                   "default": false,
@@ -177,8 +197,6 @@
                 }
               },
               "required": [
-                "executor_image",
-                "release",
                 "namespace",
                 "s3_profile_name",
                 "staging_prefix",
