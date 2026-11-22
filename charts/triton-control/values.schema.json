@@ -12,14 +12,13 @@
         }
       }
     },
-    "localBuilds": {
+    "localBuilds": {"$ref": "#/properties/imageBuilds"},
+    "imageBuilds": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "namespace", "stagingProfile"],
       "properties": {
-        "enabled": {"type": "boolean"},
         "namespace": {"type": "string", "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
-        "stagingProfile": {"type": "string"}
+        "destinationRepositories": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+$"}}
       }
     },
     "buildQualification": {

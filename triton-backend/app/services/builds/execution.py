@@ -29,12 +29,13 @@ def qualified(session: Session) -> BuildPolicy:
     settings = contexts_storage.policy(session)
     if settings.namespace in {"default", "kube-system", "kube-public", os.getenv("POD_NAMESPACE", "")}:
         raise ForbiddenError("Runtime builds require a dedicated development namespace")
-    if isinstance(settings, LocalArchivePolicy):
+    reviewed = contexts_storage.reviewed_policy(session, settings)
+    if reviewed is None:
         return settings
     revision = os.getenv("TRITON_BUILD_FIXTURE_REVISION", "")
     if not revision:
         raise ForbiddenError("Configure the reviewed build fixture revision before enabling builds")
-    require_qualified(session, settings, revision, mode=os.getenv("TRITON_CONTROL_MODE", "development"))
+    require_qualified(session, reviewed, revision, mode=os.getenv("TRITON_CONTROL_MODE", "development"))
     return settings
 
 
@@ -312,7 +313,9 @@ def options(session: Session, claims: dict[str, Any], task_id: UUID) -> BuildOpt
     adapter.authorize(session, actor, str(task_id), "submit")
     settings = qualified(session)
     return BuildOptions(task_id=task_id, repositories=settings.allowed_repositories,
-                        max_context_bytes=settings.max_context_bytes)
+                        max_context_bytes=settings.max_context_bytes,
+                        staging_profiles=contexts_storage.available_profiles(session)
+                        if contexts_storage.reviewed_policy(session, settings) is None else ())
 
 
 def list_for_task(session: Session, claims: dict[str, Any], task_id: UUID,

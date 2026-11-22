@@ -17,7 +17,6 @@ from app.exceptions import BadRequestError, ConflictError, ForbiddenError
 from app.repositories import build_contexts as repo
 from app.repositories import operations, teams
 from app.schemas.build_contexts import BuildContextRequest, BuildContextResponse, ContextManifest
-from app.schemas.build_policy import LocalArchivePolicy
 from app.schemas.operations import OperationRequest, ReconcileResult
 from app.services.builds import access
 from app.services.builds import contexts_storage as provider
@@ -46,7 +45,8 @@ def ensure(session: Session, op: OperationEntity) -> BuildContextEntity:
         raise ForbiddenError("Build policy changed; submit a new context under the current policy")
     if session.get(BuildContextEntity, op.id) is None:
         return repo.ensure(
-            session, op.id, policy_hash=settings.fingerprint(), storage_binding=provider.binding(session, settings),
+            session, op.id, policy_hash=settings.fingerprint(), storage_binding=provider.binding(
+                session, settings, op.payload["request"].get("staging_profile")),
             expires_at=op.created_at + timedelta(seconds=op.payload["retention_seconds"]),
             upload_until=op.created_at + timedelta(minutes=30),
         )
@@ -286,8 +286,9 @@ def consume_for_build(
     installation_policy.require("development_jobs")
     op = checked(session, claims, context_id, "execute")
     settings = provider.policy(session)
-    if not isinstance(settings, LocalArchivePolicy):
-        require_qualified(session, settings, fixture_revision, mode="development")
+    reviewed = provider.reviewed_policy(session, settings)
+    if reviewed is not None:
+        require_qualified(session, reviewed, fixture_revision, mode="development")
     row = repo.get(session, context_id, lock=True)
     receipt = repo.receipt(session, context_id)
     if op.state != "succeeded" or receipt is None or row.expired or row.expires_at <= operations.now(session):

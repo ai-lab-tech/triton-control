@@ -117,6 +117,12 @@ class BuildPolicy(BuilderImage):
         )
 
 
+class ManagedRegistryPolicy(BuildPolicy):
+    """Registry output from the installation-managed development builder."""
+
+    managed_registry: Literal[True] = True
+
+
 class LocalArchivePolicy(BuildPolicy):
     """Installation-generated development contract; never accepted by the policy settings API."""
 

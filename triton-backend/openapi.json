@@ -8202,6 +8202,19 @@
             ],
             "title": "Task Id"
           },
+          "staging_profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staging Profile"
+          },
           "archive_digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$",
@@ -8489,6 +8502,14 @@
           "max_context_bytes": {
             "type": "integer",
             "title": "Max Context Bytes"
+          },
+          "staging_profiles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Staging Profiles",
+            "default": []
           }
         },
         "type": "object",

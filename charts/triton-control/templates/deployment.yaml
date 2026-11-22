@@ -96,9 +96,9 @@ spec:
             {{- if $development }}
             {{- if include "triton-control.localBuildsEnabled" . }}
             - name: TRITON_LOCAL_BUILD_NAMESPACE
-              value: {{ .Values.localBuilds.namespace | quote }}
-            - name: TRITON_LOCAL_BUILD_PROFILE
-              value: {{ .Values.localBuilds.stagingProfile | quote }}
+              value: {{ (include "triton-control.imageBuilds" . | fromJson).namespace | quote }}
+            - name: TRITON_BUILD_DESTINATION_REPOSITORIES
+              value: {{ (include "triton-control.imageBuilds" . | fromJson).destinationRepositories | toJson | quote }}
             {{- end }}
             - name: TRITON_BUILD_DEFAULT_EXECUTOR
               value: {{ include "triton-control.builderImage" . | quote }}

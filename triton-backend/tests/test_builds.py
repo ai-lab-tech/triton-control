@@ -596,6 +596,24 @@ class ProviderTests(unittest.TestCase):
         self.assertIn("--dockerfile=nested/Dockerfile", pod["containers"][0]["args"])
         self.assertNotIn("runtime", str(body))
 
+    def test_managed_destination_selects_archive_or_registry_job(self):
+        from tests.test_build_qualification import policy
+
+        for flag, archive in (("local_archive", True), ("managed_registry", False)):
+            with self.subTest(flag=flag):
+                row = BuildAttemptEntity(operation_id="a" * 32, number=1, job_name="build-test",
+                    policy={**policy().model_dump(), flag: True},
+                    context_receipt={"storage_binding": {"bucket": "contexts"}, "key": "builds/one/context.tar.gz",
+                                     "dockerfile": "Dockerfile"}, destination="registry.example/allowed:attempt")
+
+                pod = jobs_kubernetes.manifest(row)["spec"]["template"]["spec"]
+
+                args = pod["containers"][0]["args"]
+                self.assertEqual("--no-push" in args, archive)
+                self.assertEqual("--tar-path=/output/image.tar" in args, archive)
+                self.assertEqual(any("persistentVolumeClaim" in volume for volume in pod["volumes"]), archive)
+                self.assertIn("--destination=" + row.destination, args)
+
     def test_redaction_removes_plain_encoded_credentials_and_urls(self):
         # Arrange
         output = "password secret auth c2VjcmV0 https://storage/key?X-Amz-Signature=abc\nordinary log"

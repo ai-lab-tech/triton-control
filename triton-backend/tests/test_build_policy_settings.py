@@ -13,9 +13,10 @@ from app.api.build_settings_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import S3ProfileEntity, UserEntity
-from app.exceptions import ForbiddenError
+from app.schemas.build_policy import LocalArchivePolicy, ManagedRegistryPolicy
 from app.services.registry_settings import encrypt_registry_secret
 from app.repositories import build_config, registry_config
+from app.services.builds.contexts_storage import binding
 from app.services.builds.contexts_storage import policy as runtime_policy
 from tests.test_build_contexts import policy
 
@@ -112,14 +113,8 @@ class BuildSettingsTests(unittest.TestCase):
 
         response.raise_for_status()
         self.assertEqual(response.json()["destination"]["allowed_repositories"], [])
-        with Session(self.engine) as session, self.assertRaisesRegex(ForbiddenError, "local|Local"):
-            runtime_policy(session)
-        service_repo = "registry.builds.svc:5000/models"
-        candidate["allowed_repositories"].append(service_repo)
-        self.client.put(self.url, json=candidate).raise_for_status()
-        self.client.put(url, json=local).raise_for_status()
         with Session(self.engine) as session:
-            self.assertEqual(runtime_policy(session).allowed_repositories, (service_repo,))
+            self.assertIsInstance(runtime_policy(session), LocalArchivePolicy)
 
     def test_credentials_are_write_only_and_survive_destination_only_edits(self):
         self.enterContext(patch.dict(os.environ, REGISTRY_SECRET_ENCRYPTION_KEY="unit-test"))
@@ -193,19 +188,52 @@ class BuildSettingsTests(unittest.TestCase):
 
     def test_development_local_archive_uses_single_profile_and_managed_namespace_without_receipt(self):
         from app.services.builds.execution import qualified
-        from app.schemas.build_policy import LocalArchivePolicy
 
-        with patch.dict(os.environ, TRITON_LOCAL_BUILD_NAMESPACE="triton-builds", TRITON_LOCAL_BUILD_PROFILE="",
+        with patch.dict(os.environ, TRITON_LOCAL_BUILD_NAMESPACE="triton-builds",
                         TRITON_BUILD_FIXTURE_REVISION="", TRITON_CONTROL_MODE="development"):
             with Session(self.engine) as session:
                 settings = qualified(session)
 
             self.assertIsInstance(settings, LocalArchivePolicy)
             self.assertEqual(settings.namespace, "triton-builds")
-            self.assertEqual(settings.s3_profile_name, "staging")
+            with Session(self.engine) as session:
+                self.assertEqual(binding(session, settings)["bucket"], "contexts")
             self.assertEqual(settings.allowed_repositories, ("local/serving",))
             self.client.put(self.url + "/destination", json={
                 "namespace": "triton-builds", "allowed_repositories": ["remote.test/models"],
             }).raise_for_status()
-            with Session(self.engine) as session, self.assertRaises(ForbiddenError):
-                qualified(session)
+            with Session(self.engine) as session:
+                remote = qualified(session)
+                self.assertIsInstance(remote, ManagedRegistryPolicy)
+                self.assertEqual(remote.allowed_repositories, ("remote.test/models",))
+
+    def test_profile_created_after_policy_load_can_be_selected_for_staging(self):
+        with patch.dict(os.environ, TRITON_LOCAL_BUILD_NAMESPACE="triton-builds"), Session(self.engine) as session:
+            settings = runtime_policy(session)
+            session.add(S3ProfileEntity(owner_user_id=1, name="later", endpoint="https://storage.test",
+                                        bucket="new-bucket", prefix="team", access_key="fixture",
+                                        secret_key_enc="fixture"))
+            session.commit()
+
+            selected = binding(session, settings, "later")
+
+            self.assertEqual(selected["bucket"], "new-bucket")
+            self.assertEqual(selected["prefix"], "team/build-contexts/")
+            self.assertEqual(runtime_policy(session).fingerprint(), settings.fingerprint())
+
+    def test_blank_override_and_reset_restore_helm_destination(self):
+        url = self.url + "/destination"
+        with patch.dict(os.environ, TRITON_LOCAL_BUILD_NAMESPACE="triton-builds",
+                        TRITON_BUILD_DESTINATION_REPOSITORIES='["registry.test/team/model"]'):
+            self.assertEqual(self.client.get(url).json()["destination"]["allowed_repositories"],
+                             ["registry.test/team/model"])
+
+            self.client.put(url, json={"namespace": "triton-builds", "allowed_repositories": []}).raise_for_status()
+            with Session(self.engine) as session:
+                self.assertIsInstance(runtime_policy(session), LocalArchivePolicy)
+
+            self.client.delete(url).raise_for_status()
+            with Session(self.engine) as session:
+                restored = runtime_policy(session)
+                self.assertIsInstance(restored, ManagedRegistryPolicy)
+                self.assertTrue(restored.permits_destination("registry.test/team/model:v1"))

@@ -82,10 +82,10 @@ def destination_settings(session: Session) -> BuildDestinationSettings:
                                        allowed_repositories=effective.allowed_repositories)
     status = "The cluster builder still needs setup."
     if not configured and os.getenv("TRITON_LOCAL_BUILD_NAMESPACE"):
-        if row and row.repositories:
-            status = "Registry publishing requires a registry builder. Clear repositories to build a local archive."
-        else:
-            status = f"Local images are saved in {os.environ['TRITON_LOCAL_BUILD_NAMESPACE']} as image.tar."
+        if destination is None:
+            destination = contexts_storage.installation_destination(os.environ["TRITON_LOCAL_BUILD_NAMESPACE"])
+        status = ("Builds publish to the selected repository." if destination.allowed_repositories else
+                  f"Local images are saved in {destination.namespace} as image.tar.")
     if configured:
         try:
             qualified(session)

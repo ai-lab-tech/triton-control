@@ -52,6 +52,11 @@ function registerServingBuild(context, vscode) {
       ? options.repositories[0]
       : await vscode.window.showQuickPick(options.repositories, { title: "Permitted destination repository" });
     if (!repository) return;
+    const profiles = options.staging_profiles || [];
+    const profile = profiles.length > 1
+      ? await vscode.window.showQuickPick(profiles, { title: "Storage for this build context" })
+      : profiles[0];
+    if (profiles.length && !profile) return;
     const bases = await vscode.window.showInputBox({ title: "Exact external base images (comma-separated repository@sha256:digest; empty for FROM scratch)", value: "" });
     if (bases === undefined) return;
     const deps = await vscode.window.showInputBox({ title: "Dependency lock files relative to context (comma-separated, optional)", value: "" });
@@ -61,6 +66,7 @@ function registerServingBuild(context, vscode) {
     const accepted = await vscode.window.showWarningMessage(`Upload a frozen ${frozen.archive.length}-byte context from ${path.basename(folder)} for task ${taskId}? Only include files you intend to send. Known credential files are excluded; the server applies Dockerignore before building.`, { modal: true }, "Build serving image");
     if (accepted !== "Build serving image") return;
     frozen.request.task_id = taskId;
+    if (profile) frozen.request.staging_profile = profile;
     output.show(true);
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Preparing serving image build", cancellable: true }, async (progress, cancellation) => {
       const fingerprint = keyFor(frozen.request);

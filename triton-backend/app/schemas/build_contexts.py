@@ -18,6 +18,7 @@ class BuildContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal[1] = 1
     task_id: UUID | None = None
+    staging_profile: str | None = Field(default=None, min_length=1, max_length=128)
     archive_digest: Digest
     archive_bytes: Annotated[int, Field(strict=True, ge=1024, le=1073741824)]
     dockerfile: Path = "Dockerfile"

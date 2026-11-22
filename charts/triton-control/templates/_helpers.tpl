@@ -82,8 +82,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/* A registry policy takes precedence. Production installations cannot build local images. */}}
+{{- define "triton-control.imageBuilds" -}}
+{{- mergeOverwrite (deepCopy .Values.imageBuilds) (default dict .Values.localBuilds) | toJson -}}
+{{- end -}}
+
 {{- define "triton-control.localBuildsEnabled" -}}
-{{- if and (eq (include "triton-control.installationMode" .) "development") .Values.localBuilds.enabled (not .Values.buildQualification.policy) -}}
+{{- if and (eq (include "triton-control.installationMode" .) "development") (not .Values.buildQualification.policy) -}}
 true
 {{- end -}}
 {{- end -}}

@@ -1,10 +1,9 @@
 # Builder qualification and provisioning
 
 Builder qualification verifies one exact container-image builder and its
-installation policy. Builds remain disabled by default. The
+installation policy when an operator configures a reviewed policy. The
 [build-context staging API](build-contexts.md) prepares inputs; staging alone does
-not enable execution. The [runtime-build executor](runtime-builds.md) must pass
-the qualification gate before execution. It does not deploy images automatically.
+not enable execution. The [runtime-build executor](runtime-builds.md) uses that qualification gate for reviewed policies. It does not deploy images automatically.
 
 ## Local builds in a development installation
 
@@ -18,10 +17,10 @@ Successful archives remain on their claims until removed by the operator.
 Failed or cancelled attempts clean up their claims. Local archives cannot be
 used as published registry evidence.
 
-`localBuilds.namespace` sets the namespace for this installation. Use a separate
-namespace for each installation. With a single HTTPS S3 profile the builder
-selects it automatically. With several profiles set `localBuilds.stagingProfile`
-to the versioned staging profile. Local archive builds require neither a
+`imageBuilds.namespace` sets the namespace for this installation. Use a separate
+namespace for each installation. The build command reads the current HTTPS S3 profiles when it starts. It uses
+a single profile automatically or offers a choice when several exist. The
+selected bucket must support versioning. Local archive builds require neither a
 registry nor a fixture revision. Production omits this build workflow.
 
 ## Candidate and provenance
@@ -197,10 +196,10 @@ reusable tests, fixtures and provisioning documentation.
 
 On development installations, open **Admin → Settings → Registries**. Under
 **Push images from builds**, enter the destination registry/repository and build
-namespace. With local archive builds enabled, leave the destination empty to retain the image on a volume. With a registry policy, an empty destination uses the cluster-local registry repositories
-in the installation policy (Service hosts ending in `.svc` or `.svc.cluster.local`).
-Local mode can be saved before the cluster registry is installed. It requires a
-reachable, trusted registry when building and never falls back to a remote repository.
+namespace. Leave the destination empty to save a local archive, or enter a repository
+such as `ghcr.io/my-org/serving` to publish there. Helm uses the same rule for
+`imageBuilds.destinationRepositories`. Saving in the UI overrides the Helm list,
+including when you save an empty list. Resetting the override restores the Helm list.
 
 New destinations use anonymous publishing by default. Open **Push credentials
 (optional)** to reuse saved workload pull credentials or enter separate Docker

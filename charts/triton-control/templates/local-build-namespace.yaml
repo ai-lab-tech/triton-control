@@ -1,5 +1,5 @@
 {{- if include "triton-control.localBuildsEnabled" . }}
-{{- $ns := .Values.localBuilds.namespace }}
+{{- $ns := (include "triton-control.imageBuilds" . | fromJson).namespace }}
 {{- if or (eq $ns .Release.Namespace) (has $ns (list "default" "kube-system" "kube-public" "kube-node-lease")) }}
 {{- fail "Local builds require a dedicated namespace" }}
 {{- end }}

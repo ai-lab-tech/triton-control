@@ -14,7 +14,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.db.entities import BuildAttemptEntity
 from app.exceptions import ConflictError
-from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy
+from app.schemas.build_policy import BuildPolicy, LocalArchivePolicy, ManagedRegistryPolicy
 from app.services.builds.manifests import job
 from app.services.kubernetes_client import api_client
 
@@ -37,6 +37,8 @@ def identity(row: BuildAttemptEntity) -> str:
 
 
 def attempt_policy(row: BuildAttemptEntity) -> BuildPolicy:
+    if row.policy.get("managed_registry"):
+        return ManagedRegistryPolicy.model_validate(row.policy)
     model = LocalArchivePolicy if row.policy.get("local_archive") else BuildPolicy
     return model.model_validate(row.policy)
 
@@ -45,6 +47,8 @@ def manifest(row: BuildAttemptEntity) -> dict[str, Any]:
     policy = attempt_policy(row)
     receipt = row.context_receipt
     bucket, key = receipt["storage_binding"]["bucket"], receipt["key"]
+    if receipt["storage_binding"].get("prefix"):
+        policy = policy.model_copy(update={"staging_prefix": receipt["storage_binding"]["prefix"]})
     body = job(policy, row.job_name, f"s3://{bucket}/{key}", row.destination, row.job_name)
     body["metadata"]["labels"] = {LABEL: identity(row)}
     spec = body["spec"]
@@ -130,8 +134,9 @@ class Jobs:
 
     def provision(self, row: BuildAttemptEntity, context_url: str, ca_certificate: str = "",
                   push_config: str | None = None) -> None:
-        if row.policy.get("local_archive"):
+        if row.policy.get("local_archive") or row.policy.get("managed_registry"):
             self.ensure_local_network(row, context_url)
+        if row.policy.get("local_archive"):
             self.ensure_output_claim(row)
         if self.secret(row) is not None:
             return
@@ -144,6 +149,8 @@ class Jobs:
             names = (policy.base_pull_secret,) if push_config else (policy.base_pull_secret, policy.push_secret)
         if isinstance(policy, LocalArchivePolicy):
             names = ()
+        if isinstance(policy, ManagedRegistryPolicy):
+            names = () if policy.anonymous_push or push_config else (policy.push_secret,)
         for name in names:
             try:
                 secret = self.core.read_namespaced_secret(name, row.namespace, _request_timeout=TIMEOUT)
@@ -187,7 +194,7 @@ class Jobs:
         labels = {LABEL: identity(row)}
         dns = {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
                "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}
-        policy = {"metadata": {"name": row.job_name, "labels": labels},
+        policy: dict[str, Any] = {"metadata": {"name": row.job_name, "labels": labels},
                   "spec": {"podSelector": {"matchLabels": labels}, "policyTypes": ["Ingress", "Egress"],
                            "ingress": [], "egress": [
                                {"to": [dns],
@@ -198,6 +205,18 @@ class Jobs:
                                    "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4",
                                ]}}], "ports": [{"port": 443, "protocol": "TCP"}]},
                            ]}}
+        if row.policy.get("managed_registry"):
+            registry = urlsplit("//" + row.destination.split("/", 1)[0])
+            registry_port = registry.port or 443
+            peers = []
+            for address in socket.getaddrinfo(registry.hostname, registry_port, type=socket.SOCK_STREAM):
+                ip = ip_address(str(address[4][0]))
+                if ip.is_link_local or ip.is_loopback or ip.is_multicast or ip.is_unspecified:
+                    raise ConflictError("Registry must be reachable from the build namespace")
+                peers.append({"ipBlock": {"cidr": f"{ip}/{ip.max_prefixlen}"}})
+            if not peers:
+                raise ConflictError("Registry hostname has no reachable addresses")
+            policy["spec"]["egress"].append({"to": peers, "ports": [{"port": registry_port, "protocol": "TCP"}]})
         try:
             self.network.create_namespaced_network_policy(row.namespace, policy, _request_timeout=TIMEOUT)
         except ApiException as error:
@@ -308,7 +327,7 @@ class Jobs:
             self.core.delete_namespaced_secret(row.job_name, row.namespace,
                 body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=secret.metadata.uid)),
                 _request_timeout=TIMEOUT)
-        if row.policy.get("local_archive"):
+        if row.policy.get("local_archive") or row.policy.get("managed_registry"):
             try:
                 isolation = self.network.read_namespaced_network_policy(row.job_name, row.namespace,
                                                                         _request_timeout=TIMEOUT)

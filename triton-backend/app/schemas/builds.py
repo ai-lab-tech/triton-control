@@ -51,3 +51,4 @@ class BuildOptions(BaseModel):
     task_id: UUID
     repositories: tuple[str, ...]
     max_context_bytes: int
+    staging_profiles: tuple[str, ...] = ()
