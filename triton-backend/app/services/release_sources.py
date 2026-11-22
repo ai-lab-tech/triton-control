@@ -19,7 +19,7 @@ from app.services.serving_metadata import MAX_BYTES, parse_document
 CONFIG_JSON = "TRITON_RELEASE_SOURCES_JSON"
 CONFIG_FILE = "TRITON_RELEASE_SOURCES_FILE"
 ConfigProvenance = Literal["environment", "file"]
-_SOURCE_LIST = TypeAdapter(list[MetadataSource])
+_SOURCE_LIST: TypeAdapter[list[MetadataSource]] = TypeAdapter(list[MetadataSource])
 _PROVENANCE: TypeAdapter[Provenance] = TypeAdapter(Provenance)
 
 
