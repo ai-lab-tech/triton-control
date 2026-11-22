@@ -27,7 +27,7 @@ PLATFORM = os.getenv("MATERIALIZER_TEST_PLATFORM", "")
 
 
 @unittest.skipUnless(IMAGE and KUBECONFIG and PLATFORM, "Requires pinned helper, explicit kubeconfig and platform")
-class MaterializerKubernetesTests(unittest.TestCase):
+class MaterializerKubernetesFixture(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         config.load_kube_config(config_file=KUBECONFIG)
@@ -94,6 +94,9 @@ class MaterializerKubernetesTests(unittest.TestCase):
             time.sleep(1)
         raise AssertionError("S3 fixture did not start: " + str(pod.status))
 
+
+
+class MaterializerKubernetesTests(MaterializerKubernetesFixture):
     def resources(self, case, *, gpu_count=0):
         desired = plan(IMAGE)
         if case == "normalization":

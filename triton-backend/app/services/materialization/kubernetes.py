@@ -5,12 +5,12 @@ must authorize a local storage binding and verify release evidence independently
 """
 
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Literal
 
 from app.core.canonical import canonical_bytes, digest, inventory_digest
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.model_state import DevelopmentStartupRelease
-from app.schemas.serving_metadata import Name, ServingRelease
+from app.schemas.serving_metadata import Name, Repository, Resources, ServingRelease, StartupModel
 from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.budgets import check_plan, storage_bytes
 from app.services.materialization.normalization import MaterializationError
@@ -29,13 +29,25 @@ def manifests(
     namespace: str,
     limits: CaptureLimits,
 ) -> list[dict[str, Any]]:
+    return serving_manifests(
+        plan, policy, binding, name=name, namespace=namespace, limits=limits,
+        identity_digest=digest(release.model_dump(mode="json", by_alias=True)), image=release.spec.image,
+        repository=release.spec.repository, models=release.spec.models, resources=release.spec.resources_per_replica,
+    )
+
+
+def serving_manifests(
+    plan: MaterializationPlan, policy: MaterializerPolicy, binding: StorageBinding, *,
+    name: str, namespace: str, limits: CaptureLimits, identity_digest: str, image: str,
+    repository: Repository, models: tuple[StartupModel, ...], resources: Resources,
+    subject: Literal["release", "validation-manifest"] = "release",
+) -> list[dict[str, Any]]:
     from pydantic import TypeAdapter
 
     TypeAdapter(Name).validate_python(name)
     TypeAdapter(Name).validate_python(namespace)
     require_qualified(policy)
     check_plan(plan, limits)
-    repository = release.spec.repository
     if (
         plan.materializer_image != policy.image
         or repository.materializer_image != policy.image
@@ -49,16 +61,17 @@ def manifests(
     if len(data) > 512 * 1024:
         raise MaterializationError("Materialization plan exceeds Kubernetes document limit")
     budget_data = canonical_bytes(asdict(limits))
-    release_digest = digest(release.model_dump(mode="json", by_alias=True))
     readiness = {
-        "release": release_digest,
+        subject: identity_digest,
         "receipt": receipt_for(plan).model_dump(mode="json"),
-        "models": [model.model_dump(mode="json") for model in release.spec.models],
+        "models": [model.model_dump(mode="json") for model in models],
     }
     readiness_data = canonical_bytes(readiness)
     if len(data) + len(readiness_data) + len(budget_data) > 900 * 1024:
         raise MaterializationError("Release probe expectations exceed Kubernetes document limit")
-    identity = digest({"name": name, "release": release_digest, "plan": readiness["receipt"], "limits": asdict(limits)})
+    identity = digest(
+        {"name": name, subject: identity_digest, "plan": readiness["receipt"], "limits": asdict(limits)}
+    )
     config_name = name[:30].rstrip("-") + "-materialization-" + identity.removeprefix("sha256:")[:16]
     repository_storage = str(storage_bytes(plan))
     env: list[dict[str, Any]] = [
@@ -106,7 +119,6 @@ def manifests(
         init_mounts.append({"name": "storage-ca", "mountPath": "/storage-ca", "readOnly": True})
         args.extend(["--ca-bundle", "/storage-ca/ca.crt"])
     security = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
-    resources = release.spec.resources_per_replica
     requests: dict[str, str] = resources.requests.model_dump()
     runtime_limits: dict[str, str] = resources.limits.model_dump()
     if resources.gpu_count:
@@ -130,7 +142,7 @@ def manifests(
                 "name": name,
                 "namespace": namespace,
                 "annotations": {
-                    "triton-control/release-digest": release_digest,
+                    f"triton-control/{subject}-digest": identity_digest,
                     "triton-control/prepared-inventory-digest": repository.prepared_inventory_digest,
                 },
             },
@@ -161,7 +173,7 @@ def manifests(
                 "containers": [
                     {
                         "name": "triton",
-                        "image": release.spec.image,
+                        "image": image,
                         "command": ["tritonserver"],
                         "startupProbe": {
                             "httpGet": {"path": "/v2/health/live", "port": 8000},
@@ -221,7 +233,7 @@ def manifests(
                         "readinessProbe": {
                             "exec": {"command": ["python", "-m", "app.services.materialization.readiness"]},
                             "periodSeconds": 5,
-                            "timeoutSeconds": probe_timeout_seconds(sum(len(m.versions) for m in release.spec.models)),
+                            "timeoutSeconds": probe_timeout_seconds(sum(len(m.versions) for m in models)),
                             "failureThreshold": 1,
                         },
                     },

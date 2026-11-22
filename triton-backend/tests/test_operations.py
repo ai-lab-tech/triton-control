@@ -99,6 +99,20 @@ class OperationTests(unittest.TestCase):
         with Session(self.engine) as session:
             self.assertEqual(session.exec(select(OperationEntity)).all(), [])
 
+    def test_provider_timeout_preserves_durable_reconciliation_result(self):
+        operation = self.submit()
+        with Session(self.engine) as session:
+            row = repo.get(session, operation.id)
+            row.result = {"jobUID": "already-recorded"}
+            session.add(row)
+            session.commit()
+        with patch.object(self.adapter, "reconcile", side_effect=TimeoutError()):
+            self.assertTrue(OperationWorker(self.service, lambda: Session(self.engine)).run_once())
+        with Session(self.engine) as session:
+            current = repo.get(session, operation.id)
+            self.assertEqual(current.state, "pending")
+            self.assertEqual(current.result, {"jobUID": "already-recorded"})
+
     def test_uncertain_write_recovered_by_new_worker_without_duplicate(self):
         operation = self.submit()
         self.adapter.lose_ack = True

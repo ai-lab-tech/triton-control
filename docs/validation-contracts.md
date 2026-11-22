@@ -5,6 +5,8 @@ schemas, a typed evaluator interface, deterministic identities and offline
 consistency checks. They do not execute an evaluator, create Kubernetes workloads,
 authenticate an issuer, grant release readiness or implement production mode.
 
+For the development Job, provisioning and status API, see [Execute an exact-candidate validation](candidate-validation.md).
+
 ## Three documents
 
 All documents require `apiVersion: validation.triton-control/v1alpha1`, an explicit
@@ -44,7 +46,7 @@ The validation runner implements this interface in an isolated owned runner. It 
 the returned
 report using `report.model_dump_json(by_alias=True)` as `report.json`. Other-language
 evaluators use the same JSON contracts. The protocol introduces no API-process
-execution hook. Only the future authorized result-ingestion path may accept results.
+execution hook. The validation controller reads reports from its owned evaluator pod.
 
 - `passed`: every required metric is present exactly once and passes its criterion.
 - `failed`: all required metrics are present and at least one misses its threshold.
@@ -167,7 +169,7 @@ and identities, explicitly convert and revalidate. New schemas alone do not upda
 running workloads or mark any release ready.
 
 These contracts introduce no database, concurrency, network provider or Kubernetes
-behavior. Tests for those behaviors belong to validation execution and its consumers.
+behavior. Validation execution has separate worker, PostgreSQL and Kubernetes tests.
 CI checks contract compatibility with lineage and serving metadata, and tests the
 packaged-wheel CLI outside the checkout. Production execution, trusted evidence
 admission and security gates remain separate integration work.
