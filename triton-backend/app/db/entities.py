@@ -671,6 +671,30 @@ class PreparationSnapshotEntity(SQLModel, table=True):
     manifest: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     artifacts: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
 
+class ReleaseSourceEntity(SQLModel, table=True):
+    """Current registration, including a tombstone for retired source identities."""
+
+    __tablename__ = "release_sources"
+    name: str = Field(primary_key=True)
+    provenance: str
+    revision: int
+    retired: bool = False
+    document: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
+class ReleaseSourceEventEntity(SQLModel, table=True):
+    """Full registration snapshot at each revision, including retirement."""
+
+    __tablename__ = "release_source_events"
+    source_name: str = Field(primary_key=True, foreign_key="release_sources.name")
+    revision: int = Field(primary_key=True)
+    provenance: str
+    retired: bool
+    actor_id: int | None = None
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    document: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+
+
 class LocalBindingPolicyEntity(SQLModel, table=True):
     """Versioned local allowlist; never contains credential values."""
 

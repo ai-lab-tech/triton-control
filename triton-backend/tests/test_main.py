@@ -39,12 +39,14 @@ class MainAppTests(unittest.IsolatedAsyncioTestCase):
         # Arrange
         with patch("app.main.init_db") as init_db, patch.object(main.instance_health_refresher, "start") as start, \
                 patch.object(main.mlflow_migration, "start") as migrate, \
+                patch.object(main, "sync_release_sources") as sync, \
                 patch.object(main.perf_job_reconciler, "start") as start_perf:
             # Act
             await main.on_startup()
 
         # Assert
         init_db.assert_called_once()
+        sync.assert_called_once()
         start.assert_called_once()
         migrate.assert_called_once()
         start_perf.assert_called_once()

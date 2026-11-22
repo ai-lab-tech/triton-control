@@ -21,6 +21,11 @@ rbac:
 podAnnotations: {}
 podLabels: {}
 
+releaseSources:
+  # MetadataSource documents to mount as JSON. Alternatively set
+  # TRITON_RELEASE_SOURCES_JSON in app.env. Use logical binding names.
+  file: []
+
 app:
   image:
     repository: ailabtechtriton/triton-control

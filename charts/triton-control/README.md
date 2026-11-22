@@ -546,6 +546,57 @@ it through `spec.imagePullSecrets`. A future controlled Triton Control upload
 flow can create a temporary per-workflow Secret and inject its server-generated
 name. Do not place registry credentials directly in Workflow YAML.
 
+### Release source registration
+
+Administrators can register Git and S3 metadata sources under **Settings → Release
+sources** or through `/api/release-sources`. Use the same
+[`MetadataSource` contract](../../contracts/serving/v1alpha1/MetadataSource.schema.json)
+for API requests and installation configuration. The following values mount a
+read-only JSON file generated from a Helm list:
+
+```yaml
+releaseSources:
+  file:
+    - apiVersion: serving.triton-control/v1alpha1
+      kind: MetadataSource
+      metadata:
+        name: release-metadata
+      spec:
+        location:
+          type: s3
+          bucket: release-metadata
+          key: targets/production.json
+        readCredential: metadata-reader
+        allowedTargets: [model-production]
+        intervalSeconds: 86400
+        enabled: false
+```
+
+Alternatively, set `TRITON_RELEASE_SOURCES_JSON` in `app.env` to a JSON array of
+documents. Outside the chart, set `TRITON_RELEASE_SOURCES_FILE` to the path of a
+mounted file containing that JSON array. Use one input. The read binding is a
+logical name in the local binding policy. Keep credential values in that policy's
+credential store. Source registration does not grant provider access or start
+polling.
+
+The upgrade adds registry and history tables. With no source configuration, an
+existing installation starts with an empty registry. New definitions that omit
+`enabled` default to disabled, and the polling interval defaults to 86,400
+seconds. A disabled source keeps its target claims. Removing a source releases
+its targets and retains its identity, registration history, and serving
+deployments. Re-register a retired ID through its original ownership channel.
+Configuration-owned sources are read-only in the admin UI.
+
+All app replicas sharing a database must start with the same release source
+configuration. For a configuration change, stop replicas with the old
+configuration before starting replacements so a restarting old replica cannot
+reapply an outdated snapshot. Startup applies a complete configuration snapshot
+in one transaction. Duplicate IDs and target ownership collisions fail startup
+and leave the stored configuration intact. In production mode, startup accepts
+the existing snapshot and rejects changed configuration. Production registration
+changes require independent review and remain gated on the production approval
+workflow.
+
 ### Existing Argo Installation
 
 Keep `argoWorkflows.enabled=false` when Argo Workflows is managed by a separate

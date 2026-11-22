@@ -776,6 +776,15 @@
         </mat-card-content>
       </mat-card>
     </mat-tab>
+    @if (installation.allows("credential_admin")) {
+      <mat-tab label="Release sources">
+        <ng-template matTabContent>
+          <div class="tab-content">
+            <mat-card class="card"><app-release-source-settings /></mat-card>
+          </div>
+        </ng-template>
+      </mat-tab>
+    }
     <mat-tab label="Model preparation"
       ><div class="tab-content">
         <mat-card class="card"><app-preparation-settings /></mat-card></div

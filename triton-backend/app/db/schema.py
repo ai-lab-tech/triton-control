@@ -5,6 +5,11 @@ from sqlmodel import SQLModel
 
 # Stable application-wide key, not Python's process-randomized hash().
 SCHEMA_LOCK_ID = 741293816
+APPEND_ONLY_TABLES = (
+    "preparation_task_events", "preparation_attempts", "preparation_handoffs",
+    "candidate_imports", "build_context_receipts", "workspace_snapshot_inputs",
+    "preparation_snapshots", "release_source_events",
+)
 
 
 def create_tables(engine: Engine) -> None:
@@ -21,29 +26,21 @@ def create_tables(engine: Engine) -> None:
                 CREATE OR REPLACE FUNCTION reject_preparation_history_mutation()
                 RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
-                    RAISE EXCEPTION 'Preparation history is append-only';
+                    RAISE EXCEPTION 'History in % is append-only', TG_TABLE_NAME;
                 END;
                 $$
             """))
-            for table in (
-                "preparation_task_events", "preparation_attempts", "preparation_handoffs",
-                "candidate_imports", "build_context_receipts", "workspace_snapshot_inputs",
-                "preparation_snapshots",
-            ):
+            for table in APPEND_ONLY_TABLES:
                 connection.execute(text(f"DROP TRIGGER IF EXISTS immutable_history ON {table}"))
                 connection.execute(text(f"""
                     CREATE TRIGGER immutable_history BEFORE UPDATE OR DELETE ON {table}
                     FOR EACH ROW EXECUTE FUNCTION reject_preparation_history_mutation()
                 """))
         elif connection.dialect.name == "sqlite":
-            for table in (
-                "preparation_task_events", "preparation_attempts", "preparation_handoffs",
-                "candidate_imports", "build_context_receipts", "workspace_snapshot_inputs",
-                "preparation_snapshots",
-            ):
+            for table in APPEND_ONLY_TABLES:
                 for action in ("UPDATE", "DELETE"):
                     connection.execute(text(f"""
                         CREATE TRIGGER IF NOT EXISTS immutable_{table}_{action.lower()}
                         BEFORE {action} ON {table}
-                        BEGIN SELECT RAISE(ABORT, 'Preparation history is append-only'); END
+                        BEGIN SELECT RAISE(ABORT, 'History in {table} is append-only'); END
                     """))

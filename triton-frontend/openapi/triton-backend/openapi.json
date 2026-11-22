@@ -32,6 +32,239 @@
         ]
       }
     },
+    "/api/release-sources": {
+      "get": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "List Release Sources",
+        "operationId": "list_release_sources_api_release_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseSource"
+                  },
+                  "type": "array",
+                  "title": "Response List Release Sources Api Release Sources Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Create Release Source",
+        "operationId": "create_release_source_api_release_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/release-sources/{name}": {
+      "get": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Get Release Source",
+        "operationId": "get_release_source_api_release_sources__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Update Release Source",
+        "operationId": "update_release_source_api_release_sources__name__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Delete Release Source",
+        "operationId": "delete_release_source_api_release_sources__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "expected_revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Expected Revision"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login": {
       "get": {
         "tags": [
@@ -13082,6 +13315,58 @@
           "release"
         ],
         "title": "ReleaseMetadata"
+      },
+      "ReleaseSource": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MetadataSource"
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "database",
+              "environment",
+              "file"
+            ],
+            "title": "Provenance"
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Revision"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "provenance",
+          "revision",
+          "editable"
+        ],
+        "title": "ReleaseSource"
+      },
+      "ReleaseSourceUpdate": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MetadataSource"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "expected_revision"
+        ],
+        "title": "ReleaseSourceUpdate"
       },
       "ReleaseSpec": {
         "properties": {

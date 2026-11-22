@@ -65,3 +65,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 {{- $mode -}}
 {{- end -}}
+
+{{- define "triton-control.releaseSourcesConfigMapName" -}}
+{{- printf "%s-sources-%s" (include "triton-control.fullname" . | trunc 42 | trimSuffix "-") (.Values.releaseSources.file | mustToJson | sha256sum | trunc 12) -}}
+{{- end -}}

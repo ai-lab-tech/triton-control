@@ -1,4 +1,5 @@
 {{- $development := eq (include "triton-control.installationMode" .) "development" -}}
+{{- $releaseSourceFile := (default dict .Values.releaseSources).file -}}
 {{- if and .Values.tritonDeployments.ingressTlsSecretName .Values.tritonDeployments.certManagerClusterIssuer }}
 {{- fail "Set either tritonDeployments.ingressTlsSecretName or tritonDeployments.certManagerClusterIssuer, not both" }}
 {{- end }}
@@ -56,13 +57,24 @@ spec:
             - name: api
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
-          {{- if .Values.buildQualification.policy }}
+          {{- if or .Values.buildQualification.policy $releaseSourceFile }}
           volumeMounts:
+            {{- if .Values.buildQualification.policy }}
             - name: build-context-policy
               mountPath: /etc/triton-control/build-context
               readOnly: true
+            {{- end }}
+            {{- if $releaseSourceFile }}
+            - name: release-sources
+              mountPath: /etc/triton-control/release-sources
+              readOnly: true
+            {{- end }}
           {{- end }}
           env:
+            {{- if $releaseSourceFile }}
+            - name: TRITON_RELEASE_SOURCES_FILE
+              value: /etc/triton-control/release-sources/sources.json
+            {{- end }}
             - name: PREPARATION_MAX_INPUT_GIB
               value: {{ .Values.modelPreparation.maxInputGiB | quote }}
             - name: PREPARATION_MAX_WORKSPACE_STORAGE_GIB
@@ -192,11 +204,18 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if .Values.buildQualification.policy }}
+      {{- if or .Values.buildQualification.policy $releaseSourceFile }}
       volumes:
+        {{- if .Values.buildQualification.policy }}
         - name: build-context-policy
           configMap:
             name: {{ include "triton-control.fullname" . }}-build-context-policy
+        {{- end }}
+        {{- if $releaseSourceFile }}
+        - name: release-sources
+          configMap:
+            name: {{ include "triton-control.releaseSourcesConfigMapName" . }}
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
