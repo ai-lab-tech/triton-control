@@ -78,7 +78,8 @@ def base_policy(session: Session) -> BuildPolicy:
     if row:
         return with_default_executor(BuildPolicy.model_validate(row.policy))
     namespace = os.getenv("TRITON_LOCAL_BUILD_NAMESPACE")
-    if namespace and not os.getenv("TRITON_BUILD_POLICY_FILE") and os.getenv("TRITON_CONTROL_MODE", "development") == "development":
+    development = os.getenv("TRITON_CONTROL_MODE", "development") == "development"
+    if development and namespace and not os.getenv("TRITON_BUILD_POLICY_FILE"):
         name = os.getenv("TRITON_LOCAL_BUILD_PROFILE")
         profiles = s3_profiles.list_by_name(session, name) if name else s3_profiles.list_all(session)
         if len(profiles) != 1:

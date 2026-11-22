@@ -190,3 +190,22 @@ class BuildSettingsTests(unittest.TestCase):
                 self.assertEqual(runtime_policy(session).release, "v2.0.1")
         with Session(self.engine) as session:
             self.assertEqual(runtime_policy(session).release, "v1.29.1")
+
+    def test_development_local_archive_uses_single_profile_and_managed_namespace_without_receipt(self):
+        from app.services.builds.execution import qualified
+        from app.schemas.build_policy import LocalArchivePolicy
+
+        with patch.dict(os.environ, TRITON_LOCAL_BUILD_NAMESPACE="triton-builds", TRITON_LOCAL_BUILD_PROFILE="",
+                        TRITON_BUILD_FIXTURE_REVISION="", TRITON_CONTROL_MODE="development"):
+            with Session(self.engine) as session:
+                settings = qualified(session)
+
+            self.assertIsInstance(settings, LocalArchivePolicy)
+            self.assertEqual(settings.namespace, "triton-builds")
+            self.assertEqual(settings.s3_profile_name, "staging")
+            self.assertEqual(settings.allowed_repositories, ("local/serving",))
+            self.client.put(self.url + "/destination", json={
+                "namespace": "triton-builds", "allowed_repositories": ["remote.test/models"],
+            }).raise_for_status()
+            with Session(self.engine) as session, self.assertRaises(ForbiddenError):
+                qualified(session)

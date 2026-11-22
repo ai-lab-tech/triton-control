@@ -3,7 +3,9 @@
 import base64
 import json
 import re
+import socket
 from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -94,6 +96,7 @@ class Jobs:
         self.api = api_client()
         self.batch = client.BatchV1Api(self.api)
         self.core = client.CoreV1Api(self.api)
+        self.network = client.NetworkingV1Api(self.api)
 
     def close(self) -> None:
         self.api.close()
@@ -128,6 +131,7 @@ class Jobs:
     def provision(self, row: BuildAttemptEntity, context_url: str, ca_certificate: str = "",
                   push_config: str | None = None) -> None:
         if row.policy.get("local_archive"):
+            self.ensure_local_network(row, context_url)
             self.ensure_output_claim(row)
         if self.secret(row) is not None:
             return
@@ -168,6 +172,39 @@ class Jobs:
             if error.status != 409:
                 raise
             self.secret(row)
+
+    def ensure_local_network(self, row: BuildAttemptEntity, context_url: str) -> None:
+        """Only the staging endpoint, cluster DNS and public HTTPS are needed by this build."""
+        endpoint = urlsplit(context_url)
+        if endpoint.scheme != "https" or not endpoint.hostname:
+            raise ConflictError("Local build inputs require HTTPS")
+        port = endpoint.port or 443
+        addresses = {ip_address(str(item[4][0])) for item in
+                     socket.getaddrinfo(endpoint.hostname, port, type=socket.SOCK_STREAM)}
+        if any(ip.is_link_local or ip.is_loopback or ip.is_multicast or ip.is_unspecified for ip in addresses):
+            raise ConflictError("Staging endpoint must be reachable from the build namespace")
+        storage = [{"ipBlock": {"cidr": f"{ip}/{ip.max_prefixlen}"}} for ip in sorted(addresses, key=str)]
+        labels = {LABEL: identity(row)}
+        dns = {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+               "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}
+        policy = {"metadata": {"name": row.job_name, "labels": labels},
+                  "spec": {"podSelector": {"matchLabels": labels}, "policyTypes": ["Ingress", "Egress"],
+                           "ingress": [], "egress": [
+                               {"to": [dns],
+                                "ports": [{"port": 53, "protocol": proto} for proto in ("UDP", "TCP")]},
+                               {"to": storage, "ports": [{"port": port, "protocol": "TCP"}]},
+                               {"to": [{"ipBlock": {"cidr": "0.0.0.0/0", "except": [
+                                   "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+                                   "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4",
+                               ]}}], "ports": [{"port": 443, "protocol": "TCP"}]},
+                           ]}}
+        try:
+            self.network.create_namespaced_network_policy(row.namespace, policy, _request_timeout=TIMEOUT)
+        except ApiException as error:
+            if error.status != 409:
+                raise
+            self.check(self.network.read_namespaced_network_policy(row.job_name, row.namespace,
+                                                                   _request_timeout=TIMEOUT), row)
 
     def ensure_output_claim(self, row: BuildAttemptEntity) -> None:
         claim = {"metadata": {"name": row.job_name, "labels": {LABEL: identity(row)}},
@@ -271,6 +308,18 @@ class Jobs:
             self.core.delete_namespaced_secret(row.job_name, row.namespace,
                 body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=secret.metadata.uid)),
                 _request_timeout=TIMEOUT)
+        if row.policy.get("local_archive"):
+            try:
+                isolation = self.network.read_namespaced_network_policy(row.job_name, row.namespace,
+                                                                        _request_timeout=TIMEOUT)
+                self.check(isolation, row)
+                self.network.delete_namespaced_network_policy(row.job_name, row.namespace,
+                    body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=isolation.metadata.uid)),
+                    _request_timeout=TIMEOUT)
+                return False
+            except ApiException as error:
+                if error.status != 404:
+                    raise
         if row.policy.get("local_archive") and row.state != "succeeded":
             try:
                 claim = self.core.read_namespaced_persistent_volume_claim(row.job_name, row.namespace,
