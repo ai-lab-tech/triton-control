@@ -328,16 +328,25 @@ class Jobs:
     def cleanup(self, row: BuildAttemptEntity) -> bool:
         resource = self.read(row)
         if resource is not None:
-            self.batch.delete_namespaced_job(row.job_name, row.namespace,
-                body=client.V1DeleteOptions(propagation_policy="Foreground",
-                                           preconditions=client.V1Preconditions(uid=resource.metadata.uid)),
-                _request_timeout=TIMEOUT)
-            return False
+            try:
+                self.batch.delete_namespaced_job(row.job_name, row.namespace,
+                    body=client.V1DeleteOptions(propagation_policy="Foreground",
+                                                preconditions=client.V1Preconditions(uid=resource.metadata.uid)),
+                    _request_timeout=TIMEOUT)
+            except ApiException as error:
+                if error.status != 404:
+                    raise
+            else:
+                return False  # Wait for foreground deletion before removing credentials.
         secret = self.secret(row)
         if secret is not None:
-            self.core.delete_namespaced_secret(row.job_name, row.namespace,
-                body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=secret.metadata.uid)),
-                _request_timeout=TIMEOUT)
+            try:
+                self.core.delete_namespaced_secret(row.job_name, row.namespace,
+                    body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=secret.metadata.uid)),
+                    _request_timeout=TIMEOUT)
+            except ApiException as error:
+                if error.status != 404:
+                    raise
         if row.policy.get("local_archive") or row.policy.get("managed_registry"):
             try:
                 isolation = self.network.read_namespaced_network_policy(row.job_name, row.namespace,
