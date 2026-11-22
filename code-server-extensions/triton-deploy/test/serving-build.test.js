@@ -84,6 +84,20 @@ for (const status of [401, 403]) {
     await assert.rejects(result, error => error.status === status && !error.message.includes("sensitive"));
   });
 }
+test("missing staging policy identifies the administrator action", async t => {
+  // Arrange
+  const server = http.createServer((req, res) => {
+    res.writeHead(403);
+    res.end(JSON.stringify({ detail: "Build context staging has not been configured" }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const connection = { endpoint: `http://127.0.0.1:${server.address().port}`, workload: "dev/code", token: "fixture" };
+  // Act
+  const result = request(connection, "/api/builds/options");
+  // Assert
+  await assert.rejects(result, /administrator to configure.*build policy/);
+});
 test("failed attempts cannot expose a candidate digest", () => {
   // Arrange
   const build = { attempts: [{ number: 1, state: "failed", destination: "registry:5000/model:attempt", final_digest: "sha256:" + "a".repeat(64) }] };
@@ -193,7 +207,10 @@ test("build command submits a frozen task-bound context and displays the exact c
   });
   const readFile = fs.readFile;
   t.mock.method(fs, "readFile", (...args) => args[0] === "/inputs/verified/task.json" ? Promise.resolve(JSON.stringify({ task_id: taskId })) : readFile(...args));
-  const inputs = ["Dockerfile", "", ""];
+  await fs.rename(path.join(root, "Dockerfile"), path.join(root, "dockerfile"));
+  await fs.writeFile(path.join(root, "dockerfile"), "FROM scratch\n");
+  await fs.writeFile(path.join(root, "weights.bin"), Buffer.alloc(20000));
+  const inputs = ["registry/model:v2"];
   const vscode = { ProgressLocation: { Notification: 1 }, window: {
     createOutputChannel: () => ({ dispose() {}, show() {}, appendLine(line) { outputLines.push(line); if (line.startsWith("Candidate runtime:")) shown(); } }),
     showInputBox: async () => inputs.shift(), showQuickPick: async () => "registry/model",
@@ -204,15 +221,19 @@ test("build command submits a frozen task-bound context and displays the exact c
   registerServingBuild(context, vscode);
   t.after(() => context.subscriptions.forEach(item => item.dispose()));
   // Act
-  await commands.get("tritonControl.buildServingImage")({ fsPath: root });
+  await commands.get("tritonControl.buildServingImage")({ fsPath: path.join(root, "dockerfile") });
   await displayed;
   // Assert
   const admission = calls.find(call => call.url === "/api/build-contexts");
   const upload = calls.find(call => call.url.endsWith("/archive"));
   const build = calls.find(call => call.url === "/api/builds" && call.method === "POST");
+  assert.equal(JSON.parse(admission.body).dockerfile_only, true);
+  assert.equal(JSON.parse(admission.body).staging_profile, undefined);
+  assert.equal(JSON.parse(admission.body).dockerfile, "dockerfile");
+  assert.ok(!JSON.parse(admission.body).allowed_paths.includes("weights.bin"));
   assert.equal(JSON.parse(admission.body).task_id, taskId);
   assert.equal(JSON.parse(admission.body).archive_digest, "sha256:" + crypto.createHash("sha256").update(upload.body).digest("hex"));
-  assert.deepEqual(JSON.parse(build.body), { task_id: taskId, context_id: contextId, repository: "registry/model" });
+  assert.deepEqual(JSON.parse(build.body), { task_id: taskId, context_id: contextId, repository: "registry/model", tag: "v2" });
   assert.equal(build.headers["x-triton-build-workspace"], "dev/code");
   assert.ok(build.headers["idempotency-key"]);
   assert.ok(outputLines.some(line => line.includes("registry/model@" + digest)));
@@ -374,4 +395,15 @@ test("pending context is resumed without replacing its idempotency key", async t
   assert.equal(fixture.calls.filter(call => call.route === "/api/build-contexts").length, 1);
   assert.ok(fixture.calls.some(call => call.route === `/api/build-contexts/${fixture.oldId}/archive`));
   assert.deepEqual(fixture.errors, []);
+});
+
+test("Dockerfile menus match the workspace filename regardless of case", () => {
+  const menus = require("../package.json").contributes.menus;
+  for (const location of ["explorer/context", "editor/context"]) {
+    const rule = menus[location].find(item => item.command === "tritonControl.buildServingImage").when;
+    const [, expression, flags] = rule.match(/resourceFilename =~ \/(.+?)\/(i?)/);
+    const matches = new RegExp(expression, flags);
+    for (const name of ["dockerfile", "Dockerfile", "Dockerfile.gpu"]) assert.ok(matches.test(name));
+    assert.ok(!matches.test("requirements.txt"));
+  }
 });

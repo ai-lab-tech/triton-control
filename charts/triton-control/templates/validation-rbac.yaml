@@ -1,4 +1,7 @@
 {{- if and .Values.candidateValidation.namespace (eq (include "triton-control.installationMode" .) "development") }}
+{{- if has .Values.candidateValidation.namespace (list .Release.Namespace "default" "kube-system" "kube-public" "kube-node-lease") }}
+{{- fail "Validation requires a dedicated namespace" }}
+{{- end }}
 {{- $name := printf "%s-validation" (include "triton-control.fullname" .) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

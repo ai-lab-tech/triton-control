@@ -1,5 +1,5 @@
 import { TestBed } from "@angular/core/testing";
-import { ActivatedRoute, convertToParamMap } from "@angular/router";
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from "@angular/router";
 import { BehaviorSubject, Subject, of, throwError } from "rxjs";
 import {
   BuildsApiService,
@@ -26,12 +26,13 @@ describe("Task serving builds", () => {
         context_id: "b".repeat(32),
         final_digest: null,
         cleaned: true,
+        created_at: "2026-01-01T12:00:00Z",
         finished_at: "2026-01-01",
       },
     ],
   };
   beforeEach(async () => {
-    api = jasmine.createSpyObj("BuildsApiService", ["options", "list", "submit", "action", "logs"]);
+    api = jasmine.createSpyObj("BuildsApiService", ["options", "list", "action", "logs"]);
     api.options.and.returnValue(
       of({ task_id: taskId, repositories: ["registry/model"], max_context_bytes: 10000 }),
     );
@@ -40,6 +41,7 @@ describe("Task serving builds", () => {
     await TestBed.configureTestingModule({
       imports: [TaskBuildsPageComponent],
       providers: [
+        provideRouter([]),
         { provide: BuildsApiService, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params } },
       ],
@@ -52,10 +54,34 @@ describe("Task serving builds", () => {
     // Act
     fixture.detectChanges();
     // Assert
-    expect(fixture.nativeElement.textContent).toContain("Retry as new attempt");
+    expect(fixture.nativeElement.textContent).toContain("Retry build");
     expect(fixture.nativeElement.textContent).toContain("Attempt 1");
     expect(fixture.nativeElement.textContent).not.toContain("Candidate runtime image:");
-    expect(fixture.nativeElement.textContent).toContain("does not grant production readiness");
+    expect(fixture.nativeElement.textContent).not.toContain("Build again with saved files");
+  });
+  it("retries the failed build using its existing build ID", async () => {
+    api.action.and.returnValue(of(failed));
+    const fixture = TestBed.createComponent(TaskBuildsPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const buttons: HTMLButtonElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll("button"),
+    );
+    buttons.find((button) => button.textContent?.includes("Retry build"))!.click();
+    await fixture.whenStable();
+
+    expect(api.action).toHaveBeenCalledOnceWith(failed.id, "retry");
+  });
+  it("links back to the task when the build page was opened directly", async () => {
+    const fixture = TestBed.createComponent(TaskBuildsPageComponent);
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    fixture.nativeElement.querySelector("a").click();
+
+    expect(navigate).toHaveBeenCalledWith(["/preparation/tasks", taskId]);
   });
   it("production or denied options hide build submission", async () => {
     // Arrange
@@ -66,7 +92,7 @@ describe("Task serving builds", () => {
     fixture.detectChanges();
     // Assert
     expect(fixture.nativeElement.querySelector("form")).toBeNull();
-    expect(fixture.nativeElement.textContent).not.toContain("Retry as new attempt");
+    expect(fixture.nativeElement.textContent).not.toContain("Retry build");
   });
   it("lost task access clears previously visible results and logs", async () => {
     // Arrange
@@ -80,19 +106,6 @@ describe("Task serving builds", () => {
     expect(fixture.componentInstance.builds()).toEqual([]);
     expect(fixture.componentInstance.options()).toBeNull();
     expect(fixture.nativeElement.querySelector("article")).toBeNull();
-  });
-  it("reuses the idempotency key after an uncertain submit", async () => {
-    // Arrange
-    const fixture = TestBed.createComponent(TaskBuildsPageComponent);
-    await fixture.whenStable();
-    api.submit.and.returnValue(throwError(() => ({ status: 0 })));
-    fixture.componentInstance.contextId = "b".repeat(32);
-    // Act
-    await fixture.componentInstance.submit();
-    await fixture.componentInstance.submit();
-    // Assert
-    expect(api.submit).toHaveBeenCalledTimes(2);
-    expect(api.submit.calls.argsFor(0)[3]).toBe(api.submit.calls.argsFor(1)[3]);
   });
   it("does not mutate a build from another task", async () => {
     // Arrange

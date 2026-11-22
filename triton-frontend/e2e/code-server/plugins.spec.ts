@@ -566,7 +566,7 @@ test.describe.serial("code-server plugin workflows", () => {
 
   test("task build history uses the managed workspace credential", async () => {
     test.setTimeout(600_000);
-    // Arrange: a real version-pinned handoff and claimed task, with no builder policy enabled.
+    // Arrange: a real version-pinned handoff and claimed task using the default development builder.
     const profiles = await jsonResponse(await context.request.get("/api/s3-profiles"));
     const profileId = profiles.find((profile: { name: string }) => profile.name === "Smoke S3").id;
     const users = await jsonResponse(await context.request.get("/api/auth/users"));
@@ -591,7 +591,7 @@ test.describe.serial("code-server plugin workflows", () => {
           baseline: artifact("baseline"),
           expected_behavior: "Read task build history using managed workspace credentials.",
           acceptance_criteria:
-            "An installation without qualified build policy cannot start builds.",
+            "The assignee can select a Dockerfile and cancel without submitting a build.",
         },
       }),
     );
@@ -640,18 +640,25 @@ test.describe.serial("code-server plugin workflows", () => {
     await expect(workbench.locator(".quick-input-widget")).toBeHidden();
   });
 
-  test("task build submission enforces the installation policy before context selection", async () => {
-    // Arrange: the preceding scenario opened a genuine task workspace.
-    const notification = workbench.locator(".notifications-toasts");
+  test("an assigned task can select a Dockerfile and cancel before submitting a build", async () => {
+    // Arrange
+    const options = await jsonResponse(
+      await context.request.get(`/api/builds/options?task_id=${buildTaskId}`),
+    );
+    expect(options.local_archive).toBe(true);
+    const picker = workbench
+      .locator(".quick-input-widget")
+      .filter({ hasText: "Select Dockerfile" });
 
     // Act
     await command("Triton Control: Build serving image");
-    const builds = await context.request.get(`/api/builds?task_id=${buildTaskId}`);
+    await expect(picker).toBeVisible();
+    await picker.locator("input:visible").press("Escape");
 
     // Assert
-    await expect(notification).toContainText("Build access denied");
-    await expect(workbench.locator(".quick-input-widget")).toBeHidden();
-    expect(builds.ok()).toBeTruthy();
-    expect(await builds.json()).toEqual([]);
+    await expect(picker).toBeHidden();
+    expect(
+      await jsonResponse(await context.request.get(`/api/builds?task_id=${buildTaskId}`)),
+    ).toEqual([]);
   });
 });

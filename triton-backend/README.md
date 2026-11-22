@@ -156,7 +156,7 @@ runs. It does not change the Kubernetes installation.
 
 ### Central workload credentials
 
-Administrators configure image pull credentials under **Settings → Registry** and
+Administrators configure image pull credentials under **Settings → Registries** and
 S3 connections through the existing **S3 Profiles** admin menu entry. New deployments, development
 workspaces, MLflow installations and profiling jobs use the stored registry
 credentials automatically. Existing Kubernetes workloads are unchanged; recreate

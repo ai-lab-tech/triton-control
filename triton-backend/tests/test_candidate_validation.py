@@ -21,7 +21,7 @@ from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import OperationEntity, UserEntity
 from app.exceptions import ForbiddenError, UnprocessableEntityError
-from app.repositories.operations import VALIDATION_KIND
+from app.repositories.operations import VALIDATION_KIND, validation_attempts
 from app.schemas.materialization import StorageBinding
 from app.schemas.operations import OperationRequest
 from app.schemas.validation import ValidationManifest
@@ -195,7 +195,61 @@ class ValidationTests(unittest.TestCase):
         batch.delete_namespaced_job.assert_not_called()
 
 
+    def test_completed_job_with_missing_evaluator_logs_cannot_publish_a_report(self):
+        # Arrange
+        row = OperationEntity(
+            id=uuid4().hex, target=str(uuid4()), payload=self.manifest.model_dump(mode="json", by_alias=True),
+            result={"namespace": "isolated", "jobUID": self.job.metadata.uid},
+        )
+        self.job.metadata.annotations = {execution.OWNER: row.id}
+        self.job.spec = NS(suspend=False)
+        self.job.status = NS(conditions=[NS(type="Complete", status="True")])
+        batch = Mock()
+        batch.read_namespaced_job.return_value = self.job
+        self.core.read_namespaced_pod_log.side_effect = ApiException(status=404)
+
+        # Act
+        with self.assertRaisesRegex(execution.MetadataError, "completed-runner-evidence-missing"):
+            execution.reconcile(row, Mock(), self.core, batch)
+
+        # Assert
+        batch.delete_namespaced_job.assert_not_called()
+
+    def test_cleanup_observes_completion_when_the_owned_job_disappears_before_delete(self):
+        # Arrange
+        row = OperationEntity(
+            id=uuid4().hex, target=str(uuid4()), payload=self.manifest.model_dump(mode="json", by_alias=True),
+            result={"namespace": "isolated", "jobUID": "owned", "finishedState": "succeeded", "outcome": "passed"},
+        )
+        batch = Mock()
+        batch.read_namespaced_job.return_value = NS(metadata=NS(uid="owned", annotations={execution.OWNER: row.id}))
+        batch.delete_namespaced_job.side_effect = ApiException(status=404)
+
+        # Act
+        result = execution.reconcile(row, Mock(), self.core, batch)
+
+        # Assert
+        self.assertEqual(result.state, "succeeded")
+        self.assertEqual(result.result, row.result)
+        self.assertEqual(batch.delete_namespaced_job.call_args.kwargs["body"]["preconditions"], {"uid": "owned"})
+
+
 class ValidationAccessTests(PreparationFixture, unittest.TestCase):
+    def test_submission_rejects_the_application_namespace_before_reserving_work(self):
+        # Arrange
+        task = self.claim(self.create())
+        service = OperationService()
+        service.register(VALIDATION_KIND, execution.ValidationAdapter())
+        request = OperationRequest(kind=VALIDATION_KIND, target=str(task.id), payload=fixture("manifest"))
+
+        # Act
+        with patch.dict(os.environ, POD_NAMESPACE="control", TRITON_VALIDATION_NAMESPACE="control"):
+            with self.assertRaises(UnprocessableEntityError):
+                service.submit(self.session, self.engineer, request, "unsafe-namespace")
+
+        # Assert
+        self.assertEqual(validation_attempts(self.session, task.id, 10, 0), [])
+
     def test_only_assignee_can_submit_and_failed_attempt_cannot_be_overwritten(self):
         if self.engine.dialect.name == "sqlite":
             self.enterContext(patch("app.repositories.operations.now", lambda _: datetime.utcnow()))

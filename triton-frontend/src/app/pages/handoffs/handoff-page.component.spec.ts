@@ -3,10 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from "@angular/common
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatSelectHarness } from "@angular/material/select/testing";
 import { TestBed } from "@angular/core/testing";
+import { By } from "@angular/platform-browser";
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from "@angular/router";
-import { of } from "rxjs";
+import { BehaviorSubject, of } from "rxjs";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { HandoffPageComponent } from "./handoff-page.component";
+import { TaskWorkspaceOptionsComponent } from "./task-workspace-options.component";
 
 const receipt = {
   id: "receipt-1",
@@ -29,6 +31,7 @@ const receipt = {
 };
 
 describe("HandoffPageComponent", () => {
+  let query: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   let http: HttpTestingController;
   async function setup(
     id: string | null = null,
@@ -36,6 +39,7 @@ describe("HandoffPageComponent", () => {
     requireS3Versioning = true,
     previous = "",
   ) {
+    query = new BehaviorSubject(convertToParamMap(previous ? { previous } : {}));
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -45,6 +49,7 @@ describe("HandoffPageComponent", () => {
         {
           provide: ActivatedRoute,
           useValue: {
+            queryParamMap: query.asObservable(),
             paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
             snapshot: { queryParamMap: convertToParamMap(previous ? { previous } : {}) },
           },
@@ -67,23 +72,146 @@ describe("HandoffPageComponent", () => {
   }
   afterEach(() => http.verify());
 
-  it("starts a linked handoff revision with a blank revision field", async () => {
+  it("reveals the generic help for each evaluation field without submitting the form", async () => {
+    // Arrange
+    const fixture = await setup();
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const form = fixture.nativeElement as HTMLElement;
+    const fields = [
+      ["dataset", "Evaluation dataset", "representative inputs"],
+      ["baseline", "Baseline", "reference outputs or measurements"],
+      ["behavior", "Expected behavior", "important edge cases"],
+      ["criteria", "Acceptance criteria", "measurable thresholds"],
+    ];
+
+    for (const [name, label, expected] of fields) {
+      const button = form.querySelector<HTMLButtonElement>(`button[aria-label="${label} help"]`)!;
+      const input = form.querySelector(`[name="${name}"]`)!;
+      const help = form.querySelector<HTMLElement>(`#evaluation-help-${name}`)!;
+
+      // Act
+      button.click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(button.type).toBe("button");
+      expect(button.getAttribute("aria-expanded")).toBe("true");
+      expect(button.getAttribute("aria-controls")).toBe(help.id);
+      expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(help.id);
+      expect(help.hidden).toBeFalse();
+      expect(help.textContent).toContain(expected);
+
+      button.click();
+      fixture.detectChanges();
+      expect(help.hidden).toBeTrue();
+    }
+    http.expectNone("/api/preparation/handoff-captures");
+  });
+
+  it("prefills an incomplete handoff and submits the missing data as a new revision", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", true, receipt.id);
+    const origin = { installation_id: "lab-dev", record_id: "model-17" };
+    const model = { kind: "s3", profile_id: 1, path: "models/iris.onnx" };
+    const baseline = { kind: "s3", profile_id: 2, path: "results/baseline.json" };
+    http.expectOne("/api/s3-profiles").flush([
+      { id: 1, name: "Models", bucket: "models", prefix: "" },
+      { id: 2, name: "Results", bucket: "results", prefix: "" },
+    ]);
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush({
+      ...receipt,
+      request: {
+        ...receipt.request,
+        origin,
+        source: model,
+        dataset: null,
+        baseline,
+        expected_behavior: "Predict species",
+        acceptance_criteria: "Match saved predictions",
+      },
+      baseline: { version_id: "baseline-v1", file: { digest: "sha256:baseline", size: 12 } },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const form = fixture.nativeElement as HTMLElement;
+    const input = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+    const displayed = [
+      input("title").value,
+      input("source").value,
+      input("baseline").value,
+      input("behavior").value,
+      input("criteria").value,
+    ];
+    const page = fixture.componentInstance;
+    const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+
+    // Act
+    await page.submit();
+    http.expectNone("/api/preparation/handoff-captures");
+    input("dataset").value = "datasets/eval.csv";
+    input("dataset").dispatchEvent(new Event("input"));
+    const pending = page.submit();
+    const post = http.expectOne("/api/preparation/handoff-captures");
+    post.flush({
+      id: "capture-new",
+      state: "succeeded",
+      message: "",
+      result: { handoff_id: "receipt-new" },
+    });
+    await pending;
+
+    // Assert
+    expect(form.textContent).toContain("Add missing information");
+    expect(displayed).toEqual([
+      "Iris",
+      model.path,
+      baseline.path,
+      "Predict species",
+      "Match saved predictions",
+    ]);
+    expect(post.request.body.previous_handoff_id).toBe(receipt.id);
+    expect(post.request.body.revision).toMatch(/^revision-[a-f0-9]{32}$/);
+    expect(post.request.body.origin).toEqual(origin);
+    expect(post.request.body.source).toEqual({
+      ...model,
+      version_id: "v1",
+      expected_digest: "sha256:abc",
+    });
+    expect(post.request.body.baseline).toEqual({
+      ...baseline,
+      version_id: "baseline-v1",
+      expected_digest: "sha256:baseline",
+    });
+    expect(post.request.body.dataset).toEqual({
+      kind: "s3",
+      profile_id: 1,
+      path: "datasets/eval.csv",
+    });
+    expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-new"]);
+  });
+
+  it("blocks submission and offers retry if the linked handoff cannot be loaded", async () => {
     // Arrange
     const fixture = await setup(null, "member", true, receipt.id);
     http.expectOne("/api/s3-profiles").flush([]);
 
     // Act
+    http
+      .expectOne("/api/preparation/handoffs/receipt-1")
+      .flush({}, { status: 404, statusText: "Not Found" });
     await fixture.whenStable();
     fixture.detectChanges();
-    await fixture.whenStable();
+    await fixture.componentInstance.submit();
 
     // Assert
-    const form = fixture.nativeElement as HTMLElement;
-    expect(form.querySelector<HTMLInputElement>('input[name="previousHandoff"]')?.value).toBe(
-      receipt.id,
-    );
-    expect(form.querySelector<HTMLInputElement>('input[name="revision"]')?.value).toBe("");
-    expect(form.textContent).toContain("Enter a new revision, such as 2.");
+    expect(fixture.nativeElement.querySelector("form")).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain("Retry loading form");
+    http.expectNone("/api/preparation/handoff-captures");
   });
 
   it("warns about overwritten or deleted files when unversioned inputs are allowed", async () => {
@@ -117,8 +245,10 @@ describe("HandoffPageComponent", () => {
     http
       .expectOne("/api/s3-profiles")
       .flush([{ id: 1, name: "Lab", bucket: "models", prefix: "" }]);
+    await fixture.whenStable();
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
     const form = fixture.nativeElement.querySelector("form") as HTMLFormElement;
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     expect(button.disabled).toBeTrue();
@@ -185,6 +315,31 @@ describe("HandoffPageComponent", () => {
     await pending;
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-1"]);
   });
+  it("clears the original receipt and revision when starting over on the same route", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", true, receipt.id);
+    http.expectOne("/api/s3-profiles").flush([]);
+    http.expectOne("/api/preparation/handoffs/" + receipt.id).flush(receipt);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    expect(page.original()?.id).toBe(receipt.id);
+
+    // Act
+    page.newSubmission();
+    query.next(convertToParamMap({}));
+    http.expectOne("/api/s3-profiles").flush([]);
+    http
+      .expectOne("/api/preparation/handoff-submission-policy")
+      .flush({ require_s3_versioning: true });
+    await fixture.whenStable();
+
+    // Assert
+    expect(page.original()).toBeNull();
+    expect(page.revision).toBe("1");
+    expect(page.previousHandoffId).toBe("");
+    expect(page.title).toBe("");
+  });
+
   it("starts an unchanged new submission with a fresh key after cancellation", async () => {
     const fixture = await setup();
     http
@@ -292,20 +447,40 @@ describe("HandoffPageComponent", () => {
       recommended_gib: 24,
       maximum_gib: 50,
       existing_storage_size: null,
+      default_image: "registry.test/default:1",
     });
     await preview;
+    fixture.detectChanges();
+    const options = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .componentInstance as TaskWorkspaceOptionsComponent;
     // Assert
-    expect(page.storageGiB).toBe(24);
+    expect(options.draft().storage).toBe(24);
+    expect(options.draft().image).toBe("registry.test/default:1");
+    expect(options.draft().gpu).toBe(0);
     http.expectNone("/api/preparation/tasks/task-1/workspace");
     // Act
-    page.storageGiB = 30;
-    const pending = page.openWorkspace();
+    options.draft.set({
+      storage: 30,
+      image: "registry.test/converter:2",
+      gpu: 1,
+      cpu: 1.5,
+      memory: 4096,
+    });
+    options.confirm();
     const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
     const body = request.request.body;
     request.flush({ workspace: { id: 42 } });
-    await pending;
+    await fixture.whenStable();
     // Assert
-    expect(body).toEqual({ workspace: { storage_size: "30Gi" } });
+    expect(body).toEqual({
+      workspace: {
+        storage_size: "30Gi",
+        image: "registry.test/converter:2",
+        gpu_count: 1,
+        cpu: "1500m",
+        memory: "4096Mi",
+      },
+    });
   });
   it("blocks workspace creation when the estimate exceeds the admin maximum", async () => {
     // Arrange
@@ -318,13 +493,51 @@ describe("HandoffPageComponent", () => {
       recommended_gib: 60,
       maximum_gib: 50,
       existing_storage_size: null,
+      default_image: "registry.test/default:1",
     });
-    page.storageGiB = 60;
+    fixture.detectChanges();
+    const options = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .componentInstance as TaskWorkspaceOptionsComponent;
     // Act
-    await page.openWorkspace();
+    options.confirm();
     // Assert
-    expect(page.validWorkspaceSize()).toBeFalse();
+    expect(options.valid()).toBeFalse();
     http.expectNone("/api/preparation/tasks/task-1/workspace");
+  });
+  it("shows saved workspace resources and reopens without sending overrides", async () => {
+    // Arrange
+    const fixture = await setup("receipt-1");
+    http.expectOne("/api/preparation/handoffs/receipt-1").flush(receipt);
+    await fixture.whenStable();
+    spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
+    fixture.componentInstance.workspaceSizing.set({
+      input_bytes: 10,
+      recommended_gib: 6,
+      maximum_gib: 50,
+      existing_storage_size: "10Gi",
+      default_image: "registry.test/default:1",
+      existing_image: "registry.test/converter:2",
+      existing_gpu_count: 1,
+      existing_cpu: "1500m",
+      existing_memory: "4096Mi",
+    });
+    fixture.detectChanges();
+    const settings = fixture.debugElement.query(By.directive(TaskWorkspaceOptionsComponent))
+      .nativeElement as HTMLElement;
+
+    // Act
+    settings.querySelector("button")?.click();
+    const request = http.expectOne("/api/preparation/tasks/task-1/workspace");
+    request.flush({ workspace: { id: 42 } });
+    await fixture.whenStable();
+
+    // Assert
+    expect(settings.textContent).toContain("registry.test/converter:2");
+    expect(settings.textContent).toContain("GPUs: 1");
+    expect(settings.textContent).toContain("CPU: 1500m");
+    expect(settings.textContent).toContain("RAM: 4096Mi");
+    expect(settings.querySelector("input")).toBeNull();
+    expect(request.request.body).toEqual({});
   });
   it("opens the task workspace and navigates to its exact instance", async () => {
     const fixture = await setup("receipt-1");

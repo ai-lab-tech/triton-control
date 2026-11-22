@@ -21,6 +21,11 @@ rbac:
 podAnnotations: {}
 podLabels: {}
 
+releaseSources:
+  # MetadataSource documents to mount as JSON. Alternatively set
+  # TRITON_RELEASE_SOURCES_JSON in app.env. Use logical binding names.
+  file: []
+
 app:
   image:
     repository: ailabtechtriton/triton-control
@@ -441,11 +446,18 @@ perfAnalyzer:
       cpu: "2"
       memory: 2Gi
 
-# S06-A qualification only. No executor runs until explicitly invoked by an operator.
-# Configure a complete BuildPolicy object from docs/build-provisioning.md.
-# No floating executor image or automatic build enablement is shipped.
+# Development image builds. Admin Settings > Registries can override the destination.
+imageBuilds:
+  destinationRepositories: [] # Empty saves image.tar. Example for pushing: ["ghcr.io/my-org/serving"]
+  namespace: triton-builds
+
+# Optional qualification settings for installations using a reviewed build policy.
 buildQualification:
-  fixtureRevision: "" # Reviewed qualification receipt revision; required to execute builds.
+  # Default builder shown under Registries > Advanced. Update version and digest together.
+  kaniko:
+    version: v1.29.1
+    image: ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37
+  fixtureRevision: "" # Required only with a reviewed build policy.
   # Temporary context retention; periodic cleanup keeps receipts and build history.
   contextRetentionDays: 7
   # policy.namespace is persistent; disposable qualification uses its own temporary namespace.

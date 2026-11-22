@@ -9,13 +9,65 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Self
 
+from app.schemas.registry import RegistryUpdate
 
-class BuildPolicy(BaseModel):
+
+def validate_repositories(repositories: tuple[str, ...]) -> None:
+    for repo in repositories:
+        if not re.fullmatch(r"[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+", repo) or ".." in repo:
+            raise ValueError("Use exact registry/repository names without tags or wildcards")
+
+
+class BuildDestination(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    push_secret: str | None = Field(default=None, max_length=253, pattern=r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+    namespace: str = Field(max_length=63, pattern=r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+    allowed_repositories: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> Self:
+        validate_repositories(self.allowed_repositories)
+        return self
+
+
+class BuildDestinationUpdate(BuildDestination):
+    reuse_pull_credentials: bool = False
+    dockerconfigjson: str | None = Field(default=None, max_length=500_000, repr=False)
+
+    @model_validator(mode="after")
+    def validate_credentials(self) -> Self:
+        if self.reuse_pull_credentials and (self.dockerconfigjson or self.push_secret):
+            raise ValueError("Choose saved pull credentials or separate push credentials")
+        if self.dockerconfigjson:
+            RegistryUpdate(dockerconfigjson=self.dockerconfigjson)
+            if self.push_secret:
+                raise ValueError("Provide either Docker credentials or an existing secret reference")
+        return self
+
+
+class BuilderImage(BaseModel):
+    executor_image: str = Field(
+        default=("ghcr.io/osscontainertools/kaniko@sha256:"
+                 "e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37"),
+        pattern=r"^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
+    )
+    release: str = Field(default="v1.29.1", pattern=r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+class BuildDestinationSettings(BaseModel):
+    builder: BuilderImage = Field(default_factory=BuilderImage)
+    reuse_pull_credentials: bool = False
+    push_credentials_saved: bool = False
+    destination: BuildDestination | None
+    has_override: bool
+    status: str
+
+
+class BuildPolicy(BuilderImage):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    anonymous_push: bool = False
     enabled: bool = False
-    executor_image: str = Field(pattern=r"^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$")
-    release: str = Field(pattern=r"^v[0-9]+\.[0-9]+\.[0-9]+$")
     namespace: str = Field(pattern=r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
     platform: Literal["linux/amd64", "linux/arm64"] = "linux/amd64"
     s3_profile_name: str = Field(min_length=1, max_length=128)
@@ -37,11 +89,11 @@ class BuildPolicy(BaseModel):
 
     @model_validator(mode="after")
     def validate_scope(self) -> Self:
+        if ("executor_image" in self.model_fields_set) != ("release" in self.model_fields_set):
+            raise ValueError("Specify both executor_image and release when overriding the default builder")
         if len({self.base_pull_secret, self.push_secret, self.runtime_pull_secret}) != 3:
             raise ValueError("Base pull, build push and runtime pull require distinct credential references")
-        for repo in self.allowed_repositories:
-            if not re.fullmatch(r"[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+", repo) or ".." in repo:
-                raise ValueError("Allowlist entries must be exact registry/repository names, without tags or wildcards")
+        validate_repositories(self.allowed_repositories)
         for cidr in self.egress_cidrs:
             if ip_network(cidr).prefixlen == 0:
                 raise ValueError("Unrestricted egress is not a qualification policy")
@@ -52,12 +104,38 @@ class BuildPolicy(BaseModel):
     def fingerprint(self) -> str:
         # Enabling an already qualified policy is not a change to its execution contract.
         data = self.model_dump(mode="json", exclude={"enabled"})
+        if not self.anonymous_push:
+            data.pop("anonymous_push")  # Preserve existing qualification fingerprints.
         return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    def permits_repository(self, repository: str) -> bool:
+        return repository in self.allowed_repositories
 
     def permits_destination(self, destination: str) -> bool:
         repository, separator, tag = destination.rpartition(":")
         return bool(
             separator
             and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag)
-            and repository in self.allowed_repositories
+            and self.permits_repository(repository)
         )
+
+
+class ManagedRegistryPolicy(BuildPolicy):
+    """Registry output from the installation-managed development builder."""
+
+    managed_registry: Literal[True] = True
+
+
+class LocalArchivePolicy(BuildPolicy):
+    """Installation-generated development contract; never accepted by the policy settings API."""
+
+    local_archive: Literal[True] = True
+
+    def permits_repository(self, repository: str) -> bool:
+        component = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+        return bool(re.fullmatch(rf"(?:[a-z0-9.-]+:[0-9]+/)?{component}(?:/{component})*", repository))
+
+
+class BuildPolicySettings(BaseModel):
+    policy: BuildPolicy | None
+    source: Literal["admin", "deployment", "unconfigured"]

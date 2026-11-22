@@ -21,6 +21,7 @@ from app.db.database import get_session
 from app.db.entities import CodeServerEntity, S3ProfileEntity, TaskWorkspaceEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.repositories import task_workspaces as repository
+from app.schemas.development import CreateCodeServerRequest
 from app.schemas.preparation import ReasonRequest, TaskRevision
 from app.schemas.task_workspaces import OpenTaskWorkspace
 from app.services import handoff_sources, preparation, task_workspaces, teams
@@ -108,6 +109,25 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(first.workspace.id, second.workspace.id)
         self.assertEqual(sizing.existing_storage_size, "6Gi")
         self.assertEqual(repository.get(self.session, self.task.id).configuration["storage_size"], "6Gi")
+        self.apply.assert_called_once()
+
+    def test_reopen_uses_saved_image_and_resources_without_overrides(self):
+        # Arrange
+        options = {"image": "registry.example/converter:2", "gpu_count": 1,
+                   "cpu": "1500m", "memory": "4096Mi", "storage_size": "8Gi"}
+        first = self.open(request=OpenTaskWorkspace(workspace=options))
+
+        # Act
+        sizing = task_workspaces.workspace_sizing(self.session, self.engineer, self.task.id)
+        reopened = self.open()
+
+        # Assert
+        self.assertEqual(reopened.workspace.id, first.workspace.id)
+        self.assertEqual(sizing.existing_image, options["image"])
+        self.assertEqual(sizing.existing_gpu_count, options["gpu_count"])
+        self.assertEqual(sizing.existing_cpu, options["cpu"])
+        self.assertEqual(sizing.existing_memory, options["memory"])
+        self.assertEqual(sizing.existing_storage_size, options["storage_size"])
         self.apply.assert_called_once()
 
     def test_missing_inputs_block_start(self):
@@ -224,14 +244,46 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
             workspaces.get_owned_code_server(self.session, self.engineer, result.workspace.id)
         with self.assertRaises(ForbiddenError):
             self.open()
-        self.assertEqual(workspaces.list_code_servers(self.session, self.engineer), [])
+        listed, = workspaces.list_code_servers(self.session, self.engineer)
+        self.assertEqual((listed.id, listed.status, listed.url), (result.workspace.id, "cleanup_only", ""))
+        self.assertIsNone(listed.task_title)
+
+    def test_task_workspace_title_is_available_in_workspace_navigation(self):
+        # Arrange
+        opened = self.open()
+
+        # Act
+        available = workspaces.list_code_servers(self.session, self.engineer)
+
+        # Assert
+        self.assertEqual(available[0].storage_size, "6Gi")
+        self.assertEqual(opened.workspace.task_title, self.task.title)
+        self.assertEqual([(item.id, item.task_title) for item in available], [(opened.workspace.id, self.task.title)])
+
+    def test_personal_workspace_can_be_created_after_task_workspace(self):
+        # Arrange
+        self.open()
+        request = CreateCodeServerRequest()
+
+        # Act
+        personal = workspaces.create_code_server(request, self.session, self.engineer)
+
+        # Assert
+        self.assertIsNone(personal.task_title)
+        with self.assertRaises(BadRequestError):
+            workspaces.create_code_server(request, self.session, self.engineer)
 
     def test_released_claim_blocks_existing_workspace(self):
         result = self.open()
         task = preparation.get_task(self.session, self.engineer, self.task.id)
         preparation.release_claim(self.session, self.engineer, task.id, TaskRevision(expected_revision=task.revision))
+        listed, = workspaces.list_code_servers(self.session, self.engineer)
+        self.assertEqual((listed.id, listed.status, listed.url), (result.workspace.id, "cleanup_only", ""))
         with self.assertRaises(ForbiddenError):
             access.guard(self.session, self.row(result))
+        with patch.object(k8s, "delete_code_server_resources", return_value="deleted"):
+            workspaces.delete_code_server(self.session, self.engineer, listed.id)
+        self.assertEqual(workspaces.list_code_servers(self.session, self.engineer), [])
 
     def test_cancelled_task_blocks_but_workspace_can_be_deleted(self):
         result = self.open()

@@ -2,13 +2,26 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
-import { BASE_PATH, CodeServerDTO } from "../../api/generated";
+import { BASE_PATH, CodeServerDTO, ControlLineage } from "../../api/generated";
 
 export interface WorkspaceSizing {
   input_bytes: number;
   recommended_gib: number;
   maximum_gib: number;
   existing_storage_size: string | null;
+  default_image: string;
+  existing_image?: string | null;
+  existing_gpu_count?: number | null;
+  existing_cpu?: string | null;
+  existing_memory?: string | null;
+}
+
+export interface TaskWorkspaceOptions {
+  storage_size: string;
+  image: string;
+  gpu_count: number;
+  cpu?: string;
+  memory?: string;
 }
 
 export interface CaptureOperation {
@@ -36,6 +49,7 @@ export interface HandoffRequest {
   revision: string;
   title: string;
   source: SourceInput | RepositoryInput;
+  lineage?: ControlLineage | null;
   dataset: SourceInput | null;
   baseline: SourceInput | null;
   expected_behavior: string | null;
@@ -125,10 +139,10 @@ export class HandoffsApiService {
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace-sizing",
     );
   }
-  openWorkspace(taskId: string, storageGiB?: number) {
+  openWorkspace(taskId: string, workspace?: TaskWorkspaceOptions) {
     return this.http.post<{ task_id: string; workspace: CodeServerDTO }>(
       this.base + "/api/preparation/tasks/" + encodeURIComponent(taskId) + "/workspace",
-      storageGiB === undefined ? {} : { workspace: { storage_size: `${storageGiB}Gi` } },
+      workspace ? { workspace } : {},
     );
   }
   profiles() {

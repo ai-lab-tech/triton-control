@@ -1,7 +1,7 @@
 import { MatButtonModule } from "@angular/material/button";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
-import { FormsModule } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
+import { DatePipe, Location } from "@angular/common";
+import { ActivatedRoute, Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
 import {
@@ -17,7 +17,7 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
 @Component({
   selector: "app-task-builds-page",
   standalone: true,
-  imports: [FormsModule, MatButtonModule],
+  imports: [DatePipe, MatButtonModule],
   templateUrl: "./task-builds-page.component.html",
   styles: [
     `
@@ -27,30 +27,12 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
         margin: auto;
         padding: var(--card-padding);
       }
-      article,
-      form {
+      article {
         padding: var(--card-padding);
         margin: 16px 0;
         background: white;
         box-shadow: var(--shadow-card);
         border-radius: var(--radius-lg);
-      }
-      label {
-        display: block;
-        margin: 12px 0;
-      }
-      input,
-      select {
-        display: block;
-        width: min(100%, 32rem);
-        min-height: var(--control-height);
-        border: 1px solid var(--mist-200);
-        border-radius: 10px;
-        background: white;
-        color: inherit;
-        font: inherit;
-        max-width: 100%;
-        padding: 8px;
       }
       button {
         margin: 4px;
@@ -71,6 +53,20 @@ import { mapApiErrorMessage } from "../../shared/api-error-message";
   ],
 })
 export class TaskBuildsPageComponent {
+  private readonly location = inject(Location);
+  private readonly router = inject(Router);
+  taskUrl() {
+    return this.location.prepareExternalUrl(
+      "/preparation/tasks/" + encodeURIComponent(this.taskId()),
+    );
+  }
+  goBack(event: MouseEvent) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    if (this.router.lastSuccessfulNavigation()?.previousNavigation) this.location.back();
+    else void this.router.navigate(["/preparation/tasks", this.taskId()]);
+  }
   private readonly api = inject(BuildsApiService);
   readonly taskId = signal("");
   readonly builds = signal<TaskBuild[]>([]);
@@ -83,13 +79,10 @@ export class TaskBuildsPageComponent {
   readonly offset = signal(0);
   readonly label = buildLabel;
   readonly image = imageReference;
-  contextId = "";
-  repository = "";
   private generation = 0;
   private logVersion = 0;
   private refreshVersion = 0;
   private timer?: ReturnType<typeof setTimeout>;
-  private submission?: { payload: string; key: string };
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -106,9 +99,6 @@ export class TaskBuildsPageComponent {
         this.options.set(null);
         this.log.set(null);
         this.offset.set(0);
-        this.contextId = "";
-        this.repository = "";
-        this.submission = undefined;
         this.busy.set(false);
         this.error.set("");
         this.accessMessage.set("");
@@ -122,7 +112,6 @@ export class TaskBuildsPageComponent {
       const options = await firstValueFrom(this.api.options(this.taskId()));
       if (generation !== this.generation) return;
       this.options.set(options);
-      this.repository = options.repositories[0] ?? "";
     } catch (error) {
       if (generation === this.generation)
         this.accessMessage.set(
@@ -161,22 +150,6 @@ export class TaskBuildsPageComponent {
     this.log.set(null);
     this.offset.set(Math.max(0, this.offset() + delta));
     await this.refresh();
-  }
-  async submit() {
-    if (
-      this.busy() ||
-      !this.options()?.repositories.includes(this.repository) ||
-      !/^[a-f0-9]{32}$/.test(this.contextId)
-    )
-      return;
-    const payload = JSON.stringify([this.taskId(), this.contextId, this.repository]);
-    if (this.submission?.payload !== payload)
-      this.submission = { payload, key: crypto.randomUUID() };
-    await this.mutate(() =>
-      firstValueFrom(
-        this.api.submit(this.taskId(), this.contextId, this.repository, this.submission!.key),
-      ),
-    );
   }
   async action(build: TaskBuild, action: "cancel" | "retry") {
     if (this.busy() || build.task_id !== this.taskId()) return;

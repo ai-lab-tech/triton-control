@@ -124,9 +124,10 @@ are never identities.
 For revised inputs, supply `previous_handoff_id` referencing the prior receipt.
 The service checks current access to that receipt and requires a different revision
 within the same origin installation. The immutable request retains the link;
-retries with a different predecessor conflict. The UI offers **New revision** and
-shows a link to the previous receipt. Existing receipts without this optional field
-remain readable. Prior tasks, claims and history are preserved, not automatically
+retries with a different predecessor conflict. The UI offers **Add missing information**
+on incomplete handoffs and **New revision** on complete ones. Both actions prefill the
+form, generate a revision ID and link to the previous receipt. Existing receipts
+without this optional field remain readable. Prior tasks, claims and history are preserved, not automatically
 cancelled or transferred to the new task.
 
 `revision` identifies the explicit submission, not a mutable S3 alias. Changing

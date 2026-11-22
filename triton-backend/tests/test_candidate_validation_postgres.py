@@ -22,6 +22,7 @@ class ValidationPostgresTests(validation.ValidationAccessTests):
     cleanup_schema = postgres.PreparationPostgresTests.cleanup_schema
 
     def test_concurrent_validation_replay_and_claim(self):
+        # Arrange
         task = self.claim(self.create())
         service = OperationService()
         service.register(operations.VALIDATION_KIND, ValidationAdapter())
@@ -44,5 +45,10 @@ class ValidationPostgresTests(validation.ValidationAccessTests):
             patch.dict(os.environ, TRITON_VALIDATION_NAMESPACE="validation"),
             ThreadPoolExecutor(max_workers=3) as pool,
         ):
-            self.assertEqual(len(set(pool.map(submit, range(3)))), 1)
-            self.assertEqual(sum(row is not None for row in pool.map(claim, range(3))), 1)
+            # Act
+            submitted = list(pool.map(submit, range(3)))
+            claims = list(pool.map(claim, range(3)))
+
+        # Assert
+        self.assertEqual(len(set(submitted)), 1)
+        self.assertEqual([row.id for row in claims if row is not None], [submitted[0]])

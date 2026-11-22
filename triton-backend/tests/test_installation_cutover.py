@@ -105,6 +105,7 @@ class CutoverTests(unittest.TestCase):
         from app import main
         with patch.object(main, "init_db"), patch.object(main, "session_factory"), \
              patch.object(main, "verify_cutover") as verify, \
+             patch.object(main, "sync_release_sources") as sync, \
              patch.object(main.instance_health_refresher, "start") as health, \
              patch.object(main.perf_job_reconciler, "start") as perf, \
              patch.object(main.operation_worker, "start") as operations, \
@@ -113,6 +114,7 @@ class CutoverTests(unittest.TestCase):
             asyncio.run(main.on_startup())
             # Assert
             verify.assert_called_once()
+            sync.assert_called_once()
             health.assert_called_once()
             perf.assert_not_called()
             operations.assert_not_called()

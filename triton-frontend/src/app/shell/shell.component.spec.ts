@@ -2,14 +2,69 @@ import { InstallationService } from "../shared/installation/installation.service
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BreakpointObserver } from "@angular/cdk/layout";
 import { TestBed } from "@angular/core/testing";
-import { Router } from "@angular/router";
+import { provideRouter, Router } from "@angular/router";
 import { of, Subject } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
-import { InstancesService } from "../api/generated/index";
+import { DevelopmentService, InstancesService } from "../api/generated/index";
 import { AuthStore } from "../shared/auth/auth.store";
 import { AuthService } from "../shared/auth/auth.service";
 import { ShellComponent } from "./shell.component";
+import { HandoffsApiService } from "../pages/handoffs/handoffs-api.service";
 import { selectDashboardFleetHealthPercentage } from "../state/dashboard/dashboard.selectors";
+
+describe("Workspace navigation", () => {
+  it("lists multiple workspaces under Workspaces and removes the list when only one remains", async () => {
+    // Arrange
+    const personal = { id: 1, name: "personal" };
+    const task = { id: 2, name: "task-generated", task_title: "Prepare Iris" };
+    await TestBed.configureTestingModule({
+      imports: [ShellComponent],
+      providers: [
+        provideRouter([]),
+        provideMockStore({
+          selectors: [{ selector: selectDashboardFleetHealthPercentage, value: null }],
+        }),
+        {
+          provide: AuthService,
+          useValue: { getAuthOptions: async () => ({ kubernetesEnabled: true }) },
+        },
+        { provide: BreakpointObserver, useValue: { observe: () => of({ matches: false }) } },
+        {
+          provide: DevelopmentService,
+          useValue: { listCodeServersApiDevelopmentGet: () => of([personal, task]) },
+        },
+        { provide: HandoffsApiService, useValue: { notifications: () => of([]) } },
+      ],
+    }).compileComponents();
+    TestBed.inject(InstallationService).snapshot.set({
+      mode: "development",
+      explanation: "Development",
+      capabilities: { development_tools: true, direct_deployment: true },
+    } as any);
+    TestBed.inject(AuthStore).setAuthenticatedUser({ name: "Engineer", role: "member" });
+    const fixture = TestBed.createComponent(ShellComponent);
+
+    // Act
+    fixture.detectChanges();
+    await fixture.componentInstance.workspaceDirectory.refresh();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const links = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(".workspace-nav-list a"),
+    );
+
+    // Assert
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/workspaces?workspace=1",
+      "/workspaces?workspace=2",
+    ]);
+    expect(links[0]?.textContent).toContain("personal");
+    expect(links[1]?.textContent).toContain("Prepare Iris");
+    fixture.componentInstance.workspaceDirectory.remove(task.id);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(".workspace-nav-list")).toBeNull();
+  });
+});
 
 describe("ShellComponent", () => {
   let routerEvents$: Subject<any>;
@@ -58,6 +113,10 @@ describe("ShellComponent", () => {
         { provide: Router, useValue: routerMock },
         { provide: AuthService, useValue: authServiceMock },
         { provide: InstancesService, useValue: instancesApiMock },
+        {
+          provide: DevelopmentService,
+          useValue: { listCodeServersApiDevelopmentGet: () => of([]) },
+        },
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: false }) } },
       ],
     }).compileComponents();
@@ -319,6 +378,10 @@ describe("ShellComponentHandset", () => {
         { provide: Router, useValue: routerMock },
         { provide: AuthService, useValue: authServiceMock },
         { provide: InstancesService, useValue: instancesApiMock },
+        {
+          provide: DevelopmentService,
+          useValue: { listCodeServersApiDevelopmentGet: () => of([]) },
+        },
         { provide: BreakpointObserver, useValue: { observe: () => of({ matches: true }) } },
       ],
     }).compileComponents();

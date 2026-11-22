@@ -32,6 +32,239 @@
         ]
       }
     },
+    "/api/release-sources": {
+      "get": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "List Release Sources",
+        "operationId": "list_release_sources_api_release_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseSource"
+                  },
+                  "type": "array",
+                  "title": "Response List Release Sources Api Release Sources Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Create Release Source",
+        "operationId": "create_release_source_api_release_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/release-sources/{name}": {
+      "get": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Get Release Source",
+        "operationId": "get_release_source_api_release_sources__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Update Release Source",
+        "operationId": "update_release_source_api_release_sources__name__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "release-sources"
+        ],
+        "summary": "Delete Release Source",
+        "operationId": "delete_release_source_api_release_sources__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "expected_revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Expected Revision"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login": {
       "get": {
         "tags": [
@@ -280,6 +513,194 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PreparationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/settings/serving-image-builds": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_settings_serving_image_builds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildPolicySettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_settings_serving_image_builds_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildPolicySettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_settings_serving_image_builds_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildPolicySettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/settings/serving-image-builds/destination": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Read Destination",
+        "operationId": "read_destination_api_settings_serving_image_builds_destination_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Save Destination",
+        "operationId": "save_destination_api_settings_serving_image_builds_destination_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildDestinationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Reset Destination",
+        "operationId": "reset_destination_api_settings_serving_image_builds_destination_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDestinationSettings"
                 }
               }
             }
@@ -7923,6 +8344,31 @@
             ],
             "title": "Task Id"
           },
+          "dockerfile_only": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerfile Only"
+          },
+          "staging_profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staging Profile"
+          },
           "archive_digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$",
@@ -8027,6 +8473,139 @@
         ],
         "title": "BuildContextResponse"
       },
+      "BuildDestination": {
+        "properties": {
+          "push_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Push Secret"
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Namespace"
+          },
+          "allowed_repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Repositories",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "title": "BuildDestination"
+      },
+      "BuildDestinationSettings": {
+        "properties": {
+          "builder": {
+            "$ref": "#/components/schemas/BuilderImage"
+          },
+          "reuse_pull_credentials": {
+            "type": "boolean",
+            "title": "Reuse Pull Credentials",
+            "default": false
+          },
+          "push_credentials_saved": {
+            "type": "boolean",
+            "title": "Push Credentials Saved",
+            "default": false
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildDestination"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_override": {
+            "type": "boolean",
+            "title": "Has Override"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "destination",
+          "has_override",
+          "status"
+        ],
+        "title": "BuildDestinationSettings"
+      },
+      "BuildDestinationUpdate": {
+        "properties": {
+          "push_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Push Secret"
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Namespace"
+          },
+          "allowed_repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Repositories",
+            "default": []
+          },
+          "reuse_pull_credentials": {
+            "type": "boolean",
+            "title": "Reuse Pull Credentials",
+            "default": false
+          },
+          "dockerconfigjson": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dockerconfigjson"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "title": "BuildDestinationUpdate"
+      },
       "BuildLogsResponse": {
         "properties": {
           "attempt": {
@@ -8077,6 +8656,19 @@
           "max_context_bytes": {
             "type": "integer",
             "title": "Max Context Bytes"
+          },
+          "local_archive": {
+            "type": "boolean",
+            "title": "Local Archive",
+            "default": false
+          },
+          "staging_profiles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Staging Profiles",
+            "default": []
           }
         },
         "type": "object",
@@ -8086,6 +8678,205 @@
           "max_context_bytes"
         ],
         "title": "BuildOptions"
+      },
+      "BuildPolicy": {
+        "properties": {
+          "executor_image": {
+            "type": "string",
+            "pattern": "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
+            "title": "Executor Image",
+            "default": "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37"
+          },
+          "release": {
+            "type": "string",
+            "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Release",
+            "default": "v1.29.1"
+          },
+          "anonymous_push": {
+            "type": "boolean",
+            "title": "Anonymous Push",
+            "default": false
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Namespace"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "linux/amd64",
+              "linux/arm64"
+            ],
+            "title": "Platform",
+            "default": "linux/amd64"
+          },
+          "s3_profile_name": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "S3 Profile Name"
+          },
+          "staging_prefix": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*/$",
+            "title": "Staging Prefix"
+          },
+          "allowed_repositories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Allowed Repositories"
+          },
+          "base_pull_secret": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Base Pull Secret"
+          },
+          "push_secret": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Push Secret"
+          },
+          "runtime_pull_secret": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "title": "Runtime Pull Secret"
+          },
+          "provisioning_revision": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Provisioning Revision"
+          },
+          "max_context_bytes": {
+            "type": "integer",
+            "maximum": 1073741824.0,
+            "minimum": 1024.0,
+            "title": "Max Context Bytes",
+            "default": 10485760
+          },
+          "cpu_millis": {
+            "type": "integer",
+            "maximum": 64000.0,
+            "minimum": 100.0,
+            "title": "Cpu Millis",
+            "default": 1000
+          },
+          "memory_mib": {
+            "type": "integer",
+            "maximum": 131072.0,
+            "minimum": 128.0,
+            "title": "Memory Mib",
+            "default": 1024
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "maximum": 7200.0,
+            "minimum": 10.0,
+            "title": "Timeout Seconds",
+            "default": 300
+          },
+          "egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Egress Cidrs"
+          },
+          "egress_ports": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Egress Ports",
+            "default": [
+              443
+            ]
+          },
+          "capabilities": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "CHOWN",
+                "DAC_OVERRIDE",
+                "FOWNER",
+                "SETGID",
+                "SETUID"
+              ]
+            },
+            "type": "array",
+            "title": "Capabilities",
+            "default": [
+              "CHOWN",
+              "FOWNER"
+            ]
+          },
+          "run_as_user": {
+            "type": "integer",
+            "const": 0,
+            "title": "Run As User",
+            "default": 0
+          },
+          "seccomp_profile": {
+            "type": "string",
+            "const": "RuntimeDefault",
+            "title": "Seccomp Profile",
+            "default": "RuntimeDefault"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "namespace",
+          "s3_profile_name",
+          "staging_prefix",
+          "allowed_repositories",
+          "base_pull_secret",
+          "push_secret",
+          "runtime_pull_secret",
+          "provisioning_revision",
+          "egress_cidrs"
+        ],
+        "title": "BuildPolicy"
+      },
+      "BuildPolicySettings": {
+        "properties": {
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "deployment",
+              "unconfigured"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy",
+          "source"
+        ],
+        "title": "BuildPolicySettings"
       },
       "BuildRequest": {
         "properties": {
@@ -8104,6 +8895,18 @@
             "maxLength": 256,
             "minLength": 1,
             "title": "Repository"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
           }
         },
         "additionalProperties": false,
@@ -8150,6 +8953,24 @@
           "attempts"
         ],
         "title": "BuildResponse"
+      },
+      "BuilderImage": {
+        "properties": {
+          "executor_image": {
+            "type": "string",
+            "pattern": "^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$",
+            "title": "Executor Image",
+            "default": "ghcr.io/osscontainertools/kaniko@sha256:e7cba1f7e70c01c8ee1cbe622d07990c04dea550430c4c81319d26679226cd37"
+          },
+          "release": {
+            "type": "string",
+            "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Release",
+            "default": "v1.29.1"
+          }
+        },
+        "type": "object",
+        "title": "BuilderImage"
       },
       "CandidateSummary": {
         "properties": {
@@ -8300,6 +9121,28 @@
             },
             "type": "array",
             "title": "Applied Resources"
+          },
+          "task_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Title"
+          },
+          "storage_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Size"
           }
         },
         "type": "object",
@@ -13380,6 +14223,58 @@
         ],
         "title": "ReleaseMetadata"
       },
+      "ReleaseSource": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MetadataSource"
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "database",
+              "environment",
+              "file"
+            ],
+            "title": "Provenance"
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Revision"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "provenance",
+          "revision",
+          "editable"
+        ],
+        "title": "ReleaseSource"
+      },
+      "ReleaseSourceUpdate": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MetadataSource"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "expected_revision"
+        ],
+        "title": "ReleaseSourceUpdate"
+      },
       "ReleaseSpec": {
         "properties": {
           "image": {
@@ -16716,6 +17611,54 @@
               }
             ],
             "title": "Existing Storage Size"
+          },
+          "default_image": {
+            "type": "string",
+            "title": "Default Image"
+          },
+          "existing_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Image"
+          },
+          "existing_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Gpu Count"
+          },
+          "existing_cpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Cpu"
+          },
+          "existing_memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Memory"
           }
         },
         "additionalProperties": false,
@@ -16723,7 +17666,8 @@
         "required": [
           "input_bytes",
           "recommended_gib",
-          "maximum_gib"
+          "maximum_gib",
+          "default_image"
         ],
         "title": "WorkspaceSizing"
       }

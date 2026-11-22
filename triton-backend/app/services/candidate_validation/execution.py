@@ -29,6 +29,16 @@ MAX_REPORT = 128 * 1024
 OWNER = "triton-control/validation-operation"
 
 
+def validation_namespace() -> str:
+    namespace = os.getenv("TRITON_VALIDATION_NAMESPACE", "")
+    if not namespace:
+        raise ValueError("Validation namespace is not configured")
+    TypeAdapter(Name).validate_python(namespace)
+    if namespace in {"default", "kube-system", "kube-public", "kube-node-lease", os.getenv("POD_NAMESPACE")}:
+        raise ValueError("Validation requires a dedicated namespace")
+    return namespace
+
+
 def optional(read: Callable[..., Any], *args: str) -> Any:
     try:
         return read(*args, _request_timeout=TIMEOUT)
@@ -114,11 +124,9 @@ def reconcile(operation: OperationEntity, context: ExecutionContext, core: Any, 
     if not result:
         if operation.cancel_requested:
             return ReconcileResult(state="cancelled")
-        namespace = os.getenv("TRITON_VALIDATION_NAMESPACE", "")
-        TypeAdapter(Name).validate_python(namespace)
         return ReconcileResult(
             result={
-                "namespace": namespace,
+                "namespace": validation_namespace(),
                 "manifestDigest": document_digest(ValidationManifest.model_validate(operation.payload)),
             },
             retry_after=1,
@@ -146,13 +154,18 @@ def reconcile(operation: OperationEntity, context: ExecutionContext, core: Any, 
     if operation.cancel_requested or "finishedState" in result:
         if job and uid:
             context.checkpoint()
-            batch.delete_namespaced_job(
-                name,
-                ns,
-                body={"propagationPolicy": "Foreground", "preconditions": {"uid": job.metadata.uid}},
-                _request_timeout=TIMEOUT,
-            )
-            return ReconcileResult(result=result, message="Removing validation workload")
+            try:
+                batch.delete_namespaced_job(
+                    name,
+                    ns,
+                    body={"propagationPolicy": "Foreground", "preconditions": {"uid": uid}},
+                    _request_timeout=TIMEOUT,
+                )
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+            else:
+                return ReconcileResult(result=result, message="Removing validation workload")
         return ReconcileResult(
             state="cancelled" if operation.cancel_requested else result["finishedState"],
             result=result,
@@ -166,7 +179,12 @@ def reconcile(operation: OperationEntity, context: ExecutionContext, core: Any, 
             result.update(finishedState="failed", outcome="Validation Job failed or exceeded deadline")
             return ReconcileResult(result=result, retry_after=1)
         if "Complete" in conditions:
-            report = read_result(core, job, ns, manifest)
+            try:
+                report = read_result(core, job, ns, manifest)
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+                raise MetadataError("completed-runner-evidence-missing") from exc
             result.update(report=report.model_dump(mode="json", by_alias=True), reportDigest=document_digest(report))
             result.update(finishedState="succeeded" if report.status == "passed" else "failed", outcome=report.status)
             return ReconcileResult(result=result, retry_after=1)
@@ -216,15 +234,18 @@ def reconcile(operation: OperationEntity, context: ExecutionContext, core: Any, 
 class ValidationAdapter:
     cleanup_after_authorized_cancel = True
 
-    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             return ValidationManifest.model_validate(payload).model_dump(mode="json", by_alias=True)
         except ValidationError:
             raise UnprocessableEntityError("Invalid validation manifest") from None
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:
-        if action == "submit" and not os.getenv("TRITON_VALIDATION_NAMESPACE"):
-            raise UnprocessableEntityError("Validation namespace is not configured")
+        if action == "submit":
+            try:
+                validation_namespace()
+            except ValueError:
+                raise UnprocessableEntityError("Configure a dedicated validation namespace") from None
         try:
             task_id = UUID(target)
             if str(task_id) != target:
@@ -232,7 +253,7 @@ class ValidationAdapter:
             task = preparation.get(session, task_id)
         except ValueError:
             raise UnprocessableEntityError("Expected a preparation task ID") from None
-        if actor.role == "admin":
+        if actor.role.strip().lower() == "admin":
             return
         if actor.id != task.assignee_user_id or actor.id not in teams.eligible_user_ids(session, task.assigned_team_id):
             raise ForbiddenError("Assigned ML engineer required")

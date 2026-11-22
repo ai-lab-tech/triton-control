@@ -5,13 +5,15 @@ from urllib.parse import urlsplit
 
 from app.schemas.build_policy import BuildPolicy
 
+DOCKERFILE_CONTEXT = "tar:///kaniko/build-input/context.tar.gz"
+
 
 def job(policy: BuildPolicy, name: str, context: str, destination: str, credential_secret: str) -> dict[str, Any]:
     if not policy.permits_destination(destination):
         raise ValueError("Destination is outside the registry repository allowlist")
     parsed = urlsplit(context)
     key = parsed.path.lstrip("/")
-    if (
+    if context != DOCKERFILE_CONTEXT and (
         parsed.scheme != "s3"
         or not parsed.netloc
         or parsed.query

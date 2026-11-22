@@ -390,7 +390,7 @@ Perf Analyzer endpoint notes:
 
 Image pull secrets:
 
-- Administrators save Docker registry authentication JSON under **Settings → Registry**.
+- Administrators save Docker registry authentication JSON under **Settings → Registries**.
 - New Triton deployments, development workspaces, MLflow installations, and
   performance Jobs use the central secret automatically. Per-workload overrides
   are rejected. Recreate existing workloads to apply credential changes.

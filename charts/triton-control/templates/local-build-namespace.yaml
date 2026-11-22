@@ -1,0 +1,17 @@
+{{- if include "triton-control.localBuildsEnabled" . }}
+{{- $ns := (include "triton-control.imageBuilds" . | fromJson).namespace }}
+{{- if or (eq $ns .Release.Namespace) (has $ns (list "default" "kube-system" "kube-public" "kube-node-lease")) }}
+{{- fail "Local builds require a dedicated namespace" }}
+{{- end }}
+{{- $existing := lookup "v1" "Namespace" "" $ns }}
+{{- if or (not $existing) (and (eq (dig "metadata" "annotations" "meta.helm.sh/release-name" "" $existing) .Release.Name) (eq (dig "metadata" "annotations" "meta.helm.sh/release-namespace" "" $existing) .Release.Namespace)) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns | quote }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+{{- end }}
+{{- end }}

@@ -40,6 +40,7 @@ _REVIEWED = {
     "error_log_api": "list_error_logs create_frontend_error_log",
     "registry_api": "get_registry_settings",
     "local_bindings_api": "get_policy get_credential put_credential delete_credential admit",
+    "release_sources_api": "list_release_sources get_release_source",
     "s3_profile_api": "resolve_s3_profile list_s3_profiles update_s3_profile delete_s3_profile",
 }
 PRODUCTION_ENDPOINTS.update(

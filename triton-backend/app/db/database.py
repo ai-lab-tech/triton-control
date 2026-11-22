@@ -100,6 +100,8 @@ def init_db() -> None:
         PreparationTaskEntity,
         PreparationTaskEventEntity,
         RecoveryRateLimitEntity,
+        ReleaseSourceEntity,
+        ReleaseSourceEventEntity,
         S3ProfileEntity,
         SecurityEventEntity,
         TeamEntity,

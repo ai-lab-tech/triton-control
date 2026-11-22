@@ -9,6 +9,7 @@ export interface BuildAttempt {
   final_digest: string | null;
   context_id: string;
   cleaned: boolean;
+  created_at: string;
   finished_at: string | null;
 }
 export interface TaskBuild {
@@ -25,6 +26,7 @@ export interface TaskBuild {
 export interface BuildOptions {
   task_id: string;
   repositories: string[];
+  local_archive?: boolean;
   max_context_bytes: number;
 }
 export interface BuildLogs {
@@ -61,13 +63,6 @@ export class BuildsApiService {
     return this.http.get<TaskBuild[]>(`${this.base}/api/builds`, {
       params: { task_id: taskId, limit: 50, offset },
     });
-  }
-  submit(taskId: string, contextId: string, repository: string, key: string) {
-    return this.http.post<TaskBuild>(
-      `${this.base}/api/builds`,
-      { task_id: taskId, context_id: contextId, repository },
-      { headers: { "Idempotency-Key": key } },
-    );
   }
   action(id: string, action: "cancel" | "retry") {
     return this.http.post<TaskBuild>(
