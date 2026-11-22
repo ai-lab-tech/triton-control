@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 from google.protobuf import text_format
 
+from app.db.entities import TritonInstanceEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError, ServiceUnavailableError
 from app.schemas import CreateTritonInstanceRequest, UpdateTritonInstanceRequest
 from app.services.triton import config as triton_config
@@ -325,7 +326,7 @@ class TritonModelEdgeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_LoadAndUnloadModel_TritonError_UsesErrorDetail(self):
         # Arrange
-        instance = SimpleNamespace(url="http://triton", triton_verify_ssl=False, triton_ca_certificate="")
+        instance = TritonInstanceEntity(name="triton", url="http://triton")
         response = SimpleNamespace(json=lambda: {"error": "model broken"}, text="", status_code=400)
         exc = Exception("bad")
         exc.response = response

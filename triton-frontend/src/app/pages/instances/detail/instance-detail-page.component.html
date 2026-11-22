@@ -154,6 +154,95 @@
               (viewLogs)="openPodLogs($event)"
               (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
             />
+            @if (managedModelState()) {
+              <section class="panel-card model-state-panel">
+                <h2 class="panel-title">Model state and replicas</h2>
+                @if (deploymentModelState(); as state) {
+                  <p class="panel-hint" role="status">
+                    {{ state.mode === "declared" ? "Declared startup" : "Interactive" }}
+                    · {{ state.replicas }} desired
+                    {{ state.replicas === 1 ? "replica" : "replicas" }} ·
+                    {{
+                      state.rollout_complete
+                        ? "Stable"
+                        : "Waiting for the workload to become stable"
+                    }}
+                  </p>
+                  @if (state.release_digest) {
+                    <code class="network-url">{{ state.release_digest }}</code>
+                  }
+                  @if (canWriteInstances() && state.capacity_owner === "manual") {
+                    @if (state.can_declare) {
+                      <div class="model-state-action">
+                        <label>
+                          Prepared startup release digest
+                          <input
+                            class="model-state-input"
+                            [(ngModel)]="startupReleaseDigest"
+                            placeholder="sha256:…"
+                          />
+                        </label>
+                        <button
+                          mat-flat-button
+                          color="primary"
+                          type="button"
+                          [disabled]="!validStartupDigest() || modelStateSaving()"
+                          (click)="updateModelState('declare')"
+                        >
+                          Roll out startup state
+                        </button>
+                      </div>
+                    }
+                    @if (state.can_restore) {
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        [disabled]="modelStateSaving()"
+                        (click)="updateModelState('interactive')"
+                      >
+                        Restore interactive control
+                      </button>
+                    }
+                    @if (state.can_scale_above_one || state.replicas > 1) {
+                      <div class="model-state-action">
+                        <label>
+                          Desired replicas
+                          <input
+                            class="model-state-input"
+                            type="number"
+                            min="1"
+                            [max]="state.can_scale_above_one ? 100 : 1"
+                            [placeholder]="state.replicas.toString()"
+                            [(ngModel)]="desiredReplicas"
+                          />
+                        </label>
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          [disabled]="!validReplicaChange(state) || modelStateSaving()"
+                          (click)="updateModelState('replicas')"
+                        >
+                          Apply replica count
+                        </button>
+                      </div>
+                    }
+                  } @else if (state.capacity_owner !== "manual") {
+                    <p class="panel-hint">
+                      {{
+                        state.capacity_owner === "source"
+                          ? "Capacity is managed by a release source."
+                          : "Capacity is managed by a Kubernetes autoscaler."
+                      }}
+                    </p>
+                  }
+                } @else {
+                  <p class="panel-hint">Waiting for deployment model state.</p>
+                }
+                @if (modelStateError()) {
+                  <p class="panel-hint health-error" role="alert">{{ modelStateError() }}</p>
+                }
+              </section>
+            }
             <div class="panel-card endpoint-summary">
               <div class="panel-title">Endpoint</div>
               @if (endpointAccess(); as endpoint) {
@@ -338,7 +427,7 @@
                         </span>
                       </div>
                       <div class="repository-model-actions">
-                        @if (canWriteInstances()) {
+                        @if (canControlModels()) {
                           <button
                             mat-stroked-button
                             type="button"

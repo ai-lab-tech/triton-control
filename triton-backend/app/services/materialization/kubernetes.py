@@ -9,6 +9,7 @@ from typing import Any
 
 from app.core.canonical import canonical_bytes, digest, inventory_digest
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
+from app.schemas.model_state import DevelopmentStartupRelease
 from app.schemas.serving_metadata import Name, ServingRelease
 from app.services.candidates.artifacts import CaptureLimits
 from app.services.materialization.budgets import check_plan, storage_bytes
@@ -19,7 +20,7 @@ from app.services.materialization.runtime import receipt_for
 
 
 def manifests(
-    release: ServingRelease,
+    release: ServingRelease | DevelopmentStartupRelease,
     plan: MaterializationPlan,
     policy: MaterializerPolicy,
     binding: StorageBinding,

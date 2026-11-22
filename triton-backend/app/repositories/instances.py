@@ -14,9 +14,28 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import text
 from sqlmodel import Session, col, select
 
 from app.db.entities import DeploymentIntentEntity, TritonInstanceEntity
+from app.exceptions import ConflictError
+
+
+def lock_model_state(session: Session, instance_id: int) -> None:
+    """Serialize model mutation across backend workers without blocking an async request."""
+    if session.get_bind().dialect.name == "postgresql":
+        acquired = session.execute(
+            text("SELECT pg_try_advisory_xact_lock(741293817, CAST(:instance AS integer))"),
+            {"instance": instance_id},
+        ).scalar_one()
+        if not acquired:
+            raise ConflictError("Another model state change is in progress")
+    elif session.get_bind().dialect.name == "sqlite":
+        # Take a database write lock before inspecting the provider. SQLite is
+        # supported for local use and serializes writers at database scope.
+        session.execute(
+            text("UPDATE triton_instances SET id = id WHERE id = :instance"), {"instance": instance_id},
+        )
 
 
 def find_by_id(session: Session, instance_id: int) -> TritonInstanceEntity | None:

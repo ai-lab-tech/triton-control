@@ -5,7 +5,7 @@ import { S3ProfileLabelComponent } from "../../../shared/s3-profile-label.compon
 import { HttpClient } from "@angular/common/http";
 import { MatSelectModule } from "@angular/material/select";
 import { BASE_PATH } from "../../../api/generated";
-import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core";
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { firstValueFrom, interval } from "rxjs";
 
@@ -59,6 +59,18 @@ import {
   selectDetailTritonSaving,
 } from "../../../state/instances-detail/instances-detail.selectors";
 import { isSelfDeployedStarting } from "../../../state/instances.utils";
+
+interface DeploymentModelState {
+  capacity_owner: "manual" | "source" | "autoscaler";
+  mode: "interactive" | "declared";
+  replicas: number;
+  release_digest: string | null;
+  rollout_complete: boolean;
+  interactive_allowed: boolean;
+  can_declare: boolean;
+  can_restore: boolean;
+  can_scale_above_one: boolean;
+}
 
 @Component({
   selector: "app-instance-detail-page",
@@ -195,6 +207,86 @@ export class InstanceDetailPageComponent implements OnInit {
       !this.loadError(),
   );
 
+  readonly managedModelState = computed(
+    () => this.instance()?.isSelfDeployed && this.instance()?.deploymentRuntime === "kubernetes",
+  );
+  readonly deploymentModelState = signal<DeploymentModelState | null>(null);
+  readonly modelStateError = signal("");
+  readonly modelStateSaving = signal(false);
+  readonly canControlModels = computed(
+    () =>
+      this.canWriteInstances() &&
+      (!this.managedModelState() ||
+        (!!this.deploymentModelState()?.interactive_allowed && !this.modelStateSaving())),
+  );
+  startupReleaseDigest = "";
+  desiredReplicas: number | null = null;
+  private modelStateReadPending = false;
+  private modelStateRevision = 0;
+
+  private async refreshModelState(): Promise<void> {
+    if (!this.managedModelState() || !this.instanceId() || this.modelStateReadPending) return;
+    this.modelStateReadPending = true;
+    const revision = this.modelStateRevision;
+    try {
+      const state = await firstValueFrom(this.http.get<DeploymentModelState>(this.modelStateUrl()));
+      if (revision === this.modelStateRevision) this.deploymentModelState.set(state);
+    } catch {
+      if (revision === this.modelStateRevision) this.deploymentModelState.set(null);
+    } finally {
+      this.modelStateReadPending = false;
+    }
+  }
+
+  private modelStateUrl(): string {
+    return `${this.apiBase}/api/instances/${this.instanceId()}/model-state`;
+  }
+
+  validStartupDigest(): boolean {
+    return /^sha256:[a-f0-9]{64}$/.test(this.startupReleaseDigest.trim());
+  }
+
+  validReplicaChange(state: DeploymentModelState): boolean {
+    const replicas = this.desiredReplicas;
+    return (
+      replicas !== null &&
+      Number.isInteger(replicas) &&
+      replicas >= 1 &&
+      replicas <= 100 &&
+      replicas !== state.replicas &&
+      (replicas === 1 || state.can_scale_above_one)
+    );
+  }
+
+  async updateModelState(action: "declare" | "interactive" | "replicas"): Promise<void> {
+    if (this.modelStateSaving() || !this.canWriteInstances()) return;
+    const url = `${this.modelStateUrl()}/${action}`;
+    this.modelStateError.set("");
+    this.modelStateRevision += 1;
+    this.modelStateSaving.set(true);
+    try {
+      const state = await firstValueFrom(
+        action === "replicas"
+          ? this.http.put<DeploymentModelState>(url, { replicas: this.desiredReplicas })
+          : this.http.post<DeploymentModelState>(
+              url,
+              action === "declare" ? { release_digest: this.startupReleaseDigest.trim() } : null,
+            ),
+      );
+      this.deploymentModelState.set(state);
+      this.desiredReplicas = null;
+      if (action === "declare") this.startupReleaseDigest = "";
+      this.refreshAfterAccessChange();
+    } catch (error) {
+      this.modelStateError.set(
+        mapApiErrorMessage(error, "Unable to update deployment model state."),
+      );
+    } finally {
+      this.modelStateSaving.set(false);
+      void this.refreshModelState();
+    }
+  }
+
   readonly metadataJson = computed(() => {
     const metadata = this.instance()?.serverMetadata;
     if (!metadata) {
@@ -230,6 +322,9 @@ export class InstanceDetailPageComponent implements OnInit {
   });
 
   constructor() {
+    effect(() => {
+      if (this.managedModelState()) void this.refreshModelState();
+    });
     this.openLogsOnce =
       !!this.router.getCurrentNavigation()?.extras.state?.["openLogsOnce"] ||
       !!window.history.state?.["openLogsOnce"];
@@ -557,6 +652,7 @@ export class InstanceDetailPageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.store.dispatch(instanceDetailRefreshRequested({ instanceId }));
+        if (!this.modelStateSaving()) void this.refreshModelState();
       });
   }
 
@@ -566,7 +662,7 @@ export class InstanceDetailPageComponent implements OnInit {
     version: string,
   ): Promise<void> {
     const instanceId = this.instanceId();
-    if (!instanceId || !this.canWriteInstances()) {
+    if (!instanceId || !this.canControlModels()) {
       return;
     }
 

@@ -21,12 +21,15 @@ from typing import Any
 
 from fastapi import Response
 from sqlmodel import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core import installation_policy
 from app.core.access_control import require_member_or_admin
 from app.exceptions import BadGatewayError, BadRequestError, NotFoundError
+from app.repositories import instances
 from app.schemas import ModelRepositoryActionResponse, TritonRepositoryModelDTO
 from app.services.access import get_instance_or_404
+from app.services.deployment import model_state
 from app.services.triton.client import TritonService
 from app.services.triton.config import extract_triton_error_detail
 
@@ -95,19 +98,7 @@ async def load_model(
     model_name: str,
 ) -> ModelRepositoryActionResponse:
     """Trigger explicit load for a model via Triton's repository API."""
-    installation_policy.require("model_write")
-    require_member_or_admin(claims)
-    instance = get_instance_or_404(session, instance_id, claims)
-
-    try:
-        await TritonService(
-            instance.url,
-            instance.triton_verify_ssl,
-            instance.triton_ca_certificate,
-        ).load_model(model_name)
-        return ModelRepositoryActionResponse(status="ok", message="Model load requested.")
-    except Exception as exc:
-        raise BadRequestError(extract_triton_error_detail(exc)) from exc
+    return await _mutate_model(session, claims, instance_id, model_name, load=True)
 
 
 async def unload_model(
@@ -117,19 +108,46 @@ async def unload_model(
     model_name: str,
 ) -> ModelRepositoryActionResponse:
     """Trigger explicit unload for a model via Triton's repository API."""
+    return await _mutate_model(session, claims, instance_id, model_name, load=False)
+
+
+async def _mutate_model(
+    session: Session, claims: dict[str, Any], instance_id: int, model_name: str, *, load: bool,
+) -> ModelRepositoryActionResponse:
     installation_policy.require("model_write")
     require_member_or_admin(claims)
     instance = get_instance_or_404(session, instance_id, claims)
+    if not model_state.managed(instance):
+        return await _send_model_command(
+            instance.url, model_name, load=load,
+            verify_ssl=instance.triton_verify_ssl, ca_certificate=instance.triton_ca_certificate,
+        )
 
+    # Keep the transaction open through the Triton response. Kubernetes reads
+    # and SQLite lock acquisition are blocking and must run off the event loop.
     try:
-        await TritonService(
-            instance.url,
-            instance.triton_verify_ssl,
-            instance.triton_ca_certificate,
-        ).unload_model(model_name)
-        return ModelRepositoryActionResponse(status="ok", message="Model unload requested.")
+        await run_in_threadpool(instances.lock_model_state, session, instance_id)
+        endpoint = await run_in_threadpool(model_state.interactive_endpoint, session, instance)
+        result = await _send_model_command(endpoint, model_name, load=load)
+        session.commit()
+        return result
+    except BaseException:
+        session.rollback()
+        raise
+
+
+async def _send_model_command(
+    url: str, model_name: str, *, load: bool, verify_ssl: bool = False, ca_certificate: str = "",
+) -> ModelRepositoryActionResponse:
+    try:
+        service = TritonService(url, verify_ssl, ca_certificate)
+        if load:
+            await service.load_model(model_name)
+        else:
+            await service.unload_model(model_name)
     except Exception as exc:
         raise BadRequestError(extract_triton_error_detail(exc)) from exc
+    return ModelRepositoryActionResponse(status="ok", message=f"Model {'load' if load else 'unload'} requested.")
 
 
 async def infer_model(

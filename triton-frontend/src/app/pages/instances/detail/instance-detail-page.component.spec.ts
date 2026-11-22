@@ -587,6 +587,31 @@ describe("InstanceDetailPageComponent", () => {
     expect(component.getModelActionMessage("resnet", "1")).toContain("load requested");
   });
 
+  it("blocks model commands on managed deployments until interactive control is available", async () => {
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      isSelfDeployed: true,
+      deploymentRuntime: "kubernetes",
+    } as any);
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
+    component.deploymentModelState.set({
+      mode: "declared",
+      capacity_owner: "manual",
+      replicas: 1,
+      release_digest: null,
+      rollout_complete: true,
+      interactive_allowed: false,
+      can_declare: false,
+      can_restore: true,
+      can_scale_above_one: true,
+    });
+    await component.loadModel("resnet", "1");
+    expect(
+      instancesApiMock.loadInstanceModelApiInstancesInstanceIdModelsModelNameLoadPost,
+    ).not.toHaveBeenCalled();
+    expect(component.canControlModels()).toBeFalse();
+  });
+
   it("UnloadModel_ApiFails_SetsMappedActionError", async () => {
     // Arrange
     const fixture = TestBed.createComponent(InstanceDetailPageComponent);
