@@ -190,3 +190,30 @@ Local verification on 2026-11-16 (Python 3.12, Pydantic 2.14.3):
 An additional Ruff scan of all pre-existing tests/scripts reports 53 findings in
 unchanged files; these are outside the current CI Ruff scope and this change.
 Remote CI and implementation PR evidence remain pending publication of the branch.
+
+## Trusted validation evidence
+
+Set `TRITON_GATE_POLICY_FILE` to an operator-owned JSON file mounted read-only
+for the backend. The GatePolicy document contains `identity` (name and version),
+`issuers` (issuer names mapped to lowercase hex Ed25519 public keys),
+`evaluator` (the pinned evaluator identity), `requiredCriteria` (exact metric,
+category, unit, operator, and threshold entries), and `maxValiditySeconds`.
+The release publisher must have no write access to this file or to issuer keys.
+
+Before signing, the independent issuer must verify the exact validation result
+and check the manifest's dataset and expected-output digests against artifacts
+approved independently of the release publisher. Verify that the bytes used by
+the evaluator match those approved digests. Sign the bytes returned by
+`signing_message` only after completing these checks.
+
+Retain the manifest, report, envelope, and lowercase hex signature together using
+`package_evidence`. Store those bytes alongside the release metadata so admission
+can run offline. The release validation digest continues to reference the
+envelope. The gate rejects duplicate JSON keys in the archive and policy.
+
+The approval flow records the binding returned by `verify_release_evidence`
+for the reviewed release and exact target profile. The executor calls
+`admit_release` with the approved binding before changing a workload. A raised
+error blocks that proposed change. The local policy is read on each call so
+issuer removal takes effect on the next admission. A changed policy or archive
+requires a new approval binding.
