@@ -52,7 +52,7 @@ function registerServingBuild(context, vscode) {
   async function start(resource) {
     const { connection, taskId } = await scope();
     const options = await request(connection, `/api/builds/options?task_id=${encodeURIComponent(taskId)}`);
-    const selected = resource ? [resource] : await vscode.window.showOpenDialog({ canSelectFolders: false, canSelectFiles: true, canSelectMany: false, openLabel: "Select Dockerfile" });
+    const selected = resource ? [resource] : await vscode.window.showOpenDialog({ canSelectFolders: false, canSelectFiles: true, canSelectMany: false, title: "Select Dockerfile", openLabel: "Select Dockerfile" });
     if (!selected?.length) return;
     const selectedPath = selected[0].fsPath;
     const fromFile = (await fs.lstat(selectedPath)).isFile();
