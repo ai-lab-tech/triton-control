@@ -39,9 +39,10 @@ class WorkspaceInputs(Request):
             if (len(snapshots) != len(self.files) or len({item.snapshot_id for item in snapshots}) != 1
                     or any(item.role != "source" for item in self.files)):
                 raise ValueError("Snapshot inputs must belong to one snapshot and retain their source inventory")
-        elif (len(self.files) > 1000 or not self.expected_behavior or not self.acceptance_criteria
-              or {item.role for item in self.files} != {"source", "dataset", "baseline"}):
-            raise ValueError("Source, dataset and baseline inputs are required")
+        elif len(self.files) > 1000:
+            raise ValueError("Handoff workspace inputs exceed the 1000 file limit")
+        elif not any(item.role == "source" for item in self.files):
+            raise ValueError("A workspace model source is required")
         return self
 
 

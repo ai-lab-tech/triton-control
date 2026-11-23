@@ -27,8 +27,8 @@ from app.schemas.preparation import ReasonRequest, TaskRevision
 from app.schemas.task_workspaces import OpenTaskWorkspace
 from app.services import conversion_exports, engineering_queue, handoff_sources, preparation, task_workspaces, teams
 from app.services import task_workspace_access as access
-from app.services.development import kubernetes as k8s
 from app.services.development import deployment_access, profiles, workspaces
+from app.services.development import kubernetes as k8s
 from app.services.development.task_stage_runner import stage
 from app.services.development.task_staging import configure
 from tests.test_handoffs import HandoffFixture
@@ -256,12 +256,19 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(sizing.existing_storage_size, options["storage_size"])
         self.apply.assert_called_once()
 
-    def test_missing_inputs_block_start(self):
-        incomplete = self.submit(self.request(revision="incomplete"))
-        self.task = self.claim(incomplete.task)
-        with self.assertRaises(ConflictError):
-            self.open()
-        self.apply.assert_not_called()
+    def test_source_only_handoff_opens_assigned_workspace(self):
+        receipt = self.submit(self.request(revision="source-only"))
+        self.task = self.claim(receipt.task)
+
+        overview = engineering_queue.overview(self.session, self.engineer, self.task.id)
+        workspace = self.open()
+
+        self.assertTrue(overview.actions.open_workspace)
+        association = repository.for_workspace(self.session, workspace.workspace.id)
+        self.assertIsNotNone(association)
+        assert association is not None
+        self.assertEqual([item["role"] for item in association.inputs["files"]], ["source"])
+        self.apply.assert_called_once()
 
     def authenticated_workspace(self):
         workspace = self.row(self.open())

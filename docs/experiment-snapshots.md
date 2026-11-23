@@ -241,8 +241,7 @@ The new API is the contract for the #22/#24 user flows; this ticket adds no new 
 Capture registers immutable task-workspace inputs in the same transaction as the
 receipt and task. After claiming the task, an eligible engineer can open its
 workspace even while experiment gaps remain. Those gaps are retained unchanged:
-workspace access is preparation, not evaluation or release approval. Existing
-handoff workspaces still require their evaluation inputs before opening.
+workspace access is preparation, not evaluation or release approval.
 
 The workspace restores the captured model inventory under `/inputs/verified/source/`
 and selected project files under `/inputs/verified/source/.workspace/`. Downloads

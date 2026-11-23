@@ -61,6 +61,10 @@ class TaskDTO(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @property
+    def has_blocking_inputs(self) -> bool:
+        return any(reason.startswith("missing_input:") for reason in self.blocked_reasons)
+
 
 class TaskEventDTO(BaseModel):
     id: int

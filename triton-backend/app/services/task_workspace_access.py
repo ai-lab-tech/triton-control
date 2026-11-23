@@ -31,8 +31,8 @@ def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recove
     elif not (eligible and task.assignee_user_id == actor):
         raise ForbiddenError("Only the current eligible assignee may open this task workspace")
     snapshot = experiment_snapshots.find(session, task.source_snapshot_id) if task.source_snapshot_id else None
-    if preparation.get_task(session, claims, task_id).missing_inputs and snapshot is None:
-        raise ConflictError("Complete the handoff evaluation inputs before opening a workspace")
+    if preparation.get_task(session, claims, task_id).has_blocking_inputs and snapshot is None:
+        raise ConflictError("Resolve the outstanding task inputs before opening a workspace")
     return actor
 
 

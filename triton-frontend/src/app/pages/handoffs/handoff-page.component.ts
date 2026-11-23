@@ -369,11 +369,7 @@ export class HandoffPageComponent {
       !this.title.trim() ||
       !this.sourcePath.trim() ||
       !this.revision.trim() ||
-      this.unavailableRevisionProfile() ||
-      (this.completingHandoff() &&
-        ![this.datasetPath, this.baselinePath, this.expectedBehavior, this.criteria].every(
-          (value) => value.trim(),
-        ))
+      this.unavailableRevisionProfile()
     )
       return;
     const original = this.original();
@@ -504,6 +500,10 @@ export class HandoffPageComponent {
       { label: "Evaluation dataset", value: item.dataset },
       { label: "Baseline", value: item.baseline },
     ];
+  }
+
+  hasBlockingInputs(item: HandoffReceipt): boolean {
+    return item.task.blocked_reasons.some((reason) => reason.startsWith("missing_input:"));
   }
 
   inputLabel(name: string) {

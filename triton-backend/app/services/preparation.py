@@ -46,8 +46,8 @@ def _actor(session: Session, claims: dict[str, Any]) -> tuple[int, bool, str]:
     return mapped.id, role == "admin", role
 
 
-def _blocked(task: PreparationTaskEntity, eligible: set[int]) -> list[str]:
-    reasons = ["missing_input:" + name for name in task.missing_inputs]
+def _blocked(task: PreparationTaskEntity, eligible: set[int], optional_inputs: set[str]) -> list[str]:
+    reasons = ["missing_input:" + name for name in task.missing_inputs if name not in optional_inputs]
     if not eligible:
         reasons.append("no_eligible_engineers")
     if task.assignee_user_id is not None and task.assignee_user_id not in eligible:
@@ -75,11 +75,9 @@ def _handoff_missing(handoff: HandoffEntity | None) -> list[str]:
 
 
 def _task_dto(task: PreparationTaskEntity, eligible: set[int], handoff: HandoffEntity | None) -> TaskDTO:
-    # Receipt completeness is immutable. Preserve its blockers even if an older
-    # application version previously cleared the mutable task checklist.
-    missing = sorted(set(task.missing_inputs) | set(_handoff_missing(handoff)))
-    blocked = _blocked(task, eligible)
-    blocked.extend("missing_input:" + name for name in missing if "missing_input:" + name not in blocked)
+    optional_inputs = set(_handoff_missing(handoff))
+    missing = sorted(set(task.missing_inputs) | optional_inputs)
+    blocked = _blocked(task, eligible, optional_inputs)
     return task_to_dto(task, blocked).model_copy(update={"missing_inputs": missing})
 
 

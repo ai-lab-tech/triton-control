@@ -1,6 +1,6 @@
 # Task workspaces
 
-An assigned engineer can open a workspace from a complete scientist handoff. The
+An assigned engineer can open a workspace from a scientist handoff with a verified model source. The
 handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
 Each engineer can have one personal workspace alongside their task workspaces.

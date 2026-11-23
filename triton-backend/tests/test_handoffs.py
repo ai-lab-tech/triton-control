@@ -128,7 +128,7 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
         self.assertEqual(first.id, second.id)
         self.assertEqual(self.session.get(HandoffEntity, first.id).identity_digest, legacy_identity)
 
-    def test_handoff_evaluation_blockers_cannot_be_cleared_without_inputs(self):
+    def test_handoff_evaluation_gaps_cannot_be_cleared_without_inputs(self):
         receipt = self.submit()
         for actor in (self.admin, self.engineer):
             task = preparation.get_task(self.session, actor, receipt.task.id)
@@ -145,7 +145,7 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             self.assertEqual(current.task.revision, task.revision)
             self.assertEqual(len(preparation.list_events(self.session, actor, task.id)), len(events))
 
-    def test_historical_cleared_flags_still_show_receipt_blockers_in_queue_and_detail(self):
+    def test_historical_cleared_flags_still_show_receipt_gaps_in_queue_and_detail(self):
         receipt = self.submit()
         row = self.session.get(PreparationTaskEntity, receipt.task.id)
         row.missing_inputs = []
@@ -157,7 +157,7 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             preparation.list_tasks(self.session, self.engineer)[0],
         ):
             self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
-            self.assertIn("missing_input:evaluation_dataset", task.blocked_reasons)
+            self.assertNotIn("missing_input:evaluation_dataset", task.blocked_reasons)
 
     def test_other_task_checklist_items_can_still_be_resolved(self):
         receipt = self.submit()
@@ -248,7 +248,7 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             set(receipt.task.missing_inputs),
             {"evaluation_dataset", "baseline", "expected_behavior", "acceptance_criteria"},
         )
-        self.assertIn("missing_input:evaluation_dataset", receipt.task.blocked_reasons)
+        self.assertNotIn("missing_input:evaluation_dataset", receipt.task.blocked_reasons)
 
     def test_complete_inputs_have_no_missing_evaluation_fields(self):
         receipt = self.submit(

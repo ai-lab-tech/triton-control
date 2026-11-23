@@ -205,10 +205,6 @@ describe("HandoffPageComponent", () => {
     const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
 
     // Act
-    await page.submit();
-    http.expectNone("/api/preparation/handoff-captures");
-    input("dataset").value = "datasets/eval.csv";
-    input("dataset").dispatchEvent(new Event("input"));
     const pending = page.submit();
     const post = http.expectOne("/api/preparation/handoff-captures");
     post.flush({
@@ -241,11 +237,7 @@ describe("HandoffPageComponent", () => {
       version_id: "baseline-v1",
       expected_digest: "sha256:baseline",
     });
-    expect(post.request.body.dataset).toEqual({
-      kind: "s3",
-      profile_id: 1,
-      path: "datasets/eval.csv",
-    });
+    expect(post.request.body.dataset).toBeNull();
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-new"]);
   });
 
@@ -437,7 +429,7 @@ describe("HandoffPageComponent", () => {
     await fixture.whenStable();
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain("Workspace blocked by missing inputs");
+    expect(text).toContain("Information not provided");
     expect(text).toContain("Evaluation dataset");
     expect(text).toContain("v1");
     expect(text).toContain("task-1");

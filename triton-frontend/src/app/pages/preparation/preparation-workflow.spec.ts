@@ -255,7 +255,7 @@ describe("Engineering preparation workflow", () => {
     http.expectOne("/api/preparation-tasks/task-1/events?limit=50&offset=0").flush([]);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
-  it("shows why an assigned handoff cannot open its workspace and links to a new revision", async () => {
+  it("shows why an assigned handoff cannot open its workspace with outstanding task inputs", async () => {
     // Arrange
     const fixture = TestBed.createComponent(PreparationDetailComponent);
     await finishDetailLoad({
@@ -264,8 +264,8 @@ describe("Engineering preparation workflow", () => {
         ...entry.task,
         state: "claimed",
         assignee_user_id: 2,
-        missing_inputs: ["evaluation_dataset"],
-        blocked_reasons: ["missing_input:evaluation_dataset"],
+        missing_inputs: ["license_review"],
+        blocked_reasons: ["missing_input:license_review"],
       },
       actions: { ...entry.actions, claim: false, release: true, request_information: true },
     });
@@ -282,12 +282,8 @@ describe("Engineering preparation workflow", () => {
     expect(workspace?.disabled).toBeTrue();
     expect(workspace?.getAttribute("aria-describedby")).toBe("workspace-blocked-reason");
     expect(assignment.querySelector("#workspace-blocked-reason")?.textContent).toContain(
-      "Add the missing evaluation inputs",
+      "required inputs",
     );
-    expect(assignment.querySelector("a")?.getAttribute("href")).toBe(
-      "/preparation/handoffs/new?previous=handoff-1",
-    );
-    expect(assignment.querySelector("a")?.textContent).toContain("Add missing information");
     http.expectNone("/api/preparation/tasks/task-1/workspace-sizing");
     fixture.destroy();
   });

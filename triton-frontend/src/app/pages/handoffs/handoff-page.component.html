@@ -91,7 +91,7 @@
             }}</a>
             (revision {{ previous.request.revision }}).
             @if (completingHandoff()) {
-              Add the remaining evaluation details, then claim the new task to open its workspace.
+              Add any evaluation details you want to include in the new revision.
             }
           </p>
         }
@@ -227,10 +227,10 @@
         </fieldset>
         <fieldset [disabled]="busy()" class="form-card">
           <legend>
-            <span class="step-number" aria-hidden="true">02</span> Evaluation requirements
+            <span class="step-number" aria-hidden="true">02</span> Evaluation details (optional)
           </legend>
           <p class="section-intro">
-            Help engineering understand what a successful model looks like.
+            The assigned engineer can start the workspace with just the verified model source.
           </p>
           <ng-template #fieldHelp let-field let-help="help">
             <button
@@ -255,17 +255,12 @@
           <div class="fields">
             <div class="evaluation-field">
               <mat-form-field appearance="outline">
-                <mat-label
-                  >Evaluation dataset object path{{
-                    completingHandoff() ? "" : " (optional)"
-                  }}</mat-label
-                >
+                <mat-label>Evaluation dataset object path (optional)</mat-label>
                 <input
                   matInput
                   name="dataset"
                   aria-describedby="evaluation-help-dataset"
                   [(ngModel)]="datasetPath"
-                  [required]="completingHandoff()"
                   maxlength="1024"
                   placeholder="datasets/evaluation.csv"
                 />
@@ -296,15 +291,12 @@
             }
             <div class="evaluation-field">
               <mat-form-field appearance="outline">
-                <mat-label
-                  >Baseline object path{{ completingHandoff() ? "" : " (optional)" }}</mat-label
-                >
+                <mat-label>Baseline object path (optional)</mat-label>
                 <input
                   matInput
                   name="baseline"
                   aria-describedby="evaluation-help-baseline"
                   [(ngModel)]="baselinePath"
-                  [required]="completingHandoff()"
                   maxlength="1024"
                   placeholder="baselines/results.json"
                 />
@@ -340,13 +332,12 @@
           </p>
           <div class="evaluation-field">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Expected behavior{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
+              <mat-label>Expected behavior (optional)</mat-label>
               <textarea
                 matInput
                 name="behavior"
                 aria-describedby="evaluation-help-behavior"
                 [(ngModel)]="expectedBehavior"
-                [required]="completingHandoff()"
                 rows="3"
                 maxlength="8000"
                 placeholder="Describe expected outputs and representative examples."
@@ -361,15 +352,12 @@
           </div>
           <div class="evaluation-field">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label
-                >Acceptance criteria{{ completingHandoff() ? "" : " (optional)" }}</mat-label
-              >
+              <mat-label>Acceptance criteria (optional)</mat-label>
               <textarea
                 matInput
                 name="criteria"
                 aria-describedby="evaluation-help-criteria"
                 [(ngModel)]="criteria"
-                [required]="completingHandoff()"
                 rows="3"
                 maxlength="8000"
                 placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
@@ -385,7 +373,7 @@
           @if (!completingHandoff()) {
             <p class="evaluation-note">
               <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
-              later with a new revision. Missing inputs block the task workspace.
+              later with a new revision.
             </p>
           }
         </fieldset>
@@ -471,9 +459,7 @@
           <button
             mat-flat-button
             (click)="prepareWorkspace()"
-            [disabled]="
-              busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
-            "
+            [disabled]="busy() || !item.task.assignee_user_id || hasBlockingInputs(item)"
             color="primary"
           >
             Open task workspace
@@ -497,11 +483,8 @@
       }
       @if (item.task.missing_inputs.length) {
         <div class="notice">
-          <strong>Workspace blocked by missing inputs</strong>
-          <p>
-            Submit a new handoff revision with the inputs below, then claim the new task to open its
-            workspace.
-          </p>
+          <strong>Information not provided</strong>
+          <p>You can add evaluation details in a new handoff revision.</p>
           <ul>
             @for (name of item.task.missing_inputs; track name) {
               <li>{{ inputLabel(name) }}</li>
