@@ -20,6 +20,9 @@ from app.services.materialization.normalization import MaterializationError
 ROLLBACK_KEY = "triton-control/interactive-template"
 
 
+SCALE_TARGET = "triton-control/scale-target"
+
+
 class ModelStateProvider(PodProvider):
     def has_autoscaler(self, namespace: str, name: str) -> bool:
         api = client.AutoscalingV2Api(self.api)
@@ -31,6 +34,7 @@ class ModelStateProvider(PodProvider):
 
     def patch(
         self, deployment: dict[str, Any], path: str, value: Any, *, replace_single_pod: bool = False,
+        rolling_target: int | None = None, clear_target: bool = False,
     ) -> None:
         meta = deployment["metadata"]
         changes = [
@@ -38,6 +42,17 @@ class ModelStateProvider(PodProvider):
             {"op": "test", "path": "/metadata/resourceVersion", "value": meta["resourceVersion"]},
             {"op": "add", "path": path, "value": value},
         ]
+        if rolling_target is not None or clear_target:
+            annotations = dict(meta.get("annotations") or {})
+            if rolling_target is None:
+                annotations.pop(SCALE_TARGET, None)
+            else:
+                annotations[SCALE_TARGET] = str(rolling_target)
+            changes.append({"op": "add", "path": "/metadata/annotations", "value": annotations})
+        if rolling_target is not None:
+            changes.append({"op": "add", "path": "/spec/strategy", "value": {
+                "type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 0, "maxSurge": 1},
+            }})
         if replace_single_pod:
             # A one-GPU installation may have no capacity for a rolling surge.
             changes.append({"op": "add", "path": "/spec/strategy", "value": {"type": "Recreate"}})
@@ -114,6 +129,14 @@ class ModelStateProvider(PodProvider):
         except (KeyError, TypeError, ValueError) as error:
             raise ConflictError("Prepared startup release or materialization binding is invalid") from error
 
+        self.install(deployment, release_digest, config, pod)
+
+    def install(
+        self, deployment: dict[str, Any], release_digest: str, config: dict[str, Any],
+        pod: dict[str, Any], *, target: int | None = None,
+    ) -> None:
+        meta = deployment["metadata"]
+        namespace = meta["namespace"]
         old = deployment["spec"]["template"]
         old_spec = old["spec"]
         rollback_name = "tc-interactive-" + digest(old).removeprefix("sha256:")[:24] + "-" + meta["uid"][:8]
@@ -139,7 +162,24 @@ class ModelStateProvider(PodProvider):
             {"name": name, "containerPort": port}
             for name, port in (("http", 8000), ("grpc", 8001), ("metrics", 8002))
         ]
-        self.patch(deployment, "/spec/template", template, replace_single_pod=True)
+        if target is not None:
+            init = template["spec"]["initContainers"][0]
+            init["args"].append("--selected-objects")
+            runtime = template["spec"]["containers"][0]
+            original = next(c for c in old_spec["containers"] if c["name"] == "triton")
+            runtime["env"] = [env for env in original.get("env", []) if env["name"] in {
+                "LOGNAME", "USER", "HOME", "XDG_CACHE_HOME", "TORCHINDUCTOR_CACHE_DIR",
+            }]
+            if "workingDir" in original:
+                runtime["workingDir"] = original["workingDir"]
+            for mount in original.get("volumeMounts", []):
+                if mount["mountPath"] == "/dev/shm":
+                    volume = next(v for v in old_spec["volumes"] if v["name"] == mount["name"])
+                    template["spec"]["volumes"].append(volume)
+                    runtime["volumeMounts"].append(mount)
+            self.patch(deployment, "/spec/template", template, rolling_target=target)
+        else:
+            self.patch(deployment, "/spec/template", template, replace_single_pod=True)
 
     def restore(self, deployment: dict[str, Any], backup: str) -> None:
         meta = deployment["metadata"]
@@ -150,4 +190,7 @@ class ModelStateProvider(PodProvider):
             template = json.loads(config["data"]["template.json"])
         except (KeyError, ValueError) as error:
             raise BadGatewayError("Kubernetes returned an invalid interactive template") from error
-        self.patch(deployment, "/spec/template", template, replace_single_pod=True)
+        if SCALE_TARGET in (meta.get("annotations") or {}):
+            self.patch(deployment, "/spec/template", template, clear_target=True)
+        else:
+            self.patch(deployment, "/spec/template", template, replace_single_pod=True)

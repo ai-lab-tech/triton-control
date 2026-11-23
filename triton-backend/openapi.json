@@ -13314,6 +13314,17 @@
             ],
             "title": "Release Digest"
           },
+          "pending_replicas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Replicas"
+          },
           "rollout_complete": {
             "type": "boolean",
             "title": "Rollout Complete"

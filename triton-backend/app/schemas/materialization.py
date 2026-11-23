@@ -124,7 +124,7 @@ class StorageBinding(Contract):
     """Trusted environment-local binding, resolved by the caller after authorization."""
 
     bucket: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")]
-    prefix: Path
+    prefix: Path | Literal[""]
     secret_name: Name
     endpoint: str | None = None
     region: Annotated[str, Field(min_length=1, max_length=128)] = "us-east-1"

@@ -41,6 +41,7 @@ def main() -> int:
     for option in ("plan", "output", "expected-image", "bucket", "prefix", "limits"):
         run.add_argument("--" + option, required=True)
     run.add_argument("--endpoint")
+    run.add_argument("--selected-objects", action="store_true")
     run.add_argument("--allow-http", action="store_true")
     run.add_argument("--ca-bundle")
     prepare = commands.add_parser("prepare")
@@ -98,7 +99,7 @@ def main() -> int:
             try:
                 receipt = materialize(
                     plan,
-                    VersionedS3(client, binding.bucket, binding.prefix),
+                    VersionedS3(client, binding.bucket, binding.prefix, selected_objects=args.selected_objects),
                     Path(args.output),
                     expected_image=args.expected_image,
                     limits=limits,

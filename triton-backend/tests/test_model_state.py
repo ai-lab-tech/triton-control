@@ -168,6 +168,39 @@ class ModelStateTests(unittest.TestCase):
         # Assert
         self.provider.patch.assert_called_once_with(self.raw, "/spec/replicas", 3)
 
+    def test_scale_captures_the_active_pod_before_starting_a_rolling_update(self):
+        # Arrange
+        with Session(self.engine) as session:
+            row = session.get(TritonInstanceEntity, 1)
+            row.s3_enabled, row.s3_bucket, row.deployment_secret_name = True, "models", "storage"
+            session.commit()
+        snapshot = (RELEASE, {}, {})
+        with patch.object(service.scale_snapshot, "ready_models", return_value=("iris",)) as read, \
+                patch.object(service.scale_snapshot, "render", return_value=snapshot):
+            # Act
+            self.invoke("scale", replicas=2)
+
+        # Assert
+        self.assertEqual(read.call_count, 2)
+        self.provider.install.assert_called_once_with(self.raw, *snapshot, target=2)
+        self.provider.patch.assert_not_called()
+
+    def test_reconcile_waits_for_ready_release_and_then_applies_pending_target(self):
+        # Arrange
+        self.set_declared_rollout()
+        self.raw["metadata"]["annotations"] = {service.SCALE_TARGET: "2"}
+        self.pods[0].ready = False
+        with Session(self.engine) as session:
+            row = session.get(TritonInstanceEntity, 1)
+            # Act
+            service.reconcile_scale(session, row)
+            self.provider.patch.assert_not_called()
+            self.pods[0].ready = True
+            service.reconcile_scale(session, row)
+
+        # Assert
+        self.provider.patch.assert_called_once_with(self.raw, "/spec/replicas", 2, clear_target=True)
+
     def test_load_is_blocked_in_declared_mode(self):
         # Arrange
         self.set_declared_rollout()

@@ -36,6 +36,7 @@ class ModelState(BaseModel):
     mode: Literal["interactive", "declared"]
     replicas: int
     release_digest: Digest | None = None
+    pending_replicas: int | None = None
     rollout_complete: bool
     interactive_allowed: bool
     can_declare: bool
