@@ -1,4 +1,5 @@
 {{- $development := eq (include "triton-control.installationMode" .) "development" -}}
+{{- $snapshotVolume := include "triton-control.snapshotVolumeEnabled" . -}}
 {{- $releaseSourceFile := (default dict .Values.releaseSources).file -}}
 {{- if and .Values.tritonDeployments.ingressTlsSecretName .Values.tritonDeployments.certManagerClusterIssuer }}
 {{- fail "Set either tritonDeployments.ingressTlsSecretName or tritonDeployments.certManagerClusterIssuer, not both" }}
@@ -38,7 +39,11 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.podSecurityContext }}
+      {{- $podSecurity := deepCopy .Values.podSecurityContext }}
+      {{- if and $snapshotVolume (not (hasKey $podSecurity "fsGroup")) }}
+      {{- $_ := set $podSecurity "fsGroup" 10001 }}
+      {{- end }}
+      {{- with $podSecurity }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -61,8 +66,12 @@ spec:
             - name: api
               containerPort: {{ .Values.app.ports.backend }}
               protocol: TCP
-          {{- if or .Values.buildQualification.policy $releaseSourceFile }}
+          {{- if or .Values.buildQualification.policy $releaseSourceFile $snapshotVolume }}
           volumeMounts:
+            {{- if $snapshotVolume }}
+            - name: preparation-snapshots
+              mountPath: /var/lib/triton-control/preparation
+            {{- end }}
             {{- if .Values.buildQualification.policy }}
             - name: build-context-policy
               mountPath: /etc/triton-control/build-context
@@ -75,6 +84,10 @@ spec:
             {{- end }}
           {{- end }}
           env:
+            {{- if $snapshotVolume }}
+            - name: TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT
+              value: /var/lib/triton-control/preparation/snapshots
+            {{- end }}
             - name: TASK_WORKSPACE_RETENTION_DAYS
               value: {{ .Values.development.workspaceRetention.days | quote }}
             - name: TASK_WORKSPACE_INSTALLATION_ID
@@ -224,8 +237,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if or .Values.buildQualification.policy $releaseSourceFile }}
+      {{- if or .Values.buildQualification.policy $releaseSourceFile $snapshotVolume }}
       volumes:
+        {{- if $snapshotVolume }}
+        - name: preparation-snapshots
+          persistentVolumeClaim:
+            claimName: {{ include "triton-control.fullname" . }}-snapshots
+        {{- end }}
         {{- if .Values.buildQualification.policy }}
         - name: build-context-policy
           configMap:

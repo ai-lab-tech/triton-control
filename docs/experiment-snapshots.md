@@ -8,8 +8,19 @@ create a production release, approve it or claim validation success.
 
 ## Configure controlled staging
 
-Set a stable `TRITON_INSTALLATION_ID` on every backend replica and choose exactly
-one administrator-configured destination:
+The development Helm chart mounts a persistent snapshot volume by default and
+uses its namespace/release installation ID. The claim requests 20 GiB with
+ReadWriteOnce access. Configure `modelPreparation.snapshotVolume` for the desired
+size, storage class and access mode. Use ReadWriteMany when backend replicas run
+on different nodes. Helm retains the claim on uninstall.
+
+**Require S3 versioning for handoff inputs** in Admin settings applies to the
+original serving model files. When cleared, capture reads unversioned files with
+their ETags, hashes their contents, rechecks the source, and retains a separate
+copy for the task. Subsequent changes to the serving files do not change that copy.
+
+For an explicit store, configure one of these options. Outside Helm, also set a
+stable `TRITON_INSTALLATION_ID` on every backend replica.
 
 - `TRITON_PREPARATION_SNAPSHOT_PROFILE_ID`: existing global S3 profile ID. Its
   bucket must have versioning enabled. Optional
@@ -21,10 +32,9 @@ one administrator-configured destination:
   made read-only. An ephemeral container directory is unsuitable for retained
   snapshots.
 
-Use the existing Helm `app.env` and storage/volume configuration to provide
-these settings. No bucket, credentials, persistent volume or storage location is
-created implicitly. Unknown/unconfigured storage fails visibly through the
-operation contract. Source and destination prefixes may not overlap the selected
+An explicit root or profile in Helm `app.env` overrides the default volume.
+Set `modelPreparation.snapshotVolume.enabled=false` when supplying storage
+configuration through `app.envFrom`. Source and destination prefixes may not overlap the selected
 models. Preserve destination configuration and retained object versions across
 upgrades; changing a provider location requires an explicit data migration.
 Do not apply lifecycle deletion to referenced snapshots. This ticket adds no

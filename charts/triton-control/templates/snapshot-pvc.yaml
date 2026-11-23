@@ -1,0 +1,19 @@
+{{- if include "triton-control.snapshotVolumeEnabled" . }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "triton-control.fullname" . }}-snapshots
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "triton-control.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.modelPreparation.snapshotVolume.accessMode }}
+  {{- with .Values.modelPreparation.snapshotVolume.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.modelPreparation.snapshotVolume.size }}
+{{- end }}

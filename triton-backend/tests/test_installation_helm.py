@@ -38,6 +38,19 @@ class InstallationHelmTests(unittest.TestCase):
                 self.assertLessEqual(set(rule["verbs"]), {"get", "list", "watch"})
                 self.assertNotIn("pods/exec", rule["resources"])
 
+    def test_development_mounts_snapshot_claim_unless_an_external_store_is_configured(self):
+        for options, expected in [
+            ([], True),
+            (["--set", "app.env[0].name=TRITON_PREPARATION_SNAPSHOT_PROFILE_ID",
+              "--set-string", "app.env[0].value=2"], False),
+            (["-f", str(CHART / "values-production.yaml")], False),
+        ]:
+            with self.subTest(options=options):
+                result = self.render(*options)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual("TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT" in result.stdout, expected)
+                self.assertEqual("claimName: policy-test-triton-control-snapshots" in result.stdout, expected)
+
     def test_invalid_mode_and_production_argo_are_rejected(self):
         # Arrange
         configurations = [

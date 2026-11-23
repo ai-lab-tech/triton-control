@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -29,6 +29,7 @@ from app.main import app
 from app.repositories import operations as operation_repo
 from app.schemas.experiment_snapshots import PreparationRequest, RuntimeObservation
 from app.schemas.lineage import FileEntry, InventoryV1
+from app.schemas.preparation_settings import PreparationLimits
 from app.schemas.task_workspaces import SnapshotFile
 from app.services.candidates.artifacts import CapturedSource, DirectoryArtifactStore
 from app.services.operations import OperationWorker
@@ -37,6 +38,7 @@ from app.services.snapshots import service, workspace_reader
 from app.services.snapshots.inputs import download
 from app.services.snapshots.runtime import actual_image
 from app.services.snapshots.workspace import decode
+from tests.test_candidate_s3 import MemoryS3
 from tests.test_preparation import PreparationFixture
 
 
@@ -45,6 +47,7 @@ def entry(path, data):
 
 
 class Source:
+    require_versioning = True
     bucket = "fixture-models"
     prefix = "models/"
 
@@ -148,6 +151,7 @@ class SnapshotFixture(PreparationFixture):
         patcher = patch.dict(operations.adapters, {service.KIND: self.adapter})
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.configured_source = service._source
         for name, value in (("_source", self.source), ("_observe", self.runtime)):
             mock = patch.object(service, name, return_value=value)
             mock.start()
@@ -185,6 +189,36 @@ class SnapshotFixture(PreparationFixture):
 
 
 class SnapshotTests(SnapshotFixture, unittest.TestCase):
+    def test_unversioned_serving_input_follows_admin_policy_and_restores_captured_bytes(self):
+        # Arrange
+        client = MemoryS3(versioned=False)
+        client.close = Mock()
+        obj = {"Bucket": "fixture-models", "Key": "models/iris/1/model.onnx"}
+        client.put_object(**obj, Body=b"original")
+        self.enterContext(patch.object(service, "_source", self.configured_source))
+        self.enterContext(patch.object(service, "build_s3_client", return_value=client))
+        self.enterContext(patch.dict(os.environ, {
+            "TRITON_INSTALLATION_ID": "", "TASK_WORKSPACE_INSTALLATION_ID": "test/release",
+            "TRITON_PREPARATION_SNAPSHOT_ROOT": "", "TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT": str(self.root),
+        }))
+
+        # Act
+        rejected = self.submit(key="strict")
+        self.worker.run_once()
+        failure = self.read_operation(rejected.operation.id)
+        service.preparation_settings.update(self.session, self.admin, PreparationLimits(require_s3_versioning=False))
+        receipt = self.finish(key="relaxed")
+        client.put_object(**obj, Body=b"changed")
+        restored = self.root.parent / "restored.onnx"
+        download(self.session, SnapshotFile(snapshot_id=receipt.id, file=receipt.manifest.inventory.files[0]), restored)
+
+        # Assert
+        self.assertEqual(failure.state, "failed")
+        self.assertIn("S3 object versions", failure.message)
+        self.assertEqual(receipt.manifest.origin.installation_id, "test/release")
+        self.assertEqual(restored.read_bytes(), b"original")
+        self.assertTrue(all("IfMatch" in args for _, args in client.calls))
+
     def select_workspace(self, files: dict[str, bytes]):
         def capture(namespace, name, selected, destination):
             rows = [{"path": path, "data": base64.b64encode(files[path]).decode()} for path in selected]

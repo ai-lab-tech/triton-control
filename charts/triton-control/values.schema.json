@@ -238,6 +238,16 @@
         "transferTimeoutSeconds"
       ],
       "properties": {
+        "snapshotVolume": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "size": {"type": "string", "minLength": 1},
+            "storageClass": {"type": "string"},
+            "accessMode": {"enum": ["ReadWriteOnce", "ReadWriteMany"]}
+          }
+        },
         "maxInputGiB": {
           "type": "integer",
           "minimum": 1,
