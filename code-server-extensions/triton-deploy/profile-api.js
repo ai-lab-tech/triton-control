@@ -9,7 +9,7 @@ function apiUrl(endpoint) {
   return url;
 }
 
-function requestJson(endpoint, path, { token, body } = {}) {
+function requestJson(endpoint, path, { token, body, timeoutMs = 15000, maxResponseBytes = 4 * 1024 * 1024, failureHint } = {}) {
   const url = apiUrl(endpoint);
   url.pathname = url.pathname.replace(/\/$/, "") + path;
   const payload = body === undefined ? undefined : JSON.stringify(body);
@@ -28,14 +28,14 @@ function requestJson(endpoint, path, { token, body } = {}) {
       res.on("error", () => reject(new Error("Triton Control response interrupted.")));
       res.on("data", (chunk) => {
         size += chunk.length;
-        if (size > 4 * 1024 * 1024) req.destroy(new Error("Triton Control response exceeds 4 MiB."));
+        if (size > maxResponseBytes) req.destroy(new Error("Triton Control response exceeds the size limit."));
         else chunks.push(chunk);
       });
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           const hint = res.statusCode === 401 ? "Workspace access is no longer valid. Reopen the workspace from Triton Control."
             : res.statusCode === 403 ? "Your account needs active member or admin access."
-            : "Could not load saved S3 profiles. Try refreshing S3 Browser.";
+            : failureHint || "Could not load saved S3 profiles. Try refreshing S3 Browser.";
           const error = new Error(`Triton Control HTTP ${res.statusCode}. ${hint}`);
           error.status = res.statusCode;
           reject(error);
@@ -45,7 +45,7 @@ function requestJson(endpoint, path, { token, body } = {}) {
         catch { reject(new Error("Triton Control returned an invalid response. Check the API URL.")); }
       });
     });
-    const timer = setTimeout(() => req.destroy(new Error("Triton Control request timed out.")), 15000);
+    const timer = setTimeout(() => req.destroy(new Error("Triton Control request timed out.")), timeoutMs);
     req.on("close", () => clearTimeout(timer));
     req.on("error", (error) => reject(new Error(
       `Cannot connect to Triton Control (${error.code || "request failed"}). Check the URL, network, and HTTPS certificate.`,

@@ -169,3 +169,40 @@ external instances require an explicit S3 repository or selected workspace model
 the original instance. The capture URL preserves progress across page reloads. These
 entry points are unavailable in production. This workflow adds read-only API views;
 no database migration or existing receipt rewrite is required.
+
+### Save and restore converted models
+
+In the assigned workspace, right-click a Triton model directory under
+`/workspace/conversion` and choose **Save Converted Model to S3**. Choose a
+saved profile with a versioned bucket. Each export has its own prefix and
+preserves the model configuration and version directories. Task history shows
+the export status, S3 location, and verified object versions. A failed upload
+can leave partial objects under its own prefix. Retry the command to create a
+new export. Only verified receipts are available for restoration.
+
+After opening a replacement workspace for the same task, use **Triton Control:
+Restore Saved Conversion** from the command palette. It downloads the exact
+recorded versions, verifies their checksums and writes to a new directory.
+The current profile must still authorize access to the original destination.
+
+### Reclaim retired task workspace volumes
+
+Run `python -m app.services.development.claim_retention` in the development
+backend environment to see eligibility and retention reasons. Use `--apply` to
+request deletion of eligible claims. Set `TASK_WORKSPACE_RETENTION_DAYS` to
+control the retention interval after retirement (default 30 days). Helm supplies
+the installation identity. For other installations, configure a stable
+`TRITON_INSTALLATION_ID` before creating workspaces.
+
+The operator command checks the task history, exact S3 versions, Kubernetes
+attachments and files on the retired volume using a read-only inspection pod.
+Additional files, including personal workspace files outside the conversion
+directory, retain the claim. The task records deletion requests. Subsequent
+runs report the bound PV and reclaim policy where the operator has Kubernetes
+permission to get persistent volumes. A storage class with the Retain policy
+can leave a released PV for the storage administrator.
+
+Enable `development.workspaceRetention.enabled` in Helm to schedule this
+operator command. The default schedule is 02:17 daily, with a 30-day retention
+period. Configure `development.workspaceRetention.schedule` and
+`development.workspaceRetention.days` to override them.

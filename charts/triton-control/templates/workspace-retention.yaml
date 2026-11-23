@@ -1,0 +1,72 @@
+{{- if and .Values.development.workspaceRetention.enabled (eq (include "triton-control.installationMode" .) "development") }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "triton-control.fullname" . | trunc 36 | trimSuffix "-" }}-workspace-gc
+spec:
+  schedule: {{ .Values.development.workspaceRetention.schedule | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: {{ include "triton-control.serviceAccountName" . }}
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: retention
+              image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+              imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+              command: ["python", "-m", "app.services.development.claim_retention", "--apply"]
+              env:
+                - name: TASK_WORKSPACE_INSTALLATION_ID
+                  value: {{ printf "%s/%s" .Release.Namespace .Release.Name | quote }}
+                - name: TASK_WORKSPACE_RETENTION_DAYS
+                  value: {{ .Values.development.workspaceRetention.days | quote }}
+                - name: POD_NAMESPACE
+                  value: {{ .Release.Namespace | quote }}
+                {{- with .Values.app.env }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- if .Values.postgresql.enabled }}
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "triton-control.postgresqlSecretName" . }}
+                      key: database-url
+                {{- end }}
+              envFrom:
+                - secretRef:
+                    name: {{ default (printf "%s-app" (include "triton-control.fullname" .)) .Values.app.existingSecret }}
+                {{- with .Values.app.envFrom }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-%s-workspace-pv-report" .Release.Namespace .Release.Name }}
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s-workspace-pv-report" .Release.Namespace .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-%s-workspace-pv-report" .Release.Namespace .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "triton-control.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

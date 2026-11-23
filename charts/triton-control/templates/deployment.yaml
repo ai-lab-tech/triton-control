@@ -75,6 +75,10 @@ spec:
             {{- end }}
           {{- end }}
           env:
+            - name: TASK_WORKSPACE_RETENTION_DAYS
+              value: {{ .Values.development.workspaceRetention.days | quote }}
+            - name: TASK_WORKSPACE_INSTALLATION_ID
+              value: {{ printf "%s/%s" .Release.Namespace .Release.Name | quote }}
             {{- if $releaseSourceFile }}
             - name: TRITON_RELEASE_SOURCES_FILE
               value: /etc/triton-control/release-sources/sources.json

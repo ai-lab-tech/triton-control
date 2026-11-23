@@ -93,6 +93,22 @@ def apply_code_server_resources(
             configure(manifests, task_document, namespace, statefulset_name, secret_name)
             # A retry must preserve tokens already present in a running init pod.
             from kubernetes import client  # type: ignore[import-untyped]
+            # Claim templates are immutable. A retry on a pre-retention workspace
+            # must keep its original identity metadata, including absent annotations.
+            try:
+                existing_set = client.AppsV1Api(api).read_namespaced_stateful_set(statefulset_name, namespace)
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+            else:
+                old = next(claim for claim in existing_set.spec.volume_claim_templates
+                           if claim.metadata.name == "workspace")
+                desired = next(m for m in manifests if m["kind"] == "StatefulSet")
+                metadata = desired["spec"]["volumeClaimTemplates"][0]["metadata"]
+                if old.metadata.annotations:
+                    metadata["annotations"] = old.metadata.annotations
+                else:
+                    metadata.pop("annotations", None)
             try:
                 existing = client.CoreV1Api(api).read_namespaced_secret(secret_name, namespace)
             except ApiException as exc:

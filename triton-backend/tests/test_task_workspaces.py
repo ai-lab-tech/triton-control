@@ -64,6 +64,44 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         history = preparation.list_events(self.session, self.engineer, self.task.id)
         self.assertEqual(sum(item.action == "workspace_requested" for item in history), 1)
 
+    def test_conversion_history_survives_replacement_and_retry(self):
+        from uuid import uuid4
+        from app.services import conversion_exports, engineering_queue
+        first = self.row(self.open())
+        identity = uuid4()
+        prefix = f"allowed/task-conversions/{self.task.id}/{identity}/iris/"
+        request = conversion_exports.ConversionExport.model_validate({
+            "directory": "iris", "profile_id": 1, "export_id": identity, "objects": [
+                {"key": prefix + path, "size": 5, "sha256": hashlib.sha256(b"model").hexdigest(), "version_id": "v1"}
+                for path in ["config.pbtxt", "1/model.onnx"]],
+        })
+        with patch.object(conversion_exports, "authenticate_workspace", return_value=first), \
+             patch.object(conversion_exports, "api_client"), patch.object(conversion_exports.client, "CoreV1Api") as core, \
+             patch.object(conversion_exports, "storage") as backend:
+            core.return_value.read_namespaced_persistent_volume_claim.return_value.metadata.uid = "old-pvc"
+            provider = MagicMock()
+            provider.get_bucket_versioning.return_value = {"Status": "Enabled"}
+            provider.get_object.side_effect = lambda **args: {
+                "VersionId": args["VersionId"], "ContentLength": 5,
+                "Body": SimpleNamespace(iter_chunks=lambda **_: [b"model"], close=lambda: None),
+            }
+            backend.return_value.__enter__.return_value = conversion_exports.ContextStore(provider, "models")
+            for status in ["started", "interrupted"]:
+                conversion_exports.export_event(self.session, first.namespace, first.name, "token", request,
+                                                "conversion_export_" + status)
+            self.assertEqual(conversion_exports.saved_conversions(self.session, first.namespace, first.name, "token"), [])
+            for _ in range(2):
+                conversion_exports.record(self.session, first.namespace, first.name, "token", request)
+            overview = engineering_queue.overview(self.session, self.engineer, self.task.id)
+            self.assertEqual([(c.status, c.directory) for c in overview.conversions], [("verified", "iris")])
+        with patch.object(k8s, "delete_code_server_resources", return_value="retired"):
+            workspaces.delete_code_server(self.session, self.engineer, first.id)
+        second = self.row(self.open())
+        with patch.object(conversion_exports, "authenticate_workspace", return_value=second):
+            receipt = conversion_exports.saved_receipt(self.session, second.namespace, second.name, "token", identity)
+        self.assertEqual(receipt["claim_uid"], "old-pvc")
+        self.assertEqual([o["version_id"] for o in receipt["objects"]], ["v1", "v1"])
+
     def test_size_preview_does_not_allocate_and_matches_creation(self):
         # Arrange
         client = self.http_client()
@@ -422,6 +460,18 @@ class TaskStagerTests(unittest.TestCase):
         self.assertFalse(spec["automountServiceAccountToken"])
         self.assertEqual(init["command"], ["python3", "/stager/stage.py"])
         self.assertNotIn("S3_SECRET", json.dumps(spec))
+
+    def test_claim_retains_task_identity_after_statefulset_deletion(self):
+        manifests = k8s._manifests(OpenTaskWorkspace().workspace, "test", "task-1", "svc", "secret")
+        with patch.dict("os.environ", {"TRITON_INSTALLATION_ID": "dev.example"}):
+            configure(manifests, {**self.document(), "task_id": "task-id"}, "test", "task-1", "secret")
+
+        spec = next(item["spec"] for item in manifests if item["kind"] == "StatefulSet")
+        self.assertEqual(spec["persistentVolumeClaimRetentionPolicy"], {"whenScaled": "Retain", "whenDeleted": "Retain"})
+        self.assertEqual(spec["volumeClaimTemplates"][0]["metadata"]["annotations"], {
+            "triton-control.io/workspace-name": "task-1", "triton-control.io/task-id": "task-id",
+            "triton-control.io/installation-id": "dev.example",
+        })
 
     def test_editor_default_output_root_is_writable_conversion_folder(self):
         manifests = k8s._manifests(OpenTaskWorkspace().workspace, "test", "task-1", "task-1-svc", "task-1-secret")
