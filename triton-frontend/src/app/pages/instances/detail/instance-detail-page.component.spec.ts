@@ -119,7 +119,12 @@ describe("InstanceDetailPageComponent", () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => EMPTY),
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => "7" } } } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { paramMap: { get: () => "7" }, queryParamMap: { get: () => null } },
+          },
+        },
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: PodsService, useValue: podsApiMock },
         { provide: DeploymentsService, useValue: deploymentsApiMock },
@@ -163,6 +168,24 @@ describe("InstanceDetailPageComponent", () => {
 
     // Assert
     expect(component).toBeTruthy();
+  });
+
+  it("renders serving details and preparation on the first render", () => {
+    // Arrange
+    mockStore.overrideSelector(selectDetailInstance, {
+      ...MOCK_INSTANCE,
+      repositoryModels: [{ name: "iris", version: "1", state: "READY", reason: "" }],
+    } as any);
+    const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector(".summary-value")?.textContent).toContain("node-7");
+    expect(page.textContent).toContain("Prepare for production");
+    expect(page.querySelector('[role="tablist"]')?.textContent).toContain("Overview");
   });
 
   it("summarizes repeated pod states without losing readiness information", () => {

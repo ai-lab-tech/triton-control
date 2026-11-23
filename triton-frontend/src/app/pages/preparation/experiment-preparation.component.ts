@@ -69,33 +69,30 @@ export class ExperimentPreparationComponent implements OnInit {
     if (!this.pending() && ready.length === 1) this.models = ready[0];
     this.expanded.set(true);
   }
-  readyModels() {
+  readyModels(instance = this.instance()) {
     return [
       ...new Set(
-        this.instance()
-          .repositoryModels.filter((m) => m.state?.toUpperCase() === "READY" && m.version)
+        instance.repositoryModels
+          .filter((m) => m.state?.toUpperCase() === "READY" && m.version)
           .map((m) => m.name + ":" + m.version),
       ),
     ];
   }
-  allowed() {
-    const instance = this.instance();
+  allowed(instance = this.instance(), unavailable = this.unavailable()) {
     return (
-      this.canAccess() &&
+      this.canAccess(unavailable) &&
       !instance.preparationTaskId &&
       !!instance.s3?.enabled &&
       !!instance.s3.bucket &&
       !!instance.s3.endpoint &&
       !!instance.s3.accessKey &&
       !!instance.s3.secretConfigured &&
-      this.readyModels().length > 0
+      this.readyModels(instance).length > 0
     );
   }
-  canAccess() {
+  canAccess(unavailable = this.unavailable()) {
     return (
-      !this.unavailable() &&
-      this.auth.canWriteInstances() &&
-      this.installation.allows("development_jobs")
+      !unavailable && this.auth.canWriteInstances() && this.installation.allows("development_jobs")
     );
   }
   terminal() {

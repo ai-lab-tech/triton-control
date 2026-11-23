@@ -26,11 +26,11 @@
       <div class="detail-summary">
         <div class="detail-summary-head">
           <h1 class="page-title">{{ instance.name }}</h1>
-          @if (instance.preparationTaskId && preparation.canAccess()) {
+          @if (instance.preparationTaskId && preparation.canAccess(!!loadError())) {
             <a mat-stroked-button [routerLink]="['/preparation/tasks', instance.preparationTaskId]"
               >Open preparation task</a
             >
-          } @else if (preparation.allowed() && !preparation.expanded()) {
+          } @else if (preparation.allowed(instance, !!loadError()) && !preparation.expanded()) {
             <button mat-stroked-button color="primary" type="button" (click)="preparation.begin()">
               <mat-icon>assignment</mat-icon>
               Prepare for production
