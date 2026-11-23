@@ -56,8 +56,8 @@ interactive template available for the deployment's lifetime.
 
 ## Roll out and change replicas
 
-Under **Use an operator-prepared startup release**, enter the prepared startup release digest and choose
-**Roll out startup state**. The transition replaces the current single pod, so
+An operator can submit a prepared release using the instance model-state API
+(`POST /api/instances/{id}/model-state/declare`). The transition replaces the current single pod, so
 expect a serving interruption. The Deployment uses a recreate strategy so the
 transition works without a spare GPU. The replacement uses pod-local readiness
 checks for the frozen materialization receipt and every declared model version.

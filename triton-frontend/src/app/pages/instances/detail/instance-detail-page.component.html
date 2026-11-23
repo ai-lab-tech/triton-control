@@ -178,37 +178,7 @@
                       {{ state.pending_replicas }} replicas.
                     </p>
                   }
-                  @if (state.release_digest) {
-                    <details>
-                      <summary>Startup configuration</summary>
-                      <code class="network-url">{{ state.release_digest }}</code>
-                    </details>
-                  }
                   @if (canWriteInstances() && state.capacity_owner === "manual") {
-                    @if (state.can_declare) {
-                      <details>
-                        <summary>Use an operator-prepared startup release</summary>
-                        <div class="model-state-action">
-                          <label>
-                            Prepared startup release digest
-                            <input
-                              class="model-state-input"
-                              [(ngModel)]="startupReleaseDigest"
-                              placeholder="sha256:…"
-                            />
-                          </label>
-                          <button
-                            mat-flat-button
-                            color="primary"
-                            type="button"
-                            [disabled]="!validStartupDigest() || modelStateSaving()"
-                            (click)="updateModelState('declare')"
-                          >
-                            Roll out startup state
-                          </button>
-                        </div>
-                      </details>
-                    }
                     @if (state.can_restore) {
                       <button
                         mat-stroked-button
