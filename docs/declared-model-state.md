@@ -9,40 +9,20 @@ which the backend must be able to reach.
 
 Under **Serving → Instances**, open the instance, enter **2** in **Desired replicas**
 and choose **Apply replica count**. On the first scale-up, Triton Control reads the
-ready model names and versions directly from the current pod. It captures those
-versions from the instance's versioned S3 repository and pins the runtime image.
-If S3 objects changed since the original pod loaded them, the replacement pods
-use the bytes captured at scale time.
+ready model names and versions from the current pod. Each replica runs the same
+configured serving image, uses the existing S3 repository and credentials, and
+starts Triton with the selected model names. Triton's version policy determines
+which versions it loads. Kubernetes checks that the ready names and versions
+match the original selection before sending traffic to the pod.
 
-The original pod keeps serving while Kubernetes schedules a replacement with
-the snapshot. The replacement must pass local readiness checks for every selected
-model version before Kubernetes can retire the original. The backend then applies
-the requested replica count. You can close the page during the rollout. If the
-replacement is unschedulable or fails readiness, the original stays available.
-Choose **Restore interactive control** to cancel a pending scale-up. Later
-changes to replica count reuse the frozen template.
+The first rollout keeps the original pod serving until a replacement is ready.
+If capacity is unavailable or the model versions in S3 change, the rollout can
+wait with the original pod online. Choose **Restore interactive control** to
+cancel a pending scale-up. Later changes reuse the same startup configuration.
 
-### Installation setup
-
-For automatic scaling, set the backend environment variable
-`TRITON_MODEL_SCALE_POLICY` to a JSON object. Its `policy` field holds the
-[qualified materializer policy](immutable-materialization.md) for a helper image
-built with support for `run --selected-objects`. Its `limits` field contains
-the numeric capture limits `max_bytes`, `max_file_bytes`, and `deadline_seconds`.
-Allow temporary disk space on the backend for the selected model files and
-retain the captured object versions while replicas use them.
-
-The helper uses the instance's namespace-local S3 credential Secret and needs
-permission to read specific object versions. For a private CA, set
-`ca_secret_name` to a Secret in the workload namespace containing `ca.crt`.
-When Docker reports only an image config ID, pin the deployment image by digest
-or supply a `runtime_manifests` mapping in the policy configuration. Each key
-is the observed `docker://sha256:…` ID and its value is the pullable image
-reference whose platform manifest you verified references that config ID.
-
-Automatic capture supports the standard managed explicit-mode launcher with
-dependencies installed in the runtime image. Repositories requiring custom
-configuration rewrites can use an operator-prepared release.
+Scaling works with versioning enabled or disabled. With a mutable repository,
+overwriting a file under the same model version can change the bytes a new pod
+loads. The readiness check runs with Python 3 inside the serving image.
 
 ## Use an operator-prepared startup release
 

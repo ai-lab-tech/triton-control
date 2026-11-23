@@ -1,7 +1,6 @@
 """Serialize development model commands and keep scaling behind a verified startup rollout."""
 
 import re
-import shlex
 from collections.abc import Iterator
 from contextlib import contextmanager
 from ipaddress import ip_address
@@ -21,7 +20,7 @@ from app.schemas.lineage import DIGEST_PATTERN
 from app.schemas.model_state import ModelState
 from app.schemas.pods import DeploymentState, PodState
 from app.services.access import get_instance_or_404
-from app.services.deployment import scale_snapshot
+from app.services.deployment import replica_startup
 from app.services.deployment.model_state_provider import ROLLBACK_KEY, SCALE_TARGET, ModelStateProvider
 from app.services.kubernetes_client import api_client
 
@@ -97,7 +96,7 @@ def observe(
         ),
         can_scale_above_one=pending is None and (
             (owner == "manual" and stable and bool(release_digest and backup))
-            or (interactive and bool(instance.s3_enabled and instance.s3_bucket and instance.deployment_secret_name))
+            or (interactive and bool(instance.s3_enabled and instance.s3_bucket))
         ),
     )
     # Kubernetes is authoritative. Re-observe on every request so a crash or a
@@ -115,16 +114,7 @@ def supports_interactive_control(template: dict[str, Any]) -> bool:
     for container in template.get("spec", {}).get("containers", []):
         if container["name"] != "triton":
             continue
-        arguments = container.get("args") or []
-        if container.get("command") == ["/bin/bash", "-c"] and arguments:
-            script = arguments[0]
-            launch = re.search(r"(?m)^exec tritonserver[ \t]+", script)
-            if launch is None:
-                return False
-            try:
-                arguments = shlex.split(script[launch.end():])
-            except ValueError:
-                return False
+        _, arguments = replica_startup.launch_arguments(container)
         return "--model-control-mode=explicit" in arguments
     return False
 
@@ -239,15 +229,14 @@ def change(
                         raise ConflictError("Verify an explicitly prepared startup rollout before scaling above one")
                     if replicas > 1 and state.interactive_allowed:
                         endpoint = pod_endpoint(provider, raw, pods[0])
-                        models = scale_snapshot.ready_models(endpoint)
-                        snapshot = scale_snapshot.render(instance, raw, pods[0], models)
+                        models = replica_startup.ready_models(endpoint)
                         current, fresh, active = observe(session, instance, provider)
                         if (not fresh.interactive_allowed or active[0].uid != pods[0].uid
                                 or active[0].restarts != pods[0].restarts
                                 or current["metadata"]["generation"] != raw["metadata"]["generation"]
-                                or scale_snapshot.ready_models(pod_endpoint(provider, current, active[0])) != models):
+                                or replica_startup.ready_models(pod_endpoint(provider, current, active[0])) != models):
                             raise ConflictError("The serving pod or its loaded models changed during capture")
-                        provider.install(current, *snapshot, target=replicas)
+                        provider.scale_serving(current, models, replicas)
                     else:
                         provider.patch(raw, "/spec/replicas", replicas)
                 _, accepted, _ = observe(session, instance, provider)

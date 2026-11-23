@@ -174,15 +174,14 @@ class ModelStateTests(unittest.TestCase):
             row = session.get(TritonInstanceEntity, 1)
             row.s3_enabled, row.s3_bucket, row.deployment_secret_name = True, "models", "storage"
             session.commit()
-        snapshot = (RELEASE, {}, {})
-        with patch.object(service.scale_snapshot, "ready_models", return_value=("iris",)) as read, \
-                patch.object(service.scale_snapshot, "render", return_value=snapshot):
+        models = ("iris",)
+        with patch.object(service.replica_startup, "ready_models", return_value=models) as read:
             # Act
             self.invoke("scale", replicas=2)
 
         # Assert
         self.assertEqual(read.call_count, 2)
-        self.provider.install.assert_called_once_with(self.raw, *snapshot, target=2)
+        self.provider.scale_serving.assert_called_once_with(self.raw, models, 2)
         self.provider.patch.assert_not_called()
 
     def test_reconcile_waits_for_ready_release_and_then_applies_pending_target(self):

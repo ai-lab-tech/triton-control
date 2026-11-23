@@ -11,8 +11,9 @@ from app.core.canonical import digest
 from app.exceptions import BadGatewayError, ConflictError
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.model_state import DevelopmentStartupRelease
-from app.schemas.serving_metadata import ServingRelease
+from app.schemas.serving_metadata import ServingRelease, StartupModel
 from app.services.deployment.pod_provider import RELEASE_KEY, TIMEOUT, PodProvider, controlled_by
+from app.services.deployment.replica_startup import serving_template
 from app.services.materialization.budgets import configured_limits
 from app.services.materialization.kubernetes import serving_manifests
 from app.services.materialization.normalization import MaterializationError
@@ -129,22 +130,9 @@ class ModelStateProvider(PodProvider):
         except (KeyError, TypeError, ValueError) as error:
             raise ConflictError("Prepared startup release or materialization binding is invalid") from error
 
-        self.install(deployment, release_digest, config, pod)
-
-    def install(
-        self, deployment: dict[str, Any], release_digest: str, config: dict[str, Any],
-        pod: dict[str, Any], *, target: int | None = None,
-    ) -> None:
-        meta = deployment["metadata"]
-        namespace = meta["namespace"]
         old = deployment["spec"]["template"]
         old_spec = old["spec"]
-        rollback_name = "tc-interactive-" + digest(old).removeprefix("sha256:")[:24] + "-" + meta["uid"][:8]
-        self.ensure_config(deployment, {
-            "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
-            "metadata": {"name": rollback_name, "namespace": namespace},
-            "data": {"template.json": json.dumps(old, separators=(",", ":"))},
-        })
+        rollback_name = self.save_interactive_template(deployment)
         self.ensure_config(deployment, config)
         template = {"metadata": deepcopy(old["metadata"]), "spec": pod["spec"]}
         template["metadata"]["annotations"] = {
@@ -162,24 +150,27 @@ class ModelStateProvider(PodProvider):
             {"name": name, "containerPort": port}
             for name, port in (("http", 8000), ("grpc", 8001), ("metrics", 8002))
         ]
-        if target is not None:
-            init = template["spec"]["initContainers"][0]
-            init["args"].append("--selected-objects")
-            runtime = template["spec"]["containers"][0]
-            original = next(c for c in old_spec["containers"] if c["name"] == "triton")
-            runtime["env"] = [env for env in original.get("env", []) if env["name"] in {
-                "LOGNAME", "USER", "HOME", "XDG_CACHE_HOME", "TORCHINDUCTOR_CACHE_DIR",
-            }]
-            if "workingDir" in original:
-                runtime["workingDir"] = original["workingDir"]
-            for mount in original.get("volumeMounts", []):
-                if mount["mountPath"] == "/dev/shm":
-                    volume = next(v for v in old_spec["volumes"] if v["name"] == mount["name"])
-                    template["spec"]["volumes"].append(volume)
-                    runtime["volumeMounts"].append(mount)
-            self.patch(deployment, "/spec/template", template, rolling_target=target)
-        else:
-            self.patch(deployment, "/spec/template", template, replace_single_pod=True)
+        self.patch(deployment, "/spec/template", template, replace_single_pod=True)
+
+    def save_interactive_template(self, deployment: dict[str, Any]) -> str:
+        meta = deployment["metadata"]
+        namespace = meta["namespace"]
+        old = deployment["spec"]["template"]
+        rollback_name = "tc-interactive-" + digest(old).removeprefix("sha256:")[:24] + "-" + str(meta["uid"])[:8]
+        self.ensure_config(deployment, {
+            "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
+            "metadata": {"name": rollback_name, "namespace": namespace},
+            "data": {"template.json": json.dumps(old, separators=(",", ":"))},
+        })
+        return rollback_name
+
+    def scale_serving(self, deployment: dict[str, Any], models: tuple[StartupModel, ...], replicas: int) -> None:
+        template = serving_template(deployment["spec"]["template"], models)
+        annotations = dict(template["metadata"].get("annotations") or {})
+        annotations[RELEASE_KEY] = digest(template)
+        annotations[ROLLBACK_KEY] = self.save_interactive_template(deployment)
+        template["metadata"]["annotations"] = annotations
+        self.patch(deployment, "/spec/template", template, rolling_target=replicas)
 
     def restore(self, deployment: dict[str, Any], backup: str) -> None:
         meta = deployment["metadata"]
