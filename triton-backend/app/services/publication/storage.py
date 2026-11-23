@@ -1,11 +1,24 @@
 """Publication providers. All metadata mutations use compare-and-swap."""
 
 import hashlib
-import subprocess
+import os
+import shutil
+import subprocess  # nosec B404 - Git CLI is required for branch publication.
 from pathlib import Path
 from typing import Any, Protocol
 
 from botocore.exceptions import ClientError
+
+
+def run_git(*args: str, cwd: Path | None = None) -> bytes:
+    executable = shutil.which("git", path=os.defpath)
+    if executable is None:
+        raise FileNotFoundError("Git is required for release publication")
+    # Only built-in publication transports are allowed. All arguments stay separate.
+    env = {**os.environ, "GIT_ALLOW_PROTOCOL": "file:https:ssh"}
+    return subprocess.run(  # nosec B603 - system executable, fixed subcommands, no shell.
+        [executable, *args], cwd=cwd, env=env, check=True, stdout=subprocess.PIPE,
+    ).stdout
 
 
 def checksum(data: bytes) -> str:
@@ -33,9 +46,9 @@ class GitStore:
             raise ValueError(f"Publication conflict at {key}")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-        subprocess.run(["git", "add", "--", key], cwd=self.root, check=True)
-        subprocess.run(["git", "commit", "-m", f"Publish {key}"], cwd=self.root, check=True)
-        blob = subprocess.check_output(["git", "show", f"HEAD:{key}"], cwd=self.root)
+        run_git("add", "--", key, cwd=self.root)
+        run_git("commit", "-m", f"Publish {key}", cwd=self.root)
+        blob = run_git("show", f"HEAD:{key}", cwd=self.root)
         if blob != data:
             raise ValueError("Committed bytes differ from publication input")
 

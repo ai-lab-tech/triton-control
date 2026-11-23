@@ -1,7 +1,6 @@
 """Publish from an operator-owned bundle to a versioned bucket or a Git branch."""
 
 import argparse
-import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -14,7 +13,7 @@ from app.services.materialization.budgets import configured_limits
 from app.services.materialization.cli import read_document
 from app.services.publication.models import require_versioning
 from app.services.publication.service import publish
-from app.services.publication.storage import GitStore, S3Store
+from app.services.publication.storage import GitStore, S3Store, run_git
 
 
 def main() -> int:
@@ -44,15 +43,14 @@ def main() -> int:
         result = publish(args.bundle, store, client, args.model_bucket, prefix, limits, args.previous_target)
     else:
         branch = args.branch
-        subprocess.run(["git", "check-ref-format", "--branch", branch], check=True)
+        run_git("check-ref-format", "--branch", branch)
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            subprocess.run(["git", "clone", "--single-branch", "--branch", branch, "--",
-                            args.repository, temporary], check=True)
+            run_git("clone", "--single-branch", "--branch", branch, "--", args.repository, temporary)
             result = publish(
                 args.bundle, GitStore(root), client, args.model_bucket, prefix, limits, args.previous_target
             )
-            subprocess.run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"], cwd=root, check=True)
+            run_git("push", "origin", f"HEAD:refs/heads/{branch}", cwd=root)
     print(result)
     return 0
 
