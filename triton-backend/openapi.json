@@ -9722,6 +9722,52 @@
         ],
         "title": "ControlLineage"
       },
+      "ConversionSummary": {
+        "properties": {
+          "export_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Export Id"
+          },
+          "directory": {
+            "type": "string",
+            "title": "Directory"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "export_id",
+          "directory",
+          "status"
+        ],
+        "title": "ConversionSummary"
+      },
       "CreateCodeServerRequest": {
         "properties": {
           "name": {
@@ -16338,6 +16384,13 @@
           },
           "actions": {
             "$ref": "#/components/schemas/TaskActions"
+          },
+          "conversions": {
+            "items": {
+              "$ref": "#/components/schemas/ConversionSummary"
+            },
+            "type": "array",
+            "title": "Conversions"
           },
           "candidates": {
             "items": {

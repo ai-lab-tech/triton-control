@@ -37,6 +37,13 @@ export interface QueueEntry {
   };
 }
 export interface Overview extends QueueEntry {
+  conversions?: {
+    export_id: string;
+    directory: string;
+    status: string;
+    bucket: string | null;
+    prefix: string | null;
+  }[];
   candidates: {
     installation_id: string;
     record_id: string;

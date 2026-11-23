@@ -125,6 +125,19 @@
           </details>
         }
       </section>
+      @if (item.conversions?.length) {
+        <section class="records">
+          <h3>Workspace conversions</h3>
+          @for (conversion of item.conversions; track conversion.export_id) {
+            <p>
+              <strong>{{ conversion.directory }}</strong> · {{ label(conversion.status) }}
+              @if (conversion.bucket) {
+                <br /><code>s3://{{ conversion.bucket }}/{{ conversion.prefix }}/</code>
+              }
+            </p>
+          }
+        </section>
+      }
       <details class="records">
         <summary class="app-disclosure">Build history</summary>
         <p>Build status is independent of task status, validation and deployment.</p>
@@ -190,10 +203,26 @@
         @for (event of events(); track event.id) {
           <details>
             <summary class="app-disclosure">
-              {{ event.action }} · {{ event.created_at | date: "medium" }} · revision
+              {{
+                event.action === "conversion_export_verified"
+                  ? "Saved conversion verified"
+                  : event.action
+              }}
+              · {{ event.created_at | date: "medium" }} · revision
               {{ event.revision }}
             </summary>
-            <pre>{{ event.changes | json }}</pre>
+            @if (event.action === "conversion_export_verified") {
+              <p>
+                <strong>{{ event.changes["directory"] }}</strong>
+              </p>
+              <code>s3://{{ event.changes["bucket"] }}/{{ event.changes["prefix"] }}/</code>
+              <details>
+                <summary class="app-disclosure">Verified object versions</summary>
+                <pre>{{ event.changes["objects"] | json }}</pre>
+              </details>
+            } @else {
+              <pre>{{ event.changes | json }}</pre>
+            }
           </details>
         }
         @if (moreEvents()) {

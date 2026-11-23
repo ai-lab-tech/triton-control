@@ -16,6 +16,20 @@ def configmap_name(name: str) -> str:
 def configure(manifests: list[dict[str, Any]], document: dict[str, Any], namespace: str,
               name: str, secret_name: str) -> None:
     statefulset = next(item for item in manifests if item["kind"] == "StatefulSet")
+    claim = next(template for template in statefulset["spec"]["volumeClaimTemplates"]
+                 if template["metadata"]["name"] == "workspace")
+    # Installation identities are not constrained to Kubernetes label values.
+    # Missing identity components keep legacy claims ineligible for reclamation.
+    annotations = claim["metadata"].setdefault("annotations", {})
+    annotations["triton-control.io/workspace-name"] = name
+    if document.get("task_id"):
+        annotations["triton-control.io/task-id"] = str(document["task_id"])
+    installation = (os.getenv("TRITON_INSTALLATION_ID") or os.getenv("TASK_WORKSPACE_INSTALLATION_ID") or "").strip()
+    if installation:
+        annotations["triton-control.io/installation-id"] = installation
+    statefulset["spec"]["persistentVolumeClaimRetentionPolicy"] = {
+        "whenDeleted": "Retain", "whenScaled": "Retain",
+    }
     spec = statefulset["spec"]["template"]["spec"]
     container = spec["containers"][0]
     container["volumeMounts"].append({"name": "task-inputs", "mountPath": "/inputs", "readOnly": True})

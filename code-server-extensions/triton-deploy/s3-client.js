@@ -219,9 +219,9 @@ async function stat(profile, key, signal) {
 async function head(profile, key, signal) {
   return (await stat(profile, key, signal))?.etag || null;
 }
-async function download(profile, key, filename, { signal, etag, onBytes } = {}) {
+async function download(profile, key, filename, { signal, etag, onBytes, versionId, expected } = {}) {
   signal?.throwIfAborted();
-  const options = signedRequest(profile, "GET", key, {}, etag ? { "if-match": etag } : {});
+  const options = signedRequest(profile, "GET", key, versionId ? { versionId } : {}, etag ? { "if-match": etag } : {});
   const response = await new Promise((resolve, reject) => {
     const req = (options.protocol === "https:" ? https : http).request({ ...options, signal }, resolve);
     req.setTimeout(60000, () => req.destroy(new Error("S3 download timed out.")));
@@ -232,16 +232,21 @@ async function download(profile, key, filename, { signal, etag, onBytes } = {}) 
   let complete = false;
   try {
     check({ status: response.statusCode });
+    if (versionId && response.headers["x-amz-version-id"] !== versionId) throw new Error("S3 object version differs.");
+    const digest = expected && crypto.createHash("sha256");
     file = await fs.promises.open(filename, "wx", 0o600);
     let bytes = 0;
     const limit = new Transform({ transform(chunk, encoding, callback) {
       bytes += chunk.length;
+      digest?.update(chunk);
       if (bytes > 5 * 1024 ** 3) return callback(new Error("Files over 5 GiB are not supported."));
       onBytes?.(chunk.length);
       callback(null, chunk);
     } });
     // The explicit descriptor lets us remove only the file we created on failure.
     await pipeline(response, limit, file.createWriteStream(), { signal });
+    if (expected && (bytes !== expected.size || digest.digest("hex") !== expected.sha256))
+      throw new Error("Saved model checksum differs.");
     complete = true;
   } finally {
     response.destroy();
@@ -251,7 +256,7 @@ async function download(profile, key, filename, { signal, etag, onBytes } = {}) 
     }
   }
 }
-async function upload(profile, key, file, { signal, onBytes, etag, metadata = {} } = {}) {
+async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}, versionReceipt = false } = {}) {
   signal?.throwIfAborted();
   const stat = await fs.promises.stat(file);
   if (stat.size > 5 * 1024 ** 3)
@@ -267,15 +272,21 @@ async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}
     "content-length": String(stat.size),
     ...(etag ? { "if-match": etag } : { "if-none-match": "*" }),
   };
+  const sha256 = digest.digest("hex");
   const response = check(
     await request(profile, "PUT", key, {
       headers,
-      payloadHash: digest.digest("hex"),
+      payloadHash: sha256,
       stream: fs.createReadStream(file, { signal }),
       signal,
       onBytes,
     }),
   );
+  if (versionReceipt) {
+    const version = response.headers["x-amz-version-id"];
+    if (!version || version === "null") throw new Error("Select an S3 bucket with versioning enabled.");
+    return { key, version_id: version, size: stat.size, sha256 };
+  }
   return response.headers.etag;
 }
 async function remove(profile, key, signal, etag) {
@@ -287,6 +298,10 @@ function validateBucketName(name) {
       name.includes("..") || /^\d+\.\d+\.\d+\.\d+$/.test(name) ||
       /^(xn--|sthree-|amzn-s3-demo-)/.test(name) || /(-s3alias|--ol-s3|\.mrap|--x-s3|--table-s3)$/.test(name))
     return "Use a valid bucket name: 3–63 lowercase letters, numbers, dots or hyphens; start and end with a letter or number.";
+}
+async function requireVersioning(profile) {
+  const result = check(await request(profile, "GET", "", { query: { versioning: "" } }));
+  if (tag(result.body, "Status") !== "Enabled") throw new Error("Select an S3 bucket with versioning enabled.");
 }
 async function listBuckets(profile, signal) {
   const buckets = new Map(), seen = new Set();
@@ -327,4 +342,4 @@ async function createBucket(profile, bucket, signal) {
     headers: { "content-length": String(Buffer.byteLength(body)), ...(body ? { "content-type": "application/xml" } : {}) },
     payloadHash: hash(body), stream: Readable.from([body]) }));
 }
-module.exports = { listBuckets, createBucket, bucketExists, validateBucketName, signedRequest, parseList, list, stat, head, download, upload, remove };
+module.exports = { requireVersioning, listBuckets, createBucket, bucketExists, validateBucketName, signedRequest, parseList, list, stat, head, download, upload, remove };

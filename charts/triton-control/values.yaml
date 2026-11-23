@@ -176,6 +176,10 @@ mlflow:
   gatewayImage: nginx:1.28-alpine
 
 development:
+  workspaceRetention:
+    enabled: false
+    days: 30
+    schedule: "17 2 * * *"
   mlflow:
     # Workspace defaults; users can override versions when creating a workspace.
     version: "3.14.0"

@@ -524,6 +524,7 @@ class CodeServerTests(unittest.TestCase):
         self.assertIn("extension/profile-api.js", names)
         self.assertIn("extension/endpoint-config.js", names)
         self.assertIn("extension/s3-browser.js", names)
+        self.assertIn("extension/conversion-exports.js", names)
         self.assertIn("extension/s3-client.js", names)
         self.assertIn("extension/s3-files.js", names)
         self.assertIn("extension/s3-transfers.js", names)

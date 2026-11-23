@@ -157,6 +157,19 @@ jobs:
         run: |
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
           python -m unittest tests.test_teams_postgres tests.test_model_state.ModelStatePostgresTests tests.test_preparation_postgres tests.test_candidate_validation_postgres tests.test_engineering_queue_postgres tests.test_handoffs_postgres tests.test_control_lineage_postgres tests.test_handoff_repositories_postgres tests.test_handoff_capture_postgres tests.test_operations_postgres tests.test_deployment_operations_postgres tests.test_deployment_operations_kubernetes tests.test_task_workspaces_postgres tests.test_task_workspaces_kubernetes tests.test_builds_postgres tests.test_build_ui_postgres tests.test_builds_kubernetes -v
+      - name: Verify conversion export, workspace replacement and retired claim reclamation
+        working-directory: triton-backend
+        env:
+          CONVERSION_EXPORT_TEST_S3: http://127.0.0.1:19000
+        run: |
+          docker run -d --name conversion-s3 -p 127.0.0.1:19000:9000 \
+            -e RUSTFS_ACCESS_KEY=conversion-test -e RUSTFS_SECRET_KEY=conversion-test-secret \
+            docker.io/rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a /data
+          trap 'docker rm -f conversion-s3' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 --max-time 3 \
+            "$CONVERSION_EXPORT_TEST_S3/health" || { docker logs conversion-s3; exit 1; }
+          export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
+          python -m unittest tests.test_conversion_exports_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
         working-directory: triton-backend
         env:

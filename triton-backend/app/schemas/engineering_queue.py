@@ -35,5 +35,14 @@ class CandidateSummary(BaseModel):
     candidate_digest: str
     created_at: datetime
 
+class ConversionSummary(BaseModel):
+    export_id: UUID
+    directory: str
+    status: str
+    bucket: str | None = None
+    prefix: str | None = None
+
+
 class TaskOverview(QueueEntry):
+    conversions: list[ConversionSummary] = Field(default_factory=list)
     candidates: list[CandidateSummary] = Field(default_factory=list)
