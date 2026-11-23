@@ -49,7 +49,7 @@ def ready_models(endpoint: str) -> tuple[StartupModel, ...]:
 
 
 def launch_arguments(runtime: dict[str, Any]) -> tuple[str, list[str]]:
-    args = runtime.get("args", [])
+    args = runtime.get("args") or []
     shell = runtime.get("command") == ["/bin/bash", "-c"]
     prefix = ""
     if shell:

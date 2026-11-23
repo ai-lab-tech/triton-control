@@ -253,13 +253,14 @@ def resolve_inputs(session: Session, claims: dict[str, Any], task_id: UUID, requ
     task = repository.get(session, task_id)
     _engineer_or_admin(admin, eligible, task.assignee_user_id, actor)
     handoff = next(iter(handoff_repository.for_tasks(session, [task_id])), None)
-    if set(request.resolved_inputs) & set(_handoff_missing(handoff)):
+    optional_inputs = set(_handoff_missing(handoff))
+    if set(request.resolved_inputs) & optional_inputs:
         raise ConflictError("Handoff evaluation inputs are still absent; submit a new revision with the missing inputs")
     if not set(request.resolved_inputs) <= set(task.missing_inputs):
         raise ConflictError("Resolved inputs must name currently missing inputs")
     before = _values(session, task_id)
     task.missing_inputs = sorted(set(task.missing_inputs) - set(request.resolved_inputs))
-    if not task.missing_inputs and task.state == "awaiting_information":
+    if task.state == "awaiting_information" and not set(task.missing_inputs).difference(optional_inputs):
         task.state = "claimed" if task.assignee_user_id is not None else "queued"
     # This records preparation completeness only, never validation/release approval.
     return _finish(session, task_id, actor, "inputs_resolved", before, request.reason)

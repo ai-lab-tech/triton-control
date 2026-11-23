@@ -159,14 +159,20 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
             self.assertNotIn("missing_input:evaluation_dataset", task.blocked_reasons)
 
-    def test_other_task_checklist_items_can_still_be_resolved(self):
+    def test_resolving_last_required_input_returns_source_only_task_to_queue(self):
+        # Arrange
         receipt = self.submit()
         task = preparation.request_information(self.session, self.admin, receipt.task.id, InformationRequest(
             expected_revision=1, missing_inputs=["license_review"], reason="review license",
         ))
+
+        # Act
         task = preparation.resolve_inputs(self.session, self.admin, task.id, ResolveInputsRequest(
             expected_revision=task.revision, resolved_inputs=["license_review"], reason="reviewed",
         ))
+
+        # Assert
+        self.assertEqual(task.state, "queued")
         self.assertNotIn("license_review", task.missing_inputs)
         self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
 

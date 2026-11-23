@@ -126,6 +126,35 @@ describe("HandoffPageComponent", () => {
     await submitted;
   });
 
+  it("assigns a fresh revision to a new serving handoff for the same model version", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", false, "", "16");
+    http
+      .expectOne((req) => req.url.endsWith("/api/instances/16"))
+      .flush({
+        id: 16,
+        name: "iris",
+        repository_models: [{ name: "iris", version: "1", state: "READY" }],
+        s3: { enabled: true, bucket: "models", endpoint: "https://s3.test", prefix: "iris" },
+      });
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([
+        { id: 1, name: "Models", bucket: "models", endpoint: "https://s3.test", prefix: "" },
+      ]);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    const firstRevision = page.revision;
+
+    // Act
+    page.newSubmission();
+
+    // Assert
+    expect(page.selectedVersion).toBe("iris:1");
+    expect(page.revision).toMatch(/^revision-[a-f0-9]{32}$/);
+    expect(page.revision).not.toBe(firstRevision);
+  });
+
   it("reveals the generic help for each evaluation field without submitting the form", async () => {
     // Arrange
     const fixture = await setup();

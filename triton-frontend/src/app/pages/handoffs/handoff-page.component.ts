@@ -250,7 +250,7 @@ export class HandoffPageComponent {
   selectServingVersion(value: string): void {
     this.selectedVersion = value;
     this.title = value ? `Prepare ${value} from ${this.servingInstance?.name}`.slice(0, 200) : "";
-    this.revision = value ? `${this.servingInstance?.id}-${value}` : "";
+    this.revision = value ? `revision-${this.submissionId}` : "";
   }
 
   completingHandoff(): boolean {
@@ -355,6 +355,7 @@ export class HandoffPageComponent {
     ++this.captureGeneration;
     clearTimeout(this.captureTimer);
     this.submissionId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    if (this.servingInstance) this.revision = `revision-${this.submissionId}`;
     this.capture.set(null);
     this.error.set("");
   }

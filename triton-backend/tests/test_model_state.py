@@ -19,6 +19,7 @@ from app.exceptions import ConflictError, ForbiddenError
 from app.repositories.instances import lock_model_state
 from app.schemas.model_state import DevelopmentStartupRelease
 from app.schemas.pods import DeploymentState, PodCondition, PodState
+from app.schemas.serving_metadata import StartupModel
 from app.services.deployment import model_state as service
 from app.services.deployment.model_state_provider import ROLLBACK_KEY, ModelStateProvider
 from app.services.deployment.pod_provider import RELEASE_KEY
@@ -168,33 +169,56 @@ class ModelStateTests(unittest.TestCase):
         # Assert
         self.provider.patch.assert_called_once_with(self.raw, "/spec/replicas", 3)
 
+    def test_null_container_args_leave_interactive_control_disabled(self):
+        # Arrange
+        runtime = self.raw["spec"]["template"]["spec"]["containers"][0]
+        runtime["args"] = None
+
+        # Act
+        state = self.invoke("read")
+
+        # Assert
+        self.assertFalse(state.interactive_allowed)
+        self.assertFalse(state.can_scale_above_one)
+
     def test_scale_captures_the_active_pod_before_starting_a_rolling_update(self):
         # Arrange
         with Session(self.engine) as session:
             row = session.get(TritonInstanceEntity, 1)
             row.s3_enabled, row.s3_bucket, row.deployment_secret_name = True, "models", "storage"
             session.commit()
-        models = ("iris",)
-        with patch.object(service.replica_startup, "ready_models", return_value=models) as read:
+        selection = (StartupModel(name="iris", versions=("1",)),)
+        with patch.object(service.replica_startup, "ready_models", return_value=selection) as read:
             # Act
             self.invoke("scale", replicas=2)
 
         # Assert
         self.assertEqual(read.call_count, 2)
-        self.provider.scale_serving.assert_called_once_with(self.raw, models, 2)
+        self.provider.scale_serving.assert_called_once_with(self.raw, selection, 2)
         self.provider.patch.assert_not_called()
 
-    def test_reconcile_waits_for_ready_release_and_then_applies_pending_target(self):
+    def test_reconcile_waits_for_unready_release(self):
         # Arrange
         self.set_declared_rollout()
         self.raw["metadata"]["annotations"] = {service.SCALE_TARGET: "2"}
         self.pods[0].ready = False
         with Session(self.engine) as session:
             row = session.get(TritonInstanceEntity, 1)
+
             # Act
             service.reconcile_scale(session, row)
-            self.provider.patch.assert_not_called()
-            self.pods[0].ready = True
+
+        # Assert
+        self.provider.patch.assert_not_called()
+
+    def test_reconcile_applies_pending_target_when_release_is_ready(self):
+        # Arrange
+        self.set_declared_rollout()
+        self.raw["metadata"]["annotations"] = {service.SCALE_TARGET: "2"}
+        with Session(self.engine) as session:
+            row = session.get(TritonInstanceEntity, 1)
+
+            # Act
             service.reconcile_scale(session, row)
 
         # Assert
