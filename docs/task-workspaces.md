@@ -163,12 +163,13 @@ visible and do not prevent claiming a task. Snapshot tasks can open a workspace 
 retaining their recorded gaps. Build attempts, preparation attempts and retained
 candidates are displayed separately from task state and imply no production approval.
 
-On an instance with a configured S3 model repository, **Prepare for production**
-lets you select a READY model version and create a preparation task from its snapshot.
-The form shows the recorded bucket and prefix. Deployments created with a task
-workspace credential link back to that task through **Open preparation task**.
-Existing instances without recorded task provenance follow the repository and model
-eligibility checks. These actions are available on development installations.
+On a development serving instance, **Prepare for production** opens the engineering
+queue's **Submit model** form. It selects a matching S3 profile by endpoint, bucket
+and repository prefix, and preselects the version when only one is ready. Review
+the version and evaluation details before submitting. The handoff captures the
+selected version and its shared model configuration under the installation's S3
+versioning policy. **Open engineering task** opens the original task for a
+deployment created from its workspace.
 
 ### Save and restore converted models
 

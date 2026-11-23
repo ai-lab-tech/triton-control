@@ -184,7 +184,11 @@ describe("InstanceDetailPageComponent", () => {
     // Assert
     const page = fixture.nativeElement as HTMLElement;
     expect(page.querySelector(".summary-value")?.textContent).toContain("node-7");
-    expect(page.textContent).toContain("Prepare for production");
+    const shortcut = Array.from(page.querySelectorAll("a")).find((link) =>
+      link.textContent.includes("Prepare for production"),
+    );
+    expect(shortcut?.getAttribute("href")).toBe("/preparation/handoffs/new?instance=7");
+    expect(page.querySelector("app-experiment-preparation")).toBeNull();
     expect(page.querySelector('[role="tablist"]')?.textContent).toContain("Overview");
   });
 
@@ -386,7 +390,12 @@ describe("InstanceDetailPageComponent", () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => EMPTY),
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => "abc" } } } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { paramMap: { get: () => "abc" }, queryParamMap: { get: () => null } },
+          },
+        },
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: DeploymentsService, useValue: deploymentsApiMock },
         { provide: PerfAnalyzersService, useValue: perfAnalyzersApiMock },
@@ -902,7 +911,12 @@ describe("InstanceDetailPageComponent", () => {
       providers: [
         provideMockStore(),
         provideMockActions(() => EMPTY),
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => null } } } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { paramMap: { get: () => null }, queryParamMap: { get: () => null } },
+          },
+        },
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: DeploymentsService, useValue: deploymentsApiMock },
         { provide: UsersService, useValue: usersApiMock },

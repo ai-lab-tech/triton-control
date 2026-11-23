@@ -25,7 +25,8 @@ def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3
         raise ForbiddenError("Source profile is unavailable")
     session.refresh(profile)
     path = source.path
-    if (
+    profile_root = isinstance(source, S3RepositoryInput) and source.model is not None and path == "."
+    if not profile_root and (
         path.startswith("/")
         or "\\" in path
         or ":" in path
@@ -34,7 +35,7 @@ def authorize(session: Session, source: S3Input | S3RepositoryInput) -> tuple[S3
     ):
         raise BadRequestError("Source path must be relative to the configured profile prefix")
     prefix = (profile.prefix or "").strip("/")
-    key = f"{prefix}/{path}" if prefix else path
+    key = prefix if profile_root else "/".join(part for part in (prefix, path) if part)
     if len(key.encode("utf-8")) > 1024:
         raise BadRequestError("Source object key exceeds the S3 length limit")
     return (

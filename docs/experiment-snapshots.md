@@ -48,11 +48,9 @@ and task authorization.
 
 ## Request capture
 
-In the UI, open **Serving → Instances**, select the development instance, and
-choose **Prepare for production**, select a READY model version, review the S3
-location, and choose **Create preparation task**. A single ready version is
-preselected. After capture, **Open preparation task and snapshot** opens the result.
-Task workspace deployments provide a direct link to their originating task.
+The serving page opens the engineering queue's prefilled **Submit model** form.
+The following API is available to clients that explicitly request an experiment
+snapshot. Existing snapshot operation links can still show their status.
 
 `POST /api/instances/{instance_id}/preparation-requests` requires an interactive,
 currently active member/admin, instance access, and `Idempotency-Key` (1–128

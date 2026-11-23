@@ -54,7 +54,7 @@ installation capabilities, and Kubernetes availability.
 - **Dashboard** opens the fleet overview.
 - **Serving → Instances** lists Triton endpoints. Select **Connect existing instance** to register a running server, or **Serving → Add deployment** to deploy one.
 - **Development → Engineering queue → Submit model** opens the handoff form. Select **Submit to engineering** to send it.
-- **Serving → Instances → select an instance → Prepare for production** opens snapshot capture. Choose a served model version and select **Create preparation task**. Task workspace deployments offer **Open preparation task** instead.
+- **Prepare for production** on a serving instance opens **Engineering Queue → Submit model** with its S3 repository prefilled. Review the served version and evaluation details, then submit. A task workspace deployment links directly to its engineering task.
 - Under **Development**, select **Workspaces**, **Argo Workflows**, or **MLflow** for the corresponding development tool.
 - Administrators can open **User Management**, **Settings**, and **Error Logs** from the account menu at the bottom of the sidebar. **S3 Profiles** appears there when credential administration is enabled.
 

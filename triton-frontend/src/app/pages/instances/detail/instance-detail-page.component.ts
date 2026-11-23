@@ -155,6 +155,25 @@ export class InstanceDetailPageComponent implements OnInit {
   private openLogsOnce = false;
 
   readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id"));
+  readonly legacyCapture = this.route.snapshot.queryParamMap.get("snapshotCapture");
+  readonly canPrepare = computed(
+    () =>
+      !this.loadError() &&
+      this.auth.canWriteInstances() &&
+      this.installation.allows("development_jobs"),
+  );
+  canPrepareInstance(instance: Instance): boolean {
+    return !!(
+      instance.s3.enabled &&
+      instance.s3.bucket &&
+      instance.s3.endpoint &&
+      instance.s3.secretConfigured &&
+      instance.repositoryModels.some(
+        (model) => model.state.toUpperCase() === "READY" && model.version,
+      )
+    );
+  }
+
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),

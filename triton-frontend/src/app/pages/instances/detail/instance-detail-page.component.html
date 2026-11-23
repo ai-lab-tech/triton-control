@@ -26,15 +26,20 @@
       <div class="detail-summary">
         <div class="detail-summary-head">
           <h1 class="page-title">{{ instance.name }}</h1>
-          @if (instance.preparationTaskId && preparation.canAccess(!!loadError())) {
+          @if (instance.preparationTaskId && canPrepare()) {
             <a mat-stroked-button [routerLink]="['/preparation/tasks', instance.preparationTaskId]"
-              >Open preparation task</a
+              >Open engineering task</a
             >
-          } @else if (preparation.allowed(instance, !!loadError()) && !preparation.expanded()) {
-            <button mat-stroked-button color="primary" type="button" (click)="preparation.begin()">
+          } @else if (canPrepare() && canPrepareInstance(instance)) {
+            <a
+              mat-stroked-button
+              color="primary"
+              routerLink="/preparation/handoffs/new"
+              [queryParams]="{ instance: instance.id }"
+            >
               <mat-icon>assignment</mat-icon>
               Prepare for production
-            </button>
+            </a>
           }
         </div>
         <div class="summary-row">
@@ -98,12 +103,9 @@
         <p class="page-subtitle">{{ instance.version }} · {{ instance.region }}</p>
       </div>
     </div>
-    <app-experiment-preparation
-      #preparation
-      [instance]="instance"
-      [unavailable]="!!loadError()"
-      [hidden]="!preparation.expanded()"
-    />
+    @if (legacyCapture) {
+      <app-experiment-preparation [instance]="instance" [unavailable]="!!loadError()" />
+    }
     @if (deploymentDeleteError()) {
       <div class="panel-hint health-error">{{ deploymentDeleteError() }}</div>
     }

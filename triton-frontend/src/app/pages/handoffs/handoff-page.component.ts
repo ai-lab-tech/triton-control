@@ -10,6 +10,9 @@ import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { combineLatest, distinctUntilChanged, firstValueFrom, forkJoin, map, of } from "rxjs";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { InstancesService } from "../../api/generated";
+import { dtoToInstance } from "../../state/instances.utils";
+import type { Instance } from "../instances/instances.data";
 import { AuthStore } from "../../shared/auth/auth.store";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
 import {
@@ -45,6 +48,7 @@ import { TaskWorkspaceOptionsComponent } from "./task-workspace-options.componen
 })
 export class HandoffPageComponent {
   private readonly api = inject(HandoffsApiService);
+  private readonly instances = inject(InstancesService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly document = inject(DOCUMENT);
@@ -60,6 +64,11 @@ export class HandoffPageComponent {
   readonly draftLoadFailed = signal(false);
   readonly original = signal<HandoffReceipt | null>(null);
   originalId = "";
+  instanceId = "";
+  servingInstance: Instance | null = null;
+  readyVersions: string[] = [];
+  selectedVersion = "";
+
   private draftGeneration = 0;
   readonly capture = signal<CaptureOperation | null>(null);
   readonly evaluationHelp = {
@@ -105,15 +114,22 @@ export class HandoffPageComponent {
     });
     const captureId = this.route.snapshot.queryParamMap.get("capture");
     if (captureId && this.canSubmit()) void this.monitorCapture(captureId);
-    const previousId = this.route.queryParamMap.pipe(
-      map((params) => params.get("previous") ?? ""),
-      distinctUntilChanged(),
+    const draftSource = this.route.queryParamMap.pipe(
+      map((params) => ({
+        previous: params.get("previous") ?? "",
+        instance: params.get("instance") ?? "",
+      })),
+      distinctUntilChanged((a, b) => a.previous === b.previous && a.instance === b.instance),
     );
-    combineLatest([this.route.paramMap, previousId])
+    combineLatest([this.route.paramMap, draftSource])
       .pipe(takeUntilDestroyed())
-      .subscribe(([params, previous]) => {
-        if (previous !== this.originalId) {
+      .subscribe(([params, { previous, instance }]) => {
+        if (previous !== this.originalId || instance !== this.instanceId) {
           this.originalId = previous;
+          this.instanceId = instance;
+          this.servingInstance = null;
+          this.readyVersions = [];
+          this.selectedVersion = "";
           this.original.set(null);
           this.title = this.sourcePath = this.datasetPath = this.baselinePath = "";
           this.expectedBehavior = this.criteria = this.previousHandoffId = "";
@@ -138,9 +154,15 @@ export class HandoffPageComponent {
     this.draftLoadFailed.set(false);
     this.error.set("");
     try {
-      const { profiles, policy, original } = await firstValueFrom(
+      const { profiles, policy, original, serving } = await firstValueFrom(
         forkJoin({
           profiles: this.api.profiles(),
+          serving:
+            this.instanceId && !this.originalId
+              ? this.instances
+                  .getInstanceApiInstancesInstanceIdGet(this.instanceId)
+                  .pipe(map(dtoToInstance))
+              : of(null),
           policy: this.api.submissionPolicy(),
           original: this.originalId ? this.api.get(this.originalId) : of(null),
         }),
@@ -148,6 +170,15 @@ export class HandoffPageComponent {
       if (this.destroyed || generation !== this.draftGeneration) return;
       this.requireS3Versioning.set(policy.require_s3_versioning);
       this.profiles.set(profiles);
+      if (serving) {
+        if (serving.preparationTaskId) {
+          await this.router.navigate(["/preparation/tasks", serving.preparationTaskId], {
+            replaceUrl: true,
+          });
+          return;
+        }
+        this.prefillServingDraft(serving, profiles);
+      }
       if (original) {
         this.original.set(original);
         const request = original.request;
@@ -177,6 +208,49 @@ export class HandoffPageComponent {
     } finally {
       if (!this.destroyed && generation === this.draftGeneration) this.draftLoading.set(false);
     }
+  }
+
+  private prefillServingDraft(serving: Instance, profiles: SourceProfile[]): void {
+    this.servingInstance = serving;
+    this.readyVersions = [
+      ...new Set(
+        serving.repositoryModels
+          .filter((row) => row.state.toUpperCase() === "READY" && row.version)
+          .map((row) => row.name + ":" + row.version),
+      ),
+    ];
+    const repo = serving.s3;
+    const prefix = (repo.prefix || "").replace(/^\/+|\/+$/g, "");
+    const matches = profiles
+      .map((profile) => ({ profile, base: (profile.prefix || "").replace(/^\/+|\/+$/g, "") }))
+      .filter(
+        ({ profile, base }) =>
+          repo.enabled &&
+          profile.bucket === repo.bucket &&
+          profile.endpoint?.replace(/\/+$/, "") === repo.endpoint.replace(/\/+$/, "") &&
+          (!base || base === prefix || prefix.startsWith(base + "/")),
+      )
+      .sort((a, b) => b.base.length - a.base.length || a.profile.id - b.profile.id);
+    if (!matches.length || !this.readyVersions.length) {
+      this.draftLoadFailed.set(true);
+      this.error.set(
+        !this.readyVersions.length
+          ? "This instance has no ready model versions."
+          : "No handoff S3 profile covers the serving repository. Configure a profile for its endpoint, bucket and prefix.",
+      );
+      return;
+    }
+    const { profile, base } = matches[0];
+    this.profileId = profile.id;
+    this.sourceKind = "s3_repository";
+    this.sourcePath = prefix.slice(base.length).replace(/^\//, "") || ".";
+    this.selectServingVersion(this.readyVersions.length === 1 ? this.readyVersions[0] : "");
+  }
+
+  selectServingVersion(value: string): void {
+    this.selectedVersion = value;
+    this.title = value ? `Prepare ${value} from ${this.servingInstance?.name}`.slice(0, 200) : "";
+    this.revision = value ? `${this.servingInstance?.id}-${value}` : "";
   }
 
   completingHandoff(): boolean {
@@ -290,6 +364,7 @@ export class HandoffPageComponent {
       !this.canSubmit() ||
       (this.originalId && !this.original()) ||
       this.capture() !== null ||
+      (this.instanceId && !this.originalId && !this.readyVersions.includes(this.selectedVersion)) ||
       this.profileId === null ||
       !this.title.trim() ||
       !this.sourcePath.trim() ||
@@ -309,9 +384,15 @@ export class HandoffPageComponent {
       previous?.source.kind === this.sourceKind &&
       previous.source.profile_id === profileId &&
       previous.source.path === path;
+    const [name, version] = this.selectedVersion.split(":");
+    const model = this.servingInstance
+      ? { name, versions: [version] }
+      : sameSource && previous?.source.kind === "s3_repository"
+        ? previous.source.model
+        : undefined;
     const source: HandoffRequest["source"] =
       this.sourceKind === "s3_repository"
-        ? { kind: "s3_repository", profile_id: profileId, path }
+        ? { kind: "s3_repository", profile_id: profileId, path, ...(model ? { model } : {}) }
         : this.objectInput(
             path,
             profileId,
@@ -325,7 +406,9 @@ export class HandoffPageComponent {
           ? previous.origin
           : {
               installation_id: previous?.origin.installation_id ?? this.document.location.origin,
-              record_id: `s3-profile:${profileId}:${bytesToHex(sha256(new TextEncoder().encode(path)))}`,
+              record_id: this.servingInstance
+                ? `instance:${this.servingInstance.id}:${name}`
+                : `s3-profile:${profileId}:${bytesToHex(sha256(new TextEncoder().encode(path)))}`,
             },
       previous_handoff_id: original?.id ?? (this.previousHandoffId.trim() || null),
       revision: this.revision.trim(),

@@ -15392,6 +15392,16 @@
             "minLength": 1,
             "pattern": "^[^\\x00-\\x1f]+$",
             "title": "Path"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StartupModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

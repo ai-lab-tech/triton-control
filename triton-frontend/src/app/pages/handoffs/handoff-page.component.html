@@ -105,6 +105,28 @@
           <legend><span class="step-number" aria-hidden="true">01</span> Model source</legend>
           <p class="section-intro">Choose the model you want engineering to work with.</p>
           <div class="fields">
+            @if (servingInstance; as instance) {
+              <p>
+                Serving instance
+                <a [routerLink]="['/instances', instance.id]">{{ instance.name }}</a>
+              </p>
+              <mat-form-field appearance="outline">
+                <mat-label>Served model and version</mat-label>
+                <mat-select
+                  name="servedVersion"
+                  [ngModel]="selectedVersion"
+                  (ngModelChange)="selectServingVersion($event)"
+                  required
+                >
+                  @for (version of readyVersions; track version) {
+                    <mat-option [value]="version">{{ version }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <p>
+                Model repository <code>s3://{{ instance.s3.bucket }}/{{ instance.s3.prefix }}</code>
+              </p>
+            }
             <mat-form-field appearance="outline">
               <mat-label>Handoff title</mat-label>
               <input
@@ -116,37 +138,39 @@
                 placeholder="e.g. Iris classifier"
               />
             </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Model source type</mat-label>
-              <mat-select name="sourceKind" [(ngModel)]="sourceKind">
-                <mat-option value="s3">Single file or archive</mat-option>
-                <mat-option value="s3_repository">Triton repository folder</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>S3 profile</mat-label>
-              <mat-select name="profile" [(ngModel)]="profileId" required>
-                @for (profile of profiles(); track profile.id) {
-                  <mat-option [value]="profile.id"
-                    >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
-                  >
-                }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Model object path</mat-label>
-              <input
-                matInput
-                name="source"
-                [(ngModel)]="sourcePath"
-                required
-                maxlength="1024"
-                [placeholder]="
-                  sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
-                "
-              />
-              <mat-hint>Relative to your S3 profile’s prefix.</mat-hint>
-            </mat-form-field>
+            @if (!servingInstance) {
+              <mat-form-field appearance="outline">
+                <mat-label>Model source type</mat-label>
+                <mat-select name="sourceKind" [(ngModel)]="sourceKind">
+                  <mat-option value="s3">Single file or archive</mat-option>
+                  <mat-option value="s3_repository">Triton repository folder</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>S3 profile</mat-label>
+                <mat-select name="profile" [(ngModel)]="profileId" required>
+                  @for (profile of profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Model object path</mat-label>
+                <input
+                  matInput
+                  name="source"
+                  [(ngModel)]="sourcePath"
+                  required
+                  maxlength="1024"
+                  [placeholder]="
+                    sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
+                  "
+                />
+                <mat-hint>Relative to your S3 profile’s prefix.</mat-hint>
+              </mat-form-field>
+            }
           </div>
           <div class="source-note">
             <span class="material-icons" aria-hidden="true">verified_user</span>

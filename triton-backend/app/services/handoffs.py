@@ -58,6 +58,8 @@ def _selection(source: S3Input | S3RepositoryInput, endpoint: str | None, bucket
     result: dict[str, Any] = {"kind": source.kind, "endpoint": endpoint, "bucket": bucket, "key": key}
     if isinstance(source, S3Input):
         result.update(version_id=source.version_id, expected_digest=source.expected_digest)
+    elif source.model:
+        result["model"] = source.model.model_dump(mode="json")
     return result
 
 

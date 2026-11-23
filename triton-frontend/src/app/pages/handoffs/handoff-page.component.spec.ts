@@ -38,8 +38,11 @@ describe("HandoffPageComponent", () => {
     role = "member",
     requireS3Versioning = true,
     previous = "",
+    instance = "",
   ) {
-    query = new BehaviorSubject(convertToParamMap(previous ? { previous } : {}));
+    query = new BehaviorSubject(
+      convertToParamMap(previous ? { previous } : instance ? { instance } : {}),
+    );
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -51,7 +54,11 @@ describe("HandoffPageComponent", () => {
           useValue: {
             queryParamMap: query.asObservable(),
             paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
-            snapshot: { queryParamMap: convertToParamMap(previous ? { previous } : {}) },
+            snapshot: {
+              queryParamMap: convertToParamMap(
+                previous ? { previous } : instance ? { instance } : {},
+              ),
+            },
           },
         },
       ],
@@ -71,6 +78,53 @@ describe("HandoffPageComponent", () => {
     return fixture;
   }
   afterEach(() => http.verify());
+
+  it("prefills the serving instance and submits only its selected ready version on confirmation", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", false, "", "16");
+    http
+      .expectOne((req) => req.url.endsWith("/api/instances/16"))
+      .flush({
+        id: 16,
+        name: "iris-classifier",
+        repository_models: [{ name: "iris", version: "1", state: "READY" }],
+        s3: {
+          enabled: true,
+          bucket: "models",
+          endpoint: "https://storage.test",
+          prefix: "team/exports/iris",
+        },
+      });
+    http.expectOne("/api/s3-profiles").flush([
+      {
+        id: 1,
+        name: "Other storage",
+        bucket: "models",
+        endpoint: "https://elsewhere.test",
+        prefix: "team/exports",
+      },
+      { id: 2, name: "Team", bucket: "models", endpoint: "https://storage.test", prefix: "team" },
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http.expectNone("/api/preparation/handoff-captures");
+
+    // Act
+    const submitted = fixture.componentInstance.submit();
+    const request = http.expectOne("/api/preparation/handoff-captures");
+
+    // Assert
+    expect(request.request.body.title).toContain("iris-classifier");
+    expect(request.request.body.source).toEqual({
+      kind: "s3_repository",
+      profile_id: 2,
+      path: "exports/iris",
+      model: { name: "iris", versions: ["1"] },
+    });
+    expect(fixture.nativeElement.textContent).toContain("s3://models/team/exports/iris");
+    request.flush({ id: "capture", state: "failed", message: "fixture", result: {} });
+    await submitted;
+  });
 
   it("reveals the generic help for each evaluation field without submitting the form", async () => {
     // Arrange

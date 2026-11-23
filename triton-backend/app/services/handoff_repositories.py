@@ -11,6 +11,7 @@ from sqlmodel import Session
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError, ForbiddenError
 from app.schemas.handoffs import ResolvedRepository, S3Input, S3RepositoryInput
 from app.schemas.lineage import FileEntry
+from app.schemas.serving_metadata import StartupModel
 from app.services import handoff_sources
 from app.services.preparation_settings import effective
 from app.services.storage.s3_client import build_s3_client
@@ -31,7 +32,8 @@ def _check_deadline(deadline: float) -> None:
 
 
 def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int,
-          checkpoint: Callable[[int], None], *, require_versioning: bool) -> dict[str, ListedObject]:
+          checkpoint: Callable[[int], None], *, require_versioning: bool,
+          model: StartupModel | None = None) -> dict[str, ListedObject]:
     """List only descendants and record each current object's identity."""
     files: dict[str, ListedObject] = {}
     entries, total = 0, 0
@@ -52,6 +54,10 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int
             relative = key[len(prefix):]
             if key.endswith("/") and item["Size"] == 0:
                 continue  # S3 folder markers have no filesystem bytes to restore.
+            if model:
+                directory = relative.split("/", 1)[0]
+                if directory.isdigit() and directory not in model.versions:
+                    continue
             try:
                 FileEntry(path=relative, size=item["Size"], digest="sha256:" + "0" * 64)
             except ValidationError:
@@ -74,7 +80,12 @@ def _scan(client: Any, bucket: str, prefix: str, deadline: float, max_bytes: int
         parts = name.split("/")
         if any("/".join(parts[:index]) in files for index in range(1, len(parts))):
             raise BadRequestError("Repository contains a file/directory path collision")
-    if not any(len(name.split("/")) == 2 and name.endswith("/config.pbtxt") for name in files):
+    if model:
+        if "config.pbtxt" not in files or any(
+            not any(path.startswith(version + "/") for path in files) for version in model.versions
+        ):
+            raise BadRequestError("The selected model configuration or version is missing from the S3 repository")
+    elif not any(len(name.split("/")) == 2 and name.endswith("/config.pbtxt") for name in files):
         raise BadRequestError("Select a Triton repository folder containing model-name/config.pbtxt")
     return files
 
@@ -90,21 +101,33 @@ def resolve(session: Session, source: S3RepositoryInput, *,
         client = build_s3_client(config, client_config=Config(
             connect_timeout=3, read_timeout=10, retries={"max_attempts": 1},
         ))
-        selected = _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint,
-                         require_versioning=limits.require_s3_versioning)
+        root_prefix = key + "/" if key else ""
+        model_folder = source.model.name + "/" if source.model else ""
+        if source.model:
+            # Managed S3 sync also accepts a prefix rooted at config.pbtxt.
+            root_config = root_prefix + "config.pbtxt"
+            page = client.list_objects_v2(Bucket=bucket, Prefix=root_config, MaxKeys=1)
+            if any(item["Key"] == root_config for item in page.get("Contents", [])):
+                model_folder = ""
+        prefix = root_prefix + model_folder
+        selected = _scan(client, bucket, prefix, deadline, max_bytes, checkpoint,
+                         require_versioning=limits.require_s3_versioning, model=source.model)
         captured = []
         for relative, (version, size, etag) in sorted(selected.items()):
+            local_path = f"{source.model.name}/{relative}" if source.model else relative
+            source_file = model_folder + relative
+            path = source_file if source.path == "." else source.path + "/" + source_file
             _check_deadline(deadline)
             artifact = handoff_sources.resolve(session, S3Input(
-                profile_id=source.profile_id, path=source.path + "/" + relative, version_id=version,
+                profile_id=source.profile_id, path=path, version_id=version,
             ), deadline=deadline, allow_empty=True, expected_etag=etag, checkpoint=checkpoint)
             if (artifact.endpoint, artifact.bucket, artifact.key, artifact.file.size, artifact.version_id) != (
-                config["s3_endpoint"], bucket, key + "/" + relative, size, version,
+                config["s3_endpoint"], bucket, prefix + relative, size, version,
             ):
                 raise ConflictError("Repository source changed during capture; retry after publishing finishes")
-            captured.append(artifact.model_copy(update={"file": artifact.file.model_copy(update={"path": relative})}))
-        if _scan(client, bucket, key + "/", deadline, max_bytes, checkpoint,
-                 require_versioning=limits.require_s3_versioning) != selected:
+            captured.append(artifact.model_copy(update={"file": artifact.file.model_copy(update={"path": local_path})}))
+        if _scan(client, bucket, prefix, deadline, max_bytes, checkpoint,
+                 require_versioning=limits.require_s3_versioning, model=source.model) != selected:
             raise ConflictError("Repository changed during capture; retry after publishing finishes")
         result = ResolvedRepository(source=source, endpoint=config["s3_endpoint"] or "",
                                     bucket=bucket, key=key, files=captured)
