@@ -5,12 +5,14 @@ import hashlib
 import json
 import os
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from kubernetes import client, watch  # type: ignore[import-untyped]
+from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlmodel import Session, col, select
 
@@ -48,8 +50,29 @@ def attached(core: Any, apps: Any, namespace: str, workspace: str, claim: str, i
     return False
 
 
-def inspection(core: Any, namespace: str, claim: str, image: str, timeout: int) -> tuple[dict[str, str], str]:
-    name = "claim-inspection-" + uuid4().hex
+FENCE_MESSAGE = "Task workspace claims may only be mounted by their designated pod"
+FENCE_FINALIZER = "triton-control.io/inspection"
+
+
+class DeletionUnconfirmed(RuntimeError):
+    """Keep the pod name reserved across ambiguous Kubernetes delete outcomes."""
+
+
+def admission_enforced(core: Any, namespace: str, guard: dict[str, Any]) -> bool:
+    # Prove the required policy is enforcing in this namespace before touching data.
+    probe = {**guard, "metadata": {"generateName": "retention-probe-"}}
+    try:
+        core.create_namespaced_pod(namespace, probe, dry_run="All")
+    except ApiException as exc:
+        if exc.status in {403, 422} and FENCE_MESSAGE in (exc.body or ""):
+            return True
+        raise
+    return False
+
+
+@contextmanager
+def inspection(core: Any, namespace: str, claim: str, image: str, timeout: int) -> Iterator[tuple[dict[str, str], str]]:
+    name = claim.removeprefix("workspace-")
     container = {
         "name": "inspect",
         "image": image,
@@ -61,19 +84,20 @@ def inspection(core: Any, namespace: str, claim: str, image: str, timeout: int) 
         },
         "volumeMounts": [{"name": "data", "mountPath": "/inspection", "readOnly": True}],
     }
-    pod = core.create_namespaced_pod(
-        namespace,
-        {
-            "metadata": {"name": name},
-            "spec": {
-                "restartPolicy": "Never",
-                "automountServiceAccountToken": False,
-                "activeDeadlineSeconds": timeout,
-                "containers": [container],
-                "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": claim, "readOnly": True}}],
-            },
+    guard = {
+        "metadata": {"name": name, "finalizers": [FENCE_FINALIZER]},
+        "spec": {
+            "restartPolicy": "Never",
+            "automountServiceAccountToken": False,
+            "activeDeadlineSeconds": timeout,
+            "containers": [container],
+            "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": claim, "readOnly": True}}],
         },
-    )
+    }
+    if not admission_enforced(core, namespace, guard):
+        raise ValueError("Workspace claim admission policy is not enforced")
+    pod = core.create_namespaced_pod(namespace, guard)
+    release = True
     try:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -87,16 +111,44 @@ def inspection(core: Any, namespace: str, claim: str, image: str, timeout: int) 
                     raw = response.read(limit + 1)
                     if len(raw) >= limit:
                         raise ValueError("Volume inventory exceeds the inspection limit")
-                    return json.loads(raw), pod.metadata.uid
+                    files = json.loads(raw)
                 finally:
                     response.close()
                     response.release_conn()
+                yield files, pod.metadata.uid
+                return
             time.sleep(2)
         raise ValueError("Volume inspection timed out")
+    except DeletionUnconfirmed:
+        release = False
+        raise
     finally:
-        core.delete_namespaced_pod(
-            name, namespace, body=client.V1DeleteOptions(preconditions=client.V1Preconditions(uid=pod.metadata.uid))
-        )
+        if release:
+            core.delete_namespaced_pod(
+                name,
+                namespace,
+                body=client.V1DeleteOptions(
+                    grace_period_seconds=0, preconditions=client.V1Preconditions(uid=pod.metadata.uid)
+                ),
+            )
+            core.patch_namespaced_pod(
+                name,
+                namespace,
+                [
+                    {"op": "test", "path": "/metadata/uid", "value": pod.metadata.uid},
+                    {"op": "test", "path": "/metadata/finalizers/0", "value": FENCE_FINALIZER},
+                    {"op": "remove", "path": "/metadata/finalizers/0"},
+                ],
+            )
+
+
+def recoverable(files: dict[str, str], snapshots: list[tuple[str, dict[str, str]]]) -> bool:
+    covered: set[str] = set()
+    for directory, inventory in snapshots:
+        current = {key: digest for key, digest in files.items() if key.startswith(directory + "/")}
+        if current == inventory:
+            covered.update(current)
+    return covered == set(files)
 
 
 def evaluate(
@@ -166,104 +218,102 @@ def evaluate(
     if retired[0].created_at.replace(tzinfo=timezone.utc) + retention > datetime.now(timezone.utc):
         return "Retained: within retention period"
     limits = effective(session)
-    saved: dict[str, set[str]] = {}
+    saved: list[tuple[str, dict[str, str]]] = []
     for receipt in receipts:
         request = ConversionExport.model_validate(receipt)
         with storage(session, receipt) as store:
             if not isinstance(store, ContextStore):
                 raise ValueError("Expected versioned S3 storage")
             verify_objects(store, request, receipt["prefix"], time.monotonic() + limits.transfer_timeout_seconds)
+        directory = (Path("conversion") / request.directory).as_posix()
+        inventory = {}
         for obj in request.objects:
             relative = obj.key[len(receipt["prefix"]) + 1 :].split("/", 1)[1]
             key = (Path("conversion") / request.directory / relative).as_posix()
-            saved.setdefault(key, set()).add(obj.sha256)
+            inventory[key] = obj.sha256
+        saved.append((directory, inventory))
     before = core.list_namespaced_pod(namespace)
     if any(uses_claim(pod, name) for pod in before.items):
         return "Retained: claim reattached before inspection"
-    files, inspector = inspection(
+    with inspection(
         core,
         namespace,
         name,
         os.getenv("TASK_WORKSPACE_STAGING_IMAGE", "python:3.12-alpine"),
         limits.transfer_timeout_seconds,
-    )
-    # Only this exact generated editor descriptor can be discarded without an export.
-    descriptor = json.dumps(
-        {
-            "folders": [
-                {"path": "/workspace/conversion", "name": "Conversion (writable)"},
-                {"path": "/inputs/verified", "name": "Verified inputs (read-only)"},
-            ]
-        }
-    )
-    descriptor_key = ".triton-control/workspace.code-workspace"
-    if files.get(descriptor_key) == hashlib.sha256(descriptor.encode()).hexdigest():
-        files.pop(descriptor_key)
-    if any(digest not in saved.get(key, set()) for key, digest in files.items()):
-        return "Retained: volume contains unexported or changed files"
-    session.expire_all()
-    current = core.read_namespaced_persistent_volume_claim(name, namespace)
-    if (
-        current.metadata.uid != uid
-        or current.metadata.annotations != claim.metadata.annotations
-        or current.spec.volume_name != claim.spec.volume_name
-        or active(inspector)
-    ):
-        return "Retained: volume identity or attachment changed"
-    # Detect even short-lived writers that disappeared during the disk scan.
-    stream = watch.Watch()
-    try:
-        for pod_event in stream.stream(
-            core.list_namespaced_pod, namespace, resource_version=before.metadata.resource_version, timeout_seconds=2
-        ):
-            pod = pod_event["object"]
-            if pod.metadata.uid != inspector and uses_claim(pod, name):
-                return "Retained: another pod attached during inspection"
-    finally:
-        stream.stop()
-    if not apply:
-        return "Eligible"
-    task = preparation.get(session, task_id, lock=True)
-    prior = session.exec(
-        select(PreparationTaskEventEntity).where(
-            PreparationTaskEventEntity.task_id == task_id,
-            PreparationTaskEventEntity.action == "retired_claim_deletion_requested",
-            col(PreparationTaskEventEntity.changes)["claim_uid"].as_string() == uid,
-        )
-    ).first()
-    if prior is None:
-        task.revision += 1
-        preparation.add_event(
-            session,
-            task,
-            0,
-            "retired_claim_deletion_requested",
+    ) as (files, inspector):
+        # Only this exact generated editor descriptor can be discarded without an export.
+        descriptor = json.dumps(
             {
-                "claim_uid": uid,
-                "claim_name": name,
-                "volume": current.spec.volume_name,
-                "namespace": namespace,
-                "installation": installation,
-                "initiator": "retention operator",
-            },
+                "folders": [
+                    {"path": "/workspace/conversion", "name": "Conversion (writable)"},
+                    {"path": "/inputs/verified", "name": "Verified inputs (read-only)"},
+                ]
+            }
         )
-    session.commit()
-    current = core.read_namespaced_persistent_volume_claim(name, namespace)
-    if (
-        current.metadata.uid != uid
-        or current.spec.volume_name != claim.spec.volume_name
-        or current.metadata.annotations != annotations
-        or active(inspector)
-    ):
-        return "Retained: claim changed before deletion"
-    core.delete_namespaced_persistent_volume_claim(
-        name,
-        namespace,
-        body=client.V1DeleteOptions(
-            preconditions=client.V1Preconditions(uid=uid, resource_version=current.metadata.resource_version)
-        ),
-    )
-    return f"Deletion requested for persistent volume {current.spec.volume_name}"
+        descriptor_key = ".triton-control/workspace.code-workspace"
+        if files.get(descriptor_key) == hashlib.sha256(descriptor.encode()).hexdigest():
+            files.pop(descriptor_key)
+        if not recoverable(files, saved):
+            return "Retained: volume contains unexported or changed files"
+        session.expire_all()
+        current = core.read_namespaced_persistent_volume_claim(name, namespace)
+        if (
+            current.metadata.uid != uid
+            or current.metadata.annotations != claim.metadata.annotations
+            or current.spec.volume_name != claim.spec.volume_name
+            or active(inspector)
+        ):
+            return "Retained: volume identity or attachment changed"
+        if not apply:
+            return "Eligible"
+        task = preparation.get(session, task_id, lock=True)
+        prior = session.exec(
+            select(PreparationTaskEventEntity).where(
+                PreparationTaskEventEntity.task_id == task_id,
+                PreparationTaskEventEntity.action == "retired_claim_deletion_requested",
+                col(PreparationTaskEventEntity.changes)["claim_uid"].as_string() == uid,
+            )
+        ).first()
+        if prior is None:
+            task.revision += 1
+            preparation.add_event(
+                session,
+                task,
+                0,
+                "retired_claim_deletion_requested",
+                {
+                    "claim_uid": uid,
+                    "claim_name": name,
+                    "volume": current.spec.volume_name,
+                    "namespace": namespace,
+                    "installation": installation,
+                    "initiator": "retention operator",
+                },
+            )
+        session.commit()
+        current = core.read_namespaced_persistent_volume_claim(name, namespace)
+        if (
+            current.metadata.uid != uid
+            or current.spec.volume_name != claim.spec.volume_name
+            or current.metadata.annotations != annotations
+            or active(inspector)
+        ):
+            return "Retained: claim changed before deletion"
+        pin = core.read_namespaced_pod(workspace + "-0", namespace)
+        if pin.metadata.uid != inspector or FENCE_FINALIZER not in (pin.metadata.finalizers or []):
+            return "Retained: inspection pod reservation changed"
+        try:
+            core.delete_namespaced_persistent_volume_claim(
+                name,
+                namespace,
+                body=client.V1DeleteOptions(
+                    preconditions=client.V1Preconditions(uid=uid, resource_version=current.metadata.resource_version)
+                ),
+            )
+        except Exception as exc:
+            raise DeletionUnconfirmed("Verify the PVC deletion outcome before releasing the inspection pod") from exc
+        return f"Deletion requested for persistent volume {current.spec.volume_name}"
 
 
 def report_volumes(session: Session, core: Any, namespace: str, installation: str, apply: bool) -> None:

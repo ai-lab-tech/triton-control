@@ -206,3 +206,17 @@ Enable `development.workspaceRetention.enabled` in Helm to schedule this
 operator command. The default schedule is 02:17 daily, with a 30-day retention
 period. Configure `development.workspaceRetention.schedule` and
 `development.workspaceRetention.days` to override them.
+
+Each current model directory must match a single verified export, including its
+complete file list. Scheduled cleanup requires Kubernetes 1.30 or later with
+ValidatingAdmissionPolicy enabled. The chart installs a namespace-scoped
+admission rule reserving each task claim for its designated StatefulSet pod
+name. During inspection a read-only pod holds that name with a finalizer until
+the deletion request completes. Other pod names cannot mount the claim.
+
+The admission resources are retained when disabling the schedule or removing
+the chart. Remove them only after all retention processes have stopped. If an
+operator process crashes, a remaining inspection pod protects the claim. Stop
+all retention processes before manually removing its
+`triton-control.io/inspection` finalizer and deleting the inspection pod.
+Restart cleanup to perform a fresh inventory.

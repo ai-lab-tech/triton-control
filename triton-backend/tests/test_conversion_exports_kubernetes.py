@@ -3,6 +3,8 @@
 import base64
 import hashlib
 import os
+import subprocess
+from pathlib import Path
 import time
 import unittest
 from datetime import timedelta
@@ -29,6 +31,13 @@ class ConversionExportIntegration(HandoffFixture, unittest.TestCase):
         core, apps = client.CoreV1Api(api), client.AppsV1Api(api)
         core.create_namespace({"metadata": {"name": ns}})
         self.addCleanup(core.delete_namespace, ns)
+        # Install the same enforced policy as the scheduled operator.
+        chart = Path(__file__).resolve().parents[2] / "charts/triton-control"
+        manifest = subprocess.check_output(["helm", "template", "retention-test", str(chart), "-n", ns,
+            "--set", "development.workspaceRetention.enabled=true", "--show-only",
+            "templates/workspace-claim-admission.yaml"])
+        subprocess.run(["kubectl", "apply", "-f", "-"], input=manifest, check=True)
+        self.addCleanup(subprocess.run, ["kubectl", "delete", "-f", "-"], input=manifest, check=True)
         profile = S3ProfileEntity(id=2, owner_user_id=1, name="exports", endpoint=os.environ["CONVERSION_EXPORT_TEST_S3"],
                                   bucket=ns, prefix="exports", access_key="conversion-test",
                                   secret_key_hash="fixture", secret_key_enc="conversion-test-secret")
@@ -62,7 +71,7 @@ class ConversionExportIntegration(HandoffFixture, unittest.TestCase):
         name = original.name
         claim_name = "workspace-" + name + "-0"
         def write(command):
-            pod = "writer-" + uuid4().hex[:10]
+            pod = name + "-0"
             core.create_namespaced_pod(ns, {"metadata": {"name": pod}, "spec": {
                 "restartPolicy": "Never", "containers": [{"name": "writer", "image": "python:3.12-alpine",
                 "command": ["sh", "-ec", command], "volumeMounts": [{"mountPath": "/data", "name": "data"}]}],
@@ -109,7 +118,22 @@ class ConversionExportIntegration(HandoffFixture, unittest.TestCase):
         write("printf weights > /data/conversion/iris/1/model; touch /data/unsaved")
         self.assertIn("unexported", reclaim())
         write("rm /data/unsaved")
-        self.assertIn("Deletion requested", reclaim())
+        original_lock = claim_retention.preparation.get
+        attempted = []
+        def lock_during_audit(*args, **kwargs):
+            if kwargs.get("lock"):
+                for writer_name, expected_status in [("short-lived-writer", 403), (name + "-0", 409)]:
+                    writer = {"metadata": {"name": writer_name}, "spec": {"containers": [{"name": "writer",
+                        "image": "python:3.12-alpine", "volumeMounts": [{"name": "data", "mountPath": "/data"}]}],
+                        "volumes": [{"name": "data", "persistentVolumeClaim": {"claimName": claim_name}}]}}
+                    with self.assertRaises(client.ApiException) as denied:
+                        core.create_namespaced_pod(ns, writer)
+                    self.assertEqual(denied.exception.status, expected_status)
+                    attempted.append(writer_name)
+            return original_lock(*args, **kwargs)
+        with patch.object(claim_retention.preparation, "get", side_effect=lock_during_audit):
+            self.assertIn("Deletion requested", reclaim())
+        self.assertEqual(attempted, ["short-lived-writer", name + "-0"])
         deadline = time.monotonic() + 120
         while any(c.metadata.name == claim_name for c in core.list_namespaced_persistent_volume_claim(ns).items):
             self.assertLess(time.monotonic(), deadline)

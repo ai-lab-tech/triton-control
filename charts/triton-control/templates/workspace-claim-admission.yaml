@@ -1,0 +1,37 @@
+{{- if and .Values.development.workspaceRetention.enabled (eq (include "triton-control.installationMode" .) "development") }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  name: {{ printf "%s-%s-workspace-claims" .Release.Namespace .Release.Name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        !has(object.spec.volumes) || object.spec.volumes.all(v,
+          !has(v.persistentVolumeClaim) || !v.persistentVolumeClaim.claimName.startsWith('workspace-task-') ||
+          (has(object.metadata.name) && v.persistentVolumeClaim.claimName == 'workspace-' + object.metadata.name))
+      reason: Forbidden
+      message: Task workspace claims may only be mounted by their designated pod
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  name: {{ printf "%s-%s-workspace-claims" .Release.Namespace .Release.Name }}
+spec:
+  policyName: {{ printf "%s-%s-workspace-claims" .Release.Namespace .Release.Name }}
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+{{- end }}

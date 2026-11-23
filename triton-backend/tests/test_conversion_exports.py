@@ -84,3 +84,16 @@ class ExportChecks(unittest.TestCase):
             (root / "alias").symlink_to(root / "notes")
             with self.assertRaises(ValueError):
                 claim_inventory.inventory(root)
+
+
+class ConversionRecoveryTests(unittest.TestCase):
+    def test_model_requires_one_complete_export(self):
+        root = "conversion/iris"
+        cfg, weights = root + "/config.pbtxt", root + "/1/model"
+        a, b = {cfg: "A", weights: "A"}, {cfg: "B", weights: "B"}
+        snapshots = [(root, a), (root, b)]
+        self.assertFalse(claim_retention.recoverable({cfg: "A", weights: "B"}, snapshots))
+        self.assertFalse(claim_retention.recoverable({cfg: "A"}, snapshots))
+        self.assertFalse(claim_retention.recoverable({**a, root + "/extra": "C"}, snapshots))
+        other = {"conversion/other/1/model": "C"}
+        self.assertTrue(claim_retention.recoverable({**a, **other}, snapshots + [("conversion/other", other)]))
