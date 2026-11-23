@@ -46,8 +46,8 @@ def _actor(session: Session, claims: dict[str, Any]) -> tuple[int, bool, str]:
     return mapped.id, role == "admin", role
 
 
-def _blocked(task: PreparationTaskEntity, eligible: set[int]) -> list[str]:
-    reasons = ["missing_input:" + name for name in task.missing_inputs]
+def _blocked(task: PreparationTaskEntity, eligible: set[int], optional_inputs: set[str]) -> list[str]:
+    reasons = ["missing_input:" + name for name in task.missing_inputs if name not in optional_inputs]
     if not eligible:
         reasons.append("no_eligible_engineers")
     if task.assignee_user_id is not None and task.assignee_user_id not in eligible:
@@ -75,11 +75,9 @@ def _handoff_missing(handoff: HandoffEntity | None) -> list[str]:
 
 
 def _task_dto(task: PreparationTaskEntity, eligible: set[int], handoff: HandoffEntity | None) -> TaskDTO:
-    # Receipt completeness is immutable. Preserve its blockers even if an older
-    # application version previously cleared the mutable task checklist.
-    missing = sorted(set(task.missing_inputs) | set(_handoff_missing(handoff)))
-    blocked = _blocked(task, eligible)
-    blocked.extend("missing_input:" + name for name in missing if "missing_input:" + name not in blocked)
+    optional_inputs = set(_handoff_missing(handoff))
+    missing = sorted(set(task.missing_inputs) | optional_inputs)
+    blocked = _blocked(task, eligible, optional_inputs)
     return task_to_dto(task, blocked).model_copy(update={"missing_inputs": missing})
 
 
@@ -255,13 +253,14 @@ def resolve_inputs(session: Session, claims: dict[str, Any], task_id: UUID, requ
     task = repository.get(session, task_id)
     _engineer_or_admin(admin, eligible, task.assignee_user_id, actor)
     handoff = next(iter(handoff_repository.for_tasks(session, [task_id])), None)
-    if set(request.resolved_inputs) & set(_handoff_missing(handoff)):
+    optional_inputs = set(_handoff_missing(handoff))
+    if set(request.resolved_inputs) & optional_inputs:
         raise ConflictError("Handoff evaluation inputs are still absent; submit a new revision with the missing inputs")
     if not set(request.resolved_inputs) <= set(task.missing_inputs):
         raise ConflictError("Resolved inputs must name currently missing inputs")
     before = _values(session, task_id)
     task.missing_inputs = sorted(set(task.missing_inputs) - set(request.resolved_inputs))
-    if not task.missing_inputs and task.state == "awaiting_information":
+    if task.state == "awaiting_information" and not set(task.missing_inputs).difference(optional_inputs):
         task.state = "claimed" if task.assignee_user_id is not None else "queued"
     # This records preparation completeness only, never validation/release approval.
     return _finish(session, task_id, actor, "inputs_resolved", before, request.reason)

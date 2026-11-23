@@ -27,6 +27,7 @@ export type Instance = {
   metricsUrl: string;
   metricsLastCheckedAt: string;
   metricsError: string;
+  preparationTaskId?: string;
   deploymentRuntime: string;
   deploymentNamespace: string;
   deploymentName: string;

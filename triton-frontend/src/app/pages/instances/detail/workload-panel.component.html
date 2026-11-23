@@ -19,7 +19,12 @@
           <span class="heading-icon"><mat-icon>dns</mat-icon></span>
           <div>
             <h3>Pods &amp; containers</h3>
-            <p>Workload health, rollout progress and container diagnostics.</p>
+            @if (snapshot.deployment; as deployment) {
+              <p>
+                {{ deployment.ready }} of {{ deployment.desired }}
+                {{ deployment.desired === 1 ? "replica" : "replicas" }} ready
+              </p>
+            }
           </div>
         </div>
         <button mat-stroked-button type="button" (click)="refresh()" [disabled]="loading()">
@@ -27,47 +32,43 @@
         </button>
       </header>
       @if (snapshot.deployment; as deployment) {
-        <div class="rollout-metrics" aria-label="Deployment replica counts">
-          <div>
-            <span>Desired:</span><strong>{{ deployment.desired }}</strong>
-          </div>
-          <div>
-            <span>Updated:</span><strong>{{ deployment.updated }}</strong>
-          </div>
-          <div>
-            <span>Ready:</span><strong>{{ deployment.ready }}</strong>
-          </div>
-          <div>
-            <span>Available:</span><strong>{{ deployment.available }}</strong>
-          </div>
-        </div>
-        <div class="rollout-meta">
-          <span
-            >Release <strong>{{ deployment.release || "Not recorded" }}</strong></span
-          >
-          <span
-            >Revision <strong>{{ deployment.revision || "Unknown" }}</strong></span
-          >
-        </div>
         @if (deployment.stale) {
           <p class="observation-notice" role="status">
             Waiting for Kubernetes to observe the current configuration. Generation
             {{ deployment.generation }}, observed {{ deployment.observed_generation ?? "unknown" }}.
           </p>
         }
-        @if (deployment.conditions.length) {
-          <details class="rollout-details">
-            <summary class="app-disclosure">
-              Rollout conditions <span>{{ deployment.conditions.length }}</span>
-            </summary>
-            @for (condition of deployment.conditions; track condition.type) {
-              <p>
-                <strong>{{ condition.type }}: {{ condition.status }}</strong> —
-                {{ condition.reason }} {{ condition.message }}
-              </p>
-            }
-          </details>
-        }
+        <details class="rollout-details">
+          <summary class="app-disclosure">Rollout details</summary>
+          <div class="rollout-metrics" aria-label="Deployment replica counts">
+            <div>
+              <span>Desired:</span><strong>{{ deployment.desired }}</strong>
+            </div>
+            <div>
+              <span>Updated:</span><strong>{{ deployment.updated }}</strong>
+            </div>
+            <div>
+              <span>Ready:</span><strong>{{ deployment.ready }}</strong>
+            </div>
+            <div>
+              <span>Available:</span><strong>{{ deployment.available }}</strong>
+            </div>
+          </div>
+          <div class="rollout-meta">
+            <span
+              >Release <strong>{{ deployment.release || "Not recorded" }}</strong></span
+            >
+            <span
+              >Revision <strong>{{ deployment.revision || "Unknown" }}</strong></span
+            >
+          </div>
+          @for (condition of deployment.conditions; track condition.type) {
+            <p>
+              <strong>{{ condition.type }}: {{ condition.status }}</strong> — {{ condition.reason }}
+              {{ condition.message }}
+            </p>
+          }
+        </details>
       }
       @if (snapshot.deployment && snapshot.deployment.ready < snapshot.deployment.desired) {
         <p class="observation-notice" role="status">
@@ -77,7 +78,14 @@
       }
       @for (section of podSections(); track section.title) {
         @if (!section.history || section.count) {
-          <details class="pod-section" [open]="!section.history">
+          <details
+            class="pod-section"
+            [open]="
+              !section.history &&
+              snapshot.deployment &&
+              (snapshot.deployment.stale || snapshot.deployment.ready < snapshot.deployment.desired)
+            "
+          >
             <summary class="app-disclosure">{{ section.title }} · {{ section.count }}</summary>
             @if (section.history) {
               <p class="history-description">
@@ -107,7 +115,6 @@
                         <div class="pod-heading">
                           <div class="pod-identity">
                             <strong>{{ pod.name }}</strong>
-                            <small>UID {{ pod.uid }}</small>
                           </div>
                           <span
                             class="pod-status"
@@ -145,19 +152,6 @@
                             <dt>Age</dt>
                             <dd [title]="pod.created_at || ''">{{ age(pod.created_at) }}</dd>
                           </div>
-                          <div>
-                            <dt>Release</dt>
-                            <dd>{{ pod.release || "Not recorded" }}</dd>
-                          </div>
-                          <div>
-                            <dt>Revision</dt>
-                            <dd>
-                              {{ pod.revision || "Unknown" }}
-                              {{
-                                pod.revision ? (pod.current_revision ? "(current)" : "(older)") : ""
-                              }}
-                            </dd>
-                          </div>
                         </dl>
                         <details class="container-details">
                           <summary class="app-disclosure">
@@ -167,6 +161,29 @@
                               {{ pod.containers.length === 1 ? "container" : "containers" }}</span
                             >
                           </summary>
+                          <dl class="pod-facts">
+                            <div>
+                              <dt>Pod UID</dt>
+                              <dd>{{ pod.uid }}</dd>
+                            </div>
+                            <div>
+                              <dt>Release</dt>
+                              <dd>{{ pod.release || "Not recorded" }}</dd>
+                            </div>
+                            <div>
+                              <dt>Revision</dt>
+                              <dd>
+                                {{ pod.revision || "Unknown" }}
+                                {{
+                                  pod.revision
+                                    ? pod.current_revision
+                                      ? "(current)"
+                                      : "(older)"
+                                    : ""
+                                }}
+                              </dd>
+                            </div>
+                          </dl>
                           <div class="container-grid">
                             @for (container of pod.containers; track container.name) {
                               <div class="container-card">

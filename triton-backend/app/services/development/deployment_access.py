@@ -56,10 +56,11 @@ def authenticate_token(token: str) -> dict[str, Any]:
         from app.services.task_workspace_access import guard
         current_workspace = developments.find_by_workload(session, namespace, name)
         if current_workspace is not None:
-            guard(session, current_workspace)
+            task_id = guard(session, current_workspace)
         else:
             raise ForbiddenError("Workspace no longer exists")
         return claims_from_user(owner, {
             "token_use": "workspace_deployment",  # nosec B105 - credential purpose
+            **({"preparation_task_id": str(task_id)} if task_id else {}),
             "credential_version": owner.credential_version,
         })

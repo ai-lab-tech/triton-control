@@ -1,7 +1,6 @@
 """Serialize development model commands and keep scaling behind a verified startup rollout."""
 
 import re
-import shlex
 from collections.abc import Iterator
 from contextlib import contextmanager
 from ipaddress import ip_address
@@ -21,7 +20,8 @@ from app.schemas.lineage import DIGEST_PATTERN
 from app.schemas.model_state import ModelState
 from app.schemas.pods import DeploymentState, PodState
 from app.services.access import get_instance_or_404
-from app.services.deployment.model_state_provider import ROLLBACK_KEY, ModelStateProvider
+from app.services.deployment import replica_startup
+from app.services.deployment.model_state_provider import ROLLBACK_KEY, SCALE_TARGET, ModelStateProvider
 from app.services.kubernetes_client import api_client
 
 
@@ -79,17 +79,25 @@ def observe(
         condition.type == "Progressing" and condition.status == "False"
         and condition.reason == "ProgressDeadlineExceeded" for condition in deployment.conditions
     )
+    pending = (meta.get("annotations") or {}).get(SCALE_TARGET)
+    if pending is not None and (not re.fullmatch(r"[1-9][0-9]{0,2}", pending) or not 2 <= int(pending) <= 100):
+        raise ConflictError("Invalid pending replica target")
+    interactive = single and not declared and supports_interactive_control(template)
     state = ModelState(
+        pending_replicas=int(pending) if pending else None,
         capacity_owner=owner, mode="declared" if declared else "interactive",
         replicas=deployment.desired, release_digest=release_digest,
         rollout_complete=stable,
-        interactive_allowed=single and not declared and supports_interactive_control(template),
+        interactive_allowed=interactive,
         can_declare=single and not declared,
         can_restore=(
             bool(backup) and owner == "manual" and deployment.desired == 1
-            and (single or (failed and not deployment.stale and len(pods) <= 1))
+            and (pending is not None or single or (failed and not deployment.stale and len(pods) <= 1))
         ),
-        can_scale_above_one=owner == "manual" and stable and bool(release_digest and backup),
+        can_scale_above_one=pending is None and (
+            (owner == "manual" and stable and bool(release_digest and backup))
+            or (interactive and bool(instance.s3_enabled and instance.s3_bucket))
+        ),
     )
     # Kubernetes is authoritative. Re-observe on every request so a crash or a
     # timed-out patch cannot leave the persisted mode at an unsafe older value.
@@ -106,16 +114,7 @@ def supports_interactive_control(template: dict[str, Any]) -> bool:
     for container in template.get("spec", {}).get("containers", []):
         if container["name"] != "triton":
             continue
-        arguments = container.get("args") or []
-        if container.get("command") == ["/bin/bash", "-c"] and arguments:
-            script = arguments[0]
-            launch = re.search(r"(?m)^exec tritonserver[ \t]+", script)
-            if launch is None:
-                return False
-            try:
-                arguments = shlex.split(script[launch.end():])
-            except ValueError:
-                return False
+        _, arguments = replica_startup.launch_arguments(container)
         return "--model-control-mode=explicit" in arguments
     return False
 
@@ -139,24 +138,46 @@ def interactive_endpoint(session: Session, instance: TritonInstanceEntity) -> st
             raw, state, pods = observe(session, instance, provider)
             if not state.interactive_allowed:
                 raise ConflictError("Interactive control requires one stable pod running Triton in explicit mode")
-            deployment = raw["metadata"]
-            pod = provider.verify(
-                deployment["namespace"], deployment["name"], deployment["uid"], pods[0],
-                generation=deployment["generation"],
-            )
-            if pod["metadata"].get("deletionTimestamp") or not any(
-                condition.get("type") == "Ready" and condition.get("status") == "True"
-                for condition in pod.get("status", {}).get("conditions", [])
-            ):
-                raise ConflictError("The interactive pod is no longer ready")
-            try:
-                address = ip_address(pod.get("status", {}).get("podIP", ""))
-            except ValueError as error:
-                raise ConflictError("The interactive pod has no network address") from error
-            host = f"[{address}]" if address.version == 6 else str(address)
-            return f"http://{host}:8000"
+            return pod_endpoint(provider, raw, pods[0])
     except (ApiException, ConfigException, HTTPError) as error:
         raise BadGatewayError("Could not verify the managed deployment before model control") from error
+
+
+def pod_endpoint(provider: ModelStateProvider, raw: dict[str, Any], expected: PodState) -> str:
+    deployment = raw["metadata"]
+    pod = provider.verify(
+        deployment["namespace"], deployment["name"], deployment["uid"], expected,
+        generation=deployment["generation"],
+    )
+    if pod["metadata"].get("deletionTimestamp") or not any(
+        condition.get("type") == "Ready" and condition.get("status") == "True"
+        for condition in pod.get("status", {}).get("conditions", [])
+    ):
+        raise ConflictError("The interactive pod is no longer ready")
+    try:
+        address = ip_address(pod.get("status", {}).get("podIP", ""))
+    except ValueError as error:
+        raise ConflictError("The interactive pod has no network address") from error
+    host = f"[{address}]" if address.version == 6 else str(address)
+    return f"http://{host}:8000"
+
+
+def reconcile_scale(session: Session, instance: TritonInstanceEntity) -> None:
+    if instance.id is None or not managed(instance) or not installation_policy.allowed("direct_deployment"):
+        return
+    namespace, name = instance.deployment_namespace, instance.deployment_name
+    if not namespace or not name:
+        return
+    with api_client() as api:
+        provider = ModelStateProvider(api)
+        meta = provider.deployment(namespace, name)["metadata"]
+        if SCALE_TARGET not in (meta.get("annotations") or {}):
+            return
+        with locked(session, instance.id):
+            raw, state, _ = observe(session, instance, provider)
+            if (state.pending_replicas and state.capacity_owner == "manual" and state.rollout_complete
+                    and state.release_digest and state.replicas == 1 and state.can_restore):
+                provider.patch(raw, "/spec/replicas", state.pending_replicas, clear_target=True)
 
 
 def get_state(session: Session, claims: dict[str, Any], instance_id: int) -> ModelState:
@@ -178,7 +199,7 @@ def change(
             session.refresh(instance)
             with api_client() as api:
                 provider = ModelStateProvider(api)
-                raw, state, _ = observe(session, instance, provider)
+                raw, state, pods = observe(session, instance, provider)
                 if action == "read":
                     return state
                 if state.capacity_owner != "manual":
@@ -198,11 +219,26 @@ def change(
                         )
                     provider.restore(raw, raw["spec"]["template"]["metadata"]["annotations"][ROLLBACK_KEY])
                 elif action == "scale":
+                    if state.pending_replicas:
+                        if replicas == state.pending_replicas:
+                            return state
+                        raise ConflictError("A rolling scale is already pending")
                     if replicas == state.replicas:
                         return state
                     if replicas > 1 and not state.can_scale_above_one:
                         raise ConflictError("Verify an explicitly prepared startup rollout before scaling above one")
-                    provider.patch(raw, "/spec/replicas", replicas)
+                    if replicas > 1 and state.interactive_allowed:
+                        endpoint = pod_endpoint(provider, raw, pods[0])
+                        models = replica_startup.ready_models(endpoint)
+                        current, fresh, active = observe(session, instance, provider)
+                        if (not fresh.interactive_allowed or active[0].uid != pods[0].uid
+                                or active[0].restarts != pods[0].restarts
+                                or current["metadata"]["generation"] != raw["metadata"]["generation"]
+                                or replica_startup.ready_models(pod_endpoint(provider, current, active[0])) != models):
+                            raise ConflictError("The serving pod or its loaded models changed during capture")
+                        provider.scale_serving(current, models, replicas)
+                    else:
+                        provider.patch(raw, "/spec/replicas", replicas)
                 _, accepted, _ = observe(session, instance, provider)
                 return accepted
     except ApiException as error:

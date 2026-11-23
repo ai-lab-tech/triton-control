@@ -11,9 +11,10 @@ from app.services.materialization.normalization import MaterializationError
 
 
 class VersionedS3:
-    def __init__(self, client: Any, bucket: str, prefix: str) -> None:
+    def __init__(self, client: Any, bucket: str, prefix: str, *, selected_objects: bool = False) -> None:
         self.client, self.bucket = client, bucket
-        self.prefix = safe_path(prefix.removesuffix("/"), CaptureLimits()) + "/"
+        self.prefix = safe_path(prefix.removesuffix("/"), CaptureLimits()) + "/" if prefix else ""
+        self.selected_objects = selected_objects
 
     def paths(self, limits: CaptureLimits, started: float) -> set[str]:
         paths: set[str] = set()
@@ -39,7 +40,7 @@ class VersionedS3:
         expected = {entry.path: entry for entry in plan.source_inventory.files}
         if sum(entry.size for entry in expected.values()) > limits.max_bytes:
             raise MaterializationError("Repository exceeds byte budget")
-        if self.paths(limits, started) != set(expected):
+        if not self.selected_objects and self.paths(limits, started) != set(expected):
             raise MaterializationError("Repository contains missing or extra files")
         for reference in sorted(plan.objects, key=lambda item: item.path):
             entry = expected[reference.path]
@@ -68,5 +69,5 @@ class VersionedS3:
                     raise MaterializationError("Object content differs from inventory")
             finally:
                 body.close()
-        if self.paths(limits, started) != set(expected):
+        if not self.selected_objects and self.paths(limits, started) != set(expected):
             raise MaterializationError("Repository changed during download")

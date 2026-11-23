@@ -45,6 +45,14 @@ const instance = {
   name: "Experiment",
   isSelfDeployed: false,
   deploymentRuntime: "external",
+  s3: {
+    enabled: true,
+    bucket: "models",
+    prefix: "iris",
+    endpoint: "https://s3.test",
+    accessKey: "fixture",
+    secretConfigured: true,
+  },
   repositoryModels: [{ name: "iris", version: "1", state: "READY", reason: "" }],
 } as Instance;
 const operation = {
@@ -247,7 +255,7 @@ describe("Engineering preparation workflow", () => {
     http.expectOne("/api/preparation-tasks/task-1/events?limit=50&offset=0").flush([]);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
-  it("shows why an assigned handoff cannot open its workspace and links to a new revision", async () => {
+  it("shows why an assigned handoff cannot open its workspace with outstanding task inputs", async () => {
     // Arrange
     const fixture = TestBed.createComponent(PreparationDetailComponent);
     await finishDetailLoad({
@@ -256,8 +264,8 @@ describe("Engineering preparation workflow", () => {
         ...entry.task,
         state: "claimed",
         assignee_user_id: 2,
-        missing_inputs: ["evaluation_dataset"],
-        blocked_reasons: ["missing_input:evaluation_dataset"],
+        missing_inputs: ["license_review"],
+        blocked_reasons: ["missing_input:license_review"],
       },
       actions: { ...entry.actions, claim: false, release: true, request_information: true },
     });
@@ -274,12 +282,8 @@ describe("Engineering preparation workflow", () => {
     expect(workspace?.disabled).toBeTrue();
     expect(workspace?.getAttribute("aria-describedby")).toBe("workspace-blocked-reason");
     expect(assignment.querySelector("#workspace-blocked-reason")?.textContent).toContain(
-      "Add the missing evaluation inputs",
+      "required inputs",
     );
-    expect(assignment.querySelector("a")?.getAttribute("href")).toBe(
-      "/preparation/handoffs/new?previous=handoff-1",
-    );
-    expect(assignment.querySelector("a")?.textContent).toContain("Add missing information");
     http.expectNone("/api/preparation/tasks/task-1/workspace-sizing");
     fixture.destroy();
   });
@@ -396,69 +400,24 @@ describe("Engineering preparation workflow", () => {
     const fixture = TestBed.createComponent(ExperimentPreparationComponent);
     fixture.componentRef.setInput("instance", instance);
     fixture.detectChanges();
-    fixture.componentInstance.profileId = 1;
-    fixture.componentInstance.prefix = "models";
     spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
     return fixture;
   }
-  for (const kind of ["hf", "manual", "example"] as const) {
-    it(`submits the ${kind} workspace source from the capture form`, async () => {
-      // Arrange
-      const fixture = captureFixture();
-      const page = fixture.componentInstance;
-      page.expanded.set(true);
-      page.profileId = null;
-      page.prefix = "";
-      fixture.detectChanges();
-      await fixture.whenStable();
-      const form = fixture.nativeElement.querySelector("form") as HTMLFormElement;
-      const kindInput = form.querySelector<HTMLSelectElement>('select[name="sourceKind"]')!;
-      kindInput.value = kind;
-      kindInput.dispatchEvent(new Event("change"));
-      fixture.detectChanges();
-      await fixture.whenStable();
-      const fields: Record<string, string> = {
-        workspaceId: "7",
-        workspaceFiles: "repo/iris/config.pbtxt",
-        modelRoot: "repo",
-      };
-      if (kind === "manual") fields["author"] = "Ada";
-      if (kind === "example") fields["project_path"] = "examples/street";
-      if (kind === "hf") {
-        fields["revision"] = "main";
-        fields["checkpoints"] = "iris/1/model.bin";
-      }
-      for (const [name, value] of Object.entries(fields)) {
-        const field = form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
-        field.value = value;
-        field.dispatchEvent(new Event("input"));
-      }
-      fixture.detectChanges();
-
+  it("disables capture for task deployments and instances without recorded storage", () => {
+    // Arrange
+    const fixture = captureFixture();
+    for (const change of [
+      { preparationTaskId: "task-1" },
+      { s3: null },
+      { repositoryModels: [] },
+    ]) {
       // Act
-      form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
-
+      fixture.componentRef.setInput("instance", { ...instance, ...change });
       // Assert
-      const capture = http.expectOne("/api/instances/7/preparation-requests");
-      expect(capture.request.body.source.kind).toBe(kind);
-      if (kind === "manual") expect(capture.request.body.source.author).toBe("Ada");
-      if (kind === "example")
-        expect(capture.request.body.source.project_path).toBe("examples/street");
-      if (kind === "hf") {
-        expect(capture.request.body.source.revision).toBe("main");
-        expect(capture.request.body.source.checkpoint_files).toEqual(["iris/1/model.bin"]);
-      }
-      expect(capture.request.body.source.workspace_model_root).toBe("repo");
-      expect(capture.request.body.workspace).toEqual({
-        workspace_id: 7,
-        files: ["repo/iris/config.pbtxt"],
-      });
-      capture.flush({}, { status: 400, statusText: "Invalid fixture" });
-      await fixture.whenStable();
-      fixture.destroy();
-    });
-  }
-
+      expect(fixture.componentInstance.allowed()).toBeFalse();
+    }
+    fixture.destroy();
+  });
   it("sends the snapshot contract, retains idempotency after a lost response and never mutates the experiment", async () => {
     // Arrange
     const fixture = captureFixture();
@@ -509,19 +468,16 @@ describe("Engineering preparation workflow", () => {
     expect(page.busy()).toBeFalse();
     fixture.destroy();
   });
-  it("loads named repository profiles when opening the capture form", async () => {
+  it("shows the recorded S3 location and preselects the only served version", () => {
     // Arrange
     const fixture = captureFixture();
-    const page = fixture.componentInstance;
     // Act
-    const pending = page.begin();
-    http
-      .expectOne("/api/s3-profiles")
-      .flush([{ id: 1, name: "Research models", bucket: "models", prefix: "" }]);
-    await pending;
+    fixture.componentInstance.begin();
     fixture.detectChanges();
     // Assert
-    expect(fixture.nativeElement.textContent).toContain("Research models");
+    http.expectNone("/api/s3-profiles");
+    expect(fixture.nativeElement.textContent).toContain("s3://models/iris");
+    expect(fixture.componentInstance.models).toBe("iris:1");
     fixture.destroy();
   });
   it("uses a fresh capture key after explicit cancellation", async () => {
@@ -589,8 +545,6 @@ describe("Engineering preparation workflow", () => {
       isSelfDeployed: true,
       deploymentRuntime: "kubernetes",
     });
-    page.profileId = null;
-    page.prefix = "";
     // Act
     const pending = page.submit();
     http.expectOne("/api/instances/7/pods").flush({
@@ -619,8 +573,6 @@ describe("Engineering preparation workflow", () => {
       isSelfDeployed: true,
       deploymentRuntime: "kubernetes",
     });
-    page.profileId = null;
-    page.prefix = "";
     let pending = page.submit();
     http
       .expectOne("/api/instances/7/pods")
@@ -705,39 +657,18 @@ describe("Engineering preparation workflow", () => {
     http.expectNone("/api/instances/7/pods");
     fixture.destroy();
   });
-  it("groups and deduplicates versions without dropping other models", async () => {
-    // Arrange
-    const fixture = captureFixture();
-    const page = fixture.componentInstance;
-    page.models = "iris:1\niris:2\niris:1\nother:3";
-    // Act
-    const pending = page.submit();
-    const request = http.expectOne("/api/instances/7/preparation-requests");
-    const models = request.request.body.models;
-    request.flush({ operation: { ...operation, state: "cancelled" } });
-    await pending;
-    // Assert
-    expect(models).toEqual([
-      { name: "iris", versions: ["1", "2"] },
-      { name: "other", versions: ["3"] },
-    ]);
-    fixture.destroy();
-  });
-  it("prefills every observed model version", () => {
+  it("requires a selection when several versions are ready", () => {
     // Arrange
     const fixture = TestBed.createComponent(ExperimentPreparationComponent);
     fixture.componentRef.setInput("instance", {
       ...instance,
-      repositoryModels: [
-        { name: "iris", version: "1" },
-        { name: "iris", version: "2" },
-        { name: "iris", version: "1" },
-      ],
+      repositoryModels: ["1", "2"].map((version) => ({ name: "iris", version, state: "READY" })),
     });
     // Act
     fixture.detectChanges();
     // Assert
-    expect(fixture.componentInstance.models).toBe("iris:1\niris:2");
+    expect(fixture.componentInstance.readyModels()).toEqual(["iris:1", "iris:2"]);
+    expect(fixture.componentInstance.valid()).toBeFalse();
     fixture.destroy();
   });
   it("does not revive a completed request when storage removal fails", async () => {
@@ -771,17 +702,16 @@ describe("Engineering preparation workflow", () => {
     const firstKey = first.request.headers.get("Idempotency-Key");
     first.flush({ detail: "Invalid repository" }, { status: 400, statusText: "Bad Request" });
     await pending;
-    page.prefix = "corrected";
     // Act
     pending = page.submit();
     const corrected = http.expectOne("/api/instances/7/preparation-requests");
     const key = corrected.request.headers.get("Idempotency-Key");
-    const prefix = corrected.request.body.repository.prefix;
+    const repository = corrected.request.body.repository;
     corrected.flush({ operation: { ...operation, state: "cancelled" } });
     await pending;
     // Assert
     expect(key).not.toBe(firstKey);
-    expect(prefix).toBe("corrected");
+    expect(repository).toBeUndefined();
     fixture.destroy();
   });
   it("retains an uncertain request through a later authorization rejection", async () => {

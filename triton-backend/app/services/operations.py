@@ -93,6 +93,9 @@ class OperationService:
         row = OperationEntity(id=uuid4().hex, actor_id=actor.id, kind=request.kind, target=request.target,
                               idempotency_key=key, payload=json.loads(canonical),
                               payload_hash=hashlib.sha256(canonical.encode()).hexdigest())
+        validate_submission = getattr(self.adapter(request.kind), "validate_submission", None)
+        if validate_submission:
+            validate_submission(session, claims, row)
         # Committed intent IS the queue. No volatile scheduling callback is required.
         return dto(repo.reserve(session, row))
 

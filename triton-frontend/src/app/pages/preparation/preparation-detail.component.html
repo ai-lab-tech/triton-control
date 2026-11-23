@@ -262,23 +262,9 @@
             Open task workspace
           </button>
           @if (!item.actions.open_workspace) {
-            @if (item.source.handoff_id && item.task.missing_inputs.length) {
-              <p id="workspace-blocked-reason">
-                Add the missing evaluation inputs in a new handoff revision, then claim the new
-                task.
-              </p>
-              <a
-                mat-stroked-button
-                routerLink="/preparation/handoffs/new"
-                [queryParams]="{ previous: item.source.handoff_id }"
-              >
-                Add missing information
-              </a>
-            } @else {
-              <p id="workspace-blocked-reason">
-                The assigned engineer can open the workspace once the required inputs are available.
-              </p>
-            }
+            <p id="workspace-blocked-reason">
+              The assigned engineer can open the workspace once the required inputs are available.
+            </p>
           }
         }
         @if (sizing(); as size) {

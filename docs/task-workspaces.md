@@ -1,6 +1,6 @@
 # Task workspaces
 
-An assigned engineer can open a workspace from a complete scientist handoff. The
+An assigned engineer can open a workspace from a scientist handoff with a verified model source. The
 handoff page offers **Claim task**, then **Open task workspace**. The workspace
 explorer contains **Verified inputs (read-only)** and **Conversion (writable)**.
 Each engineer can have one personal workspace alongside their task workspaces.
@@ -163,12 +163,13 @@ visible and do not prevent claiming a task. Snapshot tasks can open a workspace 
 retaining their recorded gaps. Build attempts, preparation attempts and retained
 candidates are displayed separately from task state and imply no production approval.
 
-On a development instance, **Prepare for production** captures selected model versions
-without changing the experiment. Managed captures use the observed deployment identity;
-external instances require an explicit S3 repository or selected workspace model files. The resulting task links back to
-the original instance. The capture URL preserves progress across page reloads. These
-entry points are unavailable in production. This workflow adds read-only API views;
-no database migration or existing receipt rewrite is required.
+On a development serving instance, **Prepare for production** opens the engineering
+queue's **Submit model** form. It selects a matching S3 profile by endpoint, bucket
+and repository prefix, and preselects the version when only one is ready. Review
+the version and evaluation details before submitting. The handoff captures the
+selected version and its shared model configuration under the installation's S3
+versioning policy. **Open engineering task** opens the original task for a
+deployment created from its workspace.
 
 ### Save and restore converted models
 

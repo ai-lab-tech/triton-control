@@ -23,6 +23,7 @@ from app.schemas.task_workspaces import SnapshotFile, WorkspaceInput, WorkspaceI
 from app.services import handoff_sources
 from app.services.candidates.artifacts import _open_directory
 from app.services.preparation_settings import effective
+from app.services.snapshots.artifacts import store_settings
 from app.services.storage.s3_client import build_s3_client
 
 
@@ -40,8 +41,7 @@ def register(session: Session, row: PreparationSnapshotEntity) -> None:
 
 
 def binding(session: Session) -> tuple[dict[str, Any], Any]:
-    root = os.getenv("TRITON_PREPARATION_SNAPSHOT_ROOT", "").strip()
-    profile = os.getenv("TRITON_PREPARATION_SNAPSHOT_PROFILE_ID", "").strip()
+    root, profile = store_settings()
     if bool(root) == bool(profile):
         raise ForbiddenError("Snapshot storage configuration is unavailable")
     if root:

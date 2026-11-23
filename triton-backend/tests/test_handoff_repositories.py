@@ -71,6 +71,24 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
             expected_behavior="correct prediction", acceptance_criteria="matches baseline", **changes,
         )
 
+    def test_served_model_handoff_captures_only_selected_version_with_its_config(self):
+        # Arrange
+        self.contents.update({"repo/iris/2/model.onnx": b"other version", "repo/other/1/model.onnx": b"other model"})
+        request = self.repository_request()
+        source = S3RepositoryInput.model_validate({
+            "kind": "s3_repository", "profile_id": 1, "path": "repo", "model": {"name": "iris", "versions": ["1"]},
+        })
+        request = request.model_copy(update={"source": source})
+
+        # Act
+        receipt = handoffs.submit(self.session, self.submitter, request)
+
+        # Assert
+        self.assertEqual([file.file.path for file in receipt.source.files], [
+            "iris/1/helpers/__init__.py", "iris/1/model.onnx", "iris/config.pbtxt",
+        ])
+        self.assertEqual(receipt.request.source, source)
+
     def test_pins_every_file_and_preserves_relative_layout_including_empty_files(self):
         # Arrange
         source = self.repository_request().source

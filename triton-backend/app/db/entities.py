@@ -77,6 +77,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     example_model_name: Optional[str] = None
     inference_examples: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
     example_request: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    preparation_task_id: Optional[str] = None
     mlflow_model_uri: Optional[str] = None
     mlflow_model_name: Optional[str] = None
     pod_statuses: List[str] = Field(default_factory=list, sa_column=Column(JSON))

@@ -11,13 +11,17 @@ from app.core.canonical import digest
 from app.exceptions import BadGatewayError, ConflictError
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.model_state import DevelopmentStartupRelease
-from app.schemas.serving_metadata import ServingRelease
+from app.schemas.serving_metadata import ServingRelease, StartupModel
 from app.services.deployment.pod_provider import RELEASE_KEY, TIMEOUT, PodProvider, controlled_by
+from app.services.deployment.replica_startup import serving_template
 from app.services.materialization.budgets import configured_limits
 from app.services.materialization.kubernetes import serving_manifests
 from app.services.materialization.normalization import MaterializationError
 
 ROLLBACK_KEY = "triton-control/interactive-template"
+
+
+SCALE_TARGET = "triton-control/scale-target"
 
 
 class ModelStateProvider(PodProvider):
@@ -31,6 +35,7 @@ class ModelStateProvider(PodProvider):
 
     def patch(
         self, deployment: dict[str, Any], path: str, value: Any, *, replace_single_pod: bool = False,
+        rolling_target: int | None = None, clear_target: bool = False,
     ) -> None:
         meta = deployment["metadata"]
         changes = [
@@ -38,6 +43,17 @@ class ModelStateProvider(PodProvider):
             {"op": "test", "path": "/metadata/resourceVersion", "value": meta["resourceVersion"]},
             {"op": "add", "path": path, "value": value},
         ]
+        if rolling_target is not None or clear_target:
+            annotations = dict(meta.get("annotations") or {})
+            if rolling_target is None:
+                annotations.pop(SCALE_TARGET, None)
+            else:
+                annotations[SCALE_TARGET] = str(rolling_target)
+            changes.append({"op": "add", "path": "/metadata/annotations", "value": annotations})
+        if rolling_target is not None:
+            changes.append({"op": "add", "path": "/spec/strategy", "value": {
+                "type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 0, "maxSurge": 1},
+            }})
         if replace_single_pod:
             # A one-GPU installation may have no capacity for a rolling surge.
             changes.append({"op": "add", "path": "/spec/strategy", "value": {"type": "Recreate"}})
@@ -116,12 +132,7 @@ class ModelStateProvider(PodProvider):
 
         old = deployment["spec"]["template"]
         old_spec = old["spec"]
-        rollback_name = "tc-interactive-" + digest(old).removeprefix("sha256:")[:24] + "-" + meta["uid"][:8]
-        self.ensure_config(deployment, {
-            "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
-            "metadata": {"name": rollback_name, "namespace": namespace},
-            "data": {"template.json": json.dumps(old, separators=(",", ":"))},
-        })
+        rollback_name = self.save_interactive_template(deployment)
         self.ensure_config(deployment, config)
         template = {"metadata": deepcopy(old["metadata"]), "spec": pod["spec"]}
         template["metadata"]["annotations"] = {
@@ -141,6 +152,26 @@ class ModelStateProvider(PodProvider):
         ]
         self.patch(deployment, "/spec/template", template, replace_single_pod=True)
 
+    def save_interactive_template(self, deployment: dict[str, Any]) -> str:
+        meta = deployment["metadata"]
+        namespace = meta["namespace"]
+        old = deployment["spec"]["template"]
+        rollback_name = "tc-interactive-" + digest(old).removeprefix("sha256:")[:24] + "-" + str(meta["uid"])[:8]
+        self.ensure_config(deployment, {
+            "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
+            "metadata": {"name": rollback_name, "namespace": namespace},
+            "data": {"template.json": json.dumps(old, separators=(",", ":"))},
+        })
+        return rollback_name
+
+    def scale_serving(self, deployment: dict[str, Any], models: tuple[StartupModel, ...], replicas: int) -> None:
+        template = serving_template(deployment["spec"]["template"], models)
+        annotations = dict(template["metadata"].get("annotations") or {})
+        annotations[RELEASE_KEY] = digest(template)
+        annotations[ROLLBACK_KEY] = self.save_interactive_template(deployment)
+        template["metadata"]["annotations"] = annotations
+        self.patch(deployment, "/spec/template", template, rolling_target=replicas)
+
     def restore(self, deployment: dict[str, Any], backup: str) -> None:
         meta = deployment["metadata"]
         config = self.immutable_config(meta["namespace"], backup)
@@ -150,4 +181,7 @@ class ModelStateProvider(PodProvider):
             template = json.loads(config["data"]["template.json"])
         except (KeyError, ValueError) as error:
             raise BadGatewayError("Kubernetes returned an invalid interactive template") from error
-        self.patch(deployment, "/spec/template", template, replace_single_pod=True)
+        if SCALE_TARGET in (meta.get("annotations") or {}):
+            self.patch(deployment, "/spec/template", template, clear_target=True)
+        else:
+            self.patch(deployment, "/spec/template", template, replace_single_pod=True)

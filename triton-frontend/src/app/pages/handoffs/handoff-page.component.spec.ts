@@ -38,8 +38,11 @@ describe("HandoffPageComponent", () => {
     role = "member",
     requireS3Versioning = true,
     previous = "",
+    instance = "",
   ) {
-    query = new BehaviorSubject(convertToParamMap(previous ? { previous } : {}));
+    query = new BehaviorSubject(
+      convertToParamMap(previous ? { previous } : instance ? { instance } : {}),
+    );
     await TestBed.configureTestingModule({
       imports: [HandoffPageComponent],
       providers: [
@@ -51,7 +54,11 @@ describe("HandoffPageComponent", () => {
           useValue: {
             queryParamMap: query.asObservable(),
             paramMap: of(convertToParamMap(id ? { handoffId: id } : {})),
-            snapshot: { queryParamMap: convertToParamMap(previous ? { previous } : {}) },
+            snapshot: {
+              queryParamMap: convertToParamMap(
+                previous ? { previous } : instance ? { instance } : {},
+              ),
+            },
           },
         },
       ],
@@ -71,6 +78,82 @@ describe("HandoffPageComponent", () => {
     return fixture;
   }
   afterEach(() => http.verify());
+
+  it("prefills the serving instance and submits only its selected ready version on confirmation", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", false, "", "16");
+    http
+      .expectOne((req) => req.url.endsWith("/api/instances/16"))
+      .flush({
+        id: 16,
+        name: "iris-classifier",
+        repository_models: [{ name: "iris", version: "1", state: "READY" }],
+        s3: {
+          enabled: true,
+          bucket: "models",
+          endpoint: "https://storage.test",
+          prefix: "team/exports/iris",
+        },
+      });
+    http.expectOne("/api/s3-profiles").flush([
+      {
+        id: 1,
+        name: "Other storage",
+        bucket: "models",
+        endpoint: "https://elsewhere.test",
+        prefix: "team/exports",
+      },
+      { id: 2, name: "Team", bucket: "models", endpoint: "https://storage.test", prefix: "team" },
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http.expectNone("/api/preparation/handoff-captures");
+
+    // Act
+    const submitted = fixture.componentInstance.submit();
+    const request = http.expectOne("/api/preparation/handoff-captures");
+
+    // Assert
+    expect(request.request.body.title).toContain("iris-classifier");
+    expect(request.request.body.source).toEqual({
+      kind: "s3_repository",
+      profile_id: 2,
+      path: "exports/iris",
+      model: { name: "iris", versions: ["1"] },
+    });
+    expect(fixture.nativeElement.textContent).toContain("s3://models/team/exports/iris");
+    request.flush({ id: "capture", state: "failed", message: "fixture", result: {} });
+    await submitted;
+  });
+
+  it("assigns a fresh revision to a new serving handoff for the same model version", async () => {
+    // Arrange
+    const fixture = await setup(null, "member", false, "", "16");
+    http
+      .expectOne((req) => req.url.endsWith("/api/instances/16"))
+      .flush({
+        id: 16,
+        name: "iris",
+        repository_models: [{ name: "iris", version: "1", state: "READY" }],
+        s3: { enabled: true, bucket: "models", endpoint: "https://s3.test", prefix: "iris" },
+      });
+    http
+      .expectOne("/api/s3-profiles")
+      .flush([
+        { id: 1, name: "Models", bucket: "models", endpoint: "https://s3.test", prefix: "" },
+      ]);
+    await fixture.whenStable();
+    const page = fixture.componentInstance;
+    const firstRevision = page.revision;
+
+    // Act
+    page.newSubmission();
+
+    // Assert
+    expect(page.selectedVersion).toBe("iris:1");
+    expect(page.revision).toMatch(/^revision-[a-f0-9]{32}$/);
+    expect(page.revision).not.toBe(firstRevision);
+  });
 
   it("reveals the generic help for each evaluation field without submitting the form", async () => {
     // Arrange
@@ -151,10 +234,6 @@ describe("HandoffPageComponent", () => {
     const navigate = spyOn(TestBed.inject(Router), "navigate").and.resolveTo(true);
 
     // Act
-    await page.submit();
-    http.expectNone("/api/preparation/handoff-captures");
-    input("dataset").value = "datasets/eval.csv";
-    input("dataset").dispatchEvent(new Event("input"));
     const pending = page.submit();
     const post = http.expectOne("/api/preparation/handoff-captures");
     post.flush({
@@ -187,11 +266,7 @@ describe("HandoffPageComponent", () => {
       version_id: "baseline-v1",
       expected_digest: "sha256:baseline",
     });
-    expect(post.request.body.dataset).toEqual({
-      kind: "s3",
-      profile_id: 1,
-      path: "datasets/eval.csv",
-    });
+    expect(post.request.body.dataset).toBeNull();
     expect(navigate).toHaveBeenCalledWith(["/preparation/handoffs", "receipt-new"]);
   });
 
@@ -383,7 +458,7 @@ describe("HandoffPageComponent", () => {
     await fixture.whenStable();
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain("Workspace blocked by missing inputs");
+    expect(text).toContain("Information not provided");
     expect(text).toContain("Evaluation dataset");
     expect(text).toContain("v1");
     expect(text).toContain("task-1");

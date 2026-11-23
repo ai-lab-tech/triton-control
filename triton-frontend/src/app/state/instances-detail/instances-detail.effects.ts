@@ -265,6 +265,7 @@ export class InstancesDetailEffects {
       metricsUrl: dto.metrics_url ?? "",
       metricsLastCheckedAt: dto.metrics_last_checked_at ? String(dto.metrics_last_checked_at) : "",
       metricsError: dto.metrics_error ? String(dto.metrics_error) : "",
+      preparationTaskId: instance.preparationTaskId,
       deploymentRuntime: stringDtoField(dto, "deployment_runtime"),
       deploymentNamespace: stringDtoField(dto, "deployment_namespace"),
       deploymentName: stringDtoField(dto, "deployment_name"),

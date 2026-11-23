@@ -27,6 +27,7 @@ from app.db.database import session_factory
 from app.db.entities import DashboardAlertEntity, TritonInstanceEntity
 from app.repositories import dashboard_alerts, instances
 from app.services.deployment import kubernetes as deployment_k8s
+from app.services.deployment.model_state import reconcile_scale
 from app.services.storage.s3_client import build_s3_client, format_s3_error, is_s3_configured
 from app.services.triton.client import TritonService
 from app.services.triton.repository_snapshot import (
@@ -167,6 +168,10 @@ class InstanceHealthRefresher:
         if is_self_deployed and deployment_namespace:
             ns = deployment_namespace
             dn = deployment_name
+            try:
+                await asyncio.to_thread(_finish_scale, instance_id)
+            except Exception:
+                logger.exception("Could not reconcile pending replica target for instance %s", instance_id)
             pod_statuses = await asyncio.to_thread(deployment_k8s.read_pod_statuses, ns, dn)
             if not await asyncio.to_thread(deployment_k8s.is_pod_ready, ns, dn):
                 with session_factory() as session:
@@ -300,6 +305,13 @@ class InstanceHealthRefresher:
                 )
 
         return alerts
+
+
+def _finish_scale(instance_id: int) -> None:
+    with session_factory() as session:
+        instance = instances.find_by_id(session, instance_id)
+        if instance:
+            reconcile_scale(session, instance)
 
 
 def _probe_s3_connection(instance: TritonInstanceEntity) -> None:

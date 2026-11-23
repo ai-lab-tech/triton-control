@@ -77,7 +77,10 @@ def submit(
     actor = require_user_entity(session, claims)
     authorize_actor(actor)
     validate_deployment_token(request, claims)
-    digest = fingerprint(input_data(request))
+    inputs = input_data(request)
+    if claims.get("token_use") == "workspace_deployment" and claims.get("preparation_task_id"):
+        inputs["preparation_task_id"] = claims["preparation_task_id"]
+    digest = fingerprint(inputs)
     # Older clients retain their response fields; identical keyless retries are safe.
     key = key if key is not None else f"legacy-{digest}"
     if not key or len(key) > 128 or key != key.strip():
