@@ -3,13 +3,48 @@
 A Kubernetes-managed development deployment running Triton in explicit mode
 allows interactive control when it has one stable pod. Load and Unload go
 directly to that owned pod on port 8000,
-which the backend must be able to reach. To scale
-above one, first roll out a pinned runtime and a frozen repository with an explicit
-list of model names and versions. A previously unloaded model is included only if
-it is in that list and the prepared repository. Connected external endpoints keep
-their existing model-control behavior.
+which the backend must be able to reach.
 
-## Prepare a startup release
+## Scale a running model
+
+Under **Serving → Instances**, open the instance, enter **2** in **Desired replicas**
+and choose **Apply replica count**. On the first scale-up, Triton Control reads the
+ready model names and versions directly from the current pod. It captures those
+versions from the instance's versioned S3 repository and pins the runtime image.
+If S3 objects changed since the original pod loaded them, the replacement pods
+use the bytes captured at scale time.
+
+The original pod keeps serving while Kubernetes schedules a replacement with
+the snapshot. The replacement must pass local readiness checks for every selected
+model version before Kubernetes can retire the original. The backend then applies
+the requested replica count. You can close the page during the rollout. If the
+replacement is unschedulable or fails readiness, the original stays available.
+Choose **Restore interactive control** to cancel a pending scale-up. Later
+changes to replica count reuse the frozen template.
+
+### Installation setup
+
+For automatic scaling, set the backend environment variable
+`TRITON_MODEL_SCALE_POLICY` to a JSON object. Its `policy` field holds the
+[qualified materializer policy](immutable-materialization.md) for a helper image
+built with support for `run --selected-objects`. Its `limits` field contains
+the numeric capture limits `max_bytes`, `max_file_bytes`, and `deadline_seconds`.
+Allow temporary disk space on the backend for the selected model files and
+retain the captured object versions while replicas use them.
+
+The helper uses the instance's namespace-local S3 credential Secret and needs
+permission to read specific object versions. For a private CA, set
+`ca_secret_name` to a Secret in the workload namespace containing `ca.crt`.
+When Docker reports only an image config ID, pin the deployment image by digest
+or supply a `runtime_manifests` mapping in the policy configuration. Each key
+is the observed `docker://sha256:…` ID and its value is the pullable image
+reference whose platform manifest you verified references that config ID.
+
+Automatic capture supports the standard managed explicit-mode launcher with
+dependencies installed in the runtime image. Repositories requiring custom
+configuration rewrites can use an operator-prepared release.
+
+## Use an operator-prepared startup release
 
 A trusted cluster operator prepares a development startup release and a
 [versioned materialization plan](immutable-materialization.md). Use
@@ -41,7 +76,7 @@ interactive template available for the deployment's lifetime.
 
 ## Roll out and change replicas
 
-In the instance overview, enter the prepared startup release digest and choose
+Under **Use an operator-prepared startup release**, enter the prepared startup release digest and choose
 **Roll out startup state**. The transition replaces the current single pod, so
 expect a serving interruption. The Deployment uses a recreate strategy so the
 transition works without a spare GPU. The replacement uses pod-local readiness

@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import httpx
-
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.canonical import digest, inventory_digest
