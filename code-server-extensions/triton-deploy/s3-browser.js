@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const profileApi = require("./profile-api");
+const { registerConversionExports } = require("./conversion-exports");
 const path = require("node:path");
 const s3 = require("./s3-client");
 const { planUpload } = require("./s3-files");
@@ -742,6 +743,10 @@ function registerS3Browser(context) {
   });
   command("tritonControl.uploadS3", async (uri) => {
     try { await browser.chooseUpload(await node(uri)); } finally { provider.notify(uri); }
+  });
+  registerConversionExports(command, {
+    getProfile: (id) => browser.profile(id),
+    listProfiles: () => browser.session.profiles(),
   });
   command("tritonControl.uploadWorkspaceS3", async (uri, selected) => {
     const roots = (vscode.workspace.workspaceFolders || []).filter((folder) => folder.uri.scheme === SCHEME);

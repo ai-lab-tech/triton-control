@@ -5,10 +5,17 @@ from uuid import UUID
 from sqlmodel import Session
 
 from app.core import installation_policy
+from app.repositories import conversion_exports, handoffs
 from app.repositories import engineering_queue as repository
-from app.repositories import handoffs
 from app.repositories import preparation as tasks
-from app.schemas.engineering_queue import CandidateSummary, QueueEntry, TaskActions, TaskOverview, TaskSource
+from app.schemas.engineering_queue import (
+    CandidateSummary,
+    ConversionSummary,
+    QueueEntry,
+    TaskActions,
+    TaskOverview,
+    TaskSource,
+)
 from app.schemas.preparation import TaskDTO
 from app.services import preparation
 
@@ -63,4 +70,5 @@ def overview(session: Session, claims: dict[str, Any], task_id: UUID) -> TaskOve
     candidates = [CandidateSummary(installation_id=row.installation_id, record_id=row.record_id,
                                    candidate_digest=row.candidate_digest, created_at=row.created_at)
                   for row in repository.candidates(session, task_id)]
-    return TaskOverview(**entry.model_dump(), candidates=candidates)
+    conversions = [ConversionSummary.model_validate(row) for row in conversion_exports.statuses(session, task_id)]
+    return TaskOverview(**entry.model_dump(), candidates=candidates, conversions=conversions)

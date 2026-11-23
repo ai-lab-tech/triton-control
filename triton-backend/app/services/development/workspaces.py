@@ -140,7 +140,9 @@ def delete_code_server(
     if association:
         task = task_repository.get(session, association.task_id)
         task.revision += 1
-        task_repository.add_event(session, task, user.id or 0, "workspace_deleted", {"workspace_id": row.id})
+        task_repository.add_event(session, task, user.id or 0, "workspace_deleted", {
+            "workspace_id": row.id, "namespace": namespace, "workspace": row.statefulset_name,
+        })
         association.workspace_id = None
         associations.save(session, association)
     code_servers.delete(session, row)

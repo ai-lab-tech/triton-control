@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -24,7 +25,7 @@ from app.repositories import task_workspaces as repository
 from app.schemas.development import CreateCodeServerRequest
 from app.schemas.preparation import ReasonRequest, TaskRevision
 from app.schemas.task_workspaces import OpenTaskWorkspace
-from app.services import handoff_sources, preparation, task_workspaces, teams
+from app.services import conversion_exports, engineering_queue, handoff_sources, preparation, task_workspaces, teams
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
 from app.services.development import profiles, workspaces
@@ -63,6 +64,114 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.apply.assert_called_once()
         history = preparation.list_events(self.session, self.engineer, self.task.id)
         self.assertEqual(sum(item.action == "workspace_requested" for item in history), 1)
+
+    def conversion_request(self):
+        identity = uuid4()
+        prefix = f"allowed/task-conversions/{self.task.id}/{identity}/iris/"
+        return conversion_exports.ConversionExport(
+            directory="iris",
+            profile_id=1,
+            export_id=identity,
+            objects=[
+                conversion_exports.ExportObject(
+                    key=prefix + path, size=5, sha256=hashlib.sha256(b"model").hexdigest(), version_id="v1",
+                )
+                for path in ("config.pbtxt", "1/model.onnx")
+            ],
+        )
+
+    def mock_conversion_storage(self):
+        self.enterContext(patch.object(conversion_exports, "api_client"))
+        core = self.enterContext(patch.object(conversion_exports.client, "CoreV1Api"))
+        core.return_value.read_namespaced_persistent_volume_claim.return_value.metadata.uid = "old-pvc"
+        backend = self.enterContext(patch.object(conversion_exports, "storage"))
+        provider = MagicMock()
+        provider.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        provider.get_object.side_effect = lambda **args: {
+            "VersionId": args["VersionId"],
+            "ContentLength": 5,
+            "Body": SimpleNamespace(iter_chunks=lambda **_: [b"model"], close=lambda: None),
+        }
+        backend.return_value.__enter__.return_value = conversion_exports.ContextStore(provider, "models")
+        return backend
+
+    def test_conversion_receipt_survives_workspace_replacement(self):
+        # Arrange
+        first = self.row(self.open())
+        request = self.conversion_request()
+        auth = self.enterContext(patch.object(conversion_exports, "authenticate_workspace", return_value=first))
+        self.enterContext(patch.object(k8s, "delete_code_server_resources", return_value="retired"))
+        self.mock_conversion_storage()
+        conversion_exports.record(self.session, first.namespace, first.name, "token", request)
+        workspaces.delete_code_server(self.session, self.engineer, first.id)
+        second = self.row(self.open())
+        auth.return_value = second
+
+        # Act
+        receipt = conversion_exports.saved_receipt(
+            self.session, second.namespace, second.name, "token", request.export_id,
+        )
+
+        # Assert
+        self.assertEqual(receipt["claim_uid"], "old-pvc")
+        self.assertEqual([obj["version_id"] for obj in receipt["objects"]], ["v1", "v1"])
+
+    def test_record_retry_accepts_reordered_inventory_without_adding_event(self):
+        # Arrange
+        workspace = self.row(self.open())
+        request = self.conversion_request()
+        self.enterContext(patch.object(conversion_exports, "authenticate_workspace", return_value=workspace))
+        self.mock_conversion_storage()
+        args = (self.session, workspace.namespace, workspace.name, "token")
+        conversion_exports.export_event(*args, request, "conversion_export_started")
+        conversion_exports.export_event(*args, request, "conversion_export_interrupted")
+        conversion_exports.record(*args, request)
+        revision = preparation.get_task(self.session, self.engineer, self.task.id).revision
+        retry = request.model_copy(update={"objects": list(reversed(request.objects))})
+
+        # Act
+        result = conversion_exports.record(*args, retry)
+
+        # Assert
+        overview = engineering_queue.overview(self.session, self.engineer, self.task.id)
+        self.assertEqual(result, {"status": "verified", "export_id": str(request.export_id)})
+        self.assertEqual([(entry.status, entry.directory) for entry in overview.conversions], [("verified", "iris")])
+        self.assertEqual(overview.task.revision, revision)
+
+    def test_rejects_verification_with_different_metadata_than_started_export(self):
+        # Arrange
+        workspace = self.row(self.open())
+        request = self.conversion_request()
+        self.enterContext(patch.object(conversion_exports, "authenticate_workspace", return_value=workspace))
+        storage = self.mock_conversion_storage()
+        args = (self.session, workspace.namespace, workspace.name, "token")
+        started = request.model_copy(update={"directory": "other/iris"})
+        conversion_exports.export_event(*args, started, "conversion_export_started")
+
+        # Act
+        with self.assertRaises(ConflictError) as caught:
+            conversion_exports.record(*args, request)
+
+        # Assert
+        self.assertIn("identifier is already used", str(caught.exception.detail))
+        self.assertEqual(conversion_exports.saved_conversions(*args), [])
+        storage.assert_not_called()
+
+    def test_retrying_started_returns_current_interrupted_status(self):
+        # Arrange
+        workspace = self.row(self.open())
+        request = self.conversion_request()
+        self.enterContext(patch.object(conversion_exports, "authenticate_workspace", return_value=workspace))
+        args = (self.session, workspace.namespace, workspace.name, "token")
+        conversion_exports.export_event(*args, request, "conversion_export_started")
+        conversion_exports.export_event(*args, request, "conversion_export_interrupted")
+
+        # Act
+        result = conversion_exports.export_event(*args, request, "conversion_export_started")
+
+        # Assert
+        self.assertEqual(result, {"status": "interrupted"})
+        self.assertEqual(conversion_exports.saved_conversions(*args), [])
 
     def test_size_preview_does_not_allocate_and_matches_creation(self):
         # Arrange
@@ -422,6 +531,24 @@ class TaskStagerTests(unittest.TestCase):
         self.assertFalse(spec["automountServiceAccountToken"])
         self.assertEqual(init["command"], ["python3", "/stager/stage.py"])
         self.assertNotIn("S3_SECRET", json.dumps(spec))
+
+    def test_claim_retains_task_identity_after_statefulset_deletion(self):
+        # Arrange
+        manifests = k8s._manifests(OpenTaskWorkspace().workspace, "test", "task-1", "svc", "secret")
+        self.enterContext(patch.dict("os.environ", {"TRITON_INSTALLATION_ID": "dev.example"}))
+
+        # Act
+        configure(manifests, {**self.document(), "task_id": "task-id"}, "test", "task-1", "secret")
+
+        # Assert
+        spec = next(item["spec"] for item in manifests if item["kind"] == "StatefulSet")
+        self.assertEqual(
+            spec["persistentVolumeClaimRetentionPolicy"], {"whenScaled": "Retain", "whenDeleted": "Retain"},
+        )
+        self.assertEqual(spec["volumeClaimTemplates"][0]["metadata"]["annotations"], {
+            "triton-control.io/workspace-name": "task-1", "triton-control.io/task-id": "task-id",
+            "triton-control.io/installation-id": "dev.example",
+        })
 
     def test_editor_default_output_root_is_writable_conversion_folder(self):
         manifests = k8s._manifests(OpenTaskWorkspace().workspace, "test", "task-1", "task-1-svc", "task-1-secret")

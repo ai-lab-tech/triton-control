@@ -131,6 +131,16 @@
         "icon": "$(plug)"
       },
       {
+        "command": "tritonControl.restoreConvertedModel",
+        "title": "Restore Saved Conversion",
+        "category": "Triton Control"
+      },
+      {
+        "command": "tritonControl.saveConvertedModel",
+        "title": "Save Converted Model to S3",
+        "category": "Triton Control"
+      },
+      {
         "command": "tritonControl.uploadWorkspaceS3",
         "title": "Upload to Bucket Root\u2026",
         "category": "S3",
@@ -323,6 +333,11 @@
           "command": "tritonControl.switchS3Profile",
           "when": "tritonControl.s3Connected",
           "group": "4_profile@1"
+        },
+        {
+          "command": "tritonControl.saveConvertedModel",
+          "when": "explorerResourceIsFolder && (resourceScheme == file || resourceScheme == vscode-remote)",
+          "group": "2_transfer@1"
         },
         {
           "command": "tritonControl.uploadWorkspaceS3",

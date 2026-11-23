@@ -7,6 +7,8 @@ const http = require("node:http");
 const crypto = require("node:crypto");
 const {
   signedRequest,
+  requireVersioning,
+  download,
   parseList,
   list,
   head,
@@ -275,4 +277,37 @@ test("bucket creation uses region XML, validates names, and never recreates exis
   exists = true;
   await assert.rejects(createBucket(selected, "new-bucket"), /already exists/);
   assert.equal(created.length, 2);
+});
+
+test("saved conversions restore the verified version even when the current object differs", async (t) => {
+  // Arrange
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    requests.push(req.url);
+    if (req.url.endsWith("?versioning=")) return res.end("<Status>Enabled</Status>");
+    res.setHeader("x-amz-version-id", "v/1");
+    if (req.method === "PUT") {
+      for await (const _ of req) { /* consume the upload */ }
+      return res.end();
+    }
+    res.end(req.url.endsWith("?versionId=v%2F1") ? "original" : "updated");
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "conversion-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, "source");
+  const dest = path.join(root, "restored");
+  await fs.writeFile(source, "original");
+  const destination = { ...profile, endpoint: "http://127.0.0.1:" + server.address().port };
+
+  // Act
+  await requireVersioning(destination);
+  const receipt = await upload(destination, "iris/1/model", source, { versionReceipt: true });
+  await download(destination, receipt.key, dest, { versionId: receipt.version_id, expected: receipt });
+
+  // Assert
+  assert.equal(receipt.version_id, "v/1");
+  assert.equal(await fs.readFile(dest, "utf8"), "original");
+  assert.equal(requests.at(-1), "/models/iris/1/model?versionId=v%2F1");
 });
