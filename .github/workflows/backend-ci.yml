@@ -166,7 +166,8 @@ jobs:
             -e RUSTFS_ACCESS_KEY=conversion-test -e RUSTFS_SECRET_KEY=conversion-test-secret \
             docker.io/rustfs/rustfs@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a /data
           trap 'docker rm -f conversion-s3' EXIT
-          curl --fail --retry 20 --retry-connrefused --retry-delay 1 "$CONVERSION_EXPORT_TEST_S3/health"
+          curl --fail --silent --show-error --retry 20 --retry-all-errors --retry-delay 1 --max-time 3 \
+            "$CONVERSION_EXPORT_TEST_S3/health" || { docker logs conversion-s3; exit 1; }
           export KUBERNETES_KUBECONFIG_PATH="$HOME/.kube/config"
           python -m unittest tests.test_conversion_exports_kubernetes -v
       - name: Verify builder qualification persistence with PostgreSQL
