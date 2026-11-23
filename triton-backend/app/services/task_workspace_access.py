@@ -84,14 +84,15 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
             raise ForbiddenError("Captured source is no longer available through its authorized profile")
 
 
-def guard(session: Session, workspace: CodeServerEntity) -> None:
-    """No-op for personal workspaces; task tokens and proxies recheck current rights."""
+def guard(session: Session, workspace: CodeServerEntity) -> UUID | None:
+    """Return the task identity after verifying current workspace and source access."""
     association = task_workspaces.for_workspace(session, workspace.id or 0)
     if association is None:
-        return
+        return None
     owner = users.find_by_id(session, workspace.owner_user_id)
     if owner is None or not owner.is_active:
         raise ForbiddenError("Task workspace owner is inactive")
     authorize(session, claims_from_user(owner, {}), association.task_id,
               recovery=association.recovery_reason is not None)
     authorize_inputs(session, WorkspaceInputs.model_validate(association.inputs))
+    return association.task_id

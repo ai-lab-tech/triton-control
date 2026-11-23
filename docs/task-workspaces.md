@@ -163,9 +163,9 @@ visible and do not prevent claiming a task. Snapshot tasks can open a workspace 
 retaining their recorded gaps. Build attempts, preparation attempts and retained
 candidates are displayed separately from task state and imply no production approval.
 
-On a development instance, **Prepare for production** captures selected model versions
-without changing the experiment. Managed captures use the observed deployment identity;
-external instances require an explicit S3 repository or selected workspace model files. The resulting task links back to
-the original instance. The capture URL preserves progress across page reloads. These
-entry points are unavailable in production. This workflow adds read-only API views;
-no database migration or existing receipt rewrite is required.
+On an instance with a configured S3 model repository, **Prepare for production**
+lets you select a READY model version and create a preparation task from its snapshot.
+The form shows the recorded bucket and prefix. Deployments created with a task
+workspace credential link back to that task through **Open preparation task**.
+Existing instances without recorded task provenance follow the repository and model
+eligibility checks. These actions are available on development installations.

@@ -109,6 +109,7 @@ class TritonInstanceDTO(SQLModel):
     metrics_gpu: float = 0
     metrics_last_checked_at: Optional[datetime] = None
     metrics_error: Optional[str] = None
+    preparation_task_id: str | None = None
     deployment_runtime: str = "external"
     deployment_namespace: Optional[str] = None
     deployment_name: Optional[str] = None

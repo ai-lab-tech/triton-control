@@ -16815,6 +16815,17 @@
             ],
             "title": "Metrics Error"
           },
+          "preparation_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preparation Task Id"
+          },
           "deployment_runtime": {
             "type": "string",
             "title": "Deployment Runtime",

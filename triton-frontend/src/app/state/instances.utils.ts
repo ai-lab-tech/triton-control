@@ -64,6 +64,7 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
     metricsUrl: dto.metrics_url ?? "",
     metricsLastCheckedAt: dto.metrics_last_checked_at ? String(dto.metrics_last_checked_at) : "",
     metricsError: dto.metrics_error ? String(dto.metrics_error) : "",
+    preparationTaskId: stringField(deployment["preparation_task_id"]),
     deploymentRuntime: stringField(deployment["deployment_runtime"]),
     deploymentNamespace: stringField(deployment["deployment_namespace"]),
     deploymentName: stringField(deployment["deployment_name"]),

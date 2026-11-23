@@ -39,10 +39,10 @@ and task authorization.
 ## Request capture
 
 In the UI, open **Serving → Instances**, select the development instance, and
-choose **Prepare for production**. Set the intended models and versions. Under
-**Experiment source**, choose **Hugging Face**, **Git example**, or **Manual or
-AI-assisted** to enter provenance. Select **Capture snapshot**. When capture
-succeeds, select **Open preparation task and snapshot** to inspect the result.
+choose **Prepare for production**, select a READY model version, review the S3
+location, and choose **Create preparation task**. A single ready version is
+preselected. After capture, **Open preparation task and snapshot** opens the result.
+Task workspace deployments provide a direct link to their originating task.
 
 `POST /api/instances/{instance_id}/preparation-requests` requires an interactive,
 currently active member/admin, instance access, and `Idempotency-Key` (1–128
@@ -77,10 +77,9 @@ required. You can optionally supply `evaluation_files` (path/size/SHA-256 entrie
 the service checks that these refer to bytes actually included in the model or
 workspace inventory. Declarations do not constitute passed evaluation evidence.
 
-Managed deployments normally use the instance's configured S3 repository.
-An explicit `repository: {"profile_id": 3, "prefix": "prepared/iris"}` instead
-uses a prefix beneath an existing authorized S3 profile. External endpoints
-require an explicit repository or selected workspace model files. Their runtime
+Capture requires the instance's recorded S3 repository. Requests that supply a
+different repository or select an unserved version are rejected. External endpoints
+also require a configured S3 source. Their runtime
 image is unobserved. Optional `supplied_runtime_image` is a
 pinned user-supplied reference, retained separately from observed runtime
 identity and never represented as the actually tested image.

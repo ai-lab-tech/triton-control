@@ -196,6 +196,9 @@ def _migrate_triton_instances_table() -> None:
         conn.execute(text(
             "ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS inference_examples JSON DEFAULT '{}'"
         ))
+        conn.execute(text(
+            "ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS preparation_task_id VARCHAR"
+        ))
         conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_uri VARCHAR"))
         conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_name VARCHAR"))
         conn.execute(

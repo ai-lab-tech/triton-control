@@ -94,13 +94,22 @@ def _managed(instance: Any) -> bool:
 
 
 def _selectors(session: Session, claims: dict[str, Any], instance: Any, request: PreparationRequest) -> None:
+    if instance.preparation_task_id:
+        raise ConflictError("Open the existing preparation task for this instance")
+    if not (instance.s3_enabled and instance.s3_bucket and instance.s3_endpoint
+            and instance.s3_access_key and instance.s3_secret_key_enc):
+        raise BadRequestError("This instance has no configured S3 model repository")
+    if request.repository:
+        raise BadRequestError("Use the instance's configured model repository")
+    ready = {(row.get("name"), row.get("version")) for row in instance.repository_models or []
+             if str(row.get("state", "")).upper() == "READY"}
+    if any((model.name, version) not in ready for model in request.models for version in model.versions):
+        raise ConflictError("Select a model version currently served by this instance")
     if _managed(instance):
         if not request.deployment_uid or request.expected_generation is None:
             raise BadRequestError("Managed capture requires deployment_uid and expected_generation from pod state")
         if not instance.deployment_namespace or not instance.deployment_name:
             raise ConflictError("Managed deployment identity is unavailable")
-    elif request.repository is None and not (request.source and request.source.workspace_model_root):
-        raise BadRequestError("External endpoints require explicitly supplied repository or workspace model inputs")
     if request.workspace:
         get_owned_code_server(session, claims, request.workspace.workspace_id)
     if request.previous_snapshot_id:
@@ -113,8 +122,6 @@ def submit(
     session: Session, claims: dict[str, Any], instance_id: int, request: PreparationRequest, key: str
 ) -> PreparationAccepted:
     development_only()
-    instance = _instance(session, claims, instance_id)
-    _selectors(session, claims, instance, request)
     operation = operations.submit(
         session,
         claims,
@@ -190,37 +197,23 @@ def _store(session: Session, claims: dict[str, Any], stack: ExitStack) -> Any:
 
 
 def _source(
-    session: Session, claims: dict[str, Any], instance: Any, request: PreparationRequest, stack: ExitStack
-) -> Any:
-    if request.repository:
-        client, bucket, prefix = _checked_profile_client(session, claims, request.repository.profile_id)
-        prefix = "/".join(part for part in (prefix, request.repository.prefix) if part)
-    elif not _managed(instance):
-        return None
-    elif (
-        instance.s3_enabled
-        and instance.s3_bucket
-        and instance.s3_endpoint
-        and instance.s3_access_key
-        and instance.s3_secret_key_enc
-    ):
-        config = S3Config(
-            s3_endpoint=instance.s3_endpoint,
-            s3_bucket=instance.s3_bucket,
-            s3_access_key=instance.s3_access_key,
-            s3_secret_key_enc=instance.s3_secret_key_enc,
-            s3_use_https=bool(instance.s3_use_https),
-            s3_ca_certificate=instance.s3_ca_certificate,
-            s3_region=instance.s3_region,
-            s3_address_style=instance.s3_address_style,
-            s3_verify_ssl=True,
-        )
-        client = build_s3_client(
-            config, client_config=Config(connect_timeout=3, read_timeout=10, retries={"max_attempts": 1})
-        )
-        bucket, prefix = instance.s3_bucket, instance.s3_prefix or ""
-    else:
-        return None
+    instance: Any, request: PreparationRequest, stack: ExitStack
+) -> SelectedModels:
+    config = S3Config(
+        s3_endpoint=instance.s3_endpoint,
+        s3_bucket=instance.s3_bucket,
+        s3_access_key=instance.s3_access_key,
+        s3_secret_key_enc=instance.s3_secret_key_enc,
+        s3_use_https=bool(instance.s3_use_https),
+        s3_ca_certificate=instance.s3_ca_certificate,
+        s3_region=instance.s3_region,
+        s3_address_style=instance.s3_address_style,
+        s3_verify_ssl=True,
+    )
+    client = build_s3_client(
+        config, client_config=Config(connect_timeout=3, read_timeout=10, retries={"max_attempts": 1})
+    )
+    bucket, prefix = instance.s3_bucket, instance.s3_prefix or ""
     stack.callback(client.close)
     return SelectedModels(client, bucket, prefix, request.models)
 
@@ -353,7 +346,7 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
         _selectors(session, claims, instance, request)
         configuration = _config(instance)
         before = _observe(instance, request)
-        source = _source(session, claims, instance, request, stack)
+        source = _source(instance, request, stack)
         store = _store(session, claims, stack)
         source_identity = _source_identity(source)
         store_identity = _store_identity(store)
@@ -392,7 +385,7 @@ def capture(operation: OperationEntity, context: ExecutionContext) -> ReconcileR
             if _config(_instance(session, claims, int(operation.target))) != configuration:
                 raise ConflictError("Instance configuration changed during capture")
             session.expire_all()
-            fresh_source = _source(session, claims, instance, request, stack)
+            fresh_source = _source(instance, request, stack)
             if _source_identity(fresh_source) != source_identity:
                 raise ConflictError("Source binding changed during capture")
             if _store_identity(_store(session, claims, stack)) != store_identity:
@@ -450,6 +443,10 @@ class SnapshotAdapter:
             return PreparationRequest.model_validate(payload).model_dump(mode="json")
         except ValidationError:
             raise BadRequestError("Invalid experiment capture request") from None
+
+    def validate_submission(self, session: Session, claims: dict[str, Any], operation: OperationEntity) -> None:
+        instance = _instance(session, claims, int(operation.target))
+        _selectors(session, claims, instance, PreparationRequest.model_validate(operation.payload))
 
     def authorize(self, session: Session, actor: UserEntity, target: str, action: Action) -> None:
         development_only()

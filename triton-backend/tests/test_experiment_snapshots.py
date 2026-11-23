@@ -97,6 +97,10 @@ class SnapshotFixture(PreparationFixture):
                 name="experiment",
                 url="http://serving.invalid",
                 model_names=["iris"],
+                repository_models=[{"name": "iris", "version": "1", "state": "READY"}],
+                s3_endpoint="https://storage.invalid",
+                s3_access_key="fixture",
+                s3_secret_key_enc="fixture",
                 is_self_deployed=True,
                 deployment_runtime="kubernetes",
                 deployment_namespace="test",
@@ -144,7 +148,6 @@ class SnapshotFixture(PreparationFixture):
         patcher = patch.dict(operations.adapters, {service.KIND: self.adapter})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.original_source = service._source
         for name, value in (("_source", self.source), ("_observe", self.runtime)):
             mock = patch.object(service, name, return_value=value)
             mock.start()
@@ -284,39 +287,30 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         self.assertNotEqual(complete.manifest.source_snapshot.inventory, changed.manifest.source_snapshot.inventory)
         self.assertNotIn("source_license_missing", partial.task.missing_inputs)
 
-    def test_external_manual_capture_accepts_complete_workspace_model_and_attributes_author(self):
+    def test_rejects_capture_from_a_task_workspace_deployment(self):
         # Arrange
         instance = self.session.get(TritonInstanceEntity, 1)
-        instance.is_self_deployed = False
-        self.session.add(instance)
+        instance.preparation_task_id = "00000000-0000-0000-0000-000000000001"
         self.session.commit()
-        workspace = self.select_workspace({
-            "iris/config.pbtxt": b'name: "iris"',
-            "iris/1/model.py": b"# Uncommitted model logic",
-        })
-        self.enterContext(patch.object(service, "_source", wraps=self.original_source))
-        self.enterContext(patch.object(service, "_observe", return_value=RuntimeObservation(managed=False)))
-        request = self.request(
-            deployment_uid=None, expected_generation=None, workspace=workspace,
-            source={"kind": "manual", "workspace_model_root": ".", "author": "Ada Example", "ai_assisted": True},
-        )
+        # Act / Assert
+        with self.assertRaises(ConflictError):
+            self.submit()
 
-        # Act
-        receipt = self.finish(request=request)
+    def test_rejects_capture_without_a_recorded_s3_repository(self):
+        # Arrange
+        instance = self.session.get(TritonInstanceEntity, 1)
+        instance.s3_bucket = ""
+        self.session.commit()
+        # Act / Assert
+        with self.assertRaises(BadRequestError):
+            self.submit()
 
-        # Assert
-        provenance = receipt.manifest.source_provenance
-        assert provenance is not None
-        self.assertEqual(receipt.manifest.source_snapshot.kind, "manual")
-        self.assertEqual(receipt.manifest.request.source, request.source)
-        self.assertEqual(provenance.submitter_user_id, receipt.manifest.submitter_user_id)
-        self.assertEqual(receipt.manifest.inventory.files, ())
-        self.assertIn(entry(".workspace/iris/1/model.py", b"# Uncommitted model logic"),
-                      receipt.manifest.workspace_inventory.files)
-        self.assertNotIn("model_artifacts_missing", receipt.task.missing_inputs)
-        self.assertIn("external_runtime_unobserved", receipt.task.missing_inputs)
-        self.assertIn("source_model_card_missing", receipt.task.missing_inputs)
-        self.assertIn("source_license_missing", receipt.task.missing_inputs)
+    def test_rejects_version_not_served_by_instance(self):
+        # Arrange
+        request = self.request(models=[{"name": "iris", "versions": ["2"]}])
+        # Act / Assert
+        with self.assertRaises(ConflictError):
+            self.submit(request=request)
 
     def test_hf_capture_retains_unreadable_manifest_and_flags_unavailable_checkpoint(self):
         # Arrange
@@ -469,8 +463,7 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         instance.s3_endpoint = "https://legacy-user:synthetic-private-value@storage.invalid"
         self.session.add(instance)
         self.session.commit()
-        # Use explicitly supplied model inputs, independently of legacy instance settings.
-        receipt = self.finish(request=self.request(repository={"profile_id": 1, "prefix": "provided"}))
+        receipt = self.finish()
         self.assertEqual(receipt.manifest.configuration["models"], ["iris"])
         self.assertIsNone(receipt.manifest.configuration["s3_endpoint"])
         self.assertNotIn("synthetic-private-value", receipt.model_dump_json())
@@ -527,16 +520,16 @@ class SnapshotTests(SnapshotFixture, unittest.TestCase):
         )
         self.assertTrue(receipt.task.blocked_reasons)
 
-    def test_external_endpoint_requires_explicit_inputs_and_does_not_invent_runtime(self):
+    def test_external_endpoint_uses_recorded_repository_and_does_not_invent_runtime(self):
         instance = self.session.get(TritonInstanceEntity, 1)
         instance.is_self_deployed = False
         instance.deployment_runtime = "external"
         self.session.add(instance)
         self.session.commit()
         with self.assertRaises(BadRequestError):
-            self.submit()
+            self.submit(request=self.request(repository={"profile_id": 1, "prefix": "provided"}))
         with patch.object(service, "_observe", return_value=RuntimeObservation(managed=False)):
-            receipt = self.finish(request=self.request(repository={"profile_id": 1, "prefix": "provided"}))
+            receipt = self.finish()
         self.assertFalse(receipt.manifest.runtime.managed)
         self.assertIn("external_runtime_unobserved", receipt.manifest.gaps)
 

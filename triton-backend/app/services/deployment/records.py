@@ -80,6 +80,9 @@ def upsert_deployed_instance(
             f"Initial health: {snap['health_error'] or 'healthy'}"
         ),
         "is_self_deployed": True,
+        "preparation_task_id": (
+            claims.get("preparation_task_id") if claims.get("token_use") == "workspace_deployment" else None
+        ),
         "inference_examples": (
             {request.example_model_name: request.example_request} if request.example_request is not None else {}
         ),

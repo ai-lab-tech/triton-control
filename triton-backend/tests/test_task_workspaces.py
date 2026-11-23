@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.api.task_workspaces_api import router
 from app.core.security import get_claims
@@ -27,7 +27,7 @@ from app.schemas.task_workspaces import OpenTaskWorkspace
 from app.services import handoff_sources, preparation, task_workspaces, teams
 from app.services import task_workspace_access as access
 from app.services.development import kubernetes as k8s
-from app.services.development import profiles, workspaces
+from app.services.development import deployment_access, profiles, workspaces
 from app.services.development.task_stage_runner import stage
 from app.services.development.task_staging import configure
 from tests.test_handoffs import HandoffFixture
@@ -63,6 +63,23 @@ class TaskWorkspaceTests(HandoffFixture, unittest.TestCase):
         self.apply.assert_called_once()
         history = preparation.list_events(self.session, self.engineer, self.task.id)
         self.assertEqual(sum(item.action == "workspace_requested" for item in history), 1)
+
+    def test_authenticated_deployment_credential_carries_its_workspace_task(self):
+        # Arrange
+        workspace = self.row(self.open())
+        token = deployment_access.create_token(workspace.namespace, workspace.statefulset_name)
+        engine = self.session.get_bind()
+        self.enterContext(patch.object(deployment_access, "session_factory", side_effect=lambda: Session(engine)))
+        self.enterContext(patch.object(deployment_access, "api_client"))
+        core = self.enterContext(patch.object(deployment_access.client, "CoreV1Api")).return_value
+        core.read_namespaced_secret.return_value.data = {
+            deployment_access.TOKEN_KEY: base64.b64encode(token.encode()).decode(),
+        }
+        # Act
+        claims = deployment_access.authenticate_token(token)
+
+        # Assert
+        self.assertEqual(claims["preparation_task_id"], str(self.task.id))
 
     def test_size_preview_does_not_allocate_and_matches_creation(self):
         # Arrange

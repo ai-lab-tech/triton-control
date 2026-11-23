@@ -26,7 +26,11 @@
       <div class="detail-summary">
         <div class="detail-summary-head">
           <h1 class="page-title">{{ instance.name }}</h1>
-          @if (preparation.allowed() && !preparation.expanded()) {
+          @if (instance.preparationTaskId && preparation.canAccess()) {
+            <a mat-stroked-button [routerLink]="['/preparation/tasks', instance.preparationTaskId]"
+              >Open preparation task</a
+            >
+          } @else if (preparation.allowed() && !preparation.expanded()) {
             <button mat-stroked-button color="primary" type="button" (click)="preparation.begin()">
               <mat-icon>assignment</mat-icon>
               Prepare for production
@@ -98,7 +102,7 @@
       #preparation
       [instance]="instance"
       [unavailable]="!!loadError()"
-      [hidden]="!preparation.allowed() || !preparation.expanded()"
+      [hidden]="!preparation.expanded()"
     />
     @if (deploymentDeleteError()) {
       <div class="panel-hint health-error">{{ deploymentDeleteError() }}</div>
