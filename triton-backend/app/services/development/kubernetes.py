@@ -707,6 +707,7 @@ def _triton_deploy_extension_vsix_b64(extension_dir: Path, package_json: dict[st
         "extension/hf-builder-client.js": (extension_dir / "hf-builder-client.js").read_text(encoding="utf-8"),
         "extension/profile-api.js": (extension_dir / "profile-api.js").read_text(encoding="utf-8"),
         "extension/s3-browser.js": (extension_dir / "s3-browser.js").read_text(encoding="utf-8"),
+        "extension/conversion-exports.js": (extension_dir / "conversion-exports.js").read_text(encoding="utf-8"),
         "extension/s3-client.js": (extension_dir / "s3-client.js").read_text(encoding="utf-8"),
         "extension/s3-filesystem.js": (extension_dir / "s3-filesystem.js").read_text(encoding="utf-8"),
         "extension/s3-transfers.js": (extension_dir / "s3-transfers.js").read_text(encoding="utf-8"),
