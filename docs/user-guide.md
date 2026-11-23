@@ -141,17 +141,14 @@ For these manually added instances, the **Logs** tab is not available.
 
 ### Overview Tab
 
-The overview tab shows:
+For managed instances, **Overview** shows replica readiness, scaling controls and
+the serving endpoint. Expand **Current pods** to inspect individual pods or open
+their logs. Current pods expand automatically when Kubernetes reports stale state
+or fewer ready replicas than requested.
 
-- status, version, runtime environment, and assigned users
-- Triton base URL and optional metrics URL
-- SSL verification status
-- `/v2/health/live` and `/v2/health/ready` results
-- Triton `/v2` metadata as summary or raw JSON
-
-Members and admins can update Triton endpoint, metrics endpoint, and SSL
-certificate verification settings from the **Edit** action in the **Networking**
-card header.
+Expand **Rollout details** for replica counts and controller conditions.
+**Deployment details**, **Users & permissions** and **Triton server metadata**
+provide the deployment configuration, access list and server capabilities.
 
 ### Models Tab
 

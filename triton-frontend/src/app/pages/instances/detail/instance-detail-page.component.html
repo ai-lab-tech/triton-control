@@ -154,15 +154,9 @@
       <mat-tab label="Overview">
         <div class="tab-panel overview-panel">
           <div class="overview-primary">
-            <app-workload-panel
-              [instanceId]="instance.id"
-              [active]="selectedDetailTabIndex() === 0"
-              (viewLogs)="openPodLogs($event)"
-              (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
-            />
             @if (managedModelState()) {
               <section class="panel-card model-state-panel">
-                <h2 class="panel-title">Model state and replicas</h2>
+                <h2 class="panel-title">Replicas</h2>
                 @if (deploymentModelState(); as state) {
                   <p class="panel-hint" role="status">
                     {{ state.mode === "declared" ? "Declared startup" : "Interactive" }}
@@ -233,6 +227,14 @@
                 }
               </section>
             }
+            <app-workload-panel
+              [instanceId]="instance.id"
+              [active]="selectedDetailTabIndex() === 0"
+              (viewLogs)="openPodLogs($event)"
+              (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
+            />
+          </div>
+          <div class="overview-secondary">
             <div class="panel-card endpoint-summary">
               <div class="panel-title">Endpoint</div>
               @if (endpointAccess(); as endpoint) {
@@ -258,124 +260,121 @@
                 {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
               </button>
             </div>
-          </div>
-          <div class="overview-secondary">
             @if (instance.isSelfDeployed) {
               <div class="panel-card deployment-card">
-                <div class="panel-title">Deployment</div>
-                <div class="kv">
-                  <span class="kv-label">{{
-                    instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
-                  }}</span>
-                  <span class="kv-value">{{
-                    instance.deploymentBackend || "No backend in config.pbtxt"
-                  }}</span>
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Image</span>
-                  <span class="kv-value">
-                    @if (instance.deploymentImage) {
-                      <code class="network-url">{{ instance.deploymentImage }}</code>
-                    } @else {
-                      <span>Unavailable</span>
-                    }
-                  </span>
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Repository</span>
-                  <span class="kv-value">
-                    @if (instance.deploymentRepository) {
-                      <code class="network-url">{{ instance.deploymentRepository }}</code>
-                    } @else {
-                      <span>Unavailable</span>
-                    }
-                  </span>
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Namespace</span>
-                  <span class="kv-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Deployment</span>
-                  <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
-                </div>
-                <div class="kv">
-                  <span class="kv-label">Service</span>
-                  <span class="kv-value">{{
-                    instance.deploymentServiceName || "Unavailable"
-                  }}</span>
-                </div>
+                <details>
+                  <summary class="overview-disclosure">Deployment details</summary>
+                  <div class="kv">
+                    <span class="kv-label">{{
+                      instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
+                    }}</span>
+                    <span class="kv-value">{{
+                      instance.deploymentBackend || "No backend in config.pbtxt"
+                    }}</span>
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Image</span>
+                    <span class="kv-value">
+                      @if (instance.deploymentImage) {
+                        <code class="network-url">{{ instance.deploymentImage }}</code>
+                      } @else {
+                        <span>Unavailable</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Repository</span>
+                    <span class="kv-value">
+                      @if (instance.deploymentRepository) {
+                        <code class="network-url">{{ instance.deploymentRepository }}</code>
+                      } @else {
+                        <span>Unavailable</span>
+                      }
+                    </span>
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Namespace</span>
+                    <span class="kv-value">{{
+                      instance.deploymentNamespace || "Unavailable"
+                    }}</span>
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Deployment</span>
+                    <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
+                  </div>
+                  <div class="kv">
+                    <span class="kv-label">Service</span>
+                    <span class="kv-value">{{
+                      instance.deploymentServiceName || "Unavailable"
+                    }}</span>
+                  </div>
+                </details>
               </div>
             }
             <div class="panel-card access-card">
-              <div class="panel-title">Users &amp; permissions</div>
-              <div class="access-summary">
-                <span class="access-count">{{ instance.assignedUsers.length }}</span>
-                <span class="access-text">{{
-                  instance.assignedUsers.length === 1 ? "person has access" : "people have access"
-                }}</span>
-              </div>
-              <div class="chip-row">
-                @for (user of instance.assignedUsers; track user) {
-                  <span class="user-chip" data-tone="ok">
-                    <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
-                    <span class="user-name">{{ user.name }}</span>
-                    <span class="permission-chip">{{ user.role }}</span>
-                  </span>
-                }
-                @if (!instance.assignedUsers.length) {
-                  <span class="empty-chip">No access assigned</span>
-                }
-              </div>
-              <div class="panel-hint">
-                People shown here can access this instance with the listed permission.
-              </div>
-            </div>
-          </div>
-          <div class="overview-metadata">
-            <div class="panel-card">
-              <div class="panel-title">Triton /v2 Metadata</div>
-              <div class="endpoint-row">
-                <span class="endpoint-method">GET</span>
-                <code>{{ instance.url }}/v2</code>
-                <button
-                  mat-stroked-button
-                  type="button"
-                  class="metadata-toggle"
-                  (click)="toggleMetadataView()"
-                >
-                  <span class="material-icons">{{
-                    showRawMetadata() ? "notes" : "data_object"
-                  }}</span>
-                  {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
-                </button>
-              </div>
-              @if (!showRawMetadata()) {
-                <div class="metadata-summary">
-                  <div class="metadata-item">
-                    <div class="metadata-label">Server name</div>
-                    <div class="metadata-value">{{ metadataSummary().serverName }}</div>
-                  </div>
-                  <div class="metadata-item">
-                    <div class="metadata-label">Version</div>
-                    <div class="metadata-value">{{ metadataSummary().version }}</div>
-                  </div>
-                  <div class="metadata-item metadata-item-wide">
-                    <div class="metadata-label">Extensions</div>
-                    @if (metadataSummary().extensions.length) {
-                      <div class="metadata-extension-list">
-                        @for (extension of metadataSummary().extensions; track extension) {
-                          <span class="metadata-extension-chip">{{ extension }}</span>
-                        }
-                      </div>
-                    } @else {
-                      <div class="metadata-value">Unavailable</div>
-                    }
-                  </div>
+              <details>
+                <summary class="overview-disclosure">
+                  Users &amp; permissions ({{ instance.assignedUsers.length }})
+                </summary>
+                <div class="chip-row">
+                  @for (user of instance.assignedUsers; track user) {
+                    <span class="user-chip" data-tone="ok">
+                      <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
+                      <span class="user-name">{{ user.name }}</span>
+                      <span class="permission-chip">{{ user.role }}</span>
+                    </span>
+                  }
+                  @if (!instance.assignedUsers.length) {
+                    <span class="empty-chip">No access assigned</span>
+                  }
                 </div>
-              } @else {
-                <pre class="json-block">{{ metadataJson() }}</pre>
-              }
+              </details>
+            </div>
+            <div class="panel-card">
+              <details>
+                <summary class="overview-disclosure">Triton server metadata</summary>
+                <div class="endpoint-row">
+                  <span class="endpoint-method">GET</span>
+                  <code>{{ instance.url }}/v2</code>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="metadata-toggle"
+                    (click)="toggleMetadataView()"
+                  >
+                    <span class="material-icons">{{
+                      showRawMetadata() ? "notes" : "data_object"
+                    }}</span>
+                    {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
+                  </button>
+                </div>
+                @if (!showRawMetadata()) {
+                  <div class="metadata-summary">
+                    <div class="metadata-item">
+                      <div class="metadata-label">Server name</div>
+                      <div class="metadata-value">{{ metadataSummary().serverName }}</div>
+                    </div>
+                    <div class="metadata-item">
+                      <div class="metadata-label">Version</div>
+                      <div class="metadata-value">{{ metadataSummary().version }}</div>
+                    </div>
+                    <div class="metadata-item metadata-item-wide">
+                      <div class="metadata-label">Extensions</div>
+                      @if (metadataSummary().extensions.length) {
+                        <div class="metadata-extension-list">
+                          @for (extension of metadataSummary().extensions; track extension) {
+                            <span class="metadata-extension-chip">{{ extension }}</span>
+                          }
+                        </div>
+                      } @else {
+                        <div class="metadata-value">Unavailable</div>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <pre class="json-block">{{ metadataJson() }}</pre>
+                }
+              </details>
             </div>
           </div>
         </div>
