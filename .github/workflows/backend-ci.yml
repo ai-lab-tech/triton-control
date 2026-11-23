@@ -7,6 +7,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/publication/**"
       - "contracts/materialization/**"
       - "contracts/validation/**"
       - "examples/workflows/**"
@@ -23,6 +24,7 @@ on:
       - "triton-backend/**"
       - "contracts/candidate-import/**"
       - "contracts/serving/**"
+      - "contracts/publication/**"
       - "contracts/materialization/**"
       - "contracts/validation/**"
       - "examples/workflows/**"
@@ -78,7 +80,7 @@ jobs:
         run: |
           python scripts/export_validation_schema.py --check
           python scripts/generate_validation_fixtures.py --check
-          python -m unittest tests.test_validation_contracts -v
+          python -m unittest tests.test_validation_contracts tests.test_publication.ReceiptSchemaTest -v
           python -m app.services.validation_cli ../contracts/validation/v1alpha1/fixtures/manifest.json ../contracts/validation/v1alpha1/fixtures/report-passed.yaml ../contracts/validation/v1alpha1/fixtures/evidence.json
           python scripts/export_serving_metadata_schema.py --check
           python scripts/generate_serving_metadata_fixtures.py --check
@@ -273,7 +275,7 @@ jobs:
           LINEAGE_TEST_DATABASE_URL: postgresql://candidate_test:candidate_test@localhost:5432/candidate_test
           CANDIDATE_IMPORT_TEST_S3_ENDPOINT: http://127.0.0.1:9000
         run: |
-          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
+          python -m unittest tests.test_candidate_import tests.test_candidate_s3 tests.test_candidate_import_postgres tests.test_candidate_import_s3_integration tests.test_materialization_s3 tests.test_publication tests.test_lineage tests.test_lineage_postgres tests.test_experiment_snapshots_s3 -v
       - name: Verify build context staging, concurrency and versioned retention
         working-directory: triton-backend
         env:
