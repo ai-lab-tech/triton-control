@@ -5,11 +5,13 @@ import io
 import tempfile
 import time
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from botocore.exceptions import ClientError
 from botocore.response import StreamingBody
 
 from app.exceptions import BadRequestError, ConflictError
@@ -18,82 +20,209 @@ from app.services.conversion_exports import ConversionExport, ExportObject, veri
 from app.services.development import claim_inventory, claim_retention
 
 
-class ExportChecks(unittest.TestCase):
+class ExportVerificationTests(unittest.TestCase):
     def setUp(self):
-        self.export = ConversionExport(export_id=uuid4(), profile_id=1, directory="models/iris", objects=[
-            ExportObject(key="exports/iris/" + path, size=5, sha256=hashlib.sha256(b"model").hexdigest(), version_id=version)
-            for path, version in (("config.pbtxt", "v1"), ("1/model.onnx", "v2"))
-        ])
+        self.export = ConversionExport(
+            export_id=uuid4(),
+            profile_id=1,
+            directory="models/iris",
+            objects=[
+                ExportObject(
+                    key="exports/iris/" + path,
+                    size=5,
+                    sha256=hashlib.sha256(b"model").hexdigest(),
+                    version_id=version,
+                )
+                for path, version in (("config.pbtxt", "v1"), ("1/model.onnx", "v2"))
+            ],
+        )
         self.client = MagicMock()
         self.client.get_bucket_versioning.return_value = {"Status": "Enabled"}
-        self.client.get_object.side_effect = lambda **kw: {
-            "Body": StreamingBody(io.BytesIO(b"model"), 5), "ContentLength": 5, "VersionId": kw["VersionId"],
+        self.client.get_object.side_effect = lambda **kwargs: {
+            "Body": StreamingBody(io.BytesIO(b"model"), 5),
+            "ContentLength": 5,
+            "VersionId": kwargs["VersionId"],
         }
         self.store = ContextStore(self.client, "models")
 
-    def verify(self):
-        verify_objects(self.store, self.export, "exports", time.monotonic() + 60)
-
     def test_reads_exact_versions(self):
-        self.verify()
-        self.assertEqual([call.kwargs["VersionId"] for call in self.client.get_object.call_args_list], ["v1", "v2"])
+        # Arrange
+        deadline = time.monotonic() + 60
 
-    def test_rejects_corruption_and_partial_inventory(self):
+        # Act
+        verify_objects(self.store, self.export, "exports", deadline)
+
+        # Assert
+        calls = self.client.get_object.call_args_list
+        self.assertEqual([call.kwargs["VersionId"] for call in calls], ["v1", "v2"])
+
+    def test_rejects_corruption(self):
+        # Arrange
         self.export.objects[1].sha256 = "0" * 64
-        with self.assertRaises(ConflictError):
-            self.verify()
+        deadline = time.monotonic() + 60
+
+        # Act
+        with self.assertRaises(ConflictError) as caught:
+            verify_objects(self.store, self.export, "exports", deadline)
+
+        # Assert
+        self.assertIn("checksum", str(caught.exception.detail))
+
+    def test_rejects_inventory_missing_model_version(self):
+        # Arrange
         self.export.objects.pop()
-        with self.assertRaises(BadRequestError):
-            self.verify()
+        deadline = time.monotonic() + 60
 
-    def test_legacy_and_attached_claims_are_protected(self):
-        metadata = SimpleNamespace(name="workspace-task-test-0", uid="uid", annotations={})
-        claim = SimpleNamespace(metadata=metadata, spec=SimpleNamespace(volume_name="pv"))
-        session, core, apps = MagicMock(), MagicMock(), MagicMock()
-        self.assertIn("legacy", claim_retention.evaluate(session, core, apps, "ns", claim, "install", None, True))
-        metadata.annotations = {"triton-control.io/installation-id": "install", "triton-control.io/workspace-name":
-                                "task-test", "triton-control.io/task-id": str(uuid4())}
-        with patch.object(claim_retention.developments, "find_by_workload", return_value=None):
-            self.assertIn("active", claim_retention.evaluate(session, core, apps, "ns", claim, "install", None, True))
-        core.delete_namespaced_persistent_volume_claim.assert_not_called()
+        # Act
+        with self.assertRaises(BadRequestError) as caught:
+            verify_objects(self.store, self.export, "exports", deadline)
 
-    def test_interrupted_export_after_receipt_protects_claim(self):
-        task = uuid4()
-        ns, name, uid = "ns", "task-test", "claim-uid"
-        claim = SimpleNamespace(metadata=SimpleNamespace(name="workspace-task-test-0", uid=uid, annotations={
-            "triton-control.io/task-id": str(task), "triton-control.io/workspace-name": name,
-            "triton-control.io/installation-id": "test"}), spec=SimpleNamespace(volume_name="pv"))
-        session, core, apps = MagicMock(), MagicMock(), MagicMock()
+        # Assert
+        self.assertIn("version directories", str(caught.exception.detail))
+        self.client.get_object.assert_not_called()
+
+    def test_rejects_file_directory_collision_before_accessing_storage(self):
+        # Arrange
+        config = self.export.objects[0]
+        self.export.objects.append(config.model_copy(update={"key": config.key + "/extra"}))
+        deadline = time.monotonic() + 60
+
+        # Act
+        with self.assertRaises(BadRequestError) as caught:
+            verify_objects(self.store, self.export, "exports", deadline)
+
+        # Assert
+        self.assertIn("both a file and directory", str(caught.exception.detail))
+        self.client.get_bucket_versioning.assert_not_called()
+
+    def test_reports_missing_object_version_as_conflict(self):
+        # Arrange
+        self.client.get_object.side_effect = ClientError({"Error": {"Code": "NoSuchVersion"}}, "GetObject")
+        deadline = time.monotonic() + 60
+
+        # Act
+        with self.assertRaises(ConflictError) as caught:
+            verify_objects(self.store, self.export, "exports", deadline)
+
+        # Assert
+        self.assertIn("object version is missing", str(caught.exception.detail))
+
+
+class ClaimRetentionTests(unittest.TestCase):
+    def setUp(self):
+        self.claim = SimpleNamespace(
+            metadata=SimpleNamespace(
+                name="workspace-task-test-0",
+                uid="claim-uid",
+                annotations={
+                    "triton-control.io/installation-id": "install",
+                    "triton-control.io/workspace-name": "task-test",
+                    "triton-control.io/task-id": str(uuid4()),
+                },
+            ),
+            spec=SimpleNamespace(volume_name="pv"),
+        )
+        self.session, self.core, self.apps = MagicMock(), MagicMock(), MagicMock()
+        self.enterContext(patch.object(claim_retention.developments, "find_by_workload", return_value=None))
+
+    def evaluate(self):
+        return claim_retention.evaluate(
+            self.session, self.core, self.apps, "ns", self.claim, "install", timedelta(), True,
+        )
+
+    def test_retains_claims_with_unusable_identity(self):
+        for identity in (None, "invalid-id"):
+            with self.subTest(identity=identity):
+                # Arrange
+                annotations = self.claim.metadata.annotations
+                annotations.pop("triton-control.io/task-id", None)
+                if identity is not None:
+                    annotations["triton-control.io/task-id"] = identity
+
+                # Act
+                result = self.evaluate()
+
+                # Assert
+                self.assertIn("legacy identity", result)
+                self.core.delete_namespaced_persistent_volume_claim.assert_not_called()
+
+    def test_retains_attached_claim(self):
+        # Arrange
+        self.apps.read_namespaced_stateful_set.return_value = SimpleNamespace()
+
+        # Act
+        result = self.evaluate()
+
+        # Assert
+        self.assertIn("active", result)
+        self.core.delete_namespaced_persistent_volume_claim.assert_not_called()
+
+    def test_retains_claim_after_export_is_interrupted(self):
+        # Arrange
         def event(action, revision):
-            return SimpleNamespace(action=action, revision=revision, changes={
-                "workspace": name, "namespace": ns, "claim_uid": uid, "directory": "iris"})
-        session.exec.return_value.all.return_value = [
-            event("conversion_export_verified", 1), event("conversion_export_interrupted", 2),
-            event("workspace_deleted", 3)]
-        with patch.object(claim_retention.developments, "find_by_workload", return_value=None), \
-             patch.object(claim_retention, "attached", return_value=False):
-            result = claim_retention.evaluate(session, core, apps, ns, claim, "test", None, True)
+            return SimpleNamespace(
+                action=action,
+                revision=revision,
+                changes={"workspace": "task-test", "namespace": "ns", "claim_uid": "claim-uid", "directory": "iris"},
+            )
+
+        self.session.exec.return_value.all.return_value = [
+            event("conversion_export_verified", 1),
+            event("conversion_export_interrupted", 2),
+            event("workspace_deleted", 3),
+        ]
+        self.enterContext(patch.object(claim_retention, "attached", return_value=False))
+
+        # Act
+        result = self.evaluate()
+
+        # Assert
         self.assertIn("incomplete", result)
-        core.delete_namespaced_persistent_volume_claim.assert_not_called()
+        self.core.delete_namespaced_persistent_volume_claim.assert_not_called()
 
-    def test_inspection_covers_other_directories_and_rejects_links(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "notes").write_bytes(b"unsaved")
-            self.assertIn("notes", claim_inventory.inventory(root))
-            (root / "alias").symlink_to(root / "notes")
-            with self.assertRaises(ValueError):
-                claim_inventory.inventory(root)
+    def test_inventory_includes_files_outside_conversion_directory(self):
+        # Arrange
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (root / "notes").write_bytes(b"unsaved")
 
+        # Act
+        inventory = claim_inventory.inventory(root)
 
-class ConversionRecoveryTests(unittest.TestCase):
-    def test_model_requires_one_complete_export(self):
+        # Assert
+        self.assertIn("notes", inventory)
+
+    def test_inventory_rejects_symlinks(self):
+        # Arrange
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (root / "notes").write_bytes(b"unsaved")
+        (root / "alias").symlink_to(root / "notes")
+
+        # Act
+        with self.assertRaises(ValueError) as caught:
+            claim_inventory.inventory(root)
+
+        # Assert
+        self.assertIn("link or special file", str(caught.exception))
+
+    def test_recoverability_requires_one_complete_export_per_model(self):
         root = "conversion/iris"
-        cfg, weights = root + "/config.pbtxt", root + "/1/model"
-        a, b = {cfg: "A", weights: "A"}, {cfg: "B", weights: "B"}
-        snapshots = [(root, a), (root, b)]
-        self.assertFalse(claim_retention.recoverable({cfg: "A", weights: "B"}, snapshots))
-        self.assertFalse(claim_retention.recoverable({cfg: "A"}, snapshots))
-        self.assertFalse(claim_retention.recoverable({**a, root + "/extra": "C"}, snapshots))
+        config, weights = root + "/config.pbtxt", root + "/1/model"
+        first = {config: "A", weights: "A"}
+        second = {config: "B", weights: "B"}
         other = {"conversion/other/1/model": "C"}
-        self.assertTrue(claim_retention.recoverable({**a, **other}, snapshots + [("conversion/other", other)]))
+        cases = [
+            ("mixed", {config: "A", weights: "B"}, False),
+            ("partial", {config: "A"}, False),
+            ("extra", {**first, root + "/extra": "C"}, False),
+            ("complete", {**first, **other}, True),
+        ]
+        for name, files, expected in cases:
+            with self.subTest(name=name):
+                # Arrange
+                receipts = [(root, first), (root, second), ("conversion/other", other)]
+
+                # Act
+                result = claim_retention.recoverable(files, receipts)
+
+                # Assert
+                self.assertEqual(result, expected)

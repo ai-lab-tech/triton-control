@@ -27,6 +27,8 @@ spec:
                   value: {{ printf "%s/%s" .Release.Namespace .Release.Name | quote }}
                 - name: TASK_WORKSPACE_RETENTION_DAYS
                   value: {{ .Values.development.workspaceRetention.days | quote }}
+                - name: PREPARATION_TRANSFER_TIMEOUT_SECONDS
+                  value: {{ .Values.modelPreparation.transferTimeoutSeconds | quote }}
                 - name: POD_NAMESPACE
                   value: {{ .Release.Namespace | quote }}
                 {{- with .Values.app.env }}

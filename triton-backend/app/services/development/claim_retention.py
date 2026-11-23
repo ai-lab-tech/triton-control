@@ -166,14 +166,19 @@ def evaluate(
         return "Deletion already in progress"
     annotations = claim.metadata.annotations or {}
     workspace = annotations.get("triton-control.io/workspace-name")
+    task_identity = annotations.get("triton-control.io/task-id")
     if (
         annotations.get("triton-control.io/installation-id") != installation
         or not workspace
+        or not task_identity
         or name != f"workspace-{workspace}-0"
         or not claim.spec.volume_name
     ):
         return "Retained: ambiguous or legacy identity"
-    task_id = UUID(annotations["triton-control.io/task-id"])
+    try:
+        task_id = UUID(task_identity)
+    except ValueError:
+        return "Retained: ambiguous or legacy identity"
 
     def active(inspector: str | None = None) -> bool:
         return developments.find_by_workload(session, namespace, workspace) is not None or attached(
