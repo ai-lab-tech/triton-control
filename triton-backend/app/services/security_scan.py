@@ -18,6 +18,8 @@ from app.schemas.gate_evidence import SecurityReport, SignedSecurityReport
 from app.schemas.serving_metadata import ServingRelease
 from app.services.candidates.artifacts import CaptureLimits
 from app.services.gate_evidence import security_message
+from app.services.materialization.budgets import configured_limits
+from app.services.materialization.cli import read_document
 from app.services.materialization.filesystem import inventory
 
 
@@ -31,11 +33,19 @@ def run_trivy(arguments: list[str], destination: Path) -> dict[str, Any]:
     return result
 
 
-def scan(release: ServingRelease, source: Path, models: Path, destination: Path, issuer: str, key: Path) -> None:
+def scan(
+    release: ServingRelease,
+    source: Path,
+    models: Path,
+    destination: Path,
+    issuer: str,
+    key: Path,
+    *,
+    limits: CaptureLimits = CaptureLimits(),
+) -> None:
     if os.getenv("TRITON_CONTROL_MODE") != "development":
         raise ValueError("Security scanning requires development mode")
     subjects = release.spec.validation.subjects
-    limits = CaptureLimits()
     prepared = inventory(models, limits)
     if (
         inventory_digest(prepared) != subjects.prepared_inventory_digest
@@ -134,6 +144,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("release", "source", "models", "destination", "key"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--limits", help="Materialization capture budget JSON file")
     parser.add_argument("--issuer", required=True)
     args = parser.parse_args()
     scan(
@@ -143,6 +154,7 @@ def main() -> None:
         args.destination,
         args.issuer,
         args.key,
+        limits=configured_limits(read_document(args.limits)) if args.limits else CaptureLimits(),
     )
 
 

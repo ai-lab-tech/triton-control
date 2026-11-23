@@ -245,8 +245,10 @@ Keep the raw 32-byte Ed25519 signing key available only to the issuer.
 ```sh
 TRITON_CONTROL_MODE=development python -m app.services.security_scan \
   --release release.json --source /inputs/source --models /inputs/models \
-  --issuer build-security --key /keys/security-ed25519 --destination /reports/run-001
+  --limits /config/materialization-limits.json --issuer build-security --key /keys/security-ed25519 --destination /reports/run-001
 ```
+
+Pass the same `--limits` JSON file used for materialization to apply its byte, file and inventory time budgets to both directories. Omitting it uses the default capture limits. The full policy file can occupy up to 2 MiB and can contain up to 10,000 approved inventory digests.
 
 The issuer measures both repository inventories, scans serving files without
 loading the model and inspects single-platform images by manifest digest. The

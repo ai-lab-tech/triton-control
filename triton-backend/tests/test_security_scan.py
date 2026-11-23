@@ -28,7 +28,7 @@ from app.services.gate_evidence import (
     verify_security,
 )
 from app.services.materialization.filesystem import inventory
-from app.services.security_scan import scan
+from app.services.security_scan import main, scan
 from tests.test_validation_contracts import NOW, data
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts/validation/v1alpha1/fixtures/artifacts"
@@ -112,13 +112,19 @@ class SecurityTests(unittest.TestCase):
                 "evaluator": manifest.evaluator,
                 "requiredCriteria": manifest.criteria,
                 "maxValiditySeconds": int((envelope.valid_until - envelope.issued_at).total_seconds()),
-                "security": self.policy,
+                "security": {
+                    **self.policy.model_dump(by_alias=True),
+                    "approvedModelInventories": [
+                        *self.policy.approved_model_inventories,
+                        *(digest(i) for i in range(9999)),
+                    ],
+                },
             }
         )
         target = manifest.supported_targets[0]
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "policy.json"
-            path.write_text(policy.model_dump_json(by_alias=True))
+            path.write_text(policy.model_dump_json(by_alias=True, indent=2))
             with patch.dict(os.environ, {POLICY_FILE: str(path)}):
                 binding = verify_release_evidence(self.release, archive, now=NOW, target=target)
                 self.assertEqual(
@@ -154,6 +160,42 @@ class SecurityTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "development"),
         ):
             scan(self.release, Path("."), Path("."), Path("."), "scanner", Path("."))
+
+    def test_cli_applies_materialization_budget_to_both_inventories(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, TRITON_CONTROL_MODE="development"):
+            root = Path(temp)
+            release = root / "release.json"
+            release.write_text(json.dumps(data("release")))
+            budget = root / "limits.json"
+            budget.write_text(json.dumps({"max_bytes": 40 << 30, "max_file_bytes": 40 << 30, "deadline_seconds": 3600}))
+            args = [
+                "scan",
+                "--release",
+                str(release),
+                "--source",
+                str(root / "source"),
+                "--models",
+                str(root / "models"),
+                "--destination",
+                str(root / "out"),
+                "--issuer",
+                "scanner",
+                "--key",
+                str(root / "key"),
+                "--limits",
+                str(budget),
+            ]
+            expected = CaptureLimits(max_bytes=40 << 30, max_file_bytes=40 << 30, deadline_seconds=3600)
+            with (
+                patch("sys.argv", args),
+                patch("app.services.security_scan.inventory", return_value=self.report.model_inventory) as measure,
+                patch("app.services.security_scan.run_trivy", side_effect=ValueError("end of inventory")),
+                self.assertRaisesRegex(ValueError, "end of inventory"),
+            ):
+                main()
+            self.assertEqual(
+                [c.args for c in measure.call_args_list], [(root / "models", expected), (root / "source", expected)]
+            )
 
     def test_failure_leaves_no_signed_receipt_and_changed_inputs_block_retry(self):
         release = ServingRelease.model_validate(data("release"))

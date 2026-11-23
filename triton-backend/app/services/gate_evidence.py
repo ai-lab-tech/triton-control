@@ -16,7 +16,7 @@ from app.services.contract_io import MetadataError, parse_json_document
 from app.services.validation import check_evidence_consistency, check_release_binding, document_digest
 
 POLICY_FILE = "TRITON_GATE_POLICY_FILE"
-MAX_POLICY_BYTES = 256 * 1024
+MAX_POLICY_BYTES = 2 * 1024 * 1024  # Includes 10,000 SHA-256 digests and the surrounding gate policy.
 MAX_ARCHIVE_BYTES = 4 * 1024 * 1024
 
 
