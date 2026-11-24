@@ -31,10 +31,11 @@ class ConversionExportIntegration(HandoffFixture, unittest.TestCase):
         core, apps = client.CoreV1Api(api), client.AppsV1Api(api)
         core.create_namespace({"metadata": {"name": ns}})
         self.addCleanup(core.delete_namespace, ns)
-        # Install the same enforced policy as the scheduled operator.
+        # Only the admission policy is applied. The chart needs an app Secret reference to render.
         chart = Path(__file__).resolve().parents[2] / "charts/triton-control"
         manifest = subprocess.check_output(["helm", "template", "retention-test", str(chart), "-n", ns,
-            "--set", "development.workspaceRetention.enabled=true", "--show-only",
+            "--set", "development.workspaceRetention.enabled=true",
+            "--set-string", "app.existingSecret=retention-test-app", "--show-only",
             "templates/workspace-claim-admission.yaml"])
         subprocess.run(["kubectl", "apply", "-f", "-"], input=manifest, check=True)
         self.addCleanup(subprocess.run, ["kubectl", "delete", "-f", "-"], input=manifest, check=True)
