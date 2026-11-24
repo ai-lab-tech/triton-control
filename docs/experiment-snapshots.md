@@ -8,8 +8,19 @@ create a production release, approve it or claim validation success.
 
 ## Configure controlled staging
 
-Set a stable `TRITON_INSTALLATION_ID` on every backend replica and choose exactly
-one administrator-configured destination:
+The development Helm chart mounts a persistent snapshot volume by default and
+uses its namespace/release installation ID. The claim requests 20 GiB with
+ReadWriteOnce access. Configure `modelPreparation.snapshotVolume` for the desired
+size, storage class and access mode. Use ReadWriteMany when backend replicas run
+on different nodes. Helm retains the claim on uninstall.
+
+**Require S3 versioning for handoff inputs** in Admin settings applies to the
+original serving model files. When cleared, capture reads unversioned files with
+their ETags, hashes their contents, rechecks the source, and retains a separate
+copy for the task. Subsequent changes to the serving files do not change that copy.
+
+For an explicit store, configure one of these options. Outside Helm, also set a
+stable `TRITON_INSTALLATION_ID` on every backend replica.
 
 - `TRITON_PREPARATION_SNAPSHOT_PROFILE_ID`: existing global S3 profile ID. Its
   bucket must have versioning enabled. Optional
@@ -21,10 +32,9 @@ one administrator-configured destination:
   made read-only. An ephemeral container directory is unsuitable for retained
   snapshots.
 
-Use the existing Helm `app.env` and storage/volume configuration to provide
-these settings. No bucket, credentials, persistent volume or storage location is
-created implicitly. Unknown/unconfigured storage fails visibly through the
-operation contract. Source and destination prefixes may not overlap the selected
+An explicit root or profile in Helm `app.env` overrides the default volume.
+Set `modelPreparation.snapshotVolume.enabled=false` when supplying storage
+configuration through `app.envFrom`. Source and destination prefixes may not overlap the selected
 models. Preserve destination configuration and retained object versions across
 upgrades; changing a provider location requires an explicit data migration.
 Do not apply lifecycle deletion to referenced snapshots. This ticket adds no
@@ -38,11 +48,9 @@ and task authorization.
 
 ## Request capture
 
-In the UI, open **Serving → Instances**, select the development instance, and
-choose **Prepare for production**. Set the intended models and versions. Under
-**Experiment source**, choose **Hugging Face**, **Git example**, or **Manual or
-AI-assisted** to enter provenance. Select **Capture snapshot**. When capture
-succeeds, select **Open preparation task and snapshot** to inspect the result.
+The serving page opens the engineering queue's prefilled **Submit model** form.
+The following API is available to clients that explicitly request an experiment
+snapshot. Existing snapshot operation links can still show their status.
 
 `POST /api/instances/{instance_id}/preparation-requests` requires an interactive,
 currently active member/admin, instance access, and `Idempotency-Key` (1–128
@@ -77,10 +85,9 @@ required. You can optionally supply `evaluation_files` (path/size/SHA-256 entrie
 the service checks that these refer to bytes actually included in the model or
 workspace inventory. Declarations do not constitute passed evaluation evidence.
 
-Managed deployments normally use the instance's configured S3 repository.
-An explicit `repository: {"profile_id": 3, "prefix": "prepared/iris"}` instead
-uses a prefix beneath an existing authorized S3 profile. External endpoints
-require an explicit repository or selected workspace model files. Their runtime
+Capture requires the instance's recorded S3 repository. Requests that supply a
+different repository or select an unserved version are rejected. External endpoints
+also require a configured S3 source. Their runtime
 image is unobserved. Optional `supplied_runtime_image` is a
 pinned user-supplied reference, retained separately from observed runtime
 identity and never represented as the actually tested image.
@@ -234,8 +241,7 @@ The new API is the contract for the #22/#24 user flows; this ticket adds no new 
 Capture registers immutable task-workspace inputs in the same transaction as the
 receipt and task. After claiming the task, an eligible engineer can open its
 workspace even while experiment gaps remain. Those gaps are retained unchanged:
-workspace access is preparation, not evaluation or release approval. Existing
-handoff workspaces still require their evaluation inputs before opening.
+workspace access is preparation, not evaluation or release approval.
 
 The workspace restores the captured model inventory under `/inputs/verified/source/`
 and selected project files under `/inputs/verified/source/.workspace/`. Downloads

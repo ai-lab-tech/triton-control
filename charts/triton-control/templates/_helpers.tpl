@@ -91,3 +91,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 true
 {{- end -}}
 {{- end -}}
+
+{{- define "triton-control.snapshotVolumeEnabled" -}}
+{{- $external := false -}}
+{{- range .Values.app.env -}}
+  {{- if has .name (list "TRITON_PREPARATION_SNAPSHOT_PROFILE_ID" "TRITON_PREPARATION_SNAPSHOT_ROOT") -}}
+    {{- $external = true -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (eq (include "triton-control.installationMode" .) "development") (default dict .Values.modelPreparation.snapshotVolume).enabled (not $external) -}}true{{- end -}}
+{{- end -}}

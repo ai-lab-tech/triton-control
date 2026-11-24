@@ -470,6 +470,11 @@ buildQualification:
 # Deployment defaults. Admin Settings > Model preparation can override these values.
 # Reserve backend temp disk and Kubernetes node storage separately for large inputs.
 modelPreparation:
+  snapshotVolume:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
   maxInputGiB: 15
   maxWorkspaceStorageGiB: 50
   transferTimeoutSeconds: 3600

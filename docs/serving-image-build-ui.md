@@ -17,12 +17,10 @@ assigned task's workspace, not a personal workspace.
 2. Open **Development → Engineering queue → Submit model**.
 3. **Choose your model.** Enter a handoff title, select an S3 profile, enter the
    model's object path and set a submission revision, for example `1`. The object
-   must already exist, and the bucket must have versioning enabled. Paths are
+   must already exist. The installation’s handoff policy determines whether S3 versioning is required. Paths are
    relative to the S3 profile's prefix.
-4. **Fill in the evaluation requirements:** the dataset object path, baseline
-   object path, expected behavior and acceptance criteria. Although the submission
-   form allows these fields to be omitted, all four are needed to open the task
-   workspace. The dataset and baseline objects must already exist in S3.
+4. Optionally add a dataset, baseline, expected behavior or acceptance criteria.
+   The workspace stages any supplied files alongside the model source.
 5. **Click Submit to engineering.** This creates a preparation task and opens
    its handoff receipt.
 6. **Click Claim task** on the receipt to assign the task to yourself.
@@ -32,8 +30,7 @@ assigned task's workspace, not a personal workspace.
 
 If **Open task workspace** is disabled, check that the task is assigned and no
 required inputs are missing. Only the current assignee can open its normal task
-workspace. If you submitted incomplete inputs, select **Add missing information**.
-Complete the prefilled form, submit the revision and claim the new task.
+workspace. Evaluation details can be added later in a new handoff revision.
 
 For more detail, see [engineering access](user-management.md),
 [model handoffs](scientist-handoffs.md) and [task workspaces](task-workspaces.md).

@@ -236,10 +236,15 @@ class DirectorySource(ArtifactSource):
         return CapturedSource(InventoryV1(files=tuple(files)), {"kind": "directory"})
 
 
+class MissingSourceVersion(BadRequestError):
+    """The source does not satisfy the configured input policy."""
+
+
 class S3Source(ArtifactSource):
     """One authorized bucket/prefix, with version or conditional reads and rechecks."""
 
-    def __init__(self, client: Any, bucket: str, prefix: str) -> None:
+    def __init__(self, client: Any, bucket: str, prefix: str, *, require_versioning: bool = False) -> None:
+        self.require_versioning = require_versioning
         self.client, self.bucket = client, bucket
         if prefix:
             safe_path(prefix.removesuffix("/"), CaptureLimits())
@@ -290,6 +295,8 @@ class S3Source(ArtifactSource):
                 if head["ContentLength"] != item["size"] or head["ETag"] != item["etag"]:
                     raise ConflictError("S3 source changed before capture")
                 version = head.get("VersionId")
+                if self.require_versioning and (not version or version == "null"):
+                    raise MissingSourceVersion("Admin policy requires S3 object versions for selected model files")
                 args = {"VersionId": version} if version and version != "null" else {"IfMatch": item["etag"]}
                 response = self.client.get_object(Bucket=self.bucket, Key=item["key"], **args)
                 stream = response["Body"]
@@ -433,6 +440,10 @@ class DirectoryArtifactStore(ArtifactStore):
             raise ConflictError("Stored candidate artifacts are unavailable or invalid") from exc
 
 
+class UnversionedArtifactStore(BadRequestError):
+    """The retention destination cannot preserve specific S3 object versions."""
+
+
 class S3ArtifactStore(ArtifactStore):
     """Version-pinned snapshots in an administrator-selected, versioned bucket."""
 
@@ -449,7 +460,7 @@ class S3ArtifactStore(ArtifactStore):
         limits: CaptureLimits,
     ) -> ArtifactLocation:
         if self.client.get_bucket_versioning(Bucket=self.bucket).get("Status") != "Enabled":
-            raise BadRequestError("Candidate artifact bucket must have versioning enabled")
+            raise UnversionedArtifactStore("Candidate artifact bucket must have versioning enabled")
         if any(entry.size > 5 * 1024**3 for _, entry in _area_files(inventory, metadata)):
             raise BadRequestError("S3 artifact storage currently supports files up to 5 GiB")
         budget = _Budget(limits)

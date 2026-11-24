@@ -111,6 +111,28 @@ describe("WorkloadPanelComponent", () => {
     expect(component.previous()).toBeFalse();
   });
 
+  it("shows readiness and keeps healthy pod diagnostics collapsed until requested", async () => {
+    await refresh({
+      ...snapshot,
+      pods: [{ ...pod, ready: true }],
+      deployment: {
+        ...snapshot.deployment!,
+        desired: 1,
+        updated: 1,
+        ready: 1,
+        available: 1,
+        stale: false,
+      },
+    });
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.textContent).toContain("1 of 1 replica ready");
+    expect(page.querySelector<HTMLDetailsElement>(".rollout-details")!.open).toBeFalse();
+    const pods = page.querySelector<HTMLDetailsElement>(".pod-section")!;
+    expect(pods.open).toBeFalse();
+    pods.querySelector("summary")!.click();
+    expect(pods.open).toBeTrue();
+  });
+
   it("keeps pending pods current and collapses terminal pod history", async () => {
     // Arrange
     const pending = { ...pod, uid: "pending", phase: "Pending" };

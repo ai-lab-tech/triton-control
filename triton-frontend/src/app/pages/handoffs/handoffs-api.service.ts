@@ -38,6 +38,7 @@ export interface SourceInput {
   expected_digest?: string;
 }
 export interface RepositoryInput {
+  model?: { name: string; versions: string[] };
   kind: "s3_repository";
   profile_id: number;
   path: string;
@@ -89,6 +90,7 @@ export interface HandoffNotification {
   created_at: string;
 }
 export interface SourceProfile {
+  endpoint: string;
   id: number;
   name: string;
   bucket: string;

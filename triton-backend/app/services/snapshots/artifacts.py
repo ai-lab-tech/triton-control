@@ -1,5 +1,6 @@
 """Use the neutral importer providers with an explicit model/path allowlist."""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,18 @@ from app.services.candidates.artifacts import S3Source
 from app.services.snapshots.safety import allowed, reject_secrets
 
 
+def store_settings() -> tuple[str, str]:
+    profile = os.getenv("TRITON_PREPARATION_SNAPSHOT_PROFILE_ID", "").strip()
+    root = os.getenv("TRITON_PREPARATION_SNAPSHOT_ROOT", "").strip()
+    if not profile and not root:
+        root = os.getenv("TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT", "").strip()
+    return root, profile
+
+
 class SelectedModels(S3Source):
-    def __init__(self, client: Any, bucket: str, prefix: str, models: tuple[StartupModel, ...]) -> None:
-        super().__init__(client, bucket, prefix)
+    def __init__(self, client: Any, bucket: str, prefix: str, models: tuple[StartupModel, ...],
+                 *, require_versioning: bool = True) -> None:
+        super().__init__(client, bucket, prefix, require_versioning=require_versioning)
         self.models = {model.name: set(model.versions) for model in models}
 
     def includes(self, path: str) -> bool:

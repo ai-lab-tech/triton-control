@@ -3,13 +3,28 @@
 A Kubernetes-managed development deployment running Triton in explicit mode
 allows interactive control when it has one stable pod. Load and Unload go
 directly to that owned pod on port 8000,
-which the backend must be able to reach. To scale
-above one, first roll out a pinned runtime and a frozen repository with an explicit
-list of model names and versions. A previously unloaded model is included only if
-it is in that list and the prepared repository. Connected external endpoints keep
-their existing model-control behavior.
+which the backend must be able to reach.
 
-## Prepare a startup release
+## Scale a running model
+
+Under **Serving → Instances**, open the instance, enter **2** in **Desired replicas**
+and choose **Apply replica count**. On the first scale-up, Triton Control reads the
+ready model names and versions from the current pod. Each replica runs the same
+configured serving image, uses the existing S3 repository and credentials, and
+starts Triton with the selected model names. Triton's version policy determines
+which versions it loads. Kubernetes checks that the ready names and versions
+match the original selection before sending traffic to the pod.
+
+The first rollout keeps the original pod serving until a replacement is ready.
+If capacity is unavailable or the model versions in S3 change, the rollout can
+wait with the original pod online. Choose **Restore interactive control** to
+cancel a pending scale-up. Later changes reuse the same startup configuration.
+
+Scaling works with versioning enabled or disabled. With a mutable repository,
+overwriting a file under the same model version can change the bytes a new pod
+loads. The readiness check runs with Python 3 inside the serving image.
+
+## Use an operator-prepared startup release
 
 A trusted cluster operator prepares a development startup release and a
 [versioned materialization plan](immutable-materialization.md). Use
@@ -47,8 +62,8 @@ interactive template available for the deployment's lifetime.
 
 ## Roll out and change replicas
 
-In the instance overview, enter the prepared startup release digest and choose
-**Roll out startup state**. The transition replaces the current single pod, so
+An operator can submit a prepared release using the instance model-state API
+(`POST /api/instances/{id}/model-state/declare`). The transition replaces the current single pod, so
 expect a serving interruption. The Deployment uses a recreate strategy so the
 transition works without a spare GPU. The replacement uses pod-local readiness
 checks for the frozen materialization receipt and every declared model version.

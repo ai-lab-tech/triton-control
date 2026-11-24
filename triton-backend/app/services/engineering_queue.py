@@ -52,7 +52,7 @@ def _entries(session: Session, claims: dict[str, Any], rows: list[TaskDTO]) -> l
                                 release=mutable and task.assignee_user_id is not None and (assigned or admin),
                                 request_information=mutable and (assigned or admin),
                                 open_workspace=(mutable and assigned
-                                                and (snapshot is not None or not task.missing_inputs))),
+                                                and (snapshot is not None or not task.has_blocking_inputs))),
         ))
     return result
 

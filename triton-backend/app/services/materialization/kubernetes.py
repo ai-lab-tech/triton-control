@@ -57,7 +57,7 @@ def manifests(
 def serving_manifests(
     plan: MaterializationPlan, policy: MaterializerPolicy, binding: StorageBinding, *,
     name: str, namespace: str, limits: CaptureLimits, identity_digest: str, image: str,
-    repository: Repository, models: tuple[StartupModel, ...], resources: Resources,
+    repository: Repository, models: tuple[StartupModel, ...], resources: Resources | dict[str, Any],
     subject: Literal["release", "validation-manifest"] = "release",
 ) -> list[dict[str, Any]]:
     from pydantic import TypeAdapter
@@ -73,7 +73,7 @@ def serving_manifests(
         or repository.prepared_inventory_digest != inventory_digest(plan.prepared_inventory)
     ):
         raise MaterializationError("Release, plan and qualified materializer subjects differ")
-    if repository.uri.rstrip("/") != f"s3://{binding.bucket}/{binding.prefix}":
+    if repository.uri.rstrip("/") != f"s3://{binding.bucket}/{binding.prefix}".rstrip("/"):
         raise MaterializationError("Repository does not match the authorized storage binding")
     data = canonical_bytes(plan.model_dump(mode="json"))
     if len(data) > 512 * 1024:
@@ -137,10 +137,12 @@ def serving_manifests(
         init_mounts.append({"name": "storage-ca", "mountPath": "/storage-ca", "readOnly": True})
         args.extend(["--ca-bundle", "/storage-ca/ca.crt"])
     security = {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
-    requests: dict[str, str] = resources.requests.model_dump()
-    runtime_limits: dict[str, str] = resources.limits.model_dump()
-    if resources.gpu_count:
-        requests["nvidia.com/gpu"] = runtime_limits["nvidia.com/gpu"] = str(resources.gpu_count)
+    if isinstance(resources, Resources):
+        requests = resources.requests.model_dump()
+        runtime_limits = resources.limits.model_dump()
+        if resources.gpu_count:
+            requests["nvidia.com/gpu"] = runtime_limits["nvidia.com/gpu"] = str(resources.gpu_count)
+        resources = {"requests": requests, "limits": runtime_limits}
     return [
         {
             "apiVersion": "v1",
@@ -213,7 +215,7 @@ def serving_manifests(
                         },
                         "args": ["--model-repository=/models", "--model-control-mode=none", "--strict-readiness=true"],
                         "securityContext": security,
-                        "resources": {"requests": requests, "limits": runtime_limits},
+                        "resources": resources,
                         "volumeMounts": [
                             {
                                 "name": "model-repository",

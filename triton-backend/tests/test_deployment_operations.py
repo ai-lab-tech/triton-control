@@ -132,6 +132,18 @@ class DeploymentOperationTests(unittest.TestCase):
             "lineage": ControlLineage.model_validate(fixture),
         })
 
+    def test_workspace_deployment_retains_task_origin_and_rejects_replay_from_another_task(self):
+        # Arrange
+        task = str(uuid4())
+        claims = {**self.claims, "token_use": "workspace_deployment", "preparation_task_id": task}
+        # Act
+        result = self.submit(claims=claims)
+        # Assert
+        with Session(self.engine) as session:
+            self.assertEqual(session.get(TritonInstanceEntity, result.instance_id).preparation_task_id, task)
+        with self.assertRaises(ConflictError):
+            self.submit(claims={**claims, "preparation_task_id": str(uuid4())})
+
     def test_lineage_is_returned_on_admission(self):
         # Arrange
         request = self.lineage_request()

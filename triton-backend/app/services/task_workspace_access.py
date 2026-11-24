@@ -31,8 +31,8 @@ def authorize(session: Session, claims: dict[str, Any], task_id: UUID, *, recove
     elif not (eligible and task.assignee_user_id == actor):
         raise ForbiddenError("Only the current eligible assignee may open this task workspace")
     snapshot = experiment_snapshots.find(session, task.source_snapshot_id) if task.source_snapshot_id else None
-    if preparation.get_task(session, claims, task_id).missing_inputs and snapshot is None:
-        raise ConflictError("Complete the handoff evaluation inputs before opening a workspace")
+    if preparation.get_task(session, claims, task_id).has_blocking_inputs and snapshot is None:
+        raise ConflictError("Resolve the outstanding task inputs before opening a workspace")
     return actor
 
 
@@ -84,14 +84,15 @@ def authorize_inputs(session: Session, inputs: WorkspaceInputs) -> None:
             raise ForbiddenError("Captured source is no longer available through its authorized profile")
 
 
-def guard(session: Session, workspace: CodeServerEntity) -> None:
-    """No-op for personal workspaces; task tokens and proxies recheck current rights."""
+def guard(session: Session, workspace: CodeServerEntity) -> UUID | None:
+    """Return the task identity after verifying current workspace and source access."""
     association = task_workspaces.for_workspace(session, workspace.id or 0)
     if association is None:
-        return
+        return None
     owner = users.find_by_id(session, workspace.owner_user_id)
     if owner is None or not owner.is_active:
         raise ForbiddenError("Task workspace owner is inactive")
     authorize(session, claims_from_user(owner, {}), association.task_id,
               recovery=association.recovery_reason is not None)
     authorize_inputs(session, WorkspaceInputs.model_validate(association.inputs))
+    return association.task_id

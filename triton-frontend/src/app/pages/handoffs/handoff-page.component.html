@@ -91,7 +91,7 @@
             }}</a>
             (revision {{ previous.request.revision }}).
             @if (completingHandoff()) {
-              Add the remaining evaluation details, then claim the new task to open its workspace.
+              Add any evaluation details you want to include in the new revision.
             }
           </p>
         }
@@ -105,6 +105,28 @@
           <legend><span class="step-number" aria-hidden="true">01</span> Model source</legend>
           <p class="section-intro">Choose the model you want engineering to work with.</p>
           <div class="fields">
+            @if (servingInstance; as instance) {
+              <p>
+                Serving instance
+                <a [routerLink]="['/instances', instance.id]">{{ instance.name }}</a>
+              </p>
+              <mat-form-field appearance="outline">
+                <mat-label>Served model and version</mat-label>
+                <mat-select
+                  name="servedVersion"
+                  [ngModel]="selectedVersion"
+                  (ngModelChange)="selectServingVersion($event)"
+                  required
+                >
+                  @for (version of readyVersions; track version) {
+                    <mat-option [value]="version">{{ version }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <p>
+                Model repository <code>s3://{{ instance.s3.bucket }}/{{ instance.s3.prefix }}</code>
+              </p>
+            }
             <mat-form-field appearance="outline">
               <mat-label>Handoff title</mat-label>
               <input
@@ -116,37 +138,39 @@
                 placeholder="e.g. Iris classifier"
               />
             </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Model source type</mat-label>
-              <mat-select name="sourceKind" [(ngModel)]="sourceKind">
-                <mat-option value="s3">Single file or archive</mat-option>
-                <mat-option value="s3_repository">Triton repository folder</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>S3 profile</mat-label>
-              <mat-select name="profile" [(ngModel)]="profileId" required>
-                @for (profile of profiles(); track profile.id) {
-                  <mat-option [value]="profile.id"
-                    >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
-                  >
-                }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>Model object path</mat-label>
-              <input
-                matInput
-                name="source"
-                [(ngModel)]="sourcePath"
-                required
-                maxlength="1024"
-                [placeholder]="
-                  sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
-                "
-              />
-              <mat-hint>Relative to your S3 profile’s prefix.</mat-hint>
-            </mat-form-field>
+            @if (!servingInstance) {
+              <mat-form-field appearance="outline">
+                <mat-label>Model source type</mat-label>
+                <mat-select name="sourceKind" [(ngModel)]="sourceKind">
+                  <mat-option value="s3">Single file or archive</mat-option>
+                  <mat-option value="s3_repository">Triton repository folder</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>S3 profile</mat-label>
+                <mat-select name="profile" [(ngModel)]="profileId" required>
+                  @for (profile of profiles(); track profile.id) {
+                    <mat-option [value]="profile.id"
+                      >{{ profile.name }} · {{ profile.bucket }}/{{ profile.prefix }}</mat-option
+                    >
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Model object path</mat-label>
+                <input
+                  matInput
+                  name="source"
+                  [(ngModel)]="sourcePath"
+                  required
+                  maxlength="1024"
+                  [placeholder]="
+                    sourceKind === 's3_repository' ? 'repositories/iris/' : 'models/iris/model.onnx'
+                  "
+                />
+                <mat-hint>Relative to your S3 profile’s prefix.</mat-hint>
+              </mat-form-field>
+            }
           </div>
           <div class="source-note">
             <span class="material-icons" aria-hidden="true">verified_user</span>
@@ -203,10 +227,10 @@
         </fieldset>
         <fieldset [disabled]="busy()" class="form-card">
           <legend>
-            <span class="step-number" aria-hidden="true">02</span> Evaluation requirements
+            <span class="step-number" aria-hidden="true">02</span> Evaluation details (optional)
           </legend>
           <p class="section-intro">
-            Help engineering understand what a successful model looks like.
+            The assigned engineer can start the workspace with just the verified model source.
           </p>
           <ng-template #fieldHelp let-field let-help="help">
             <button
@@ -231,17 +255,12 @@
           <div class="fields">
             <div class="evaluation-field">
               <mat-form-field appearance="outline">
-                <mat-label
-                  >Evaluation dataset object path{{
-                    completingHandoff() ? "" : " (optional)"
-                  }}</mat-label
-                >
+                <mat-label>Evaluation dataset object path (optional)</mat-label>
                 <input
                   matInput
                   name="dataset"
                   aria-describedby="evaluation-help-dataset"
                   [(ngModel)]="datasetPath"
-                  [required]="completingHandoff()"
                   maxlength="1024"
                   placeholder="datasets/evaluation.csv"
                 />
@@ -272,15 +291,12 @@
             }
             <div class="evaluation-field">
               <mat-form-field appearance="outline">
-                <mat-label
-                  >Baseline object path{{ completingHandoff() ? "" : " (optional)" }}</mat-label
-                >
+                <mat-label>Baseline object path (optional)</mat-label>
                 <input
                   matInput
                   name="baseline"
                   aria-describedby="evaluation-help-baseline"
                   [(ngModel)]="baselinePath"
-                  [required]="completingHandoff()"
                   maxlength="1024"
                   placeholder="baselines/results.json"
                 />
@@ -316,13 +332,12 @@
           </p>
           <div class="evaluation-field">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label>Expected behavior{{ completingHandoff() ? "" : " (optional)" }}</mat-label>
+              <mat-label>Expected behavior (optional)</mat-label>
               <textarea
                 matInput
                 name="behavior"
                 aria-describedby="evaluation-help-behavior"
                 [(ngModel)]="expectedBehavior"
-                [required]="completingHandoff()"
                 rows="3"
                 maxlength="8000"
                 placeholder="Describe expected outputs and representative examples."
@@ -337,15 +352,12 @@
           </div>
           <div class="evaluation-field">
             <mat-form-field appearance="outline" class="wide">
-              <mat-label
-                >Acceptance criteria{{ completingHandoff() ? "" : " (optional)" }}</mat-label
-              >
+              <mat-label>Acceptance criteria (optional)</mat-label>
               <textarea
                 matInput
                 name="criteria"
                 aria-describedby="evaluation-help-criteria"
                 [(ngModel)]="criteria"
-                [required]="completingHandoff()"
                 rows="3"
                 maxlength="8000"
                 placeholder="For example: accuracy ≥ 95% on the evaluation dataset."
@@ -361,7 +373,7 @@
           @if (!completingHandoff()) {
             <p class="evaluation-note">
               <span class="material-icons" aria-hidden="true">info_outline</span> You can add these
-              later with a new revision. Missing inputs block the task workspace.
+              later with a new revision.
             </p>
           }
         </fieldset>
@@ -447,9 +459,7 @@
           <button
             mat-flat-button
             (click)="prepareWorkspace()"
-            [disabled]="
-              busy() || !item.task.assignee_user_id || item.task.missing_inputs.length > 0
-            "
+            [disabled]="busy() || !item.task.assignee_user_id || hasBlockingInputs(item)"
             color="primary"
           >
             Open task workspace
@@ -473,11 +483,8 @@
       }
       @if (item.task.missing_inputs.length) {
         <div class="notice">
-          <strong>Workspace blocked by missing inputs</strong>
-          <p>
-            Submit a new handoff revision with the inputs below, then claim the new task to open its
-            workspace.
-          </p>
+          <strong>Information not provided</strong>
+          <p>You can add evaluation details in a new handoff revision.</p>
           <ul>
             @for (name of item.task.missing_inputs; track name) {
               <li>{{ inputLabel(name) }}</li>

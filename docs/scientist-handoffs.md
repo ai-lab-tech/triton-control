@@ -17,8 +17,7 @@ as a folder. You do not need to create a ZIP or tar archive.
 2. Open **Submit model** and select **Triton repository folder** as the model source type.
 3. Select the S3 profile and enter the repository folder path, relative to the
    profile's prefix. A trailing slash is optional.
-4. Enter the dataset and baseline object paths, expected behavior and acceptance
-   criteria, then click **Submit to engineering**.
+4. Add any available evaluation details and click **Submit to engineering**.
 5. An eligible ML engineer clicks **Claim task**, then **Open task workspace**.
    The same person can submit and claim if they have engineering responsibility.
 
@@ -59,9 +58,7 @@ This checks the basic layout, not whether Triton can load or serve the model.
 Validation and release approval remain separate steps.
 
 **Single file or archive** remains available for the original submission flow.
-Dataset and baseline inputs still refer to individual S3 objects. These fields may
-be omitted at submission, but all evaluation inputs are required before opening a
-task workspace. See [task workspaces](task-workspaces.md) and
+Dataset and baseline inputs still refer to individual S3 objects. All evaluation fields are optional for submission and workspace startup. See [task workspaces](task-workspaces.md) and
 [engineering responsibility](user-management.md).
 
 The submission UI uses a durable background capture, with progress, cancellation
@@ -159,7 +156,7 @@ Absent dataset, baseline, expected behavior or acceptance criteria remain explic
 missing inputs on the task. Task checklist resolution cannot clear these receipt
 requirements: it returns HTTP 409 without changing task state/history. Submit a new
 revision containing the inputs instead. Queue, task and receipt reads derive these
-blockers from the immutable receipt, including when an older application previously
+gaps from the immutable receipt, including when an older application previously
 cleared the task flags. Other engineering checklist items remain resolvable.
 Completeness is independent of release approval and
 validation evidence; a handoff is never a release-ready assertion.

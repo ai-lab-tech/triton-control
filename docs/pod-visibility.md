@@ -2,8 +2,8 @@
 
 ## Operator workflow
 
-Open an instance's Overview for desired, updated, ready and available replicas,
-controller conditions and the pod table. Running is distinct from Ready; terminating
+Open an instance's **Overview** for replica readiness. Expand **Rollout details**
+for the full counts and controller conditions, or **Current pods** for the pod list. Running is distinct from Ready; terminating
 pods are never shown as ready. A stale observed generation is explicitly displayed.
 Expand a pod for regular/init/native-sidecar state, image identity, exit codes and
 previous termination reason. Missing release metadata is shown as **Not recorded**.

@@ -155,6 +155,25 @@ export class InstanceDetailPageComponent implements OnInit {
   private openLogsOnce = false;
 
   readonly instanceId = computed(() => this.route.snapshot.paramMap.get("id"));
+  readonly legacyCapture = this.route.snapshot.queryParamMap.get("snapshotCapture");
+  readonly canPrepare = computed(
+    () =>
+      !this.loadError() &&
+      this.auth.canWriteInstances() &&
+      this.installation.allows("development_jobs"),
+  );
+  canPrepareInstance(instance: Instance): boolean {
+    return !!(
+      instance.s3.enabled &&
+      instance.s3.bucket &&
+      instance.s3.endpoint &&
+      instance.s3.secretConfigured &&
+      instance.repositoryModels.some(
+        (model) => model.state.toUpperCase() === "READY" && model.version,
+      )
+    );
+  }
+
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
@@ -209,7 +228,6 @@ export class InstanceDetailPageComponent implements OnInit {
       (!this.managedModelState() ||
         (!!this.deploymentModelState()?.interactive_allowed && !this.modelStateSaving())),
   );
-  startupReleaseDigest = "";
   desiredReplicas: number | null = null;
   private modelStateReadPending = false;
   private modelStateRevision = 0;
@@ -240,10 +258,6 @@ export class InstanceDetailPageComponent implements OnInit {
     }
   }
 
-  validStartupDigest(): boolean {
-    return /^sha256:[a-f0-9]{64}$/.test(this.startupReleaseDigest.trim());
-  }
-
   validReplicaChange(state: ModelState): boolean {
     const replicas = this.desiredReplicas;
     return (
@@ -256,7 +270,7 @@ export class InstanceDetailPageComponent implements OnInit {
     );
   }
 
-  async updateModelState(action: "declare" | "interactive" | "replicas"): Promise<void> {
+  async updateModelState(action: "interactive" | "replicas"): Promise<void> {
     const instanceId = this.instanceId();
     const current = this.deploymentModelState();
     if (
@@ -280,7 +294,6 @@ export class InstanceDetailPageComponent implements OnInit {
       this.deploymentModelState.set(state);
       this.modelStateReadError.set("");
       this.desiredReplicas = null;
-      if (action === "declare") this.startupReleaseDigest = "";
       this.refreshAfterAccessChange();
     } catch (error) {
       this.deploymentModelState.set(null);
@@ -294,17 +307,11 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   private modelStateRequest(
-    action: "declare" | "interactive" | "replicas",
+    action: "interactive" | "replicas",
     instanceId: string,
     state: ModelState,
   ) {
     switch (action) {
-      case "declare":
-        if (!state.can_declare || !this.validStartupDigest()) return;
-        return this.podsApi.declareInstanceModelStateApiInstancesInstanceIdModelStateDeclarePost(
-          { release_digest: this.startupReleaseDigest.trim() },
-          instanceId,
-        );
       case "interactive":
         if (!state.can_restore) return;
         return this.podsApi.restoreInstanceModelStateApiInstancesInstanceIdModelStateInteractivePost(

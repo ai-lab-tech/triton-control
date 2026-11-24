@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 from app.schemas.control_lineage import ControlLineage
 from app.schemas.lineage import Digest, FileEntry, Origin, Snapshot
 from app.schemas.preparation import Request, TaskDTO
+from app.schemas.serving_metadata import StartupModel
 
 
 class S3Input(Request):
@@ -23,6 +24,8 @@ class S3RepositoryInput(Request):
     kind: Literal["s3_repository"]
     profile_id: int = Field(strict=True, ge=1)
     path: str = Field(min_length=1, max_length=1024, pattern=r"^[^\x00-\x1f]+$")
+
+    model: StartupModel | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator("path")
     @classmethod
