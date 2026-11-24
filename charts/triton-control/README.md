@@ -101,11 +101,13 @@ rewritten automatically.
 
 ## Minimal Values Override
 
-Provide a stable `app.existingSecret` or set the three required
-`app.secretEnv` values below. Preserve the deployed values on upgrade so saved
-credentials and sessions remain usable. A connected Helm upgrade can reuse an
-existing chart-managed Secret. Offline renderers need explicit values or an
-external Secret reference.
+For a chart-managed Secret, supply stable session and JWT signing secrets.
+On first install Helm generates the S3 encryption key and stores it in the
+application Secret. Connected upgrades reuse it. Back up the Secret with the
+database. To restore encrypted credentials, supply the original key before
+starting the backend. For GitOps or repeated offline renders, use
+`app.existingSecret` containing all three keys or supply a stable
+`app.secretEnv.S3_SECRET_ENCRYPTION_KEY` through your secret manager.
 
 ```yaml
 app:
@@ -115,7 +117,6 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
 
 tritonDeployments:
   # Used only by vLLM init/sidecar repository modes. Standard Triton S3

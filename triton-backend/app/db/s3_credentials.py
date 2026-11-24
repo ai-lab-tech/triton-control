@@ -41,10 +41,20 @@ def migrate_legacy_credentials(engine: Engine) -> None:
             "INSERT INTO data_migrations (name) VALUES ('encrypt-s3-credentials-v1') "
             "ON CONFLICT DO NOTHING RETURNING name"
         )).scalar()
-        if claimed is None:
-            return
         for entity, field in ((S3ProfileEntity, "secret_key_enc"), (TritonInstanceEntity, "s3_secret_key_enc")):
             table = cast(Table, inspect(entity).local_table)
             column = table.c[field]
+            if claimed is None:
+                # A restored database may be paired with a newly generated Secret.
+                sample = conn.execute(select(column).where(column != "").limit(1)).scalar_one_or_none()
+                if sample is not None:
+                    try:
+                        decrypt_secret(sample)
+                    except ValueError as exc:
+                        raise RuntimeError(
+                            "Restore the original S3_SECRET_ENCRYPTION_KEY from backup before starting "
+                            "with this database"
+                        ) from exc
+                continue
             for row_id, secret in conn.execute(select(table.c.id, column).where(column != "")):
                 conn.execute(update(table).where(table.c.id == row_id).values({column: encrypt_secret(secret)}))

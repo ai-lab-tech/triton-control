@@ -168,8 +168,8 @@ save the registry credentials again. Read endpoints return configuration status,
 never the registry secret.
 
 The backend encrypts S3 profile and instance secret keys with
-`S3_SECRET_ENCRYPTION_KEY`. Set it to a stable random value before starting
-the service and keep it with your recovery credentials. For a disposable test
+`S3_SECRET_ENCRYPTION_KEY`. Helm generates it on first install. For standalone deployments, set it to a stable
+random value before starting the service. Back up the key with the database. For a disposable test
 database, run the backend suite with a test-only key:
 
 ```bash

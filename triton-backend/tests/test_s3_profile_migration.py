@@ -54,6 +54,24 @@ class S3ProfileMigrationTests(unittest.TestCase):
             self.assertEqual(decrypt_secret(values[0]), "old-instance-secret")
             self.assertIsNone(values[1])
 
+    def test_restored_database_requires_original_key_at_startup(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("CREATE TABLE triton_instances (id INTEGER PRIMARY KEY, s3_secret_key_enc VARCHAR)"))
+            conn.execute(text("INSERT INTO triton_instances VALUES (1, 'instance-secret')"))
+        with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": "original"}):
+            migrate_legacy_credentials(self.engine)
+        for table in ("s3_profiles", "triton_instances"):
+            with self.subTest(table=table):
+                for key in ("replacement", ""):
+                    with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": key}):
+                        with self.assertRaisesRegex(RuntimeError, "Restore the original"):
+                            migrate_legacy_credentials(self.engine)
+                with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": "original"}):
+                    migrate_legacy_credentials(self.engine)
+                if table == "s3_profiles":
+                    with self.engine.begin() as conn:
+                        conn.execute(text("DELETE FROM s3_profiles"))
+
     def test_existing_table_gains_global_uniqueness_and_preserves_data(self):
         # Arrange
         original = self.rows()

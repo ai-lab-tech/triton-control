@@ -65,6 +65,21 @@ class InstallationHelmTests(unittest.TestCase):
         self.assertEqual(first.stdout, second.stdout)
         self.assertEqual(len(yaml.safe_load(first.stdout)["stringData"]), 3)
 
+    def test_first_install_generates_s3_key_and_upgrade_requires_original(self):
+        args = ["--show-only", "templates/secret.yaml", "--set-string",
+                "app.secretEnv.JWT_SECRET=fixture-jwt,app.secretEnv.SESSION_SECRET=fixture-session"]
+        def install():
+            result = self.render(*args, external_secret=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return yaml.safe_load(result.stdout)["stringData"]["S3_SECRET_ENCRYPTION_KEY"]
+
+        first = install()
+        self.assertRegex(first, r"^[A-Za-z0-9]{64}$")
+        self.assertNotEqual(first, install())
+        missing = self.render(*args, "--is-upgrade", external_secret=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("Restore S3_SECRET_ENCRYPTION_KEY", missing.stderr)
+
     def test_development_mounts_snapshot_claim_unless_an_external_store_is_configured(self):
         for options, expected in [
             ([], True),

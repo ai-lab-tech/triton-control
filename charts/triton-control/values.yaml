@@ -99,6 +99,7 @@ app:
     # Set real values in your environment-specific values file.
     SESSION_SECRET: ""
     JWT_SECRET: ""
+    # A connected Helm install generates this once. Back up the resulting Secret.
     S3_SECRET_ENCRYPTION_KEY: ""
     # Required only for EMAIL_CONFIG_SOURCE=db when saving an SMTP password.
     EMAIL_SECRET_ENCRYPTION_KEY: ""
