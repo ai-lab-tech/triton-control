@@ -1,4 +1,8 @@
-<section aria-label="Kubernetes workload" [class.pods-panel]="view === 'pods'">
+<section
+  aria-label="Kubernetes workload"
+  [class.pods-panel]="view === 'pods'"
+  [class.is-embedded]="embedded"
+>
   @if (error()) {
     <p role="alert">{{ error() }}</p>
   }
@@ -39,7 +43,10 @@
           </p>
         }
         <details class="rollout-details">
-          <summary class="app-disclosure">Rollout details</summary>
+          <summary class="app-disclosure">
+            <span>Rollout details</span>
+            <mat-icon class="disclosure-chevron" aria-hidden="true">expand_more</mat-icon>
+          </summary>
           <div class="rollout-metrics" aria-label="Deployment replica counts">
             <div>
               <span>Desired:</span><strong>{{ deployment.desired }}</strong>
@@ -82,11 +89,16 @@
             class="pod-section"
             [open]="
               !section.history &&
-              snapshot.deployment &&
-              (snapshot.deployment.stale || snapshot.deployment.ready < snapshot.deployment.desired)
+              ((embedded && section.count > 0 && section.count <= 3) ||
+                (snapshot.deployment &&
+                  (snapshot.deployment.stale ||
+                    snapshot.deployment.ready < snapshot.deployment.desired)))
             "
           >
-            <summary class="app-disclosure">{{ section.title }} · {{ section.count }}</summary>
+            <summary class="app-disclosure">
+              <span>{{ section.title }} · {{ section.count }}</span>
+              <mat-icon class="disclosure-chevron" aria-hidden="true">expand_more</mat-icon>
+            </summary>
             @if (section.history) {
               <p class="history-description">
                 Failed and completed pod instances retained by Kubernetes. These are not restarts of

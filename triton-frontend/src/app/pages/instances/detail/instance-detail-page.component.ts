@@ -125,6 +125,7 @@ export class InstanceDetailPageComponent implements OnInit {
   tritonVerifySsl = false;
   tritonCaCertificate = "";
   copyBaseUrlMessage = "";
+  readonly copiedOverviewField = signal<"" | "endpoint" | "image">("");
   readonly showRawMetadata = signal(false);
   readonly showS3Dialog = signal(false);
   readonly showTritonDialog = signal(false);
@@ -175,6 +176,27 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
+  readonly readyModelCount = computed(
+    () =>
+      (this.instance()?.repositoryModels ?? []).filter((model) => {
+        const state = (model.state ?? "").trim().toUpperCase();
+        return state === "READY" || state === "ACTIVE";
+      }).length,
+  );
+  readonly totalModelCount = computed(() => {
+    const current = this.instance();
+    if (!current) return 0;
+    return current.repositoryModels.length || current.models || 0;
+  });
+  readonly firstInferableModel = computed(() =>
+    (this.instance()?.repositoryModels ?? []).find((model) =>
+      this.canInferModel(model.state, model.version),
+    ),
+  );
+  readonly hasLiveMetrics = computed(() => {
+    const current = this.instance();
+    return Boolean(current?.metricsUrl && !current.metricsError);
+  });
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
   );
@@ -268,6 +290,30 @@ export class InstanceDetailPageComponent implements OnInit {
       replicas !== state.replicas &&
       (replicas === 1 || state.can_scale_above_one)
     );
+  }
+
+  effectiveReplicaInput(state: ModelState): number {
+    return this.desiredReplicas ?? state.replicas;
+  }
+
+  stepReplicas(delta: number, state: ModelState): void {
+    const max = state.can_scale_above_one ? 100 : 1;
+    const current = this.desiredReplicas ?? state.replicas;
+    const next = Math.min(max, Math.max(1, current + delta));
+    this.desiredReplicas = next === state.replicas ? null : next;
+  }
+
+  async copyOverviewText(value: string, field: "endpoint" | "image"): Promise<void> {
+    if (!value) return;
+    await this.copyBaseUrl(value);
+    if (this.copyBaseUrlMessage === "Copied") {
+      this.copiedOverviewField.set(field);
+      setTimeout(() => {
+        if (this.copiedOverviewField() === field) {
+          this.copiedOverviewField.set("");
+        }
+      }, 2000);
+    }
   }
 
   async updateModelState(action: "interactive" | "replicas"): Promise<void> {

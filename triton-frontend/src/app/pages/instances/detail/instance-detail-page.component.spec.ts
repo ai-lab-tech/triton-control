@@ -183,13 +183,25 @@ describe("InstanceDetailPageComponent", () => {
 
     // Assert
     const page = fixture.nativeElement as HTMLElement;
-    expect(page.querySelector(".summary-value")?.textContent).toContain("node-7");
+    expect(page.querySelector(".page-title")?.textContent).toContain("node-7");
+    expect(page.querySelector(".detail-stats")?.textContent).toContain("1 / 1");
+    expect(page.querySelector(".detail-stats")?.textContent).toContain("Not configured");
     const shortcut = Array.from(page.querySelectorAll("a")).find((link) =>
       link.textContent.includes("Prepare for production"),
     );
     expect(shortcut?.getAttribute("href")).toBe("/preparation/handoffs/new?instance=7");
     expect(page.querySelector("app-experiment-preparation")).toBeNull();
     expect(page.querySelector('[role="tablist"]')?.textContent).toContain("Overview");
+  });
+
+  it("steps desired replicas within allowed bounds and resets when matching current count", () => {
+    const component = TestBed.createComponent(InstanceDetailPageComponent).componentInstance;
+    component.stepReplicas(1, DECLARED_STATE);
+    expect(component.desiredReplicas).toBe(2);
+    component.stepReplicas(-1, DECLARED_STATE);
+    expect(component.desiredReplicas).toBeNull();
+    component.stepReplicas(-1, DECLARED_STATE);
+    expect(component.desiredReplicas).toBeNull();
   });
 
   it("summarizes repeated pod states without losing readiness information", () => {

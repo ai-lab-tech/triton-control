@@ -22,87 +22,105 @@
         <span aria-current="page">{{ instance.name }}</span>
       </nav>
     </div>
-    <div class="detail-header">
-      <div class="detail-summary">
-        <div class="detail-summary-head">
-          <h1 class="page-title">{{ instance.name }}</h1>
-          @if (instance.preparationTaskId && canPrepare()) {
-            <a mat-stroked-button [routerLink]="['/preparation/tasks', instance.preparationTaskId]"
-              >Open engineering task</a
-            >
-          } @else if (canPrepare() && canPrepareInstance(instance)) {
-            <a
-              mat-stroked-button
-              color="primary"
-              routerLink="/preparation/handoffs/new"
-              [queryParams]="{ instance: instance.id }"
-            >
-              <mat-icon>assignment</mat-icon>
-              Prepare for production
-            </a>
-          }
-        </div>
-        <div class="summary-row">
-          <span class="summary-label">Instance name</span>
-          <span class="summary-value">{{ instance.name }}</span>
-        </div>
-        <div class="summary-row">
-          <span class="summary-label">Status</span>
+    <header class="detail-hero">
+      <div class="hero-main">
+        <div class="hero-title-row">
           <span
-            class="chip"
+            class="hero-status-dot"
+            [attr.data-tone]="
+              instance.status === 'healthy' ? 'ok' : instance.status === 'warning' ? 'warn' : 'down'
+            "
+            aria-hidden="true"
+          ></span>
+          <h1 class="page-title">{{ instance.name }}</h1>
+          <span
+            class="chip hero-status-chip"
             [attr.data-tone]="
               instance.status === 'healthy' ? 'ok' : instance.status === 'warning' ? 'warn' : 'down'
             "
           >
             {{ instance.status }}
           </span>
+          @if (instance.isSelfDeployed) {
+            <span class="chip self-deployed-chip" data-tone="neutral">Self-deployed</span>
+          }
         </div>
-        <div class="summary-row">
-          <span class="summary-label">Version</span>
-          <span class="summary-value">{{ instance.version || "Unavailable" }}</span>
-        </div>
-        <div class="summary-row">
-          <span class="summary-label">Runtime</span>
-          <span class="summary-value runtime-value">
-            {{ runtimeEnvironmentLabel() }}
-            @if (instance.isSelfDeployed) {
-              <span class="chip self-deployed-chip" data-tone="ok">Self deployed</span>
-            }
+        <div class="hero-meta">
+          <span class="hero-meta-item">
+            <mat-icon aria-hidden="true">memory</mat-icon>
+            Triton {{ instance.version || "Unavailable" }}
           </span>
-        </div>
-        @if (instance.isSelfDeployed) {
-          <div class="summary-row">
-            <span class="summary-label">Namespace</span>
-            <span class="summary-value">{{ instance.deploymentNamespace || "Unavailable" }}</span>
-          </div>
-          <div class="summary-row summary-row-state">
-            <span class="summary-label">Current state</span>
-            <div class="summary-value summary-value-state">
-              @if (instance.podStatuses.length) {
-                <div class="pod-state-list">
-                  @for (state of currentPodStates(); track state.label) {
-                    <span
-                      class="pod-state-chip"
-                      [attr.data-ready]="
-                        state.label.includes('Ready') && !state.label.includes('Not Ready')
-                      "
-                    >
-                      {{ state.count }} {{ state.count === 1 ? "pod" : "pods" }} · {{ state.label }}
-                    </span>
-                  }
-                </div>
-                @if (!currentPodStates().length) {
-                  <span class="pod-state-empty">No active pods reported.</span>
-                }
-              } @else {
-                <span class="pod-state-empty">No pod status available yet.</span>
+          <span class="hero-meta-sep" aria-hidden="true">·</span>
+          <span class="hero-meta-item">
+            <mat-icon aria-hidden="true">dns</mat-icon>
+            {{ runtimeEnvironmentLabel() }}
+          </span>
+          @if (instance.isSelfDeployed && currentPodStates().length) {
+            <span class="hero-meta-sep" aria-hidden="true">·</span>
+            <div class="pod-state-list">
+              @for (state of currentPodStates(); track state.label) {
+                <span
+                  class="pod-state-chip"
+                  [attr.data-ready]="
+                    state.label.includes('Ready') && !state.label.includes('Not Ready')
+                  "
+                >
+                  {{ state.count }} {{ state.count === 1 ? "pod" : "pods" }} · {{ state.label }}
+                </span>
               }
             </div>
-          </div>
-        }
-        <p class="page-subtitle">{{ instance.version }} · {{ instance.region }}</p>
+          }
+        </div>
       </div>
-    </div>
+      <div class="hero-actions">
+        @if (firstInferableModel(); as readyModel) {
+          <a
+            mat-stroked-button
+            class="hero-secondary-btn"
+            [routerLink]="[
+              '/instances',
+              instance.id,
+              'models',
+              readyModel.name,
+              'versions',
+              readyModel.version,
+              'infer',
+            ]"
+          >
+            <mat-icon>bolt</mat-icon>
+            Test inference
+          </a>
+        } @else if (totalModelCount() > 0) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="hero-secondary-btn"
+            (click)="selectedDetailTabIndex.set(1)"
+          >
+            <mat-icon>view_in_ar</mat-icon>
+            View models
+          </button>
+        }
+        @if (instance.preparationTaskId && canPrepare()) {
+          <a
+            mat-flat-button
+            color="primary"
+            [routerLink]="['/preparation/tasks', instance.preparationTaskId]"
+            ><mat-icon>assignment</mat-icon>Open engineering task</a
+          >
+        } @else if (canPrepare() && canPrepareInstance(instance)) {
+          <a
+            mat-flat-button
+            color="primary"
+            routerLink="/preparation/handoffs/new"
+            [queryParams]="{ instance: instance.id }"
+          >
+            <mat-icon>rocket_launch</mat-icon>
+            Prepare for production
+          </a>
+        }
+      </div>
+    </header>
     @if (legacyCapture) {
       <app-experiment-preparation [instance]="instance" [unavailable]="!!loadError()" />
     }
@@ -121,31 +139,98 @@
         </div>
       </div>
     }
-    <div class="detail-stats">
+    <div class="detail-stats" aria-label="Serving summary metrics">
       <div class="stat-block">
-        <span class="label">CPU</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.cpu + "%" : "N/A"
-        }}</span>
+        <span class="label">Ready models</span>
+        <div class="stat-value-row">
+          <span class="value">{{ readyModelCount() }} / {{ totalModelCount() }}</span>
+          @if (totalModelCount() > 0 && readyModelCount() === totalModelCount()) {
+            <span class="stat-pill stat-pill-ok">All ready</span>
+          }
+        </div>
+        <span class="stat-sub">
+          {{
+            totalModelCount() === 0
+              ? "No repository models detected"
+              : readyModelCount() === 1
+                ? "1 model loaded for serving"
+                : readyModelCount() + " models loaded for serving"
+          }}
+        </span>
       </div>
       <div class="stat-block">
-        <span class="label">RAM</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.ram + "%" : "N/A"
-        }}</span>
+        <span class="label">Capacity &amp; control</span>
+        @if (managedModelState() && deploymentModelState(); as state) {
+          <div class="stat-value-row">
+            <span class="value">
+              {{ state.replicas }} {{ state.replicas === 1 ? "replica" : "replicas" }}
+            </span>
+            <span class="stat-pill" [class.stat-pill-ok]="state.rollout_complete">
+              {{ state.mode === "declared" ? "Declared" : "Interactive" }}
+            </span>
+          </div>
+          <span class="stat-sub">
+            {{ state.rollout_complete ? "Rollout stable" : "Rollout converging…" }}
+          </span>
+        } @else {
+          <div class="stat-value-row">
+            <span class="value">{{ instance.healthReady ? "Ready" : "Not ready" }}</span>
+          </div>
+          <span class="stat-sub">
+            {{ instance.isSelfDeployed ? "Kubernetes workload" : "External Triton endpoint" }}
+          </span>
+        }
       </div>
       <div class="stat-block">
-        <span class="label">GPU</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.gpu + "%" : "N/A"
-        }}</span>
+        <span class="label">Network &amp; auth</span>
+        @if (endpointAccess(); as endpoint) {
+          <div class="stat-value-row">
+            <span class="value">
+              {{ endpoint.access_mode === "ingress" ? "External" : "Cluster only" }}
+            </span>
+            @if (endpoint.basic_auth_enabled) {
+              <span class="stat-pill">Basic auth</span>
+            }
+          </div>
+          <span class="stat-sub">{{ endpoint.url }}</span>
+        } @else {
+          <div class="stat-value-row">
+            <span class="value">{{ instance.isSelfDeployed ? "Internal" : "Direct URL" }}</span>
+          </div>
+          <span class="stat-sub">{{ instance.url }}</span>
+        }
       </div>
       <div class="stat-block">
-        <span class="label">Assigned users</span>
-        <span class="value">{{ instance.assignedUsers.length }}</span>
+        <span class="label">Resource telemetry</span>
+        @if (hasLiveMetrics()) {
+          <div class="stat-metrics-inline">
+            <span
+              >CPU <strong>{{ instance.cpu }}%</strong></span
+            >
+            <span
+              >RAM <strong>{{ instance.ram }}%</strong></span
+            >
+            @if (instance.gpu > 0) {
+              <span
+                >GPU <strong>{{ instance.gpu }}%</strong></span
+              >
+            }
+          </div>
+          <span class="stat-sub">Live Prometheus scrape</span>
+        } @else {
+          <div class="stat-value-row">
+            <span class="value stat-value-muted">Not configured</span>
+          </div>
+          <span class="stat-sub">
+            {{
+              instance.metricsError
+                ? "Metrics endpoint unreachable"
+                : "No Prometheus metrics scraped"
+            }}
+          </span>
+        }
       </div>
     </div>
-    <mat-divider></mat-divider>
     <mat-tab-group
       class="detail-tabs"
       [selectedIndex]="selectedDetailTabIndex()"
@@ -154,129 +239,227 @@
       <mat-tab label="Overview">
         <div class="tab-panel overview-panel">
           <div class="overview-primary">
-            @if (managedModelState()) {
-              <section class="panel-card model-state-panel">
-                <h2 class="panel-title">Replicas</h2>
-                @if (deploymentModelState(); as state) {
-                  <p class="panel-hint" role="status">
-                    {{ state.mode === "declared" ? "Declared startup" : "Interactive" }}
-                    · {{ state.replicas }} desired
-                    {{ state.replicas === 1 ? "replica" : "replicas" }} ·
-                    {{
-                      state.rollout_complete
-                        ? "Stable"
-                        : "Waiting for the workload to become stable"
-                    }}
-                  </p>
-                  @if (state.pending_replicas) {
-                    <p role="status">
-                      Rolling out the loaded models, then scaling to
-                      {{ state.pending_replicas }} replicas.
-                    </p>
-                  }
-                  @if (canWriteInstances() && state.capacity_owner === "manual") {
-                    @if (state.can_restore) {
-                      <button
-                        mat-stroked-button
-                        type="button"
-                        [disabled]="modelStateSaving()"
-                        (click)="updateModelState('interactive')"
-                      >
-                        Restore interactive control
-                      </button>
-                    }
-                    @if (state.can_scale_above_one || state.replicas > 1) {
-                      <div class="model-state-action">
-                        <label>
-                          Desired replicas
-                          <input
-                            class="model-state-input"
-                            type="number"
-                            min="1"
-                            [max]="state.can_scale_above_one ? 100 : 1"
-                            [placeholder]="state.replicas.toString()"
-                            [(ngModel)]="desiredReplicas"
-                          />
-                        </label>
-                        <button
-                          mat-stroked-button
-                          type="button"
-                          [disabled]="!validReplicaChange(state) || modelStateSaving()"
-                          (click)="updateModelState('replicas')"
+            <section class="panel-card workload-capacity-card">
+              @if (managedModelState()) {
+                <div class="capacity-toolbar">
+                  <div class="capacity-summary">
+                    <div class="capacity-heading-row">
+                      <h2 class="panel-title">Workload &amp; capacity</h2>
+                      @if (deploymentModelState(); as state) {
+                        <span
+                          class="chip capacity-mode-chip"
+                          [attr.data-tone]="state.rollout_complete ? 'ok' : 'warn'"
                         >
-                          Apply replica count
-                        </button>
+                          {{ state.mode === "declared" ? "Declared startup" : "Interactive" }} ·
+                          {{ state.rollout_complete ? "Stable" : "Updating" }}
+                        </span>
+                      }
+                    </div>
+                    @if (deploymentModelState(); as state) {
+                      <p class="panel-hint" role="status">
+                        {{ state.replicas }} desired
+                        {{ state.replicas === 1 ? "replica" : "replicas" }}
+                        @if (state.pending_replicas) {
+                          · Rolling out loaded models, then scaling to
+                          {{ state.pending_replicas }} replicas
+                        } @else if (state.capacity_owner === "source") {
+                          · Managed by release source
+                        } @else if (state.capacity_owner !== "manual") {
+                          · Managed by Kubernetes autoscaler
+                        }
+                      </p>
+                    } @else if (modelStateReadError(); as error) {
+                      <p class="panel-hint health-error" role="alert">{{ error }}</p>
+                    } @else {
+                      <p class="panel-hint">Reading deployment model state…</p>
+                    }
+                    @if (modelStateError()) {
+                      <p class="panel-hint health-error" role="alert">{{ modelStateError() }}</p>
+                    }
+                  </div>
+                  @if (deploymentModelState(); as state) {
+                    @if (canWriteInstances() && state.capacity_owner === "manual") {
+                      <div class="capacity-controls">
+                        @if (state.can_restore) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            [disabled]="modelStateSaving()"
+                            (click)="updateModelState('interactive')"
+                          >
+                            Restore interactive control
+                          </button>
+                        }
+                        @if (state.can_scale_above_one || state.replicas > 1) {
+                          <div
+                            class="replica-stepper-group"
+                            role="group"
+                            aria-label="Desired replicas"
+                          >
+                            <span class="stepper-label">Desired replicas</span>
+                            <div class="replica-stepper">
+                              <button
+                                type="button"
+                                class="stepper-btn"
+                                aria-label="Decrease desired replicas"
+                                [disabled]="modelStateSaving() || effectiveReplicaInput(state) <= 1"
+                                (click)="stepReplicas(-1, state)"
+                              >
+                                −
+                              </button>
+                              <input
+                                class="model-state-input"
+                                aria-label="Desired replicas"
+                                type="number"
+                                min="1"
+                                [max]="state.can_scale_above_one ? 100 : 1"
+                                [placeholder]="state.replicas.toString()"
+                                [(ngModel)]="desiredReplicas"
+                              />
+                              <button
+                                type="button"
+                                class="stepper-btn"
+                                aria-label="Increase desired replicas"
+                                [disabled]="
+                                  modelStateSaving() ||
+                                  !state.can_scale_above_one ||
+                                  effectiveReplicaInput(state) >= 100
+                                "
+                                (click)="stepReplicas(1, state)"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <button
+                              mat-flat-button
+                              color="primary"
+                              type="button"
+                              class="apply-replicas-btn"
+                              [disabled]="!validReplicaChange(state) || modelStateSaving()"
+                              (click)="updateModelState('replicas')"
+                            >
+                              Apply replica count
+                            </button>
+                          </div>
+                        }
                       </div>
                     }
-                  } @else if (state.capacity_owner !== "manual") {
-                    <p class="panel-hint">
-                      {{
-                        state.capacity_owner === "source"
-                          ? "Capacity is managed by a release source."
-                          : "Capacity is managed by a Kubernetes autoscaler."
-                      }}
-                    </p>
                   }
-                } @else if (modelStateReadError(); as error) {
-                  <p class="panel-hint health-error" role="alert">{{ error }}</p>
-                } @else {
-                  <p class="panel-hint">Waiting for deployment model state.</p>
-                }
-                @if (modelStateError()) {
-                  <p class="panel-hint health-error" role="alert">{{ modelStateError() }}</p>
-                }
-              </section>
-            }
-            <app-workload-panel
-              [instanceId]="instance.id"
-              [active]="selectedDetailTabIndex() === 0"
-              (viewLogs)="openPodLogs($event)"
-              (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
-            />
+                </div>
+                <div class="capacity-divider" role="separator"></div>
+              }
+              <app-workload-panel
+                [instanceId]="instance.id"
+                [embedded]="true"
+                [active]="selectedDetailTabIndex() === 0"
+                (viewLogs)="openPodLogs($event)"
+                (viewContainerLogs)="openPodLogs($event.uid, $event.container, $event.previous)"
+              />
+            </section>
           </div>
           <div class="overview-secondary">
             <div class="panel-card endpoint-summary">
-              <div class="panel-title">Endpoint</div>
+              <div class="card-head-row">
+                <div class="panel-title">Serving endpoint</div>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="compact-card-btn"
+                  (click)="selectedDetailTabIndex.set(2)"
+                >
+                  {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
+                </button>
+              </div>
               @if (endpointAccess(); as endpoint) {
-                <code class="network-url">{{ endpoint.url }}</code>
+                <div class="endpoint-url-box">
+                  <code class="network-url" [title]="endpoint.url">{{ endpoint.url }}</code>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="inline-copy-btn"
+                    [attr.aria-label]="'Copy endpoint URL ' + endpoint.url"
+                    [matTooltip]="copiedOverviewField() === 'endpoint' ? 'Copied!' : 'Copy URL'"
+                    (click)="copyOverviewText(endpoint.url, 'endpoint')"
+                  >
+                    <mat-icon>{{
+                      copiedOverviewField() === "endpoint" ? "check" : "content_copy"
+                    }}</mat-icon>
+                  </button>
+                </div>
                 <div class="chip-row">
-                  <span class="chip">{{
-                    endpoint.access_mode === "ingress" ? "External access" : "Cluster only"
-                  }}</span>
+                  <span class="chip endpoint-badge">
+                    <mat-icon aria-hidden="true">{{
+                      endpoint.access_mode === "ingress" ? "public" : "lan"
+                    }}</mat-icon>
+                    {{ endpoint.access_mode === "ingress" ? "External access" : "Cluster only" }}
+                  </span>
                   @if (endpoint.basic_auth_enabled) {
-                    <span class="chip">Basic authentication</span>
+                    <span class="chip endpoint-badge">
+                      <mat-icon aria-hidden="true">lock</mat-icon>
+                      Basic authentication
+                    </span>
                   }
                 </div>
               } @else {
-                <p class="panel-hint">
-                  {{
-                    instance.isSelfDeployed
-                      ? "View endpoint configuration and authentication."
-                      : instance.url
-                  }}
-                </p>
+                <div class="endpoint-url-box">
+                  <code class="network-url" [title]="instance.url">{{ instance.url }}</code>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="inline-copy-btn"
+                    [attr.aria-label]="'Copy endpoint URL ' + instance.url"
+                    [matTooltip]="copiedOverviewField() === 'endpoint' ? 'Copied!' : 'Copy URL'"
+                    (click)="copyOverviewText(instance.url, 'endpoint')"
+                  >
+                    <mat-icon>{{
+                      copiedOverviewField() === "endpoint" ? "check" : "content_copy"
+                    }}</mat-icon>
+                  </button>
+                </div>
+                @if (instance.isSelfDeployed) {
+                  <p class="panel-hint">
+                    Open Endpoints to configure external ingress or HTTP Basic authentication.
+                  </p>
+                }
               }
-              <button mat-stroked-button type="button" (click)="selectedDetailTabIndex.set(2)">
-                {{ canWriteInstances() ? "Manage endpoint" : "View endpoint" }}
-              </button>
             </div>
             @if (instance.isSelfDeployed) {
               <div class="panel-card deployment-card">
-                <details>
-                  <summary class="overview-disclosure">Deployment details</summary>
+                <div class="panel-title">Deployment details</div>
+                <div class="spec-list">
                   <div class="kv">
                     <span class="kv-label">{{
                       instance.deploymentBackend.includes(",") ? "Backends" : "Backend"
                     }}</span>
                     <span class="kv-value">{{
-                      instance.deploymentBackend || "No backend in config.pbtxt"
+                      instance.deploymentBackend || "Auto-detected"
                     }}</span>
                   </div>
                   <div class="kv">
                     <span class="kv-label">Image</span>
                     <span class="kv-value">
                       @if (instance.deploymentImage) {
-                        <code class="network-url">{{ instance.deploymentImage }}</code>
+                        <span class="copyable-code-row">
+                          <code
+                            class="network-url compact-code"
+                            [title]="instance.deploymentImage"
+                            >{{ instance.deploymentImage }}</code
+                          >
+                          <button
+                            mat-icon-button
+                            type="button"
+                            class="inline-copy-btn"
+                            aria-label="Copy deployment image"
+                            [matTooltip]="
+                              copiedOverviewField() === 'image' ? 'Copied!' : 'Copy image'
+                            "
+                            (click)="copyOverviewText(instance.deploymentImage, 'image')"
+                          >
+                            <mat-icon>{{
+                              copiedOverviewField() === "image" ? "check" : "content_copy"
+                            }}</mat-icon>
+                          </button>
+                        </span>
                       } @else {
                         <span>Unavailable</span>
                       }
@@ -286,37 +469,35 @@
                     <span class="kv-label">Repository</span>
                     <span class="kv-value">
                       @if (instance.deploymentRepository) {
-                        <code class="network-url">{{ instance.deploymentRepository }}</code>
+                        <code
+                          class="network-url compact-code"
+                          [title]="instance.deploymentRepository"
+                          >{{ instance.deploymentRepository }}</code
+                        >
                       } @else {
                         <span>Unavailable</span>
                       }
                     </span>
                   </div>
                   <div class="kv">
-                    <span class="kv-label">Namespace</span>
-                    <span class="kv-value">{{
-                      instance.deploymentNamespace || "Unavailable"
-                    }}</span>
+                    <span class="kv-label">Workload</span>
+                    <span class="kv-value">
+                      {{ instance.deploymentName || "Unavailable" }}
+                      @if (instance.deploymentServiceName) {
+                        <span class="muted-inline">· svc/{{ instance.deploymentServiceName }}</span>
+                      }
+                    </span>
                   </div>
-                  <div class="kv">
-                    <span class="kv-label">Deployment</span>
-                    <span class="kv-value">{{ instance.deploymentName || "Unavailable" }}</span>
-                  </div>
-                  <div class="kv">
-                    <span class="kv-label">Service</span>
-                    <span class="kv-value">{{
-                      instance.deploymentServiceName || "Unavailable"
-                    }}</span>
-                  </div>
-                </details>
+                </div>
               </div>
             }
-            <div class="panel-card access-card">
-              <details>
+            <div class="panel-card secondary-disclosures-card">
+              <details class="clean-disclosure">
                 <summary class="overview-disclosure">
-                  Users &amp; permissions ({{ instance.assignedUsers.length }})
+                  <span>Users &amp; permissions ({{ instance.assignedUsers.length }})</span>
+                  <mat-icon class="disclosure-chevron" aria-hidden="true">expand_more</mat-icon>
                 </summary>
-                <div class="chip-row">
+                <div class="chip-row disclosure-body">
                   @for (user of instance.assignedUsers; track user) {
                     <span class="user-chip" data-tone="ok">
                       <span class="material-icons user-chip-icon" aria-hidden="true">person</span>
@@ -325,55 +506,61 @@
                     </span>
                   }
                   @if (!instance.assignedUsers.length) {
-                    <span class="empty-chip">No access assigned</span>
+                    <span class="empty-chip"
+                      >No explicit user assignments (admins have access)</span
+                    >
                   }
                 </div>
               </details>
-            </div>
-            <div class="panel-card">
-              <details>
-                <summary class="overview-disclosure">Triton server metadata</summary>
-                <div class="endpoint-row">
-                  <span class="endpoint-method">GET</span>
-                  <code>{{ instance.url }}/v2</code>
-                  <button
-                    mat-stroked-button
-                    type="button"
-                    class="metadata-toggle"
-                    (click)="toggleMetadataView()"
-                  >
-                    <span class="material-icons">{{
-                      showRawMetadata() ? "notes" : "data_object"
-                    }}</span>
-                    {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
-                  </button>
-                </div>
-                @if (!showRawMetadata()) {
-                  <div class="metadata-summary">
-                    <div class="metadata-item">
-                      <div class="metadata-label">Server name</div>
-                      <div class="metadata-value">{{ metadataSummary().serverName }}</div>
-                    </div>
-                    <div class="metadata-item">
-                      <div class="metadata-label">Version</div>
-                      <div class="metadata-value">{{ metadataSummary().version }}</div>
-                    </div>
-                    <div class="metadata-item metadata-item-wide">
-                      <div class="metadata-label">Extensions</div>
-                      @if (metadataSummary().extensions.length) {
-                        <div class="metadata-extension-list">
-                          @for (extension of metadataSummary().extensions; track extension) {
-                            <span class="metadata-extension-chip">{{ extension }}</span>
-                          }
-                        </div>
-                      } @else {
-                        <div class="metadata-value">Unavailable</div>
-                      }
-                    </div>
+              <div class="disclosure-divider" role="separator"></div>
+              <details class="clean-disclosure">
+                <summary class="overview-disclosure">
+                  <span>Triton server metadata</span>
+                  <mat-icon class="disclosure-chevron" aria-hidden="true">expand_more</mat-icon>
+                </summary>
+                <div class="disclosure-body metadata-disclosure-body">
+                  <div class="endpoint-row">
+                    <span class="endpoint-method">GET</span>
+                    <code>{{ instance.url }}/v2</code>
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      class="metadata-toggle"
+                      (click)="toggleMetadataView()"
+                    >
+                      <span class="material-icons">{{
+                        showRawMetadata() ? "notes" : "data_object"
+                      }}</span>
+                      {{ showRawMetadata() ? "Show summary" : "Show raw JSON" }}
+                    </button>
                   </div>
-                } @else {
-                  <pre class="json-block">{{ metadataJson() }}</pre>
-                }
+                  @if (!showRawMetadata()) {
+                    <div class="metadata-summary">
+                      <div class="metadata-item">
+                        <div class="metadata-label">Server name</div>
+                        <div class="metadata-value">{{ metadataSummary().serverName }}</div>
+                      </div>
+                      <div class="metadata-item">
+                        <div class="metadata-label">Version</div>
+                        <div class="metadata-value">{{ metadataSummary().version }}</div>
+                      </div>
+                      <div class="metadata-item metadata-item-wide">
+                        <div class="metadata-label">Extensions</div>
+                        @if (metadataSummary().extensions.length) {
+                          <div class="metadata-extension-list">
+                            @for (extension of metadataSummary().extensions; track extension) {
+                              <span class="metadata-extension-chip">{{ extension }}</span>
+                            }
+                          </div>
+                        } @else {
+                          <div class="metadata-value">Unavailable</div>
+                        }
+                      </div>
+                    </div>
+                  } @else {
+                    <pre class="json-block">{{ metadataJson() }}</pre>
+                  }
+                </div>
               </details>
             </div>
           </div>

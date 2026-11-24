@@ -12,6 +12,58 @@ section {
   background: #fff;
   min-width: 0;
 }
+section.is-embedded {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+section.is-embedded .logs-heading {
+  margin-bottom: 14px;
+}
+section.is-embedded .heading-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+section.is-embedded h3 {
+  font-size: 15px;
+}
+.pods-panel summary.app-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  list-style: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+  transition: background 140ms ease;
+}
+.pods-panel summary.app-disclosure::-webkit-details-marker {
+  display: none;
+}
+.pods-panel summary.app-disclosure:hover {
+  background: #f1f5f9;
+}
+.pods-panel summary.app-disclosure span {
+  margin-left: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.disclosure-chevron {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #64748b;
+  transition: transform 160ms ease;
+}
+details[open] > summary .disclosure-chevron {
+  transform: rotate(180deg);
+}
 h3 {
   margin: 0;
   font-size: 18px;

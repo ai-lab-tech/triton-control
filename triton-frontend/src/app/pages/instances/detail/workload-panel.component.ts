@@ -49,6 +49,7 @@ export class WorkloadPanelComponent implements OnChanges {
   @Input({ required: true }) instanceId = "";
   @Input() view: "pods" | "logs" = "pods";
   @Input() active = true;
+  @Input() embedded = false;
   @Input() initialPodUid = "";
   @Input() selectionRevision = 0;
   @Input() initialContainer = "";
