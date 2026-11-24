@@ -124,9 +124,10 @@ name=..., namespace=..., limits=...)` renders an immutable plan ConfigMap and a 
 ConfigMap names bind the workload name, canonical release, plan receipt and limits. Long
 names and changed plans do not collide with existing immutable ConfigMaps. It binds
 the release's source/prepared inventory and helper identity to the plan and
-requires matching qualification for the chosen Linux architecture. Both validation
-and future production consumers call this same function. There is deliberately
-no environment-specific normalization switch.
+requires matching qualification for the chosen Linux architecture. This entry
+point requires `approval=ReleaseApproval(archive, target, binding)` in production,
+when a gate policy is configured, or for a release with a security reference.
+Validation and development share the underlying pod-template renderer.
 
 The serving image comes from the digest-pinned `ServingRelease`. Its command is
 `tritonserver --model-repository=/models --model-control-mode=none

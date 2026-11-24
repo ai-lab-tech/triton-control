@@ -6,6 +6,7 @@ import json
 import os
 import subprocess  # nosec B404
 import sys
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from importlib.metadata import version as installed_version
 from pathlib import Path
@@ -23,9 +24,27 @@ from app.services.materialization.cli import read_document
 from app.services.materialization.filesystem import inventory
 
 
+def inspect_scan_input(path: str, chunks: Iterator[bytes]) -> None:
+    # Trivy discards inline-suppressed results before formatting its report.
+    # Helm can generate such directives from templates, so scan rendered YAML.
+    name = path.rsplit("/", 1)[-1]
+    if name == "Chart.yaml" or name.endswith((".tgz", ".tar.gz")):
+        raise ValueError("Scan rendered Helm manifests instead of charts or chart archives")
+
+    scanner_prefix = ignore_section = False
+    tail = b""
+    for chunk in chunks:
+        data = tail + chunk
+        scanner_prefix |= b"trivy:" in data or b"tfsec:" in data
+        ignore_section |= b"ignore:" in data
+        if scanner_prefix and ignore_section:
+            raise ValueError("Scan input contains a scanner suppression directive")
+        tail = data[-6:]
+
+
 def run_trivy(arguments: list[str], destination: Path) -> dict[str, Any]:
     with destination.open("xb") as output:
-        subprocess.run(["trivy", *arguments], stdout=output, check=True, timeout=1800)  # nosec B603 B607
+        subprocess.run(["trivy", "--config=", *arguments], stdout=output, check=True, timeout=1800)  # nosec B603 B607
     with destination.open("rb") as stream:
         result = json.load(stream)
     if not isinstance(result, dict):
@@ -46,10 +65,12 @@ def scan(
     if os.getenv("TRITON_CONTROL_MODE") != "development":
         raise ValueError("Security scanning requires development mode")
     subjects = release.spec.validation.subjects
-    prepared = inventory(models, limits)
+    prepared = inventory(models, limits, inspect_file=inspect_scan_input)
+    if not prepared.files:
+        raise ValueError("Prepared repository inventory is empty")
     if (
         inventory_digest(prepared) != subjects.prepared_inventory_digest
-        or inventory_digest(inventory(source, limits)) != subjects.inventory_digest
+        or inventory_digest(inventory(source, limits, inspect_file=inspect_scan_input)) != subjects.inventory_digest
     ):
         raise ValueError("Mounted artifact inventories differ from the release")
     destination.mkdir(mode=0o700, parents=False, exist_ok=False)
@@ -86,7 +107,10 @@ def scan(
         python_reports.append(python_report)
         code_reports.append(
             run_trivy(
-                ["fs", "--format", "json", "--scanners", "misconfig,secret", str(root.resolve())],
+                [
+                    "fs", "--format", "json", "--ignorefile=", "--secret-config=",
+                    "--scanners", "misconfig,secret", str(root.resolve()),
+                ],
                 destination / f"code-{index}.json",
             )
         )
@@ -103,7 +127,10 @@ def scan(
         if "sha256:" + hashlib.sha256(raw).hexdigest() != image.split("@")[1] or "layers" not in json.loads(raw):
             raise ValueError("Expected a single-platform image manifest at its exact digest")
         result = run_trivy(
-            ["image", "--image-src", "remote", "--format", "json", "--scanners", "vuln", "--list-all-pkgs", image],
+            [
+                "image", "--image-src", "remote", "--format", "json", "--ignorefile=",
+                "--scanners", "vuln", "--list-all-pkgs", image,
+            ],
             destination / f"image-{index}.json",
         )
         if not any(row.get("Packages") for row in result.get("Results", [])):
@@ -119,7 +146,7 @@ def scan(
     rows = [row for item in image_reports for row in item["Results"]]
     report = SecurityReport.model_validate(
         dict(
-            suite="triton-security-v1",
+            suite="triton-security-v2",
             issuer=issuer,
             subjects=subjects,
             issuedAt=datetime.now(timezone.utc),
@@ -132,11 +159,12 @@ def scan(
             packages=sum(len(row.get("Packages", [])) for row in rows),
             codeReport=digest([code_reports, python_reports]),
             imageReport=digest(image_reports),
-            modelInventory=prepared,
+            modelFiles=len(prepared.files),
         )
     )
     private = Ed25519PrivateKey.from_private_bytes(key.read_bytes())
     signed = SignedSecurityReport(report=report, signature=private.sign(security_message(report)).hex())
+    (destination / "model-inventory.json").write_bytes(canonical_bytes(prepared.model_dump(mode="json")))
     (destination / "security.json").write_bytes(canonical_bytes(signed.model_dump(mode="json", by_alias=True)))
 
 

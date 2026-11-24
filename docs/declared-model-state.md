@@ -33,6 +33,12 @@ Set its `data["startup.json"]` to a JSON object with these fields:
 | `storage` | StorageBinding for the named repository and its read-only Secret. |
 | `limits` | Explicit materialization budget, including `max_bytes`, `max_file_bytes` and `deadline_seconds`. |
 
+For a `ServingRelease` with a security reference, or when
+`TRITON_GATE_POLICY_FILE` is configured, include an `approval` object with
+`archive` (the retained JSON archive as a string), `target` (the validated
+hardware profile), and `binding` (the independently approved digest). The backend
+verifies it before creating ConfigMaps or patching the workload.
+
 Restrict writes to this namespace's deployments, autoscalers, Secrets and
 ConfigMaps to trusted provisioning identities. The ConfigMap is the development
 operator's approved input. It is not production evidence admission or a

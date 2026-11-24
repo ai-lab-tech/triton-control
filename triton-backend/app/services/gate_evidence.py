@@ -8,7 +8,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import ValidationError
 
-from app.core.canonical import digest, inventory_digest
+from app.core.canonical import digest
 from app.schemas.gate_evidence import EvidenceArchive, GatePolicy, SecurityPolicy, SecurityReport, SignedSecurityReport
 from app.schemas.serving_metadata import ServingRelease
 from app.schemas.validation import EvidenceEnvelope, HardwareRuntime, ValidationManifest, ValidationReport
@@ -27,7 +27,7 @@ def signing_message(envelope: EvidenceEnvelope) -> bytes:
 
 def security_message(report: SecurityReport) -> bytes:
     checksum = digest(report.model_dump(mode="json", by_alias=True))
-    return f"triton-control/security-evidence/v1\n{checksum}".encode("ascii")
+    return f"triton-control/security-evidence/v2\n{checksum}".encode("ascii")
 
 
 def verify_security(
@@ -52,10 +52,9 @@ def verify_security(
         reference.digest != digest(signed.model_dump(mode="json", by_alias=True))
         or reference.subjects != report.subjects
         or report.subjects != release.spec.validation.subjects
-        or inventory_digest(report.model_inventory) != report.subjects.prepared_inventory_digest
     ):
         raise MetadataError("security-subject-mismatch")
-    if not report.issued_at <= now < report.issued_at + timedelta(seconds=policy.max_validity_seconds):
+    if not timedelta(0) <= now - report.issued_at < timedelta(seconds=policy.max_validity_seconds):
         raise MetadataError("security-report-outside-validity")
     if (
         report.bandit_version != policy.bandit_version
@@ -63,7 +62,6 @@ def verify_security(
         or report.packages < policy.min_packages
         or report.code_findings > policy.max_code_findings
         or report.image_findings > policy.max_image_findings
-        or not report.model_inventory.files
         or report.subjects.prepared_inventory_digest not in policy.approved_model_inventories
     ):
         raise MetadataError("security-policy-check-failed")
@@ -109,6 +107,7 @@ def verify_release_evidence(
     now: datetime | None = None,
 ) -> str:
     """Verify retained evidence and return the binding for independent approval."""
+    now = now if now is not None else datetime.now(timezone.utc)
     policy = _load_policy()
     if len(archive_bytes) > MAX_ARCHIVE_BYTES:
         raise MetadataError("evidence-archive-too-large")
@@ -135,7 +134,7 @@ def verify_release_evidence(
         envelope,
         target=target,
         policy=policy.identity,
-        now=now if now is not None else datetime.now(timezone.utc),
+        now=now,
     )
     if envelope.valid_until - envelope.issued_at > timedelta(seconds=policy.max_validity_seconds):
         raise MetadataError("evidence-validity-exceeds-policy")
@@ -145,7 +144,7 @@ def verify_release_evidence(
     ):
         raise MetadataError("required-validation-checks-missing")
 
-    verify_security(release, archive.security, policy.security, now or datetime.now(timezone.utc))
+    verify_security(release, archive.security, policy.security, now)
     return digest(
         {
             "release": release.model_dump(mode="json", by_alias=True),

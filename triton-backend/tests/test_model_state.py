@@ -22,6 +22,7 @@ from app.schemas.pods import DeploymentState, PodCondition, PodState
 from app.services.deployment import model_state as service
 from app.services.deployment.model_state_provider import ROLLBACK_KEY, ModelStateProvider
 from app.services.deployment.pod_provider import RELEASE_KEY
+from app.services.gate_evidence import POLICY_FILE
 from app.services.triton import models
 from tests.materialization_fixtures import LIMITS, inventory, plan, policy, serving_release
 
@@ -324,6 +325,18 @@ class StartupProviderTests(unittest.TestCase):
         config = self.provider.ensure_config.call_args.args[1]
         self.assertTrue(config["immutable"])
         self.assertEqual(json.loads(config["data"]["readiness.json"])["models"], [{"name": "iris", "versions": ["1"]}])
+
+    def test_rejects_unapproved_serving_release_before_workload_mutation(self):
+        release = serving_release().model_dump(mode="json", by_alias=True)
+        release["spec"]["models"] = self.binding["release"]["spec"]["models"]
+        self.binding["release"] = release
+        target = digest(release)
+        with patch.dict(os.environ, {POLICY_FILE: "operator-policy.json"}), self.assertRaises(ConflictError) as error:
+            self.provider.declare(self.deployment, target)
+
+        self.assertIn("release-approval-required", str(error.exception.__cause__))
+        self.provider.ensure_config.assert_not_called()
+        self.provider.patch.assert_not_called()
 
     def test_rejects_mismatched_preparation_before_touching_deployment(self):
         # Arrange

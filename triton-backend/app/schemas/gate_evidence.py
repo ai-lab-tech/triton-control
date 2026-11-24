@@ -2,15 +2,16 @@
 
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import Field
 
-from app.schemas.lineage import Digest, InventoryV1
+from app.schemas.lineage import Digest
 from app.schemas.serving_metadata import ArtifactSubjects, Contract, Count, Name
 from app.schemas.validation import (
     Criterion,
     EvaluatorIdentity,
     EvidenceEnvelope,
     PolicyIdentity,
+    Timestamp,
     ValidationManifest,
     ValidationReport,
 )
@@ -31,10 +32,10 @@ class SecurityPolicy(Contract):
 
 
 class SecurityReport(Contract):
-    suite: Literal["triton-security-v1"]
+    suite: Literal["triton-security-v2"]
     issuer: Name
     subjects: ArtifactSubjects
-    issued_at: AwareDatetime
+    issued_at: Timestamp
     bandit_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     trivy_version: str
     code_findings: Count
@@ -42,7 +43,7 @@ class SecurityReport(Contract):
     packages: Count
     code_report: Digest
     image_report: Digest
-    model_inventory: InventoryV1
+    model_files: Count = Field(ge=1)
 
 
 class SignedSecurityReport(Contract):

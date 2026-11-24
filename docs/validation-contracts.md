@@ -223,7 +223,7 @@ requires a new approval binding.
 Validation-only installations omit `security` from the installation policy and
 publish validation-only releases. To require security evidence for every release
 admitted under a policy, add a `security` object to the same operator-owned
-policy file. All four checks in suite `triton-security-v1` are required together.
+policy file. All four checks in suite `triton-security-v2` are required together.
 
 | Policy field | Check |
 | --- | --- |
@@ -252,14 +252,22 @@ Pass the same `--limits` JSON file used for materialization to apply its byte, f
 
 The issuer measures both repository inventories, scans serving files without
 loading the model and inspects single-platform images by manifest digest. The
-raw image reports contain package inventories and vulnerability findings. Keep
+issuer rejects inline scanner suppressions and requires Helm input as rendered
+Kubernetes YAML. Scan inputs cannot contain `Chart.yaml`, `.tgz` or `.tar.gz`
+files. Trivy runs without local configuration or ignore files. Retain
+`model-inventory.json` alongside the raw reports for audit. The signed report
+carries the prepared inventory digest and file count, keeping admission evidence
+bounded independently of inventory size. Regenerate any earlier v1 scan report.
+
+Raw image reports contain package inventories and vulnerability findings. Keep
 the raw reports private since code reports may identify secrets. On interruption,
 rerun with a new output directory. Publication requires the final signed
 `security.json`. Its SHA-256 is the release's `spec.security.digest`. Set
 `spec.security.uri` to its retained location and copy its subjects into
 `spec.security.subjects`. Pass the parsed signed report as the `security`
-keyword to `package_evidence`. Production admission verifies the retained
-signature, subjects, thresholds and time window offline. Existing validation-only
+keyword to `package_evidence`. The release-specific Kubernetes renderer requires approval in production and
+verifies the retained signature, subjects, thresholds and time window offline
+before rendering. The production execution API is tracked separately. Existing validation-only
 approvals preserve their binding when both optional security fields are absent.
 
 An admitted result records the checks and limits in force at scan time.

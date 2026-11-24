@@ -12,9 +12,10 @@ from app.exceptions import BadGatewayError, ConflictError
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.model_state import DevelopmentStartupRelease
 from app.schemas.serving_metadata import ServingRelease
+from app.schemas.validation import HardwareRuntime
 from app.services.deployment.pod_provider import RELEASE_KEY, TIMEOUT, PodProvider, controlled_by
 from app.services.materialization.budgets import configured_limits
-from app.services.materialization.kubernetes import serving_manifests
+from app.services.materialization.kubernetes import ReleaseApproval, manifests, serving_manifests
 from app.services.materialization.normalization import MaterializationError
 
 ROLLBACK_KEY = "triton-control/interactive-template"
@@ -103,14 +104,29 @@ class ModelStateProvider(PodProvider):
             if entries != expected:
                 raise MaterializationError("Prepared model versions differ from the declared startup set")
             render_id = digest({"uid": meta["uid"], "release": release_digest, "binding": binding})
-            config, pod = serving_manifests(
-                plan, policy, storage,
-                name=f"startup-{render_id.removeprefix('sha256:')[:22]}",
-                namespace=namespace, limits=configured_limits(binding["limits"]),
-                identity_digest=release_digest, image=release.spec.image,
-                repository=release.spec.repository, models=release.spec.models,
-                resources=release.spec.resources_per_replica,
-            )
+            pod_name = f"startup-{render_id.removeprefix('sha256:')[:22]}"
+            limits = configured_limits(binding["limits"])
+            if isinstance(release, ServingRelease):
+                evidence = binding.get("approval")
+                approval = None
+                if evidence is not None:
+                    archive = evidence["archive"]
+                    if not isinstance(archive, str):
+                        raise ValueError("Release evidence archive must be JSON text")
+                    approval = ReleaseApproval(
+                        archive.encode("utf-8"), HardwareRuntime.model_validate(evidence["target"]), evidence["binding"]
+                    )
+                config, pod = manifests(
+                    release, plan, policy, storage,
+                    name=pod_name, namespace=namespace, limits=limits, approval=approval,
+                )
+            else:
+                config, pod = serving_manifests(
+                    plan, policy, storage, name=pod_name, namespace=namespace, limits=limits,
+                    identity_digest=release_digest, image=release.spec.image,
+                    repository=release.spec.repository, models=release.spec.models,
+                    resources=release.spec.resources_per_replica,
+                )
         except (KeyError, TypeError, ValueError) as error:
             raise ConflictError("Prepared startup release or materialization binding is invalid") from error
 

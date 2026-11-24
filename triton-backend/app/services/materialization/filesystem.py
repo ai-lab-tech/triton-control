@@ -4,6 +4,7 @@ import hashlib
 import os
 import stat
 import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from app.schemas.lineage import FileEntry, InventoryV1
@@ -11,7 +12,10 @@ from app.services.candidates.artifacts import CaptureLimits, _open_directory, _s
 from app.services.materialization.normalization import MaterializationError
 
 
-def inventory(root: Path, limits: CaptureLimits) -> InventoryV1:
+def inventory(
+    root: Path, limits: CaptureLimits, *, inspect_file: Callable[[str, Iterator[bytes]], None] | None = None
+) -> InventoryV1:
+    """Measure exact bytes and optionally inspect each file in the same bounded pass."""
     started = time.monotonic()
     entries: list[FileEntry] = []
     total = nodes = 0
@@ -49,13 +53,23 @@ def inventory(root: Path, limits: CaptureLimits) -> InventoryV1:
                 with os.fdopen(opened, "rb") as stream:
                     if _signature(os.fstat(stream.fileno())) != _signature(before):
                         raise MaterializationError("Repository file changed")
-                    while chunk := stream.read(1024**2):
-                        check()
-                        measured += len(chunk)
-                        total += len(chunk)
-                        if total > limits.max_bytes or measured > before.st_size:
-                            raise MaterializationError("Repository exceeds byte limits")
-                        digest.update(chunk)
+
+                    def measured_chunks() -> Iterator[bytes]:
+                        nonlocal total, measured
+                        while chunk := stream.read(1024**2):
+                            check()
+                            measured += len(chunk)
+                            total += len(chunk)
+                            if total > limits.max_bytes or measured > before.st_size:
+                                raise MaterializationError("Repository exceeds byte limits")
+                            digest.update(chunk)
+                            yield chunk
+
+                    chunks = measured_chunks()
+                    if inspect_file is not None:
+                        inspect_file(relative, chunks)
+                    for _ in chunks:
+                        pass
                     if measured != before.st_size or _signature(os.fstat(stream.fileno())) != _signature(before):
                         raise MaterializationError("Repository file changed during measurement")
                 entries.append(FileEntry(path=relative, size=measured, digest="sha256:" + digest.hexdigest()))

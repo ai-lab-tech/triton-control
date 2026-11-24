@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.core.canonical import digest, inventory_digest
 from app.schemas.gate_evidence import GatePolicy, SecurityPolicy, SecurityReport, SignedSecurityReport
 from app.schemas.lineage import InventoryV1
+from app.schemas.materialization import StorageBinding
 from app.schemas.serving_metadata import ServingRelease
 from app.schemas.validation import EvidenceEnvelope, ValidationManifest, ValidationReport
 from app.services.candidates.artifacts import CaptureLimits
@@ -28,7 +29,10 @@ from app.services.gate_evidence import (
     verify_security,
 )
 from app.services.materialization.filesystem import inventory
-from app.services.security_scan import main, scan
+from app.services.materialization.kubernetes import ReleaseApproval, manifests
+from app.services.security_scan import inspect_scan_input, main, scan
+from tests.materialization_fixtures import plan as materialization_plan
+from tests.materialization_fixtures import policy as materializer_policy
 from tests.test_validation_contracts import NOW, data
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts/validation/v1alpha1/fixtures/artifacts"
@@ -39,10 +43,11 @@ class SecurityTests(unittest.TestCase):
         self.key = Ed25519PrivateKey.generate()
         self.release = ServingRelease.model_validate(data("release"))
         subjects = self.release.spec.validation.subjects
+        self.inventory = InventoryV1.model_validate_json((FIXTURES / "inventory.json").read_bytes())
         self.report = SecurityReport.model_validate(
             {
                 "issuer": "scanner",
-                "suite": "triton-security-v1",
+                "suite": "triton-security-v2",
                 "subjects": subjects,
                 "issuedAt": NOW,
                 "trivyVersion": "0.76.2",
@@ -52,7 +57,7 @@ class SecurityTests(unittest.TestCase):
                 "imageFindings": 1,
                 "codeReport": digest([]),
                 "imageReport": digest([]),
-                "modelInventory": InventoryV1.model_validate_json((FIXTURES / "inventory.json").read_bytes()),
+                "modelFiles": len(self.inventory.files),
             }
         )
         self.policy = SecurityPolicy.model_validate(
@@ -130,6 +135,32 @@ class SecurityTests(unittest.TestCase):
                 self.assertEqual(
                     binding, admit_release(self.release, archive, now=NOW, target=target, approved_binding=binding)
                 )
+                plan = materialization_plan()
+                storage = StorageBinding(bucket="repo", prefix="models", secret_name="storage")
+                render_args = {
+                    "name": "release",
+                    "namespace": "serving",
+                    "limits": CaptureLimits(),
+                }
+                qualified = materializer_policy()
+                with (
+                    patch("app.services.materialization.kubernetes.serving_manifests") as render,
+                    patch("app.services.gate_evidence.datetime") as clock,
+                ):
+                    clock.now.return_value = NOW
+                    with self.assertRaisesRegex(MetadataError, "release-approval-required"):
+                        manifests(self.release, plan, qualified, storage, **render_args)
+                    with self.assertRaisesRegex(MetadataError, "invalidated"):
+                        manifests(
+                            self.release, plan, qualified, storage, **render_args,
+                            approval=ReleaseApproval(archive, target, digest("changed")),
+                        )
+                    render.assert_not_called()
+                    manifests(
+                        self.release, plan, qualified, storage, **render_args,
+                        approval=ReleaseApproval(archive, target, binding),
+                    )
+                    render.assert_called_once()
                 with self.assertRaisesRegex(MetadataError, "security-policy-report-or-reference-missing"):
                     verify_release_evidence(
                         ServingRelease.model_validate(data("release")),
@@ -137,6 +168,46 @@ class SecurityTests(unittest.TestCase):
                         now=NOW,
                         target=target,
                     )
+
+    def test_large_inventory_has_a_compact_signed_archive(self):
+        parent = "/".join(("a" * 190, "b" * 190, "c" * 190, "d" * 190))
+        checksum = digest("")
+        measured = InventoryV1.model_validate(
+            {
+                "files": [
+                    {"path": f"{parent}/{index:05}.txt", "size": 0, "digest": checksum}
+                    for index in range(5000)
+                ]
+            }
+        )
+        self.assertGreater(len(measured.model_dump_json().encode()), 4 * 1024 * 1024)
+        report = self.report.model_copy(
+            update={
+                "model_files": len(measured.files),
+                "subjects": self.report.subjects.model_copy(
+                    update={"prepared_inventory_digest": inventory_digest(measured)}
+                ),
+            }
+        )
+        signed = SignedSecurityReport(report=report, signature=self.key.sign(security_message(report)).hex())
+        envelope = EvidenceEnvelope.model_validate(data("evidence"))
+        archive = package_evidence(
+            ValidationManifest.model_validate(data("manifest")),
+            ValidationReport.model_validate(data("report-passed")),
+            envelope,
+            self.key.sign(signing_message(envelope)).hex(),
+            security=signed,
+        )
+        restored = SignedSecurityReport.model_validate(json.loads(archive)["security"])
+        self.assertEqual(restored, signed)
+        self.assertLess(len(archive), 64 * 1024)
+
+    def test_input_inspection_spans_chunks(self):
+        with self.assertRaisesRegex(ValueError, "suppression directive"):
+            inspect_scan_input("config.yaml", iter([b"# tri", b"vy:ign", b"ore:CHECK"]))
+        inspect_scan_input("config.yaml", iter([b"image: aquasec/trivy:0.76.2"]))
+        with self.assertRaisesRegex(ValueError, "rendered Helm manifests"):
+            inspect_scan_input("chart/Chart.yaml", iter(()))
 
     def test_changed_release_artifacts(self):
         for kind in ["image", "inventoryDigest"]:
@@ -188,7 +259,7 @@ class SecurityTests(unittest.TestCase):
             expected = CaptureLimits(max_bytes=40 << 30, max_file_bytes=40 << 30, deadline_seconds=3600)
             with (
                 patch("sys.argv", args),
-                patch("app.services.security_scan.inventory", return_value=self.report.model_inventory) as measure,
+                patch("app.services.security_scan.inventory", return_value=self.inventory) as measure,
                 patch("app.services.security_scan.run_trivy", side_effect=ValueError("end of inventory")),
                 self.assertRaisesRegex(ValueError, "end of inventory"),
             ):
@@ -196,6 +267,7 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(
                 [c.args for c in measure.call_args_list], [(root / "models", expected), (root / "source", expected)]
             )
+            self.assertTrue(all(c.kwargs == {"inspect_file": inspect_scan_input} for c in measure.call_args_list))
 
     def test_failure_leaves_no_signed_receipt_and_changed_inputs_block_retry(self):
         release = ServingRelease.model_validate(data("release"))
@@ -238,6 +310,9 @@ class SecurityTests(unittest.TestCase):
             signed = SignedSecurityReport.model_validate_json((root / "output/security.json").read_bytes())
             raw = json.loads((root / "output/image-0.json").read_bytes())
             self.assertEqual(signed.report.image_report, digest([raw]))
+            retained = InventoryV1.model_validate_json((root / "output/model-inventory.json").read_bytes())
+            self.assertEqual(inventory_digest(retained), signed.report.subjects.prepared_inventory_digest)
+            self.assertEqual(len(retained.files), signed.report.model_files)
             self.assertGreater(signed.report.packages, 0)
             self.assertGreater(signed.report.code_findings, 0)
             policy = self.policy.model_copy(
