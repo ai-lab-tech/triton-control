@@ -16,7 +16,7 @@ import { A11yModule } from "@angular/cdk/a11y";
 import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 import type * as Monaco from "monaco-editor";
 
-import { InstancesService } from "../../../api/generated/index";
+import { BASE_PATH, InstancesService } from "../../../api/generated/index";
 import { type BrowserEntry } from "../../../state/instances-s3/instances-s3.reducer";
 import {
   s3EditorClosed,
@@ -76,6 +76,7 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
 export class InstanceS3BrowserPageComponent implements OnInit {
   readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
+  private readonly apiBase = inject(BASE_PATH, { optional: true }) ?? "";
   private readonly instancesApi = inject(InstancesService);
   private readonly route = inject(ActivatedRoute);
   private readonly actions$ = inject(Actions);
@@ -621,40 +622,10 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     return null;
   }
 
-  async download(entry: BrowserEntry): Promise<void> {
-    if (entry.type !== "file") {
-      return;
-    }
-    const instanceId = (this.instanceId() ?? "").trim();
-    if (!instanceId) {
-      return;
-    }
-
-    const filePath = this.joinPath(this.currentPath(), entry.name);
-    try {
-      const response = (await firstValueFrom(
-        this.instancesApi.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet(
-          instanceId,
-          filePath,
-          "response",
-        ),
-      )) as { body?: unknown };
-      const body = response?.body;
-      const blob =
-        body instanceof Blob
-          ? body
-          : new Blob([typeof body === "string" ? body : ""], {
-              type: "application/octet-stream",
-            });
-      this.saveBlob(entry.name, blob);
-    } catch (error) {
-      this.store.dispatch(
-        displayFailure({
-          title: "Download failed",
-          message: mapApiErrorMessage(error, `Failed to download ${entry.name}.`),
-        }),
-      );
-    }
+  downloadUrl(entry: BrowserEntry): string {
+    const path = this.joinPath(this.currentPath(), entry.name);
+    const query = new URLSearchParams({ path });
+    return `${this.apiBase.replace(/\/$/, "")}/api/instances/${this.instanceId()}/s3/content/raw?${query}`;
   }
 
   async deleteEntry(entry: BrowserEntry): Promise<void> {
@@ -697,15 +668,6 @@ export class InstanceS3BrowserPageComponent implements OnInit {
         }),
       );
     }
-  }
-
-  private saveBlob(fileName: string, blob: Blob): void {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   private detectLanguage(fileName: string): string {

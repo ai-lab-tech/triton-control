@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from app.core.crypto import encrypt_secret
 from app.exceptions import ForbiddenError, ServiceUnavailableError
 from app.services.builds import contexts_storage as provider
 from tests.test_build_contexts import policy
@@ -68,7 +69,7 @@ class BuildContextSettingsTests(unittest.TestCase):
     def test_profile_client_preserves_tls_and_closes_without_exposing_credentials(self):
         expected = {"profile_id": 1, "endpoint": "https://minio.test", "bucket": "contexts", "prefix": "builds/"}
         profile = MagicMock(endpoint=expected["endpoint"], bucket="contexts", prefix="", access_key="fixture",
-                            secret_key_enc="encrypted-fixture", ca_certificate="fixture-ca", region="us-east-1",
+                            secret_key_enc=encrypt_secret("encrypted-fixture"), ca_certificate="fixture-ca", region="us-east-1",
                             force_path_style=True)
         with (patch.object(provider.s3_profiles, "get", return_value=profile),
               patch.object(provider, "build_s3_client") as mk):

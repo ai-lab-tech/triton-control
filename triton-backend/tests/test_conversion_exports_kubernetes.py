@@ -14,6 +14,7 @@ from uuid import uuid4
 import boto3
 from kubernetes import client  # type: ignore[import-untyped]
 
+from app.core.crypto import encrypt_secret
 from app.db.entities import S3ProfileEntity
 from app.schemas.task_workspaces import OpenTaskWorkspace
 from app.services import conversion_exports as exports
@@ -41,11 +42,11 @@ class ConversionExportIntegration(HandoffFixture, unittest.TestCase):
         self.addCleanup(subprocess.run, ["kubectl", "delete", "-f", "-"], input=manifest, check=True)
         profile = S3ProfileEntity(id=2, owner_user_id=1, name="exports", endpoint=os.environ["CONVERSION_EXPORT_TEST_S3"],
                                   bucket=ns, prefix="exports", access_key="conversion-test",
-                                  secret_key_hash="fixture", secret_key_enc="conversion-test-secret")
+                                  secret_key_hash="fixture", secret_key_enc=encrypt_secret("conversion-test-secret"))
         self.session.add(profile)
         self.session.commit()
         s3 = boto3.client("s3", endpoint_url=profile.endpoint, aws_access_key_id=profile.access_key,
-                          aws_secret_access_key=profile.secret_key_enc, region_name="us-east-1")
+                          aws_secret_access_key="conversion-test-secret", region_name="us-east-1")
         s3.create_bucket(Bucket=ns)
         s3.put_bucket_versioning(Bucket=ns, VersioningConfiguration={"Status": "Enabled"})
         self.enterContext(patch.object(workspaces, "workspace_namespace", return_value=ns))

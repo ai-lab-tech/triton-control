@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from app.db.s3_credentials import decrypt_secret, migrate_legacy_credentials
 from app.db.database import _migrate_s3_profile_name_uniqueness
 
 
@@ -33,6 +34,25 @@ class S3ProfileMigrationTests(unittest.TestCase):
     def rows(self):
         with self.engine.connect() as conn:
             return conn.execute(text("SELECT * FROM s3_profiles ORDER BY id")).all()
+
+    def test_credentials_are_migrated_once_and_missing_key_can_be_retried(self):
+        with self.engine.begin() as conn:
+            conn.execute(text("CREATE TABLE triton_instances (id INTEGER PRIMARY KEY, s3_secret_key_enc VARCHAR)"))
+            conn.execute(text("INSERT INTO triton_instances VALUES (1, 'old-instance-secret'), (2, NULL)"))
+        with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": ""}):
+            with self.assertRaisesRegex(ValueError, "S3_SECRET_ENCRYPTION_KEY"):
+                migrate_legacy_credentials(self.engine)
+        with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": "stable-test-key"}):
+            migrate_legacy_credentials(self.engine)
+            first = self.rows()
+            migrate_legacy_credentials(self.engine)
+            self.assertEqual(first, self.rows())
+            self.assertNotEqual(first[0].secret_key_enc, "encrypted-one")
+            self.assertEqual(decrypt_secret(first[0].secret_key_enc), "encrypted-one")
+            with self.engine.connect() as conn:
+                values = conn.execute(text("SELECT s3_secret_key_enc FROM triton_instances ORDER BY id")).scalars().all()
+            self.assertEqual(decrypt_secret(values[0]), "old-instance-secret")
+            self.assertIsNone(values[1])
 
     def test_existing_table_gains_global_uniqueness_and_preserves_data(self):
         # Arrange

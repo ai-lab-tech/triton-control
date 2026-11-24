@@ -146,6 +146,11 @@ class S3Browser {
     if (!this.pages.has(id)) await this.load(node);
     return this.pages.get(id) || [];
   }
+  async loadMore(item) {
+    if (item?.kind !== "more") return;
+    await this.load(item.parent, item.continuation);
+    this.changed.fire(item.parent);
+  }
   async load(node, continuation) {
     const profile = await this.profile(node.profileId);
     this.validateTarget(node, profile);
@@ -744,11 +749,7 @@ function registerS3Browser(context) {
   command("tritonControl.uploadS3", async (uri) => {
     try { await browser.chooseUpload(await node(uri)); } finally { provider.notify(uri); }
   });
-  command("tritonControl.moreS3", async (item) => {
-    if (item && typeof item === "object" && "profileId" in item) {
-      await browser.load(item, true);
-    }
-  });
+  command("tritonControl.moreS3", (item) => browser.loadMore(item));
   registerConversionExports(command, {
     getProfile: (id) => browser.profile(id),
     listProfiles: () => browser.session.profiles(),

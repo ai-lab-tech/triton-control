@@ -158,6 +158,7 @@ jobs:
       - name: Start backend
         working-directory: triton-backend
         env:
+          S3_SECRET_ENCRYPTION_KEY: disposable-ci-test-key
           DATABASE_URL: postgresql://triton:tritonpw@127.0.0.1:5433/triton_backend
           SERVER_HTTPS_ENABLED: "false"
           SESSION_HTTPS_ONLY: "false"

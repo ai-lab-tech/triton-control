@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from app.core.crypto import encrypt_secret
 from app.api.handoffs_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
@@ -37,7 +38,7 @@ class HandoffFixture(PreparationFixture):
                 prefix="allowed",
                 access_key="key",
                 secret_key_hash="hash",
-                secret_key_enc="encrypted",
+                secret_key_enc=encrypt_secret("encrypted"),
             )
         )
         self.session.commit()

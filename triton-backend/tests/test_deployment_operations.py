@@ -17,6 +17,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.core.crypto import encrypt_secret
 from app.api.deployment_api import router
 from app.core.operation_secrets import decode
 from app.core.security import get_claims
@@ -99,7 +100,7 @@ class DeploymentOperationTests(unittest.TestCase):
                              UserEntity(id=2, email="ben@test.invalid", name="Ben", role="member")])
             session.commit()
             session.add(S3ProfileEntity(id=1, owner_user_id=1, name="fixture", endpoint="http://s3.invalid",
-                                        bucket="models", access_key="fixture", secret_key_enc="fixture-secret"))
+                                        bucket="models", access_key="fixture", secret_key_enc=encrypt_secret("fixture-secret")))
             session.commit()
         self.enterContext(patch.object(deploy, "collect_deployment_examples", return_value={}))
         self.service = OperationService()

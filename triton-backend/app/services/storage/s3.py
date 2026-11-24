@@ -351,12 +351,12 @@ def get_instance_s3_content(
     return S3FileContentResponse(path=f"/{path}", content=content)
 
 
-def get_instance_s3_object_bytes(
+def open_instance_s3_object(
     session: Session,
     claims: dict[str, Any],
     instance_id: int,
     path: str,
-) -> tuple[bytes, str | None]:
+) -> dict[str, Any]:
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:
         raise BadRequestError("S3 is not enabled for this instance")
@@ -368,7 +368,7 @@ def get_instance_s3_object_bytes(
     object_key = _join_s3_key(instance.s3_prefix, path)
 
     try:
-        response = client.get_object(Bucket=bucket, Key=object_key)
+        response: dict[str, Any] = client.get_object(Bucket=bucket, Key=object_key)
     except ClientError as exc:
         error_code = (exc.response.get("Error") or {}).get("Code")
         if error_code in {"NoSuchKey", "404"}:
@@ -384,6 +384,16 @@ def get_instance_s3_object_bytes(
     except BotoCoreError as exc:
         raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
 
+    return response
+
+
+def get_instance_s3_object_bytes(
+    session: Session,
+    claims: dict[str, Any],
+    instance_id: int,
+    path: str,
+) -> tuple[bytes, str | None]:
+    response = open_instance_s3_object(session, claims, instance_id, path)
     content_length = response.get("ContentLength")
     body = response.get("Body")
     close = getattr(body, "close", None)
@@ -395,10 +405,7 @@ def get_instance_s3_object_bytes(
         payload = b""
     else:
         try:
-            try:
-                payload = body.read(MAX_INLINE_S3_OBJECT_BYTES + 1)
-            except TypeError:
-                payload = body.read()
+            payload = body.read(MAX_INLINE_S3_OBJECT_BYTES + 1)
         finally:
             if callable(close):
                 close()

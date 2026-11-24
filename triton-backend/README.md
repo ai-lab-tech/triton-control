@@ -167,6 +167,15 @@ back to a stable `SESSION_SECRET`. Keep this key across restarts; after changing
 save the registry credentials again. Read endpoints return configuration status,
 never the registry secret.
 
+The backend encrypts S3 profile and instance secret keys with
+`S3_SECRET_ENCRYPTION_KEY`. Set it to a stable random value before starting
+the service and keep it with your recovery credentials. For a disposable test
+database, run the backend suite with a test-only key:
+
+```bash
+S3_SECRET_ENCRYPTION_KEY=disposable-test-key python -m unittest discover -s tests
+```
+
 Deployment and instance S3 forms accept a profile and repository prefix. Manual
 connection credentials are rejected at the API/service boundary. Profiles owned
 by administrators are available to members; existing personal profiles remain

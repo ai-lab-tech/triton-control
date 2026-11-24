@@ -68,6 +68,12 @@ database host set to the compose service name:
 postgresql://triton:tritonpw@postgres:5432/triton_backend
 ```
 
+When upgrading from a release that stored S3 credentials in plaintext, back up
+the database and stop all old application replicas before starting the new
+version. On first startup, the backend encrypts existing profile and instance
+secret keys in one transaction. All replicas and restored databases must use
+the same `S3_SECRET_ENCRYPTION_KEY`. Keep a protected backup of that key.
+
 Replace the default `SESSION_SECRET`, `JWT_SECRET`, `S3_SECRET_ENCRYPTION_KEY`,
 `EMAIL_SECRET_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` values before using
 compose outside local development. Store `EMAIL_SMTP_PASSWORD` as a secret when

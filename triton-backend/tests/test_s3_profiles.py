@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.core.crypto import encrypt_secret
 from app.api import workflows_api
 from app.db.entities import MlflowEntity, S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
 from app.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -208,9 +209,9 @@ class S3ProfileTests(unittest.TestCase):
     def _member_profiles(self, session):
         session.add(UserEntity(id=7, email="member@example.com", name="Member", role="member"))
         owned = S3ProfileEntity(owner_user_id=7, name="owned", endpoint="https://minio", bucket="models",
-                                access_key="key", secret_key_enc="secret")
+                                access_key="key", secret_key_enc=encrypt_secret("secret"))
         foreign = S3ProfileEntity(owner_user_id=99, name="foreign", endpoint="https://minio", bucket="models",
-                                  access_key="foreign-key", secret_key_enc="foreign-secret")
+                                  access_key="foreign-key", secret_key_enc=encrypt_secret("foreign-secret"))
         session.add_all([owned, foreign])
         session.commit()
         return owned, foreign, {"user_id": 7, "email": "member@example.com", "role": "member"}

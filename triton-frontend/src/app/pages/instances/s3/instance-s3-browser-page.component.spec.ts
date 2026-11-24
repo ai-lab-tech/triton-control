@@ -3,7 +3,7 @@ import { InstallationService } from "../../../shared/installation/installation.s
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap } from "@angular/router";
-import { of, Subject, throwError } from "rxjs";
+import { of, Subject } from "rxjs";
 import { Action } from "@ngrx/store";
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
@@ -58,7 +58,6 @@ describe("InstanceS3BrowserPageComponent", () => {
       "getInstanceS3ApiInstancesInstanceIdS3Get",
       "listInstanceS3ApiInstancesInstanceIdS3ListGet",
       "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
-      "getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet",
       "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
       "deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete",
     ]);
@@ -76,9 +75,6 @@ describe("InstanceS3BrowserPageComponent", () => {
     );
     instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
       of({ content: "x=1" } as any),
-    );
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.and.returnValue(
-      of({ body: new Blob(["x=1"], { type: "text/plain" }) } as any),
     );
     instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.and.returnValue(
       of({} as any),
@@ -376,48 +372,19 @@ describe("InstanceS3BrowserPageComponent", () => {
     expect(editorMock.setValue).toHaveBeenCalledWith("abc");
   });
 
-  it("Download_FileOrFolderEntryProvided_FetchesContentAndClicksOnlyForFiles", async () => {
+  it("links the browser download manager to the authenticated raw endpoint", () => {
     const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
-    const component = fixture.componentInstance;
-    spyOn(URL, "createObjectURL").and.returnValue("blob:demo");
-    spyOn(URL, "revokeObjectURL");
-    const clickSpy = spyOn(HTMLAnchorElement.prototype, "click");
-
-    await component.download({ name: "a.py", path: "/", type: "file", modified: "" });
-
-    expect(
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet,
-    ).toHaveBeenCalled();
-    const rawCallArgs =
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.calls.mostRecent()
-        .args;
-    expect(rawCallArgs[0]).toBe("7");
-    expect(rawCallArgs[1]).toBe("/a.py");
-    expect(String(rawCallArgs[2])).toBe("response");
-    expect(clickSpy).toHaveBeenCalled();
-
-    clickSpy.calls.reset();
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.calls.reset();
-    await component.download({ name: "dir", path: "/", type: "folder", modified: "" });
-    expect(clickSpy).not.toHaveBeenCalled();
-    expect(
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("Download_ContentRequestFails_DispatchesFailureToast", async () => {
-    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
-    const component = fixture.componentInstance;
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.and.returnValue(
-      throwError(() => new Error("down")),
+    const url = new URL(
+      fixture.componentInstance.downloadUrl({
+        name: "large #1&2.plan",
+        path: "/",
+        type: "file",
+        modified: "",
+      }),
+      window.location.origin,
     );
-    const dispatchSpy = spyOn(mockStore, "dispatch");
-
-    await component.download({ name: "a.py", path: "/", type: "file", modified: "" });
-
-    expect(dispatchSpy).toHaveBeenCalledWith(
-      displayFailure({ title: "Download failed", message: "Failed to download a.py." }),
-    );
+    expect(url.pathname).toBe("/api/instances/7/s3/content/raw");
+    expect(url.searchParams.get("path")).toBe("/large #1&2.plan");
   });
 
   it("OnUpload_FileSelected_SetsReadingStateAndDispatchesUploadAfterRead", async () => {

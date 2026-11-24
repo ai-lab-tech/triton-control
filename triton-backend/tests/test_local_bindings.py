@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import LocalCredentialEntity, S3ProfileEntity, UserEntity
@@ -61,7 +62,7 @@ class LocalBindingTests(unittest.TestCase):
                 bucket=bucket,
                 prefix=prefix,
                 access_key="synthetic-access",
-                secret_key_enc="synthetic-storage-password",
+                secret_key_enc=encrypt_secret("synthetic-storage-password"),
             )
             self.session.add(row)
             self.session.commit()

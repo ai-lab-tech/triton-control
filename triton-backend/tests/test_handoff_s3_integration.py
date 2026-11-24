@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import boto3
 
+from app.core.crypto import encrypt_secret
 from app.exceptions import ForbiddenError
 from app.schemas.handoffs import S3Input
 from app.services import handoff_sources
@@ -34,7 +35,7 @@ class HandoffS3Tests(HandoffFixture, unittest.TestCase):
 
         profile = self.session.get(S3ProfileEntity, 1)
         profile.endpoint, profile.bucket = ENDPOINT, self.bucket
-        profile.access_key, profile.secret_key_enc = "handoff_test", "handoff_test_password"
+        profile.access_key, profile.secret_key_enc = "handoff_test", encrypt_secret("handoff_test_password")
         self.session.add(profile)
         self.session.commit()
 

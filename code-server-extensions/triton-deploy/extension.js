@@ -833,6 +833,7 @@ function normalizeForm(form) {
   return {
     sourceFolder: String(form.sourceFolder || ""),
     profileId: String(form.profileId || "").trim(),
+    profilePrefix: cleanPrefix(String(form.profilePrefix || "")),
     profileName: String(form.profileName || "").trim(),
     deploymentName: String(form.deploymentName || "").trim(),
     image: String(form.image || "").trim(),
