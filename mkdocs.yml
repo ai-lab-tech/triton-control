@@ -7,6 +7,7 @@ theme:
   favicon: assets/images/triton-control-icon.svg
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
     - content.code.copy
 
@@ -16,14 +17,18 @@ nav:
   - Product:
     - User Guide: user-guide.md
     - User Management: user-management.md
-    - Preparation Tasks: preparation-tasks.md
-    - Validation Contracts: validation-contracts.md
-    - Scientist Handoffs: scientist-handoffs.md
-    - Experiment Snapshots: experiment-snapshots.md
-    - Candidate Import: candidate-import.md
+    - Preparation for Production:
+      - Overview: production-preparation/index.md
+      - Prepare a Serving Model: production-preparation/prepare-serving-model.md
+      - Scientist Handoffs: scientist-handoffs.md
+      - Experiment Snapshots: experiment-snapshots.md
+      - Preparation Tasks: preparation-tasks.md
+      - Task Workspaces: task-workspaces.md
+      - Candidate Import: candidate-import.md
+      - Validation Contracts: validation-contracts.md
+      - Model Preparation Settings: model-preparation-settings.md
     - Build Contexts: build-contexts.md
     - Workspaces: development-workspaces.md
-    - Task Workspaces: task-workspaces.md
     - Argo Workflows: argo-workflows.md
   - Architecture:
     - Overview: architecture-overview.md
