@@ -9,14 +9,14 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import ValidationError
 
 from app.core.canonical import digest
-from app.schemas.gate_evidence import EvidenceArchive, GatePolicy
+from app.schemas.gate_evidence import EvidenceArchive, GatePolicy, SecurityPolicy, SecurityReport, SignedSecurityReport
 from app.schemas.serving_metadata import ServingRelease
 from app.schemas.validation import EvidenceEnvelope, HardwareRuntime, ValidationManifest, ValidationReport
 from app.services.contract_io import MetadataError, parse_json_document
 from app.services.validation import check_evidence_consistency, check_release_binding, document_digest
 
 POLICY_FILE = "TRITON_GATE_POLICY_FILE"
-MAX_POLICY_BYTES = 256 * 1024
+MAX_POLICY_BYTES = 2 * 1024 * 1024  # Includes 10,000 SHA-256 digests and the surrounding gate policy.
 MAX_ARCHIVE_BYTES = 4 * 1024 * 1024
 
 
@@ -25,12 +25,61 @@ def signing_message(envelope: EvidenceEnvelope) -> bytes:
     return f"triton-control/validation-evidence/v1\n{document_digest(envelope)}".encode("ascii")
 
 
+def security_message(report: SecurityReport) -> bytes:
+    checksum = digest(report.model_dump(mode="json", by_alias=True))
+    return f"triton-control/security-evidence/v2\n{checksum}".encode("ascii")
+
+
+def verify_security(
+    release: ServingRelease, signed: SignedSecurityReport | None, policy: SecurityPolicy | None, now: datetime
+) -> None:
+    reference = release.spec.security
+    if reference is None and signed is None and policy is None:
+        return
+    if reference is None or signed is None or policy is None:
+        raise MetadataError("security-policy-report-or-reference-missing")
+    report = signed.report
+    key = policy.issuers.get(report.issuer)
+    if key is None:
+        raise MetadataError("untrusted-security-issuer")
+    try:
+        Ed25519PublicKey.from_public_bytes(bytes.fromhex(key)).verify(
+            bytes.fromhex(signed.signature), security_message(report)
+        )
+    except InvalidSignature:
+        raise MetadataError("invalid-security-signature") from None
+    if (
+        reference.digest != digest(signed.model_dump(mode="json", by_alias=True))
+        or reference.subjects != report.subjects
+        or report.subjects != release.spec.validation.subjects
+    ):
+        raise MetadataError("security-subject-mismatch")
+    if not timedelta(0) <= now - report.issued_at < timedelta(seconds=policy.max_validity_seconds):
+        raise MetadataError("security-report-outside-validity")
+    if (
+        report.bandit_version != policy.bandit_version
+        or report.trivy_version != policy.trivy_version
+        or report.packages < policy.min_packages
+        or report.code_findings > policy.max_code_findings
+        or report.image_findings > policy.max_image_findings
+        or report.subjects.prepared_inventory_digest not in policy.approved_model_inventories
+    ):
+        raise MetadataError("security-policy-check-failed")
+
+
 def package_evidence(
-    manifest: ValidationManifest, report: ValidationReport, envelope: EvidenceEnvelope, signature: str,
+    manifest: ValidationManifest,
+    report: ValidationReport,
+    envelope: EvidenceEnvelope,
+    signature: str,
+    *,
+    security: SignedSecurityReport | None = None,
 ) -> bytes:
     """Serialize independently signed evidence for retention alongside a release."""
-    archive = EvidenceArchive(manifest=manifest, report=report, envelope=envelope, signature=signature)
-    raw = archive.model_dump_json(by_alias=True).encode("utf-8")
+    archive = EvidenceArchive(
+        manifest=manifest, report=report, envelope=envelope, signature=signature, security=security
+    )
+    raw = archive.model_dump_json(by_alias=True, exclude={"security"} if security is None else set()).encode("utf-8")
     if len(raw) > MAX_ARCHIVE_BYTES:
         raise MetadataError("evidence-archive-too-large")
     return raw
@@ -58,6 +107,7 @@ def verify_release_evidence(
     now: datetime | None = None,
 ) -> str:
     """Verify retained evidence and return the binding for independent approval."""
+    now = now if now is not None else datetime.now(timezone.utc)
     policy = _load_policy()
     if len(archive_bytes) > MAX_ARCHIVE_BYTES:
         raise MetadataError("evidence-archive-too-large")
@@ -79,8 +129,12 @@ def verify_release_evidence(
 
     check_release_binding(release, archive.manifest, envelope)
     check_evidence_consistency(
-        archive.manifest, archive.report, envelope,
-        target=target, policy=policy.identity, now=now if now is not None else datetime.now(timezone.utc),
+        archive.manifest,
+        archive.report,
+        envelope,
+        target=target,
+        policy=policy.identity,
+        now=now,
     )
     if envelope.valid_until - envelope.issued_at > timedelta(seconds=policy.max_validity_seconds):
         raise MetadataError("evidence-validity-exceeds-policy")
@@ -90,17 +144,28 @@ def verify_release_evidence(
     ):
         raise MetadataError("required-validation-checks-missing")
 
-    return digest({
-        "release": release.model_dump(mode="json", by_alias=True),
-        "archive": archive.model_dump(mode="json", by_alias=True),
-        "policy": policy.model_dump(mode="json", by_alias=True),
-        "target": target.model_dump(mode="json", by_alias=True),
-    })
+    verify_security(release, archive.security, policy.security, now)
+    return digest(
+        {
+            "release": release.model_dump(mode="json", by_alias=True),
+            "archive": archive.model_dump(
+                mode="json", by_alias=True, exclude={"security"} if archive.security is None else set()
+            ),
+            "policy": policy.model_dump(
+                mode="json", by_alias=True, exclude={"security"} if policy.security is None else set()
+            ),
+            "target": target.model_dump(mode="json", by_alias=True),
+        }
+    )
 
 
 def admit_release(
-    release: ServingRelease, archive_bytes: bytes, *, target: HardwareRuntime,
-    approved_binding: str, now: datetime | None = None,
+    release: ServingRelease,
+    archive_bytes: bytes,
+    *,
+    target: HardwareRuntime,
+    approved_binding: str,
+    now: datetime | None = None,
 ) -> str:
     """Reverify current policy and evidence before a caller changes a workload."""
     binding = verify_release_evidence(release, archive_bytes, target=target, now=now)

@@ -1,21 +1,33 @@
 """Single immutable pod-template path for validation and future release consumers.
 
-This module renders resources, not approval or production execution. The caller
-must authorize a local storage binding and verify release evidence independently.
+The release entry point verifies admission before rendering. Validation and
+development callers also use the lower-level pod-template renderer.
 """
 
-from dataclasses import asdict
+import os
+from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
+from app.core import installation_policy
 from app.core.canonical import canonical_bytes, digest, inventory_digest
 from app.schemas.materialization import MaterializationPlan, MaterializerPolicy, StorageBinding
 from app.schemas.serving_metadata import Name, Repository, Resources, ServingRelease, StartupModel
+from app.schemas.validation import HardwareRuntime
 from app.services.candidates.artifacts import CaptureLimits
+from app.services.contract_io import MetadataError
+from app.services.gate_evidence import POLICY_FILE, admit_release
 from app.services.materialization.budgets import check_plan, storage_bytes
 from app.services.materialization.normalization import MaterializationError
 from app.services.materialization.qualification import require_qualified
 from app.services.materialization.readiness import probe_timeout_seconds
 from app.services.materialization.runtime import receipt_for
+
+
+@dataclass(frozen=True)
+class ReleaseApproval:
+    archive: bytes
+    target: HardwareRuntime
+    binding: str
 
 
 def manifests(
@@ -27,7 +39,14 @@ def manifests(
     name: str,
     namespace: str,
     limits: CaptureLimits,
+    approval: ReleaseApproval | None = None,
 ) -> list[dict[str, Any]]:
+    if approval is not None:
+        if policy.platform != f"{approval.target.operating_system}/{approval.target.architecture}":
+            raise MetadataError("release-approval-platform-mismatch")
+        admit_release(release, approval.archive, target=approval.target, approved_binding=approval.binding)
+    elif release.spec.security is not None or POLICY_FILE in os.environ or installation_policy.mode() == "production":
+        raise MetadataError("release-approval-required")
     return serving_manifests(
         plan, policy, binding, name=name, namespace=namespace, limits=limits,
         identity_digest=digest(release.model_dump(mode="json", by_alias=True)), image=release.spec.image,

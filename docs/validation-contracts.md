@@ -217,3 +217,59 @@ for the reviewed release and exact target profile. The executor calls
 error blocks that proposed change. The local policy is read on each call so
 issuer removal takes effect on the next admission. A changed policy or archive
 requires a new approval binding.
+
+## Optional serving-artifact security gate
+
+Validation-only installations omit `security` from the installation policy and
+publish validation-only releases. To require security evidence for every release
+admitted under a policy, add a `security` object to the same operator-owned
+policy file. All four checks in suite `triton-security-v2` are required together.
+
+| Policy field | Check |
+| --- | --- |
+| `issuers` | Map of independently trusted security issuer names to hex Ed25519 public keys |
+| `trivyVersion`, `banditVersion` | Exact scanner versions allowed to issue a passing result |
+| `maxCodeFindings` | Maximum combined Bandit findings, detected secrets and failed configuration rules |
+| `minPackages` | Minimum total inventoried packages, with a nonempty inventory required for each image |
+| `maxImageFindings` | Maximum total HIGH and CRITICAL vulnerability findings in the runtime and configured materializer images |
+| `approvedModelInventories` | Prepared inventory digests reviewed by the operator, covering file paths and bytes of every model, backend and config |
+| `maxValiditySeconds` | Lifetime from the signed UTC scan timestamp |
+
+Run the issuer in an isolated development/build environment with operator-installed
+Trivy, Bandit (in the backend Python environment), Docker Buildx, registry read
+access and current scanner databases. Use a trusted working directory, environment,
+scanner configuration and PATH. Mount immutable source and prepared repositories
+read-only. Supply a fresh private output directory path outside both inputs.
+Keep the raw 32-byte Ed25519 signing key available only to the issuer.
+
+```sh
+TRITON_CONTROL_MODE=development python -m app.services.security_scan \
+  --release release.json --source /inputs/source --models /inputs/models \
+  --limits /config/materialization-limits.json --issuer build-security --key /keys/security-ed25519 --destination /reports/run-001
+```
+
+Pass the same `--limits` JSON file used for materialization to apply its byte, file and inventory time budgets to both directories. Omitting it uses the default capture limits. The full policy file can occupy up to 2 MiB and can contain up to 10,000 approved inventory digests.
+
+The issuer measures both repository inventories, scans serving files without
+loading the model and inspects single-platform images by manifest digest. The
+issuer rejects inline scanner suppressions and requires Helm input as rendered
+Kubernetes YAML. Scan inputs cannot contain `Chart.yaml`, `.tgz` or `.tar.gz`
+files. Trivy runs without local configuration or ignore files. Retain
+`model-inventory.json` alongside the raw reports for audit. The signed report
+carries the prepared inventory digest and file count, keeping admission evidence
+bounded independently of inventory size. Regenerate any earlier v1 scan report.
+
+Raw image reports contain package inventories and vulnerability findings. Keep
+the raw reports private since code reports may identify secrets. On interruption,
+rerun with a new output directory. Publication requires the final signed
+`security.json`. Its SHA-256 is the release's `spec.security.digest`. Set
+`spec.security.uri` to its retained location and copy its subjects into
+`spec.security.subjects`. Pass the parsed signed report as the `security`
+keyword to `package_evidence`. The release-specific Kubernetes renderer requires approval in production and
+verifies the retained signature, subjects, thresholds and time window offline
+before rendering. The production execution API is tracked separately. Existing validation-only
+approvals preserve their binding when both optional security fields are absent.
+
+An admitted result records the checks and limits in force at scan time.
+Vulnerabilities outside the scanner's coverage and behavior of executable model
+code still require independent review.

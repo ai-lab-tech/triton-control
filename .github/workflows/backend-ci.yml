@@ -38,6 +38,29 @@ permissions:
   contents: read
 
 jobs:
+  security-gate-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e './triton-backend[dev]'
+      - name: Install pinned Trivy
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -fsSLo trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          echo 'bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  trivy.tgz' | sha256sum --check
+          mkdir scanner-bin
+          tar xzf trivy.tgz -C scanner-bin trivy
+          echo "$RUNNER_TEMP/scanner-bin" >> "$GITHUB_PATH"
+      - name: Verify security admission against real scanner reports
+        working-directory: triton-backend
+        env:
+          SECURITY_TEST_IMAGE: docker.io/library/alpine@sha256:9db2934886712d877c932e07249c75a59e6ca27adfbccc05261987a17bef2d63
+        run: python -m unittest tests.test_gate_evidence tests.test_security_scan -v
+
   materializer-kubernetes:
     runs-on: ubuntu-latest
     timeout-minutes: 20
