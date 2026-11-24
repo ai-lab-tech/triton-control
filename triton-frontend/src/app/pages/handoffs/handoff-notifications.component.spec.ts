@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from "@angular/common
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { AuthStore } from "../../shared/auth/auth.store";
+import { InstallationService } from "../../shared/installation/installation.service";
 import { HandoffNotificationsComponent } from "./handoff-notifications.component";
 
 describe("HandoffNotificationsComponent", () => {
@@ -13,6 +14,11 @@ describe("HandoffNotificationsComponent", () => {
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
+    TestBed.inject(InstallationService).snapshot.set({
+      mode: "development",
+      capabilities: { development_jobs: true },
+      explanation: "Development mode",
+    });
   });
   afterEach(() => http.verify());
   it("counts unread notifications and marks a recipient notification read", async () => {
