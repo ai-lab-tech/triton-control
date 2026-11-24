@@ -72,4 +72,5 @@ def resolve_profile_request(
         "s3_secret_key": secret,
         "s3_region": profile.region,
         "s3_ca_certificate": profile.ca_certificate,
+        "s3_address_style": "path" if profile.force_path_style else "virtual",
     })

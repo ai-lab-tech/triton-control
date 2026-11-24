@@ -151,6 +151,16 @@ def delete_code_server(
 
 def _get_owned(session: Session, claims: dict[str, Any], code_server_id: int) -> CodeServerEntity:
     user = require_user_entity(session, claims)
+    if (
+        not user.is_active
+        or user.role.strip().lower() not in {"admin", "member"}
+        or (
+            user.auth_provider == "local"
+            and claims.get("credential_version") is not None
+            and int(claims["credential_version"]) != user.credential_version
+        )
+    ):
+        raise ForbiddenError("Development workspace access denied")
     row = code_servers.find_by_id(session, code_server_id)
     if not row:
         raise NotFoundError("Development workspace not found")

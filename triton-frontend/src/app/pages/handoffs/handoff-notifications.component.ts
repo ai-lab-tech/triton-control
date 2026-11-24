@@ -7,6 +7,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatBadgeModule } from "@angular/material/badge";
 import { firstValueFrom, timer } from "rxjs";
 import { AuthStore } from "../../shared/auth/auth.store";
+import { InstallationService } from "../../shared/installation/installation.service";
 import { HandoffsApiService, HandoffNotification } from "./handoffs-api.service";
 
 @Component({
@@ -63,7 +64,10 @@ import { HandoffsApiService, HandoffNotification } from "./handoffs-api.service"
 export class HandoffNotificationsComponent {
   private readonly api = inject(HandoffsApiService);
   private readonly auth = inject(AuthStore);
-  readonly allowed = this.auth.canWriteInstances;
+  private readonly installation = inject(InstallationService);
+  readonly allowed = computed(
+    () => this.auth.canWriteInstances() && this.installation.allows("development_jobs"),
+  );
   readonly items = signal<HandoffNotification[]>([]);
   readonly failed = signal(false);
   readonly unread = computed(() => this.items().filter((item) => !item.read_at).length);

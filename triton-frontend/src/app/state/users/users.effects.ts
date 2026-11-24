@@ -111,7 +111,16 @@ export class UsersEffects {
       switchMap(({ userId, role, prevRole }) => {
         const payload: UpdateUserRoleRequest = { role };
         return from(this.usersApi.updateUserRoleApiAuthUsersUserIdRolePut(payload, userId)).pipe(
-          map(() => updateUserRoleSucceeded({ userId, role })),
+          map((updated) =>
+            updateUserRoleSucceeded({
+              userId,
+              role,
+              isActive:
+                typeof (updated as { is_active?: unknown })?.is_active === "boolean"
+                  ? Boolean((updated as { is_active?: boolean }).is_active)
+                  : undefined,
+            }),
+          ),
           catchError(() =>
             of(
               updateUserRoleFailed({

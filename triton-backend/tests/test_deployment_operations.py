@@ -427,3 +427,26 @@ class DeploymentOperationTests(unittest.TestCase):
         with patch.object(repo, "now", side_effect=lambda _: clock[0]), patch.object(self.provider, "call", slow_read):
             self.assertEqual(self.step(result.operation_id).state, "succeeded")
         self.assertEqual(self.provider.writes, writes)
+
+    def test_cancelled_deployment_cleans_up_after_submitter_password_reset_or_demotion(self):
+        result = self.submit()
+        self.step(result.operation_id)
+        with Session(self.engine) as session:
+            submitter = session.get(UserEntity, 1)
+            submitter.credential_version += 1
+            submitter.role = "viewer"
+            submitter.assigned_instances = []
+            session.add(submitter)
+            session.commit()
+            with self.assertRaises(ConflictError):
+                deploy.prepare_deletion(session, result.instance_id)
+        for _ in range(3):
+            with Session(self.engine) as session:
+                row = repo.get(session, result.operation_id)
+                row.available_at = repo.now(session) - timedelta(seconds=1)
+                session.add(row)
+                session.commit()
+            OperationWorker(self.service, lambda: Session(self.engine)).run_once()
+        with Session(self.engine) as session:
+            self.assertEqual(repo.get(session, result.operation_id).state, "cancelled")
+            self.assertTrue(deploy.prepare_deletion(session, result.instance_id))

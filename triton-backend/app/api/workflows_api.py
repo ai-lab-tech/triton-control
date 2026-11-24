@@ -10,7 +10,7 @@ from app.api.errors import translate_app_errors
 from app.core.access_control import is_member_or_admin, require_admin, require_member_or_admin
 from app.core.identity import require_user_entity
 from app.core.security import get_claims
-from app.db.database import get_session
+from app.db.database import get_session, session_factory
 from app.exceptions import BadRequestError, UnauthorizedError
 from app.schemas import (
     ArgoWorkflowsStatusResponse,
@@ -187,6 +187,23 @@ async def proxy_argo_workflows_websocket(
     """Proxy an authenticated member or admin WebSocket to Argo Server."""
     claims = websocket.session.get("user")
     if not claims or not is_member_or_admin(claims):
+        await websocket.close(code=1008)
+        return
+    try:
+        with session_factory() as session:
+            user = require_user_entity(session, claims)
+            if (
+                not user.is_active
+                or not is_member_or_admin({"role": user.role})
+                or (
+                    user.auth_provider == "local"
+                    and claims.get("credential_version") is not None
+                    and int(claims["credential_version"]) != user.credential_version
+                )
+            ):
+                await websocket.close(code=1008)
+                return
+    except Exception:
         await websocket.close(code=1008)
         return
     await proxy.proxy_websocket(path, websocket)

@@ -256,7 +256,7 @@ async function download(profile, key, filename, { signal, etag, onBytes, version
     }
   }
 }
-async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}, versionReceipt = false } = {}) {
+async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}, versionReceipt = false, overwrite = false } = {}) {
   signal?.throwIfAborted();
   const stat = await fs.promises.stat(file);
   if (stat.size > 5 * 1024 ** 3)
@@ -270,7 +270,7 @@ async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}
   const headers = {
     ...metadata,
     "content-length": String(stat.size),
-    ...(etag ? { "if-match": etag } : { "if-none-match": "*" }),
+    ...(etag ? { "if-match": etag } : overwrite ? {} : { "if-none-match": "*" }),
   };
   const sha256 = digest.digest("hex");
   const response = check(

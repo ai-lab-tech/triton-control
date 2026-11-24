@@ -744,6 +744,11 @@ function registerS3Browser(context) {
   command("tritonControl.uploadS3", async (uri) => {
     try { await browser.chooseUpload(await node(uri)); } finally { provider.notify(uri); }
   });
+  command("tritonControl.moreS3", async (item) => {
+    if (item && typeof item === "object" && "profileId" in item) {
+      await browser.load(item, true);
+    }
+  });
   registerConversionExports(command, {
     getProfile: (id) => browser.profile(id),
     listProfiles: () => browser.session.profiles(),

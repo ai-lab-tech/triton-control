@@ -52,6 +52,7 @@ from app.services.storage.s3_client import (
 from app.services.triton.config import extract_triton_version, validate_triton_config_pbtxt
 
 DEFAULT_S3_REGION = "us-east-1"
+MAX_INLINE_S3_OBJECT_BYTES = 64 * 1024 * 1024
 
 
 def require_s3_client(entity: Any, *, client_config: Config | None = None) -> Any:
@@ -230,7 +231,7 @@ def _rotate_instance_credentials(
             or instance.s3_bucket != profile.bucket
             or (instance.s3_region or "us-east-1") != (profile.region or "us-east-1")
             or not s3_prefix_contains(prefix, instance_prefix)
-            or not instance.s3_verify_ssl
+            or (instance.s3_use_https and not instance.s3_verify_ssl)
             or instance.s3_use_https != _is_https_endpoint(profile.endpoint)
             or (instance.s3_ca_certificate or "") != (profile.ca_certificate or "")
             or instance.s3_address_style != ("path" if profile.force_path_style else "virtual")):
@@ -289,7 +290,7 @@ def list_instance_s3(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
-    relative_prefix = _clean_s3_key_part(prefix)
+    relative_prefix = normalize_s3_path(prefix)
     effective_prefix = _s3_list_prefix(instance.s3_prefix, relative_prefix)
     display_path = _display_s3_path(relative_prefix)
     try:
@@ -383,7 +384,26 @@ def get_instance_s3_object_bytes(
     except BotoCoreError as exc:
         raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
 
-    payload = response.get("Body").read() if response.get("Body") else b""
+    content_length = response.get("ContentLength")
+    body = response.get("Body")
+    close = getattr(body, "close", None)
+    if isinstance(content_length, int) and content_length > MAX_INLINE_S3_OBJECT_BYTES:
+        if callable(close):
+            close()
+        raise BadRequestError("S3 object exceeds maximum inline read size (64 MiB)")
+    if not body:
+        payload = b""
+    else:
+        try:
+            try:
+                payload = body.read(MAX_INLINE_S3_OBJECT_BYTES + 1)
+            except TypeError:
+                payload = body.read()
+        finally:
+            if callable(close):
+                close()
+        if len(payload) > MAX_INLINE_S3_OBJECT_BYTES:
+            raise BadRequestError("S3 object exceeds maximum inline read size (64 MiB)")
     content_type = response.get("ContentType")
     return payload, content_type
 

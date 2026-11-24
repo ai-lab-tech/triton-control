@@ -44,7 +44,7 @@ def normalize_s3_path(value: str | None) -> str:
     path = (value or "").strip().strip("/")
     if path and (
         any(part in {"", ".", ".."} for part in path.split("/"))
-        or any(char in "\\%?#" or ord(char) < 32 or ord(char) == 127 for char in path)
+        or any(char in "\\?" or ord(char) < 32 or ord(char) == 127 for char in path)
     ):
         raise BadRequestError("Invalid S3 path")
     return path

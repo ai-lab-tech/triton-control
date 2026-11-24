@@ -17,7 +17,8 @@ class WorkflowsChartTests(unittest.TestCase):
     def render(cls, *overrides: str) -> list[dict[str, Any]]:
         command = [
             "helm", "template", "security-test", str(CHART), "--namespace", "triton-control",
-            "--set", "app.existingSecret=app-fixture", "--set", "argoWorkflows.enabled=true", "--set", "argoWorkflows.crds.install=false",
+            "--set", "app.existingSecret=app-fixture",
+            "--set", "argoWorkflows.enabled=true", "--set", "argoWorkflows.crds.install=false",
         ]
         for value in overrides:
             command.extend(["--set", value])

@@ -10057,6 +10057,16 @@
             ],
             "title": "S3 Ca Certificate"
           },
+          "s3_address_style": {
+            "type": "string",
+            "enum": [
+              "path",
+              "virtual",
+              "auto"
+            ],
+            "title": "S3 Address Style",
+            "default": "path"
+          },
           "image": {
             "type": "string",
             "title": "Image"

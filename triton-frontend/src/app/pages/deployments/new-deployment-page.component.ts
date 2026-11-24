@@ -294,6 +294,7 @@ export class NewDeploymentPageComponent {
     }
     this.s3Url = profile.endpoint;
     this.s3Bucket = profile.bucket;
+    this.s3Prefix = profile.prefix || "";
   }
 
   async deploy(): Promise<void> {
@@ -393,8 +394,14 @@ export class NewDeploymentPageComponent {
               !!this.basicAuthPassword &&
               this.ingressScheme === "https")))) &&
       this.hasValidMemoryGi() &&
+      this.hasValidGpuCount() &&
       !this.deploying()
     );
+  }
+
+  private hasValidGpuCount(): boolean {
+    const value = this.gpuCount ?? 0;
+    return value >= 0 && Number.isInteger(value);
   }
 
   private setMessage(message: string, tone: "info" | "success" | "error"): void {

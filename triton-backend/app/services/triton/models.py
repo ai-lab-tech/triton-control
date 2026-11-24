@@ -150,6 +150,27 @@ async def _send_model_command(
     return ModelRepositoryActionResponse(status="ok", message=f"Model {'load' if load else 'unload'} requested.")
 
 
+class InferenceTarget:
+    """Detached connection snapshot so long inference calls do not hold a DB session."""
+
+    def __init__(self, url: str, verify_ssl: bool, ca_certificate: str, metrics_url: str | None) -> None:
+        self.url = url
+        self.verify_ssl = verify_ssl
+        self.ca_certificate = ca_certificate
+        self.metrics_url = metrics_url
+
+
+def resolve_inference_target(session: Session, claims: dict[str, Any], instance_id: int) -> InferenceTarget:
+    installation_policy.require("interactive_inference")
+    instance = get_instance_or_404(session, instance_id, claims)
+    return InferenceTarget(
+        url=instance.url,
+        verify_ssl=bool(instance.triton_verify_ssl),
+        ca_certificate=instance.triton_ca_certificate or "",
+        metrics_url=instance.metrics_url,
+    )
+
+
 async def infer_model(
     session: Session,
     claims: dict[str, Any],
@@ -160,15 +181,24 @@ async def infer_model(
     content_type: str,
 ) -> Response:
     """Proxy a Triton inference request for a specific model version."""
-    installation_policy.require("interactive_inference")
+    target = resolve_inference_target(session, claims, instance_id)
+    return await infer_model_target(target, model_name, version, payload_bytes, content_type)
+
+
+async def infer_model_target(
+    instance: InferenceTarget,
+    model_name: str,
+    version: str,
+    payload_bytes: bytes,
+    content_type: str,
+) -> Response:
     if not payload_bytes:
         raise BadRequestError("Request body is required")
 
-    instance = get_instance_or_404(session, instance_id, claims)
     triton_service = TritonService(
         instance.url,
-        instance.triton_verify_ssl,
-        instance.triton_ca_certificate,
+        instance.verify_ssl,
+        instance.ca_certificate,
         timeout=triton_inference_timeout_seconds(),
     )
     use_metrics = bool(instance.metrics_url)
