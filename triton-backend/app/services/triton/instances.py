@@ -2,8 +2,8 @@
 
 Provides use cases that combine DB persistence with live Triton connectivity:
   ``create_instance(request, session, claims)`` — connects to the Triton URL,
-    reads available models, upserts the ``TritonInstanceEntity``, and returns
-    the created DTO.  Raises ``ConflictError`` on duplicate URL/name.
+    reads available models, and registers a new instance. An existing URL
+    returns the authorized instance without changing its attributes.
   ``list_instances(session, claims)``           — returns instances visible to
     the caller (all for admins, assigned only for regular users).
   ``get_instance(session, claims, id)``         — single instance fetch with
@@ -81,38 +81,10 @@ async def create_instance(
     existing_by_url = instances.find_by_url(session, request.url)
     existing_by_name = instances.find_by_name(session, instance_name)
 
-    user = require_user_entity(session, claims)
-
     if existing_by_url:
-        if existing_by_name and existing_by_name.id != existing_by_url.id:
-            raise ConflictError(
-                f"Instance name '{instance_name}' already exists",
-            )
-
-        existing_by_url.name = instance_name
-        existing_by_url.model_names = model_names
-        existing_by_url.repository_models = repository_models
-        existing_by_url.server_metadata = runtime_snapshot["metadata"]
-        existing_by_url.health_live = runtime_snapshot["live"]
-        existing_by_url.health_ready = runtime_snapshot["ready"]
-        existing_by_url.health_last_checked_at = runtime_snapshot["checked_at"]
-        existing_by_url.health_error = runtime_snapshot["error"]
-        existing_by_url.triton_verify_ssl = request.verify_ssl
-        existing_by_url.triton_ca_certificate = request.ca_certificate if request.verify_ssl else ""
-        existing_by_url.metrics_url = request.metrics_url
-        existing_by_url.metrics_cpu = metrics_snapshot["cpu"]
-        existing_by_url.metrics_ram = metrics_snapshot["ram"]
-        existing_by_url.metrics_gpu = metrics_snapshot["gpu"]
-        existing_by_url.metrics_last_checked_at = metrics_snapshot["checked_at"]
-        existing_by_url.metrics_error = metrics_snapshot["error"]
-        if existing_by_url.created_by_user_id is None:
-            existing_by_url.created_by_user_id = user.id
-        instances.save(session, existing_by_url)
-
-        if instance_name not in (user.assigned_instances or []):
-            user.assigned_instances = [*user.assigned_instances, instance_name]
-            users.save(session, user)
-
+        ensure_instance_access(session, claims, existing_by_url.name)
+        if request.name and instance_name != existing_by_url.name:
+            raise ConflictError("An existing instance cannot be renamed through registration")
         return entity_to_dto(existing_by_url)
 
     if existing_by_name:
@@ -120,6 +92,7 @@ async def create_instance(
             f"Instance name '{instance_name}' already exists",
         )
 
+    user = require_user_entity(session, claims)
     entity = instances.create(
         session,
         url=request.url,

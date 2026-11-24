@@ -27,11 +27,16 @@ boundary.
 ## Helm
 
 Apply `charts/triton-control/values-production.yaml` together with your normal
-installation values. If overriding `app.env`, retain its literal production mode
-entry: Helm arrays replace one another. Duplicate mode entries, `valueFrom`, invalid
-modes, enabled Argo, build qualification policies and development tool environment
-overrides are rejected. The production template omits development tool configuration;
+installation values. The preset sets `app.installationMode: production`, which
+survives overrides of `app.env`. If a legacy `TRITON_CONTROL_MODE` entry remains
+in `app.env`, it must agree with `app.installationMode`. Duplicate mode entries,
+`valueFrom`, invalid modes, enabled Argo, build qualification policies and
+development tool environment overrides are rejected. The production template omits development tool configuration;
 MLflow cannot be installed through the production API.
+
+Production startup reconciles the operator-owned release-source file or
+environment configuration. The production API can read registered sources.
+Changing the source configuration does not enable workload execution.
 
 ## Cutover
 

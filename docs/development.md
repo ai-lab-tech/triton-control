@@ -125,7 +125,7 @@ mock server; authentication, email delivery and user storage are real.
 | --- | --- |
 | `smtp` | Admin sends invitations; Mailpit captures actual SMTP messages; recipients activate through the emailed links and sign in. Password recovery captures and consumes a real reset email. |
 | `manual-link` | Admin invites users and obtains the one-time link in the UI; recipients activate without sending email. An admin-generated reset link changes an invited user's password. |
-| `disabled` | Admin creates passwordless inactive accounts. Matching public registration activates them while preserving role and instance assignments. Invitations and admin resets are unavailable. |
+| `disabled` | New users self-register and wait for administrator approval. Invitations and admin resets are unavailable. |
 | `oidc` | Admin provisions OIDC identities in Triton Control; recipients sign in through Keycloak's browser authorization-code flow and are matched by email. Local invitations and password login are blocked. |
 
 OIDC identities are seeded in a disposable Keycloak realm; Triton Control does

@@ -70,6 +70,6 @@ def update_user_role(
     require_admin(claims)
     row = get_user_or_404(session, user_id)
     row.role = request.role
-    row.is_active = True
+    row.is_active = row.auth_provider != "local" or bool(row.password_hash)
     users.save(session, row)
     return user_entity_to_dto(row)

@@ -211,7 +211,8 @@ def claim(session: Session, claims: dict[str, Any], task_id: UUID, request: Task
         raise ConflictError("Preparation task is already assigned")
     before = _values(session, task_id)
     task.assignee_user_id = actor
-    task.state = "claimed"
+    if task.state != "awaiting_information":
+        task.state = "claimed"
     return _finish(session, task_id, actor, "claimed", before)
 
 
@@ -239,6 +240,9 @@ def request_information(
     actor, admin, eligible = _edit(session, claims, task_id, request)
     task = repository.get(session, task_id)
     _engineer_or_admin(admin, eligible, task.assignee_user_id, actor)
+    handoff = next(iter(handoff_repository.for_tasks(session, [task_id])), None)
+    if set(request.missing_inputs).intersection(_handoff_missing(handoff)):
+        raise ConflictError("Submit a new handoff revision with the missing evaluation inputs")
     before = _values(session, task_id)
     missing = sorted(set(task.missing_inputs) | set(request.missing_inputs))
     if len(missing) > 50:

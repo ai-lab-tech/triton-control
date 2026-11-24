@@ -84,6 +84,8 @@ spec:
             {{- end }}
           {{- end }}
           env:
+            - name: TRITON_CONTROL_MODE
+              value: {{ include "triton-control.installationMode" . | quote }}
             {{- if $snapshotVolume }}
             - name: TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT
               value: /var/lib/triton-control/preparation/snapshots
@@ -184,8 +186,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- with .Values.app.env }}
-            {{- toYaml . | nindent 12 }}
+            {{- range .Values.app.env }}
+            {{- if ne .name "TRITON_CONTROL_MODE" }}
+            {{- toYaml (list .) | nindent 12 }}
+            {{- end }}
             {{- end }}
             {{- if .Values.postgresql.enabled }}
             - name: DATABASE_URL

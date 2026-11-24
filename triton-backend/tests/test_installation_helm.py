@@ -14,9 +14,10 @@ CHART = Path(__file__).resolve().parents[2] / "charts/triton-control"
 
 @unittest.skipUnless(shutil.which("helm"), "Helm required for chart rendering")
 class InstallationHelmTests(unittest.TestCase):
-    def render(self, *args, release="policy-test"):
+    def render(self, *args, release="policy-test", external_secret=True):
+        secret = ["--set", "app.existingSecret=app-fixture"] if external_secret else []
         return subprocess.run(
-            ["helm", "template", release, str(CHART), *args],
+            ["helm", "template", release, str(CHART), *secret, *args],
             capture_output=True, text=True, check=False,
         )
 
@@ -37,6 +38,32 @@ class InstallationHelmTests(unittest.TestCase):
             for rule in role["rules"]:
                 self.assertLessEqual(set(rule["verbs"]), {"get", "list", "watch"})
                 self.assertNotIn("pods/exec", rule["resources"])
+
+    def test_production_mode_survives_an_environment_overlay(self):
+        result = self.render(
+            "-f", str(CHART / "values-production.yaml"),
+            "--set", "app.env[0].name=BACKEND_VERBOSE", "--set-string", "app.env[0].value=true",
+            "--show-only", "templates/deployment.yaml",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        env = yaml.safe_load(result.stdout)["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertEqual([item["value"] for item in env if item["name"] == "TRITON_CONTROL_MODE"], ["production"])
+
+    def test_app_secret_values_are_stable_and_required(self):
+        missing = self.render(external_secret=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("Set a stable app.secretEnv.", missing.stderr)
+        arguments = [
+            "--show-only", "templates/secret.yaml", "--set-string",
+            "app.secretEnv.SESSION_SECRET=fixture-session,app.secretEnv.JWT_SECRET=fixture-jwt,"
+            "app.secretEnv.S3_SECRET_ENCRYPTION_KEY=fixture-storage",
+        ]
+        first = self.render(*arguments, external_secret=False)
+        second = self.render(*arguments, external_secret=False)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(first.stdout, second.stdout)
+        self.assertEqual(len(yaml.safe_load(first.stdout)["stringData"]), 3)
 
     def test_development_mounts_snapshot_claim_unless_an_external_store_is_configured(self):
         for options, expected in [

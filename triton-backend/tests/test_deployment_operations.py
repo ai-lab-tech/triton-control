@@ -132,6 +132,27 @@ class DeploymentOperationTests(unittest.TestCase):
             "lineage": ControlLineage.model_validate(fixture),
         })
 
+    def test_deployment_resolves_repository_inside_profile_scope(self):
+        with Session(self.engine) as session:
+            profile = session.get(S3ProfileEntity, 1)
+            profile.prefix = "models/team"
+            session.add(profile)
+            session.commit()
+
+            root = deploy.resolve_profile_request(self.request, session, self.claims)
+            nested = deploy.resolve_profile_request(
+                self.request.model_copy(update={"repository_prefix": "models/team/release"}),
+                session, self.claims,
+            )
+            with self.assertRaises(ForbiddenError):
+                deploy.resolve_profile_request(
+                    self.request.model_copy(update={"repository_prefix": "models/other"}),
+                    session, self.claims,
+                )
+
+        self.assertTrue(root.s3_url.endswith("/models/models/team"))
+        self.assertTrue(nested.s3_url.endswith("/models/models/team/release"))
+
     def test_workspace_deployment_retains_task_origin_and_rejects_replay_from_another_task(self):
         # Arrange
         task = str(uuid4())

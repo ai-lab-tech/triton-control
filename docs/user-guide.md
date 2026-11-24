@@ -35,10 +35,9 @@ explicitly inactive account or issue an invitation. An invitation opens
 Expired, revoked, consumed, and invalid links display the same safe message and
 cannot be reused.
 
-When delivery is disabled, an administrator-precreated passwordless local
-account can be claimed through matching public self-registration. Registration
-sets the initial password and preserves the role and instance assignments
-chosen by the administrator.
+When delivery is disabled, new local users self-register and wait for an
+administrator to approve their account and assign access. Pre-created local
+accounts require an invitation to set their initial password.
 
 When SMTP recovery is operational, the login page shows **Forgot password**.
 Submitting the form always displays the same confirmation, whether or not the

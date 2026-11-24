@@ -36,6 +36,8 @@ app:
     backend: 8000
   command: []
   args: []
+  # Empty keeps compatibility with legacy app.env mode settings.
+  installationMode: ""
   env:
     - name: OIDC_CONFIG_SOURCE
       value: "env"

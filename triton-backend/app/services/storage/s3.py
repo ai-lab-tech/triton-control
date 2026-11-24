@@ -42,7 +42,13 @@ from app.schemas import (
     UpdateInstanceS3Request,
 )
 from app.services.access import get_instance_or_404
-from app.services.storage.s3_client import build_s3_client, format_s3_error
+from app.services.storage.s3_client import (
+    build_s3_client,
+    format_s3_error,
+    normalize_s3_path,
+    resolve_s3_profile_prefix,
+    s3_prefix_contains,
+)
 from app.services.triton.config import extract_triton_version, validate_triton_config_pbtxt
 
 DEFAULT_S3_REGION = "us-east-1"
@@ -143,8 +149,9 @@ def update_instance_s3(
         profile = s3_profiles.get(session, request.s3_profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
+        prefix = resolve_s3_profile_prefix(profile.prefix, request.prefix)
         request = request.model_copy(update={
-            "endpoint": profile.endpoint, "bucket": profile.bucket, "region": profile.region,
+            "prefix": prefix, "endpoint": profile.endpoint, "bucket": profile.bucket, "region": profile.region,
             "access_key": profile.access_key, "secret_key": decrypt_secret(profile.secret_key_enc),
             "ca_certificate": profile.ca_certificate, "verify_ssl": True,
             "address_style": "path" if profile.force_path_style else "virtual",
@@ -216,13 +223,13 @@ def _rotate_instance_credentials(
         raise NotFoundError("S3 profile not found")
     session.refresh(profile, with_for_update=True)
     session.refresh(instance, with_for_update=True)
-    prefix = (profile.prefix or "").strip("/")
-    instance_prefix = (instance.s3_prefix or "").strip("/")
+    prefix = normalize_s3_path(profile.prefix)
+    instance_prefix = normalize_s3_path(instance.s3_prefix)
     if (not instance.s3_enabled
             or instance.s3_endpoint != profile.endpoint
             or instance.s3_bucket != profile.bucket
             or (instance.s3_region or "us-east-1") != (profile.region or "us-east-1")
-            or (prefix and instance_prefix != prefix and not instance_prefix.startswith(prefix + "/"))
+            or not s3_prefix_contains(prefix, instance_prefix)
             or not instance.s3_verify_ssl
             or instance.s3_use_https != _is_https_endpoint(profile.endpoint)
             or (instance.s3_ca_certificate or "") != (profile.ca_certificate or "")
@@ -258,7 +265,7 @@ def _clean_s3_key_part(value: str | None) -> str:
 
 
 def _join_s3_key(*parts: str | None) -> str:
-    return "/".join(part for part in (_clean_s3_key_part(value) for value in parts) if part)
+    return "/".join(part for part in (normalize_s3_path(value) for value in parts) if part)
 
 
 def _s3_list_prefix(repository_prefix: str | None, relative_prefix: str | None) -> str:

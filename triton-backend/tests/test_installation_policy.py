@@ -18,6 +18,8 @@ from app.exceptions import ForbiddenError
 from app.main import app
 from app.services import operations
 from app.services.builds import execution
+from app.schemas.model_state import ModelState
+from app.services.deployment import model_state
 from app.services.development import deployment_access, workspaces
 from app.services.mlflow import installer, migration
 from app.services.storage import s3
@@ -117,6 +119,18 @@ class ProductionBoundaryTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 read.assert_awaited_once()
         self.assertEqual(self.client.get("/health").status_code, 200)
+
+    def test_production_exposes_read_only_model_state(self):
+        self.claims("member")
+        state = ModelState(
+            capacity_owner="source", mode="declared", replicas=1, rollout_complete=True,
+            interactive_allowed=False, can_declare=False, can_restore=False, can_scale_above_one=False,
+        )
+        with patch.object(model_state, "get_state", return_value=state):
+            response = self.client.get("/api/instances/1/model-state")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["capacity_owner"], "source")
+        self.assertEqual(self.client.post("/api/instances/1/model-state/scale", json={"replicas": 2}).status_code, 403)
 
     def test_instance_credential_rotation_reaches_scope_checked_service(self):
         from app.services.storage import s3 as storage

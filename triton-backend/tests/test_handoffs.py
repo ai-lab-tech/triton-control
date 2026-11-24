@@ -159,6 +159,16 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
             self.assertEqual(set(task.missing_inputs), set(receipt.task.missing_inputs))
             self.assertNotIn("missing_input:evaluation_dataset", task.blocked_reasons)
 
+    def test_request_for_immutable_evaluation_input_requires_new_handoff_revision(self):
+        receipt = self.submit()
+        with self.assertRaisesRegex(ConflictError, "new handoff revision"):
+            preparation.request_information(self.session, self.admin, receipt.task.id, InformationRequest(
+                expected_revision=receipt.task.revision, missing_inputs=["evaluation_dataset"], reason="need test data",
+            ))
+        self.session.rollback()
+        current = preparation.get_task(self.session, self.admin, receipt.task.id)
+        self.assertEqual((current.state, current.revision), (receipt.task.state, receipt.task.revision))
+
     def test_resolving_last_required_input_returns_source_only_task_to_queue(self):
         # Arrange
         receipt = self.submit()

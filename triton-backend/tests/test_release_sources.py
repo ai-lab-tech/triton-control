@@ -16,7 +16,7 @@ from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import ReleaseSourceEventEntity, UserEntity
 from app.db.schema import create_tables
-from app.exceptions import BadRequestError, ConflictError, ForbiddenError
+from app.exceptions import BadRequestError, ConflictError
 from app.main import app
 from app.services import release_sources
 
@@ -172,27 +172,25 @@ class ReleaseSourcesTests(unittest.TestCase):
                 self.assertEqual(self.client.get(API).status_code, 403)
                 self.assertEqual(self.client.post(API, json=document("new", "target")).status_code, 403)
 
-    def test_production_reads_existing_config_and_blocks_inline_and_api_changes(self):
-        # Arrange
+    def test_production_reconciles_operator_configuration_and_blocks_api_writes(self):
         source = document("configured", "original")
-        env = {release_sources.CONFIG_JSON: json.dumps([source])}
-        self.sync(env)
         self.assertEqual(self.client.post(API, json=document("database", "another")).status_code, 201)
 
-        # Act
         with patch.object(installation_policy, "mode", return_value="production"):
-            self.sync(env)
-            with self.assertRaises(ForbiddenError):
-                self.sync({})
+            self.sync({release_sources.CONFIG_JSON: json.dumps([source])})
+            self.sync({release_sources.CONFIG_JSON: json.dumps([source])})
             source["spec"]["enabled"] = True
-            with self.assertRaises(ForbiddenError):
-                self.sync({release_sources.CONFIG_JSON: json.dumps([source])})
+            self.sync({release_sources.CONFIG_JSON: json.dumps([source])})
             listed = self.client.get(API)
             created = self.client.post(API, json=document("new", "other"))
             updated = self.client.put(f"{API}/database", json={"source": source, "expected_revision": 1})
             deleted = self.client.delete(f"{API}/database", params={"expected_revision": 1})
+            self.sync({})
+            remaining = self.client.get(API)
 
-        # Assert
         self.assertEqual(listed.status_code, 200)
-        self.assertTrue(all(not item["editable"] and item["revision"] == 1 for item in listed.json()))
+        self.assertTrue(all(not item["editable"] for item in listed.json()))
+        self.assertEqual(sorted(item["revision"] for item in listed.json()), [1, 2])
         self.assertEqual([response.status_code for response in (created, updated, deleted)], [403, 403, 403])
+        self.assertEqual(len(remaining.json()), 1)
+        self.assertEqual([(e.revision, e.retired) for e in self.events("configured")], [(1, False), (2, False), (3, True)])

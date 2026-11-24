@@ -13,6 +13,7 @@ from app.core.identity import require_user_entity
 from app.exceptions import BadRequestError, NotFoundError
 from app.repositories import s3_profiles
 from app.schemas import CreateDeploymentRequest
+from app.services.storage.s3_client import resolve_s3_profile_prefix
 
 _MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
@@ -40,9 +41,7 @@ def resolve_profile_request(
     if profile is None:
         raise NotFoundError("S3 profile not found")
 
-    prefix = (request.repository_prefix or "").strip("/")
-    if any(part in {".", ".."} for part in prefix.split("/")):
-        raise BadRequestError("Invalid repository prefix")
+    prefix = resolve_s3_profile_prefix(profile.prefix, request.repository_prefix)
     if claims.get("token_use") == "mlflow_workflow" and not request.model_uri:
         raise BadRequestError("Workflow deployment requires model_uri")
     if request.model_uri:
@@ -58,8 +57,8 @@ def resolve_profile_request(
             or uri.netloc != profile.bucket
         ):
             raise BadRequestError("model_uri must name a model in the selected S3 profile bucket")
-        prefix, model_name = "/".join(parts[:-1]), parts[-1]
-        if (prefix != request.repository_prefix or model_name != request.model_name
+        uri_prefix, model_name = "/".join(parts[:-1]), parts[-1]
+        if (uri_prefix != prefix or model_name != request.model_name
                 or not _MODEL_NAME.fullmatch(model_name)):
             raise BadRequestError("model_uri, repository_prefix and model_name do not match")
 

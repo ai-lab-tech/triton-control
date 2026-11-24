@@ -439,8 +439,8 @@ class ApiHelperTests(unittest.TestCase):
         claims = {"role": "admin"}
         profile = SimpleNamespace(endpoint="https://new-minio", bucket="new-bucket", region="eu",
                                   access_key="new-ak", secret_key_enc="new-secret", ca_certificate="cert",
-                                  force_path_style=False)
-        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="new/")
+                                  force_path_style=False, prefix="new")
+        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1)
         # Act
         with patch("app.services.storage.s3.require_user_entity", return_value=SimpleNamespace(id=1)), \
              patch("app.services.storage.s3.s3_profiles.get", return_value=profile):
@@ -450,6 +450,7 @@ class ApiHelperTests(unittest.TestCase):
         self.assertTrue(dto.use_https)
         self.assertEqual(dto.region, "eu")
         self.assertEqual(dto.access_key, "new-ak")
+        self.assertEqual(dto.prefix, "new")
         self.assertTrue(dto.secret_configured)
         self.assertEqual(dto.ca_certificate, "cert")
         # Act
@@ -457,6 +458,20 @@ class ApiHelperTests(unittest.TestCase):
         # Assert
         self.assertFalse(dto.enabled)
         self.assertIsNone(instance.s3_endpoint)
+
+    def test_instance_s3_rejects_prefix_outside_profile(self):
+        instance = self._instance()
+        session = _FakeSession(get_map={1: instance})
+        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="scope-neighbor/model")
+        with (
+            patch("app.services.storage.s3.require_user_entity"),
+            patch("app.services.storage.s3.s3_profiles.get", return_value=SimpleNamespace(prefix="scope")),
+            self.assertRaises(HTTPException) as rejected,
+        ):
+            update_instance_s3(1, request, session=session, claims={"role": "admin"})
+
+        self.assertEqual(rejected.exception.status_code, 403)
+        self.assertEqual(session.commit_count, 0)
 
     def test_UpdateInstanceS3_EnableWithoutRequiredFields_RaisesBadRequest(self):
         # Arrange
@@ -688,6 +703,30 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         # Act / Assert
         with self.assertRaises(HTTPException):
             await create_instance(request, session=session, claims={"email": "u@example.com", "role": "viewer"})
+
+    async def test_register_existing_url_requires_access_without_mutating(self):
+        instance = TritonInstanceEntity(id=8, name="reserved", url="https://triton:8000")
+        user = UserEntity(id=2, email="reader@example.test", name="Reader", role="member")
+        session = _FakeSession(exec_results=[_ExecResult(first=instance), _ExecResult(), _ExecResult(first=user)])
+        triton = SimpleNamespace(
+            collect_runtime_snapshot=AsyncMock(return_value={"ready": True}),
+            collect_metrics_snapshot=AsyncMock(return_value={}),
+            get_repository_index=AsyncMock(return_value=[]),
+        )
+        with (
+            patch("app.services.triton.instances.TritonService", return_value=triton),
+            patch("app.services.access.require_user_entity", return_value=user),
+        ):
+            with self.assertRaises(HTTPException) as rejected:
+                await create_instance(
+                    CreateTritonInstanceRequest(url=instance.url, name="new-name"),
+                    session=session, claims={"email": user.email, "role": user.role},
+                )
+
+        self.assertEqual(rejected.exception.status_code, 403)
+        self.assertEqual(instance.name, "reserved")
+        self.assertEqual(user.assigned_instances, [])
+        self.assertEqual(session.commit_count, 0)
 
     async def test_CreateInstance_TritonNotReady_IncludesSnapshotErrorDetail(self):
         # Arrange

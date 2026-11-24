@@ -210,7 +210,7 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    REGISTRY_SECRET_ENCRYPTION_KEY: "replace-me"
+    S3_SECRET_ENCRYPTION_KEY: "replace-me"
 
 postgresql:
   enabled: true

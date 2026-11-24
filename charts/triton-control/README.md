@@ -95,6 +95,12 @@ rewritten automatically.
 
 ## Minimal Values Override
 
+Provide a stable `app.existingSecret` or set the three required
+`app.secretEnv` values below. Preserve the deployed values on upgrade so saved
+credentials and sessions remain usable. A connected Helm upgrade can reuse an
+existing chart-managed Secret. Offline renderers need explicit values or an
+external Secret reference.
+
 ```yaml
 app:
   image:

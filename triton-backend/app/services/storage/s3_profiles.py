@@ -16,6 +16,7 @@ from app.db.entities import S3ProfileEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.repositories import mlflow, s3_profiles, workflow_s3_credentials
 from app.schemas import CreateS3ProfileRequest, S3ProfileDTO, UpdateS3ProfileRequest
+from app.services.storage.s3_client import normalize_s3_path
 from app.services.workflows.credentials import sync_profile_credentials
 
 
@@ -196,4 +197,4 @@ def _clean_optional(value: str | None) -> str | None:
 
 
 def _clean_prefix(value: str | None) -> str:
-    return (value or "").strip().replace("\\", "/").strip("/")
+    return normalize_s3_path(value)
