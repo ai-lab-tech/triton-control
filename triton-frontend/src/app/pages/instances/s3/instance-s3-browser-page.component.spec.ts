@@ -22,6 +22,7 @@ import {
   s3EditorContentLoaded,
   s3EditorSaveRequested,
 } from "../../../state/instances-s3/instances-s3.actions";
+import { initialInstancesS3State } from "../../../state/instances-s3/instances-s3.reducer";
 import { displayFailure } from "../../../state/shared/shared.actions";
 import { AuthStore } from "../../../shared/auth/auth.store";
 
@@ -32,22 +33,6 @@ describe("InstanceS3BrowserPageComponent", () => {
   let mockStore: MockStore;
   let authState: InstanceType<typeof AuthStore>;
   let actionsSubject: Subject<Action>;
-
-  const s3InitialState = {
-    instancesS3: {
-      instanceName: "",
-      bucketName: "",
-      prefix: "",
-      currentPath: "/",
-      entries: [],
-      knownFolderPaths: ["/"],
-      pageLoading: false,
-      editorOpen: false,
-      editorLoading: false,
-      editorFileName: "",
-      editorFilePath: "",
-    },
-  };
 
   beforeEach(async () => {
     routeMock = {
@@ -91,7 +76,7 @@ describe("InstanceS3BrowserPageComponent", () => {
       imports: [InstanceS3BrowserPageComponent],
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
-        provideMockStore({ initialState: s3InitialState }),
+        provideMockStore({ initialState: { instancesS3: initialInstancesS3State } }),
         provideMockActions(() => actionsSubject),
         { provide: ActivatedRoute, useValue: routeMock },
         { provide: InstancesService, useValue: instancesApiMock },
@@ -156,7 +141,7 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     mockStore.setState({
       instancesS3: {
-        ...s3InitialState.instancesS3,
+        ...initialInstancesS3State,
         bucketName: "triton-test",
         prefix: "cancer",
       },
@@ -430,8 +415,8 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     component.onUpload({ target: input } as unknown as Event);
 
-    expect(component.readingUploadFile).toBeTrue();
-    expect(component.readingUploadFileName).toBe("model.py");
+    expect(component.uploadBusy()).toBeTrue();
+    expect(component.uploadStatusLabel()).toBe("Reading model.py...");
 
     await new Promise<void>((resolve) => {
       const check = () => {
@@ -454,8 +439,8 @@ describe("InstanceS3BrowserPageComponent", () => {
       new Uint8Array(uploadAction?.content as ArrayBuffer),
     );
     expect(uploadedText).toBe("x=1");
-    expect(component.readingUploadFile).toBeFalse();
-    expect(component.readingUploadFileName).toBe("");
+    expect(component.uploadBusy()).toBeFalse();
+    expect(component.uploadStatusLabel()).toBe("");
   });
 
   it("OnUploadFolder_FolderSelected_UploadsAllFilesWithRelativePaths", async () => {
@@ -484,8 +469,7 @@ describe("InstanceS3BrowserPageComponent", () => {
       instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.calls.allArgs();
     expect(uploadCalls[0][1]).toBe("/models/resnet/config.pbtxt");
     expect(uploadCalls[1][1]).toBe("/models/resnet/1/model.plan");
-    expect(component.uploadFolderInProgress).toBeFalse();
-    expect(component.uploadFolderCompleted).toBe(2);
+    expect(component.uploadBusy()).toBeFalse();
     expect(dispatchSpy).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
     );

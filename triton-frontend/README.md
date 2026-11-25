@@ -47,13 +47,28 @@ These paths are relative to the `triton-admin-angular-material` project root.
 npm run -s generate:api
 ```
 
+## Perf S3 browser smoke test
+
+Use a development installation with a writable S3 test repository. Set
+`SMOKE_FRONTEND_URL` and `SMOKE_BACKEND_URL` to your test endpoints and
+`SMOKE_ADMIN_EMAIL` and `SMOKE_ADMIN_PASSWORD` to the test account credentials.
+For a port-forward to the combined Kubernetes service, both URLs use the same port.
+
+```bash
+SMOKE_S3_PERF_PATH=/instances/1/models/iris/versions/1/profile \
+  npm run test:smoke -- perf-s3-browser
+```
+
+The test uploads a uniquely named Python file, edits it in Perf, checks the stored
+contents and batch size, and deletes the test file.
+
 ## Routes
 
 - `/dashboard`
 - `/instances`
 - `/workspaces`
 - `/deployments/new`
-- `/instances/:id/models/:modelName/versions/:version/profile` — model Perf controls and results
+- `/instances/:id/models/:modelName/versions/:version/profile` — model Perf controls, results, and S3 Browser
 - `/s3-profiles`
 - `/workflows` - embedded global Argo Workflows UI through Triton Control
 - `/mlflow` - embedded managed MLflow tracking UI through Triton Control

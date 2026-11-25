@@ -1,5 +1,5 @@
 import { InstallationService } from "../../../shared/installation/installation.service";
-import { Component, computed, inject, OnInit } from "@angular/core";
+import { Component, computed, inject, input, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { Actions, ofType } from "@ngrx/effects";
 import { Store } from "@ngrx/store";
@@ -74,6 +74,7 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
   templateUrl: "./instance-s3-browser-page.component.html",
 })
 export class InstanceS3BrowserPageComponent implements OnInit {
+  readonly embedded = input(false);
   readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
   private readonly instancesApi = inject(InstancesService);
@@ -112,9 +113,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   readonly uploadFileName = toSignal(this.store.select(selectS3UploadFileName), {
     initialValue: "",
   });
-  readonly uploadBusy = computed(
-    () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
-  );
+  readonly uploadBusy = computed(() => !!this.localUploadStatus() || this.uploadLoading());
   readonly canWriteInstances = computed(
     () => this.auth.canWriteInstances() && this.installation.allows("artifact_write"),
   );
@@ -128,12 +127,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     return prefix ? `s3://${bucket}/${prefix}` : `s3://${bucket}`;
   });
   readonly uploadStatusLabel = computed(() => {
-    if (this.readingUploadFile) {
-      return `Reading ${this.readingUploadFileName || "file"}...`;
-    }
-    if (this.uploadFolderInProgress) {
-      return `Uploading ${this.uploadFolderCompleted}/${this.uploadFolderTotal} files...`;
-    }
+    if (this.localUploadStatus()) return this.localUploadStatus();
     if (this.uploadLoading()) {
       return `Uploading ${this.uploadFileName() || "file"}...`;
     }
@@ -142,11 +136,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
 
   // Local UI state
   query = "";
-  readingUploadFile = false;
-  readingUploadFileName = "";
-  uploadFolderInProgress = false;
-  uploadFolderCompleted = 0;
-  uploadFolderTotal = 0;
+  private readonly localUploadStatus = signal("");
   creatingFolder = false;
   newFolderName = "";
   editorContent = "";
@@ -332,8 +322,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     const file = input.files[0];
     const filePath = this.joinPath(this.currentPath(), file.name);
     const currentPath = this.currentPath();
-    this.readingUploadFile = true;
-    this.readingUploadFileName = file.name;
+    this.localUploadStatus.set(`Reading ${file.name}...`);
 
     void file
       .arrayBuffer()
@@ -357,8 +346,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
         this.store.dispatch(displayFailure({ title: "Upload failed", message }));
       })
       .finally(() => {
-        this.readingUploadFile = false;
-        this.readingUploadFileName = "";
+        this.localUploadStatus.set("");
         input.value = "";
       });
   }
@@ -384,12 +372,10 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     }
 
     const currentPath = this.currentPath();
-    this.uploadFolderInProgress = true;
-    this.uploadFolderCompleted = 0;
-    this.uploadFolderTotal = files.length;
+    this.localUploadStatus.set(`Uploading 0/${files.length} files...`);
 
     const failed: string[] = [];
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const relativePath = this.getUploadRelativePath(file);
       const filePath = this.joinPath(currentPath, relativePath);
       try {
@@ -405,11 +391,11 @@ export class InstanceS3BrowserPageComponent implements OnInit {
       } catch {
         failed.push(relativePath);
       } finally {
-        this.uploadFolderCompleted += 1;
+        this.localUploadStatus.set(`Uploading ${index + 1}/${files.length} files...`);
       }
     }
 
-    this.uploadFolderInProgress = false;
+    this.localUploadStatus.set("");
     if (input) {
       input.value = "";
     }

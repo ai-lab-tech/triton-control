@@ -114,7 +114,7 @@
             <span class="material-icons">visibility</span>
             Details
           </a>
-          @if (instance.s3.enabled) {
+          @if (instance.s3.enabled && !installation.allows("development_jobs")) {
             <a class="s3-link" [routerLink]="['/instances', instance.id, 's3']">
               S3 Browser
               <span class="material-icons">folder</span>
