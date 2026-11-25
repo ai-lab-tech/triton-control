@@ -101,6 +101,10 @@ describe("UsersPageComponent", () => {
     // Assert
     expect(fixture.componentInstance.lastActiveAdminId()).toBe(owner.id);
     expect(deleteOwner().disabled).toBeTrue();
+    expect(deleteOwner().textContent).toContain("last active admin");
+    expect(fixture.nativeElement.querySelector("tbody .admin-notice").textContent).toContain(
+      "before changing this role or deleting this account",
+    );
 
     // Act
     selector.setResult([owner, { ...invited, isActive: true }]);
@@ -109,6 +113,7 @@ describe("UsersPageComponent", () => {
 
     // Assert
     expect(deleteOwner().disabled).toBeFalse();
+    expect(fixture.nativeElement.querySelector(".admin-notice")).toBeNull();
   });
 
   it("assigns installation engineering responsibility without changing the user's access role", async () => {

@@ -68,6 +68,12 @@
                 }
               </div>
               <span class="user-email">{{ row.email }}</span>
+              @if (lastActiveAdminId() === row.id) {
+                <p class="admin-notice">
+                  Last active admin. Promote another user to admin before changing this role or
+                  deleting this account.
+                </p>
+              }
             </td>
             <td class="optional">{{ row.role }}</td>
             <td>
@@ -171,7 +177,11 @@
                     (click)="deleteUser(row)"
                   >
                     <span class="material-icons" aria-hidden="true">delete</span>
-                    Delete
+                    {{
+                      lastActiveAdminId() === row.id
+                        ? "Delete unavailable · last active admin"
+                        : "Delete"
+                    }}
                   </button>
                 </div>
               </div>
@@ -184,12 +194,6 @@
                     </button>
                   </div>
                   <p class="user-email">{{ row.email }}</p>
-                  @if (lastActiveAdminId() === row.id) {
-                    <p>
-                      Promote another active user to admin before changing this role or deleting
-                      this account.
-                    </p>
-                  }
                   <p>Authentication · {{ row.auth }}</p>
                   <div class="instance-access-content">
                     <div class="access-controls">
@@ -207,6 +211,12 @@
                             }
                           </mat-select>
                         </mat-form-field>
+                        @if (lastActiveAdminId() === row.id) {
+                          <p class="admin-notice">
+                            This is the last active admin. Promote another user to admin to unlock
+                            this role.
+                          </p>
+                        }
                       </div>
                       <mat-checkbox
                         [checked]="isEngineer(row.id)"
