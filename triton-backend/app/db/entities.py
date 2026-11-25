@@ -78,6 +78,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     inference_examples: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
     example_request: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON, nullable=True))
     preparation_task_id: Optional[str] = None
+    perf_candidate: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     mlflow_model_uri: Optional[str] = None
     mlflow_model_name: Optional[str] = None
     pod_statuses: List[str] = Field(default_factory=list, sa_column=Column(JSON))
@@ -385,6 +386,10 @@ class ModelPerfJobEntity(SQLModel, table=True):
     input_data: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     command: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     output: str = Field(default="", sa_column=Column(Text))
+    mlflow_snapshot: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    mlflow_state: str | None = None
+    mlflow_run_id: str | None = None
+    mlflow_retry_at: datetime | None = None
     exit_code: int | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     started_at: datetime | None = None

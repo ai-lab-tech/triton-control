@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from "@angular/core/testing";
-import { ActivatedRoute, convertToParamMap } from "@angular/router";
+import { CUSTOM_ELEMENTS_SCHEMA } from "@angular/core";
+import { ActivatedRoute, convertToParamMap, provideRouter } from "@angular/router";
 import { BehaviorSubject, Subject, of, throwError } from "rxjs";
 
 import {
@@ -8,6 +9,8 @@ import {
   ModelPerfStatusResponse,
   PerfAnalyzersService,
 } from "../../../api/generated/index";
+import { InstanceModelRepositoryConfigComponent } from "../shared/instance-model-repository-config.component";
+import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-monaco-editor.component";
 import { InstanceModelProfilePageComponent } from "./instance-model-profile-page.component";
 
 describe("Model Perf jobs", () => {
@@ -53,6 +56,7 @@ describe("Model Perf jobs", () => {
     await TestBed.configureTestingModule({
       imports: [InstanceModelProfilePageComponent],
       providers: [
+        provideRouter([]),
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: params.value }, paramMap: params },
@@ -64,7 +68,12 @@ describe("Model Perf jobs", () => {
         },
       ],
     })
-      .overrideComponent(InstanceModelProfilePageComponent, { set: { template: "" } })
+      .overrideComponent(InstanceModelProfilePageComponent, {
+        remove: {
+          imports: [InstanceModelRepositoryConfigComponent, InstanceModelMonacoEditorComponent],
+        },
+        add: { schemas: [CUSTOM_ELEMENTS_SCHEMA] },
+      })
       .compileComponents();
   });
 
@@ -74,6 +83,70 @@ describe("Model Perf jobs", () => {
   }
 
   afterEach(() => fixture.destroy());
+
+  it("renders a source link and unchecked checkbox only on a task serving", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(
+      of({
+        ...idle(),
+        mlflow: {
+          available: true,
+          source_url: "/api/mlflow/proxy/#/experiments/1/models/m-source",
+          source_model: "m-source",
+          derived_model: "m-derived",
+        },
+      }),
+    );
+    mount();
+    flushMicrotasks();
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBeFalse();
+    expect(element.querySelector('a[href*="m-source"]')?.textContent).toContain("m-source");
+
+    api.getModelPerfStatus.and.returnValue(of(idle()));
+    params.next(routeParams("ordinary"));
+    flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(element.querySelector('input[type="checkbox"]')).toBeNull();
+  }));
+
+  it("shows the task option from server status and opts in for one benchmark", fakeAsync(() => {
+    api.getModelPerfStatus.and.returnValue(
+      of({ ...idle(), mlflow: { available: true, derived_model: "m-converted" } }),
+    );
+    mount();
+    flushMicrotasks();
+    expect(component.logToMlflow).toBeFalse();
+    expect(component.mlflow()?.derived_model).toBe("m-converted");
+
+    component.logToMlflow = true;
+    void component.runProfiler();
+    flushMicrotasks();
+
+    expect(api.startModelPerf.calls.mostRecent().args[0].log_to_mlflow).toBeTrue();
+    expect(component.logToMlflow).toBeFalse();
+  }));
+
+  it("clears the selection when MLflow goes offline or navigation reaches ordinary serving", fakeAsync(() => {
+    mount();
+    flushMicrotasks();
+    expect(component.mlflow()).toBeNull();
+    component.logToMlflow = true;
+    api.getModelPerfStatus.and.returnValue(
+      of({ ...idle(), mlflow: { available: false, reason: "Unavailable" } }),
+    );
+
+    void component.loadStatus();
+    flushMicrotasks();
+
+    expect(component.logToMlflow).toBeFalse();
+    expect(component.mlflow()?.reason).toBe("Unavailable");
+    api.getModelPerfStatus.and.returnValue(of(idle()));
+    params.next(routeParams("ordinary"));
+    flushMicrotasks();
+    expect(component.mlflow()).toBeNull();
+  }));
 
   it("starts from the model tab without a global installation", fakeAsync(() => {
     mount();

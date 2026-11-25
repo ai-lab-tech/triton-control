@@ -5,21 +5,21 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
-function load(profiles = []) {
+function load(profiles = [], env = {}, requestJson = async () => profiles) {
   const filename = path.join(__dirname, "../extension.js");
   const localRequire = createRequire(filename);
   const sandbox = {
     module: { exports: {} },
-    process: { env: { TRITON_CONTROL_PROFILE_URL: "https://control/profiles", TRITON_CONTROL_PROFILE_TOKEN: "token" } },
+    process: { env: { TRITON_CONTROL_PROFILE_URL: "https://control/profiles", TRITON_CONTROL_PROFILE_TOKEN: "token", ...env } },
     require(name) {
       if (name === "vscode") return { TreeItem: class {}, workspace: { isTrusted: true } };
-      if (name === "./profile-api") return { requestJson: async () => profiles };
+      if (name === "./profile-api") return { requestJson };
       if (name === "./hf-builder") return {};
       return localRequire(name);
     },
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") +
-    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile };", sandbox);
+    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile, submitWorkspaceDeployment };", sandbox);
   return sandbox.module.exports;
 }
 
@@ -56,4 +56,27 @@ test("an unavailable profile cannot fall back to manual credentials", async () =
   const result = resolveDeploymentProfile({profileId: "5", secretAccessKey: "manual"});
   // Assert
   await assert.rejects(result, /Select an admin-configured S3 profile/);
+});
+
+test("managed deployment uses the workspace credential and exposes only the result to the webview", async () => {
+  // Arrange
+  const calls = [];
+  const env = { TRITON_CONTROL_URL: "https://control", TRITON_CONTROL_TOKEN: "workspace-test" };
+  const { submitWorkspaceDeployment } = load([], env, async (...args) => {
+    calls.push(args);
+    return { instance_id: 17 };
+  });
+  const payload = { deployment_name: "converted", candidate_inventory_digest: "sha256:" + "a".repeat(64) };
+
+  // Act
+  const result = await submitWorkspaceDeployment(payload);
+
+  // Assert
+  assert.equal(calls.length, 1);
+  const [endpoint, route, options] = calls[0];
+  assert.equal(endpoint, env.TRITON_CONTROL_URL);
+  assert.equal(route, "/api/deployments");
+  assert.equal(options.body, payload);
+  assert.equal(options.token, env.TRITON_CONTROL_TOKEN);
+  assert.deepEqual({ ...result }, { type: "deploymentResult", instanceId: 17 });
 });

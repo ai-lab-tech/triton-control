@@ -8245,6 +8245,37 @@
         ],
         "title": "AttemptDTO"
       },
+      "BenchmarkLoggingOption": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": false
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "derived_model": {
+            "type": "string",
+            "title": "Derived Model",
+            "default": ""
+          },
+          "source_model": {
+            "type": "string",
+            "title": "Source Model",
+            "default": ""
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "BenchmarkLoggingOption"
+      },
       "BindingPolicy": {
         "properties": {
           "schema_version": {
@@ -10030,6 +10061,18 @@
               }
             ],
             "title": "Model Uri"
+          },
+          "candidate_inventory_digest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Inventory Digest"
           },
           "lineage": {
             "anyOf": [
@@ -13089,6 +13132,28 @@
       },
       "ModelPerfRunResponse": {
         "properties": {
+          "mlflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow State"
+          },
+          "mlflow_run_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Run Url"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -13220,6 +13285,16 @@
       },
       "ModelPerfStatusResponse": {
         "properties": {
+          "mlflow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkLoggingOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "active_run": {
             "anyOf": [
               {
@@ -15967,6 +16042,11 @@
       },
       "StartModelPerfRequest": {
         "properties": {
+          "log_to_mlflow": {
+            "type": "boolean",
+            "title": "Log To Mlflow",
+            "default": false
+          },
           "model_version": {
             "type": "string",
             "title": "Model Version"

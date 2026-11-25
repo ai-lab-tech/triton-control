@@ -44,6 +44,30 @@
         <div class="status-panel" role="status" aria-live="polite">
           <div class="section-title">{{ run.state }} · Version {{ run.model_version }}</div>
           <div class="panel-hint">{{ run.message }}</div>
+          @if (run.mlflow_state) {
+            <span
+              >Dev MLflow ·
+              @switch (run.mlflow_state) {
+                @case ("creating_run") {
+                  Waiting for MLflow to confirm run creation
+                }
+                @case ("unverified") {
+                  Export skipped because the workload or measurements could not be verified
+                }
+                @case ("ambiguous") {
+                  Export stopped because multiple matching runs were found
+                }
+                @default {
+                  {{ run.mlflow_state }}
+                }
+              }
+            </span>
+            @if (run.mlflow_run_url) {
+              <a [href]="apiBase + run.mlflow_run_url" target="_blank" rel="noopener"
+                >Open benchmark run</a
+              >
+            }
+          }
         </div>
       }
       <div class="endpoint-list">
@@ -122,6 +146,28 @@
         ></app-instance-model-repository-config>
       </div>
 
+      @if (mlflow(); as option) {
+        <div class="form-row">
+          <label
+            ><input
+              type="checkbox"
+              [(ngModel)]="logToMlflow"
+              [disabled]="!option.available || busy() || hasActiveRun()"
+            />
+            Record benchmark in Dev MLflow</label
+          >
+          @if (option.available) {
+            <span
+              >Converted model <code>{{ option.derived_model }}</code> · Source
+              <a [href]="apiBase + option.source_url" target="_blank" rel="noopener">{{
+                option.source_model
+              }}</a></span
+            >
+          } @else {
+            <span>{{ option.reason }}</span>
+          }
+        </div>
+      }
       <div class="actions form-actions">
         <a mat-stroked-button [routerLink]="['/instances', instanceId()]">
           <span class="material-icons action-glyph" aria-hidden="true">chevron_left</span>

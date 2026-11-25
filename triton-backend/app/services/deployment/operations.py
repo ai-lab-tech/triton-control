@@ -50,6 +50,8 @@ def timeout_seconds() -> int:
 
 def input_data(request: CreateDeploymentRequest) -> dict[str, Any]:
     data = request.model_dump(mode="json")
+    if request.candidate_inventory_digest is None:
+        data.pop("candidate_inventory_digest", None)
     if request.lineage is None:
         data.pop("lineage", None)  # Preserve fingerprints and keyless retries from older clients.
     if request.basic_auth_password:
@@ -135,6 +137,10 @@ def submit(
             metrics_url=kube.pending_metrics_url(namespace, f"{target}-service") if request.allow_metrics else None,
             initial_snapshot=kube.pending_snapshot(), commit=False,
         )
+        if instance.preparation_task_id:
+            from app.services.perf_analyzer.provenance import launch_binding
+
+            instance.perf_candidate = launch_binding(instance, request)
         result = DeploymentResponse(
             instance_id=instance.id, namespace=namespace, deployment_name=target, service_name=f"{target}-service",
             lineage=request.lineage,

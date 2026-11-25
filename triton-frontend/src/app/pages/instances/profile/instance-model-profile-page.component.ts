@@ -12,6 +12,8 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 
 import {
+  BASE_PATH,
+  BenchmarkLoggingOption,
   InstanceS3ConfigDTO,
   InstancesService,
   PerfAnalyzersService,
@@ -73,6 +75,9 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
   "data": []
 }`;
 
+  readonly apiBase = String(inject(BASE_PATH, { optional: true }) ?? "").replace(/\/$/, "");
+  logToMlflow = false;
+  readonly mlflow = signal<BenchmarkLoggingOption | null>(null);
   image = "";
   readonly loadingStatus = signal(true);
   readonly resolvingInstance = signal(false);
@@ -102,6 +107,8 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
       this.statusError.set("");
       this.actionError.set("");
       this.busy.set(false);
+      this.logToMlflow = false;
+      this.mlflow.set(null);
       this.image = "";
       this.batchSize = 1;
       this.concurrencyRange = "1";
@@ -157,6 +164,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
           {
             model_version: this.version(),
             image: this.image.trim(),
+            ...(this.logToMlflow && this.mlflow()?.available ? { log_to_mlflow: true } : {}),
 
             batch_size: Number(this.batchSize),
             concurrency_range: this.concurrencyRange.trim(),
@@ -168,6 +176,7 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
         ),
       );
       if (generation !== this.generation) return;
+      this.logToMlflow = false;
       this.applyRun(run);
     } catch (error) {
       if (generation !== this.generation) return;
@@ -231,6 +240,8 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
       );
       if (generation !== this.generation || requestId !== this.statusRequest || this.busy()) return;
       this.statusError.set("");
+      this.mlflow.set(status.mlflow ?? null);
+      if (!status.mlflow?.available) this.logToMlflow = false;
       if (!this.image) this.image = status.default_image;
       const active = (status.active_run ?? null) as ModelPerfRunResponse | null;
       const latest = (status.latest_run ?? null) as ModelPerfRunResponse | null;

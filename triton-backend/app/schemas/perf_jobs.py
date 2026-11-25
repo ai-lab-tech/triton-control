@@ -13,6 +13,7 @@ PerfState = Literal["creating", "pending", "running", "stopping", "succeeded", "
 
 
 class StartModelPerfRequest(SQLModel):
+    log_to_mlflow: bool = False
     model_version: str
     image: str | None = None
     dockerconfigjson: str | None = Field(default=None, repr=False, max_length=500_000)
@@ -53,6 +54,8 @@ class StartModelPerfRequest(SQLModel):
 
 
 class ModelPerfRunResponse(SQLModel):
+    mlflow_state: str | None = None
+    mlflow_run_url: str | None = None
     id: str
     instance_id: int
     model_name: str
@@ -72,7 +75,16 @@ class ModelPerfRunResponse(SQLModel):
     finished_at: datetime | None = None
 
 
+class BenchmarkLoggingOption(SQLModel):
+    available: bool = False
+    reason: str = ""
+    derived_model: str = ""
+    source_model: str = ""
+    source_url: str = ""
+
+
 class ModelPerfStatusResponse(SQLModel):
+    mlflow: BenchmarkLoggingOption | None = None
     active_run: ModelPerfRunResponse | None = None
     latest_run: ModelPerfRunResponse | None = None
     latest_result: PerfAnalyzerLatestRunResponse
