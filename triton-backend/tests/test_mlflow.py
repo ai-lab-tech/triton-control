@@ -108,6 +108,23 @@ class MlflowTests(unittest.TestCase):
         self.assertEqual(response.image, "ghcr.io/mlflow/mlflow:v3.14.0")
         self.assertIn("Deployment/mlflow", response.applied_resources)
 
+    def test_upgrade_records_the_new_running_image(self) -> None:
+        entity = MlflowEntity(
+            namespace="use-case-a", deployment_name="mlflow", service_name="mlflow-service", image="mlflow:old",
+        )
+        session = MagicMock()
+        with (
+            patch.object(installer.mlflow, "get", return_value=entity),
+            patch.object(installer.mlflow, "save", side_effect=lambda _, row: row) as save,
+            patch.object(installer.k8s, "upgrade_installation_resources", return_value=[]),
+            patch.object(installer.developments, "list_all", return_value=[]),
+            patch.object(installer.config, "server_image", return_value="mlflow:new"),
+        ):
+            result = installer.upgrade_mlflow_tracking(session)
+
+        self.assertEqual(result.image, "mlflow:new")
+        self.assertEqual(save.call_args.args[1].image, "mlflow:new")
+
     def test_Status_NotInstalled_ReturnsDefaultBasePath(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
             result = installer.get_mlflow_status(SimpleNamespace(get=lambda *args: None))

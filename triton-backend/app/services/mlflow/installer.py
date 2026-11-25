@@ -163,6 +163,7 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
                 workspace.namespace, workspace.statefulset_name, workspace.secret_name,
             )
         entity.status = "ready"
+        entity.image = config.server_image()
         entity.status_message = "MLflow tracking gateway is ready."
         entity.last_transition_at = datetime.utcnow()
         entity = mlflow.save(session, entity)
