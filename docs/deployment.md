@@ -537,21 +537,43 @@ In production, a central operations team can run one Triton Control installation
 for all use cases with a separate production PostgreSQL instance. This deployment
 omits MLflow and Argo Workflows.
 
-Use GitOps to manage all Triton Control installations and their configuration.
-The GitOps repository should contain the desired state for each namespace:
+### GitOps example with Argo CD
 
-```text
-environments/
-  dept-a/
-    triton-control-values.yaml
-    ingress.yaml
-  dept-b/
-    triton-control-values.yaml
-    ingress.yaml
-  dept-c/
-    triton-control-values.yaml
-    ingress.yaml
-```
+The [development ApplicationSet](../examples/gitops/argocd/dev-applicationset.yaml)
+generates three Argo CD Applications, one per namespace in the diagram. Each
+syncs the pinned Helm chart, sets a distinct HTTPS hostname and runs a
+namespace-scoped Argo Workflows controller. The platform team installs the
+matching Argo Workflows CRDs once per cluster.
+
+Before the first sync, create the three namespaces. Provision the databases
+on the shared development PostgreSQL server and have your secret manager create
+these Kubernetes Secrets **in each namespace**:
+
+| Secret and key | Example for `ai-dept-a` |
+| --- | --- |
+| `control-app` / `DATABASE_URL` | PostgreSQL URL for `control_a` with its own login |
+| `control-app` / application keys | Stable namespace-specific `SESSION_SECRET`, `JWT_SECRET` and `S3_SECRET_ENCRYPTION_KEY` |
+| `mlflow-postgres` / `database-url` | PostgreSQL URL for `mlflow_a` with its own login |
+| `triton-tls` | TLS certificate and private key for the namespace's ingress hostname |
+
+Use the corresponding databases and hostnames for B and C. Configure DNS for
+each ingress and grant the Argo CD project access to the chart repository and
+application namespaces and their dedicated build namespaces (for example
+`ai-dept-a-builds`). The chart also creates each build namespace and the
+release-specific cluster RBAC for namespace discovery.
+
+1. Copy the ApplicationSet into your platform GitOps repository. Replace the
+   example hosts and image coordinates with your DNS names and a published
+   Triton Control image built from the pinned chart revision.
+2. Have the platform's Argo CD bootstrap Application sync that file. For a
+   standalone trial with Argo CD installed, apply it once with
+   `kubectl apply -f examples/gitops/argocd/dev-applicationset.yaml`.
+3. After sync, open each Triton Control instance, select its S3 profile and
+   install MLflow. The installer reads that namespace's database Secret.
+4. To roll out a new build, let CI test and publish an immutable image. Update
+   the image and chart revision in a GitOps pull request. After merge, Argo CD
+   reconciles the three development releases. Production can follow its own
+   promotion schedule.
 
 Benefits:
 
