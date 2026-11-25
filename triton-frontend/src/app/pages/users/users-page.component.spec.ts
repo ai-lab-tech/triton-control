@@ -79,6 +79,38 @@ describe("UsersPageComponent", () => {
     mockStore.overrideSelector(selectUsersInstances, []);
   });
 
+  it("protects the sole active admin until a second admin becomes active", () => {
+    // Arrange
+    const owner = {
+      id: 1,
+      name: "Owner",
+      email: "owner@example.test",
+      role: "admin",
+      isActive: true,
+      auth: "local" as const,
+      instances: [],
+    };
+    const invited = { ...owner, id: 2, name: "Invited", isActive: false };
+    const selector = mockStore.overrideSelector(selectUsers, [owner, invited]);
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    const deleteOwner = () => fixture.nativeElement.querySelector("#actions-1 .app-menu-danger");
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    expect(fixture.componentInstance.lastActiveAdminId()).toBe(owner.id);
+    expect(deleteOwner().disabled).toBeTrue();
+
+    // Act
+    selector.setResult([owner, { ...invited, isActive: true }]);
+    mockStore.refreshState();
+    fixture.detectChanges();
+
+    // Assert
+    expect(deleteOwner().disabled).toBeFalse();
+  });
+
   it("assigns installation engineering responsibility without changing the user's access role", async () => {
     // Arrange
     const fixture = TestBed.createComponent(UsersPageComponent);

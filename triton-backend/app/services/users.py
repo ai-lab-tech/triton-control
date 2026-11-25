@@ -18,7 +18,7 @@ from typing import Any
 from sqlmodel import Session
 
 from app.core.access_control import require_admin
-from app.exceptions import NotFoundError
+from app.exceptions import ConflictError, NotFoundError
 from app.mappers import user_entity_to_dto
 from app.repositories import account_lifecycle, users
 from app.schemas import UpdateUserInstancesRequest, UpdateUserRoleRequest, UserDTO
@@ -43,8 +43,14 @@ def list_users(session: Session, claims: dict[str, Any]) -> list[UserDTO]:
     ]
 
 
+def _protect_last_admin(session: Session, user_id: int) -> None:
+    if users.is_last_active_admin_for_update(session, user_id):
+        raise ConflictError("At least one active administrator must remain.")
+
+
 def delete_user(session: Session, claims: dict[str, Any], user_id: int) -> None:
     require_admin(claims)
+    _protect_last_admin(session, user_id)
     users.delete(session, get_user_or_404(session, user_id))
 
 
@@ -68,6 +74,8 @@ def update_user_role(
     request: UpdateUserRoleRequest,
 ) -> UserDTO:
     require_admin(claims)
+    if request.role != "admin":
+        _protect_last_admin(session, user_id)
     row = get_user_or_404(session, user_id)
     row.role = request.role
     row.is_active = True

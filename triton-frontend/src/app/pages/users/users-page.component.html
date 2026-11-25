@@ -167,6 +167,7 @@
                   <button
                     class="app-menu-item app-menu-danger"
                     type="button"
+                    [disabled]="lastActiveAdminId() === row.id"
                     (click)="deleteUser(row)"
                   >
                     <span class="material-icons" aria-hidden="true">delete</span>
@@ -183,6 +184,12 @@
                     </button>
                   </div>
                   <p class="user-email">{{ row.email }}</p>
+                  @if (lastActiveAdminId() === row.id) {
+                    <p>
+                      Promote another active user to admin before changing this role or deleting
+                      this account.
+                    </p>
+                  }
                   <p>Authentication · {{ row.auth }}</p>
                   <div class="instance-access-content">
                     <div class="access-controls">
@@ -191,6 +198,7 @@
                         <mat-form-field appearance="outline" subscriptSizing="dynamic">
                           <mat-select
                             [aria-label]="'Role for ' + row.name"
+                            [disabled]="lastActiveAdminId() === row.id"
                             [(ngModel)]="pendingRoleByUserId[row.id]"
                             (ngModelChange)="updateRole(row, $event)"
                           >
