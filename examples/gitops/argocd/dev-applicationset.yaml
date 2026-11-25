@@ -25,7 +25,7 @@ spec:
         namespace: '{{ .namespace }}'
       source:
         repoURL: https://github.com/ai-lab-tech/triton-control.git
-        targetRevision: 0708ef3fca5206cf853a1b003a6a5b559ea72aa1
+        targetRevision: 5cafc9bf4abcad95d5efab352054deec6ffb95ed
         path: charts/triton-control
         helm:
           values: |
@@ -33,7 +33,7 @@ spec:
               image:
                 # Replace with your published build of the pinned revision.
                 repository: registry.example.com/platform/triton-control
-                tag: "0708ef3"
+                tag: "5cafc9b"
               existingSecret: control-app
             imageBuilds:
               namespace: '{{ .namespace }}-builds'
