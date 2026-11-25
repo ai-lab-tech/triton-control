@@ -465,8 +465,8 @@ S3 deployment profiles:
 
 ## Recommended Kubernetes Deployment Model
 
-For environments where teams require isolated Triton Control installations,
-deploy one dedicated Triton Control instance per Kubernetes namespace. A team is
+In development, deploy one Triton Control instance per use case in its own
+Kubernetes namespace. A team is
 the organizational owner of that namespace, not a Kubernetes resource type.
 
 Each namespace gets its own:
@@ -477,7 +477,10 @@ Each namespace gets its own:
 - Configuration
 - Self-deployed Triton instances
 
-This keeps environments isolated and makes ownership clear between teams.
+All development namespaces connect to one shared PostgreSQL instance. Each
+use case has a control database and an MLflow tracking database, each with its
+own credentials. Provision these databases on the shared server and disable
+the PostgreSQL deployment in each Helm release with `postgresql.enabled=false`.
 
 ```mermaid
 flowchart TB
@@ -489,6 +492,7 @@ flowchart TB
 
     subgraph DeptA["Namespace: ai-dept-a"]
         TC_A[Triton Control<br/>own deployment]
+        ML_A[MLflow]
         ING_A[Ingress<br/>triton-a.company.com]
         TR_A1[Triton Server A1]
         TR_A2[Triton Server A2]
@@ -500,6 +504,7 @@ flowchart TB
 
     subgraph DeptB["Namespace: ai-dept-b"]
         TC_B[Triton Control<br/>own deployment]
+        ML_B[MLflow]
         ING_B[Ingress<br/>triton-b.company.com]
         TR_B1[Triton Server B1]
 
@@ -509,6 +514,7 @@ flowchart TB
 
     subgraph DeptC["Namespace: ai-dept-c"]
         TC_C[Triton Control<br/>own deployment]
+        ML_C[MLflow]
         ING_C[Ingress<br/>triton-c.company.com]
         TR_C1[Triton Server C1]
         TR_C2[Triton Server C2]
@@ -517,7 +523,19 @@ flowchart TB
         TC_C --> TR_C1
         TC_C --> TR_C2
     end
+
+    PG[(Shared development PostgreSQL instance)]
+    TC_A -->|control_a| PG
+    ML_A -->|mlflow_a| PG
+    TC_B -->|control_b| PG
+    ML_B -->|mlflow_b| PG
+    TC_C -->|control_c| PG
+    ML_C -->|mlflow_c| PG
 ```
+
+In production, a central operations team can run one Triton Control installation
+for all use cases with a separate production PostgreSQL instance. This deployment
+omits MLflow and Argo Workflows.
 
 Use GitOps to manage all Triton Control installations and their configuration.
 The GitOps repository should contain the desired state for each namespace:
