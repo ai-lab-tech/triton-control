@@ -46,7 +46,7 @@ def publish(
             or candidate.output_inventory != inventory_digest(plan.source_inventory)
             or spec.repository.inventory_digest != candidate.output_inventory
             or spec.repository.prepared_inventory_digest != inventory_digest(plan.prepared_inventory)
-            or spec.repository.materializer_image not in (None, plan.materializer_image)):
+            or spec.repository.materializer_image != plan.materializer_image):
         raise ValueError("Candidate, plan and release inputs differ")
     archive_bytes = read_file(bundle / "validation-archive.json")
     archive = EvidenceArchive.model_validate(parse_json_document(archive_bytes))
@@ -107,7 +107,9 @@ def publish(
         store.write(key, data)
     identity = {key: value for key, value in receipt.items() if key != "target_digest"}
     store.write("identity-" + release_key, canonical_bytes(identity))
+    origin_key = digest(lineage.origin.model_dump(mode="json"))[7:]
+    store.write(f"origin-{origin_key}.json", canonical_bytes(published.digest))
     store.write(release_key, published.canonical)
     store.write("receipt-" + pointer.digest[7:] + ".json", receipt_bytes)
-    store.write(f"target-{target.metadata.name}.json", pointer.canonical, previous)
+    store.write_target(f"target-{target.metadata.name}.json", pointer.canonical, previous)
     return pointer.digest
