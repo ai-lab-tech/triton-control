@@ -571,11 +571,34 @@ a server-only Kubernetes Secret. Profile endpoint, region, addressing style and
 custom CA settings are included. Clients use the authenticated MLflow proxy and
 do not receive the S3 credentials.
 
-Tracking and registry metadata use the application's PostgreSQL connection in the
-isolated `mlflow_tracking` schema. PostgreSQL must be reachable from the MLflow
-pod and the database user must be allowed to create this schema. No new MLflow
-PVC is created. The default server image installs the S3/PostgreSQL drivers at
-startup when missing; for restricted networks, preinstall boto3 and psycopg2.
+Managed MLflow is installed in the Triton Control pod's namespace. By default it
+uses the control database and creates the `mlflow_tracking` schema there.
+
+To share a PostgreSQL server across use cases, provision a control database and
+an MLflow database per development release, with a separate login for each.
+In each release namespace, put the control connection URL in the application
+Secret under `DATABASE_URL`. Put the MLflow PostgreSQL URL (including its
+database name and any TLS options) in a separate Secret. Example Helm values:
+
+```yaml
+postgresql:
+  enabled: false
+app:
+  existingSecret: control-app  # includes DATABASE_URL and the usual app secrets
+mlflow:
+  backendStoreSecret:
+    name: mlflow-postgres
+    key: database-url
+```
+
+The MLflow pod must be able to reach PostgreSQL. For clusters without package-index
+access, preinstall boto3 and psycopg2 in the MLflow image.
+The MLflow database login needs permission to create and update tables in the
+target schema. The installer copies the URL
+into MLflow's managed storage Secret at installation. Existing installations
+keep their stored URL during upgrades. To move an existing installation, stop
+writes and migrate its tracking metadata before switching the connection.
+Changing Helm values alone does not migrate data or rotate the stored credentials.
 
 The tracking upgrade endpoint requires and preserves existing S3 storage
 configuration. SQLite/PVC installations must be migrated before upgrading; old

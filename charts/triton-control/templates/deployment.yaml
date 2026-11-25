@@ -169,6 +169,15 @@ spec:
             - name: TRITON_DEPLOY_PROBES_JSON
               value: {{ .Values.tritonDeployments.probes | toJson | quote }}
             {{- if $development }}
+            {{- with .Values.mlflow.backendStoreSecret }}
+            {{- if .name }}
+            - name: MLFLOW_BACKEND_STORE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ required "mlflow.backendStoreSecret.key is required" .key | quote }}
+            {{- end }}
+            {{- end }}
             - name: DEVELOPMENT_PROFILE_API_URL
               value: {{ printf "http://%s.%s.svc.cluster.local:%v" (include "triton-control.fullname" .) .Release.Namespace .Values.service.backendPort | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION

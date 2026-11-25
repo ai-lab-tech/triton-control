@@ -169,6 +169,10 @@ tritonDeployments:
 
 # Embedded MLflow server. Change the pin only after the plugin smoke tests pass.
 mlflow:
+  # Optional Secret in the release namespace for a dedicated PostgreSQL database.
+  backendStoreSecret:
+    name: ""
+    key: database-url
   version: "3.14.0"
   image:
     repository: ghcr.io/mlflow/mlflow
