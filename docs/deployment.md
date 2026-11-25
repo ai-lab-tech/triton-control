@@ -465,19 +465,21 @@ S3 deployment profiles:
 
 ## Recommended Kubernetes Deployment Model
 
-For environments where teams require isolated Triton Control installations,
-deploy one dedicated Triton Control instance per Kubernetes namespace. A team is
-the organizational owner of that namespace, not a Kubernetes resource type.
+Triton Control uses the **Multi-Dev-Spoke → Central-Prod-Hub** deployment model.
+Each use case has a development namespace with its own Triton Control release,
+ingress and Triton servers. Teams use MLflow and Argo Workflows in their
+development spokes to track experiments and validate workloads. In production,
+the operations team runs a single Triton Control installation for all use cases
+in production mode, without MLflow or Argo Workflows.
 
-Each namespace gets its own:
-
-- Kubernetes namespace
-- Triton Control deployment
-- Ingress endpoint
-- Configuration
-- Self-deployed Triton instances
-
-This keeps environments isolated and makes ownership clear between teams.
+**We recommend GitOps with Argo CD.** The platform team owns the chart and image
+versions for Triton Control, MLflow and Argo Workflows. It can roll out a fix to
+all development spokes from one platform repository. Each use-case team owns
+its workflow manifests and parameters in a separate repository. Argo CD syncs
+those changes to that team's development namespace. To promote a validated
+model, the operations team reviews the pinned model or image revision in a
+production GitOps pull request. Merging that request deploys the approved
+revision to the production environment.
 
 ```mermaid
 flowchart TB
@@ -486,6 +488,12 @@ flowchart TB
     GitOps --> DeptA
     GitOps --> DeptB
     GitOps --> DeptC
+    GitOps -->|Approved production revision| Prod
+    subgraph Prod["Production hub"]
+        TC_P[Central Triton Control]
+        TR_P[Production Triton servers]
+        TC_P --> TR_P
+    end
 
     subgraph DeptA["Namespace: ai-dept-a"]
         TC_A[Triton Control<br/>own deployment]
@@ -519,8 +527,7 @@ flowchart TB
     end
 ```
 
-Use GitOps to manage all Triton Control installations and their configuration.
-The GitOps repository should contain the desired state for each namespace:
+Example layout for the platform repository:
 
 ```text
 environments/
@@ -531,6 +538,9 @@ environments/
     triton-control-values.yaml
     ingress.yaml
   dept-c/
+    triton-control-values.yaml
+    ingress.yaml
+  production/
     triton-control-values.yaml
     ingress.yaml
 ```
