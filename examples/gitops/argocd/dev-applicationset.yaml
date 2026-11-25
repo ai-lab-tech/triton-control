@@ -39,7 +39,11 @@ spec:
               namespace: '{{ .namespace }}-builds'
             postgresql:
               enabled: false
+            development:
+              mlflow:
+                version: "3.14.0"
             mlflow:
+              version: "3.14.0"
               backendStoreSecret:
                 name: mlflow-postgres
                 key: database-url
