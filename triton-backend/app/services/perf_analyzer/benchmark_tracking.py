@@ -52,9 +52,9 @@ def ui(experiment: str, kind: str, identifier: str) -> str:
 
 def find_candidate(session: Session, inventory: str) -> dict[str, Any]:
     matches = []
-    token = ""
+    search_params: dict[str, Any] = {"max_results": 100}
     while True:
-        page = api(session, "experiments/search", {"max_results": 100, "page_token": token})
+        page = api(session, "experiments/search", search_params)
         ids = [e["experiment_id"] for e in page.get("experiments", [])]
         if ids:
             result = api(
@@ -67,9 +67,10 @@ def find_candidate(session: Session, inventory: str) -> dict[str, Any]:
                 },
             )
             matches.extend(result.get("models", []))
-        token = page.get("next_page_token", "")
-        if not token or len(matches) > 1:
+        next_page = page.get("next_page_token")
+        if not next_page or len(matches) > 1:
             break
+        search_params["page_token"] = next_page
     if len(matches) != 1:
         raise ConflictError("No unique converted Dev MLflow model matches this candidate.")
     return dict(matches[0]["info"])
