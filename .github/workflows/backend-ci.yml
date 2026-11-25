@@ -18,6 +18,7 @@ on:
       - "podman-compose.yaml"
       - "charts/triton-control/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/scan-secrets.sh"
   pull_request:
     branches: ["main"]
     paths:
@@ -35,6 +36,7 @@ on:
       - "podman-compose.yaml"
       - "charts/triton-control/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/scan-secrets.sh"
 
 permissions:
   contents: read
@@ -346,7 +348,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo ghcr.io/gitleaks/gitleaks:latest detect --no-git --source . --redact --verbose
+        run: bash .github/scripts/scan-secrets.sh
 
   unit-tests:
     runs-on: ubuntu-latest
