@@ -10,6 +10,7 @@ on:
       - "compose.yaml"
       - "podman-compose.yaml"
       - ".github/workflows/frontend-ci.yml"
+      - ".github/scripts/scan-secrets.sh"
   pull_request:
     branches: ["main"]
     paths:
@@ -19,6 +20,7 @@ on:
       - "compose.yaml"
       - "podman-compose.yaml"
       - ".github/workflows/frontend-ci.yml"
+      - ".github/scripts/scan-secrets.sh"
   workflow_dispatch:
 
 permissions:
@@ -34,7 +36,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo ghcr.io/gitleaks/gitleaks:latest detect --no-git --source . --redact --verbose
+        run: bash .github/scripts/scan-secrets.sh
 
   unit-tests:
     runs-on: ubuntu-latest

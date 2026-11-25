@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "candidate": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+      "title": "Candidate",
+      "type": "string"
+    },
+    "inventories": {
+      "patternProperties": {
+        "^sha256:[0-9a-f]{64}$": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+          "type": "string"
+        }
+      },
+      "title": "Inventories",
+      "type": "object"
+    },
+    "origin_plan": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+      "title": "Origin Plan",
+      "type": "string"
+    },
+    "origin_release": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+      "title": "Origin Release",
+      "type": "string"
+    },
+    "published_plan": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+      "title": "Published Plan",
+      "type": "string"
+    },
+    "release_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Release Digest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "target_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Target Digest",
+      "type": "string"
+    },
+    "validation_archive": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+      "title": "Validation Archive",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "origin_release",
+    "release_digest",
+    "candidate",
+    "inventories",
+    "origin_plan",
+    "published_plan",
+    "validation_archive",
+    "target_digest"
+  ],
+  "title": "PublicationReceipt",
+  "type": "object"
+}
