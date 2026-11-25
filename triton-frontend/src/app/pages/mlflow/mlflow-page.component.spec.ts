@@ -396,7 +396,7 @@ describe("MlflowPageComponent", () => {
     await fixture.componentInstance.uninstall();
 
     expect(fixture.nativeElement.querySelector("button.danger")).toBeNull();
-    http.expectNone(req => req.method === "DELETE");
+    http.expectNone((req) => req.method === "DELETE");
   });
 
   it("uninstalls when confirmed by an admin", async () => {
