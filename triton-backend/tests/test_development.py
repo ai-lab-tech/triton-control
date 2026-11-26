@@ -19,6 +19,7 @@ from fastapi import Response
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.api import development_api as code_server_api
+from app.db.entities import UserEntity
 from app.exceptions import BadGatewayError, BadRequestError, ForbiddenError, NotFoundError
 from app.schemas import CreateCodeServerRequest
 from app.services.development import kubernetes as k8s
@@ -192,6 +193,7 @@ class HfBuilderStartupTests(unittest.TestCase):
 class CodeServerTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch("app.services.development.workspaces.associations.for_workspace", return_value=None))
+        self.member = UserEntity(id=7, email="u@example.com", name="Workspace member", role="member")
 
     def _request(self) -> CreateCodeServerRequest:
         return CreateCodeServerRequest(
@@ -631,7 +633,7 @@ class CodeServerTests(unittest.TestCase):
     def test_GetCodeServer_NotFound_RaisesNotFound(self) -> None:
         with patch(
             "app.services.development.workspaces.require_user_entity",
-            return_value=SimpleNamespace(id=7),
+            return_value=self.member,
         ), patch(
             "app.services.development.workspaces.code_servers.find_by_id",
             return_value=None,
@@ -644,7 +646,7 @@ class CodeServerTests(unittest.TestCase):
 
         with patch(
             "app.services.development.workspaces.require_user_entity",
-            return_value=SimpleNamespace(id=7),
+            return_value=self.member,
         ), patch(
             "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
@@ -666,7 +668,7 @@ class CodeServerTests(unittest.TestCase):
 
         with patch(
             "app.services.development.workspaces.require_user_entity",
-            return_value=SimpleNamespace(id=7),
+            return_value=self.member,
         ), patch(
             "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
@@ -766,10 +768,9 @@ class CodeServerTests(unittest.TestCase):
         self.assertEqual(result[0].url, "/api/development/2/proxy/?workspace=/workspace/.triton-control/workspace.code-workspace")
 
     def test_GetCodeServer_DifferentOwner_RaisesForbidden(self) -> None:
-        user = SimpleNamespace(id=7)
         row = SimpleNamespace(owner_user_id=8)
 
-        with patch("app.services.development.workspaces.require_user_entity", return_value=user), patch(
+        with patch("app.services.development.workspaces.require_user_entity", return_value=self.member), patch(
             "app.services.development.workspaces.code_servers.find_by_id",
             return_value=row,
         ):

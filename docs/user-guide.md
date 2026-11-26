@@ -35,10 +35,9 @@ explicitly inactive account or issue an invitation. An invitation opens
 Expired, revoked, consumed, and invalid links display the same safe message and
 cannot be reused.
 
-When delivery is disabled, an administrator-precreated passwordless local
-account can be claimed through matching public self-registration. Registration
-sets the initial password and preserves the role and instance assignments
-chosen by the administrator.
+When delivery is disabled, new local users self-register and wait for an
+administrator to approve their account and assign access. Pre-created local
+accounts require an invitation to set their initial password.
 
 When SMTP recovery is operational, the login page shows **Forgot password**.
 Submitting the form always displays the same confirmation, whether or not the
@@ -54,7 +53,7 @@ installation capabilities, and Kubernetes availability.
 - **Dashboard** opens the fleet overview.
 - **Serving → Instances** lists Triton endpoints. Select **Connect existing instance** to register a running server, or **Serving → Add deployment** to deploy one.
 - **Development → Engineering queue → Submit model** opens the handoff form. Select **Submit to engineering** to send it.
-- **Prepare for production** on a serving instance opens **Engineering Queue → Submit model** with its S3 repository prefilled. Review the served version and evaluation details, then submit. A task workspace deployment links directly to its engineering task.
+- **Prepare for production** on a serving instance opens **Engineering Queue → Submit model** with its S3 repository prefilled. Review the served version and evaluation details, then submit. A task workspace deployment links directly to its engineering task. See [Prepare a serving model](production-preparation/prepare-serving-model.md) for the walkthrough.
 - Under **Development**, select **Workspaces**, **Argo Workflows**, or **MLflow** for the corresponding development tool.
 - Administrators can open **User Management**, **Settings**, and **Error Logs** from the account menu at the bottom of the sidebar. **S3 Profiles** appears there when credential administration is enabled.
 

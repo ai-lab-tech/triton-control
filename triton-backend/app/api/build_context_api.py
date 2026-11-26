@@ -1,7 +1,9 @@
 """Build context admission and bounded streaming upload; no executor API."""
 
+import contextlib
 import tempfile
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, Callable
 
 import anyio
 from fastapi import APIRouter, Depends, Header, Request, Response
@@ -46,13 +48,30 @@ def read(
 @translate_app_errors
 async def upload(
     context_id: str, request: Request, response: Response,
-    session: Session = Depends(get_session), claims: dict[str, Any] = Depends(get_claims),
+    claims: dict[str, Any] = Depends(get_claims),
 ) -> BuildContextResponse:
     if request.headers.get("content-type", "").split(";", 1)[0] != "application/x-tar":
         raise BadRequestError("Upload an uncompressed POSIX tar with Content-Type application/x-tar")
-    token, expected, limit = await anyio.to_thread.run_sync(contexts.begin_upload, session, claims, context_id)
+
+    session_provider: Callable[[], Iterator[Session]] = request.app.dependency_overrides.get(
+        get_session, get_session
+    )
+    open_session = contextlib.contextmanager(session_provider)
+
+    def _begin() -> tuple[str, Any, int]:
+        with open_session() as session:
+            return contexts.begin_upload(session, claims, context_id)
+
+    def _finish(stream: Any, token_val: str) -> BuildContextResponse:
+        with open_session() as session:
+            return contexts.finish_upload(session, claims, context_id, token_val, stream)
+
+    def _abort(token_val: str) -> None:
+        with open_session() as session:
+            contexts.abort_upload(session, context_id, token_val)
+
+    token, expected, limit = await anyio.to_thread.run_sync(_begin)
     try:
-        session.rollback()  # Do not retain a DB transaction while reading the network.
         with tempfile.TemporaryFile() as stream:
             count = 0
             try:
@@ -66,11 +85,11 @@ async def upload(
                 raise BadRequestError("Build archive upload deadline exceeded") from None
             if count != expected.archive_bytes:
                 raise BadRequestError("Incomplete build archive upload")
-            result = await anyio.to_thread.run_sync(contexts.finish_upload, session, claims, context_id, token, stream)
+            result = await anyio.to_thread.run_sync(_finish, stream, token)
         response.headers["Location"] = result.operation.status_url
         return result
     finally:
         # Shield cleanup on disconnect/cancellation. A persisted S3 write intent
         # remains recoverable; an incomplete body releases its upload reservation.
         with anyio.CancelScope(shield=True):
-            await anyio.to_thread.run_sync(contexts.abort_upload, session, context_id, token)
+            await anyio.to_thread.run_sync(_abort, token)

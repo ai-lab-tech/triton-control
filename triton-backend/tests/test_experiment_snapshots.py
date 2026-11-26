@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
 
+from app.core.crypto import encrypt_secret
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import (
@@ -103,7 +104,7 @@ class SnapshotFixture(PreparationFixture):
                 repository_models=[{"name": "iris", "version": "1", "state": "READY"}],
                 s3_endpoint="https://storage.invalid",
                 s3_access_key="fixture",
-                s3_secret_key_enc="fixture",
+                s3_secret_key_enc=encrypt_secret("fixture"),
                 is_self_deployed=True,
                 deployment_runtime="kubernetes",
                 deployment_namespace="test",

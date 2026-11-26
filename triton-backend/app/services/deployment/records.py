@@ -93,13 +93,13 @@ def upsert_deployed_instance(
         "s3_bucket": s3["bucket"],
         "s3_prefix": s3["prefix"],
         "s3_use_https": s3["use_https"],
-        "s3_verify_ssl": s3["use_https"],
+        "s3_verify_ssl": True,
         "s3_ca_certificate": (request.s3_ca_certificate or "") if s3["use_https"] else "",
         "s3_region": request.s3_region,
         "s3_access_key": request.s3_access_key,
         "s3_secret_key_hash": hash_secret(request.s3_secret_key or ""),
         "s3_secret_key_enc": encrypt_secret(request.s3_secret_key or ""),
-        "s3_address_style": "path",
+        "s3_address_style": request.s3_address_style,
     }
     validate_deployment_available(session, deployment_name, triton_url)
     if commit:

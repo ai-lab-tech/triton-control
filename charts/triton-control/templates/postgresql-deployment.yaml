@@ -8,6 +8,10 @@ metadata:
     app.kubernetes.io/component: postgresql
 spec:
   replicas: 1
+  {{- if .Values.postgresql.persistence.enabled }}
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "triton-control.selectorLabels" . | nindent 6 }}

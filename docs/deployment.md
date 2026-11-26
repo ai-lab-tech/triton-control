@@ -210,7 +210,7 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    REGISTRY_SECRET_ENCRYPTION_KEY: "replace-me"
+    # Helm generates and reuses the S3 encryption key. Back up the application Secret.
 
 postgresql:
   enabled: true

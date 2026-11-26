@@ -59,7 +59,7 @@ def _selection(source: S3Input | S3RepositoryInput, endpoint: str | None, bucket
     if isinstance(source, S3Input):
         result.update(version_id=source.version_id, expected_digest=source.expected_digest)
     elif source.model:
-        result["model"] = source.model.model_dump(mode="json")
+        result["model"] = {"name": source.model.name, "versions": sorted(source.model.versions)}
     return result
 
 
@@ -120,9 +120,13 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
             if existing_lineage:
                 return _reuse(session, claims, existing_lineage, selectors)
         version = request.source.version_id if isinstance(request.source, S3Input) else None
+        model = request.source.model if isinstance(request.source, S3RepositoryInput) else None
+        model_name = model.name if model is not None else None
+        model_versions = tuple(sorted(model.versions)) if model is not None else ()
         existing = None if lineage_identity else repository.find_source(
             session, request.origin.installation_id, request.revision,
             selected["endpoint"], selected["bucket"], selected["key"], version, request.source.kind,
+            model_name=model_name, model_versions=model_versions,
         )
         if existing is not None:
             return _reuse(session, claims, existing, selectors)
@@ -164,10 +168,12 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
         existing = None if lineage_identity else repository.find_source(
             session, request.origin.installation_id, request.revision,
             source.endpoint, source.bucket, source.key, version, request.source.kind,
+            model_name=model_name, model_versions=model_versions,
         ) or repository.find_source(
             session, request.origin.installation_id, request.revision,
             source.endpoint, source.bucket, source.key,
             source.version_id if isinstance(source, ResolvedInput) else None, request.source.kind,
+            model_name=model_name, model_versions=model_versions,
         )
         if existing is not None:
             receipt = _reuse(session, claims, existing, selectors)
@@ -177,6 +183,7 @@ def submit(session: Session, claims: dict[str, Any], request: HandoffRequest, *,
             "installation_id": request.origin.installation_id, "revision": request.revision,
             "kind": request.source.kind, "endpoint": source.endpoint, "bucket": source.bucket, "key": source.key,
             "version_id": source.version_id if isinstance(source, ResolvedInput) else None,
+            **({"model": selected.get("model")} if isinstance(request.source, S3RepositoryInput) else {}),
         })
         missing = missing_evaluation_inputs(dataset, baseline, request.expected_behavior, request.acceptance_criteria)
         snapshot_id = uuid4()

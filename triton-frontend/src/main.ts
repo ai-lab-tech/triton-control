@@ -1,7 +1,12 @@
 import "zone.js";
 import { FullscreenOverlayContainer, OverlayContainer } from "@angular/cdk/overlay";
 import "@angular/compiler";
-import { ErrorHandler, provideZoneChangeDetection } from "@angular/core";
+import {
+  ErrorHandler,
+  inject,
+  provideAppInitializer,
+  provideZoneChangeDetection,
+} from "@angular/core";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { MatSnackBarModule } from "@angular/material/snack-bar";
 import { importProvidersFrom } from "@angular/core";
@@ -14,6 +19,7 @@ import { provideState, provideStore } from "@ngrx/store";
 
 import { AppComponent } from "./app/app.component";
 import { APP_ROUTES } from "./app/app.routes";
+import { AuthService } from "./app/shared/auth/auth.service";
 import { authInterceptor } from "./app/shared/auth/auth.interceptor";
 import { FrontendErrorHandler } from "./app/shared/frontend-error.handler";
 import { BASE_PATH, Configuration } from "./app/api/generated/index";
@@ -47,6 +53,9 @@ bootstrapApplication(AppComponent, {
     importProvidersFrom(MatSnackBarModule),
     provideRouter(APP_ROUTES, withInMemoryScrolling({ scrollPositionRestoration: "top" })),
     provideHttpClient(withInterceptors([authInterceptor])),
+    provideAppInitializer(() => {
+      inject(AuthService).hydrateStoredToken();
+    }),
     provideStore(),
     provideState(instancesInferFeature),
     provideState(instancesDetailFeature),

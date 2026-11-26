@@ -51,19 +51,23 @@ export class AuthService {
     return `${this.basePath ?? ""}`.trim().replace(/\/$/, "");
   }
 
+  hydrateStoredToken(): void {
+    if (!this.isBrowser || this.authState.accessToken()) return;
+    const stored = localStorage.getItem(this.tokenStorageKey);
+    if (!stored) return;
+    if (this.isTokenExpired(stored)) {
+      localStorage.removeItem(this.tokenStorageKey);
+      return;
+    }
+    this.authState.setAccessToken(stored);
+    this.scheduleAutoLogout(stored);
+  }
+
   async init(): Promise<void> {
     // SSR-safe: do nothing server-side
     if (!this.isBrowser) return;
 
-    const stored = localStorage.getItem(this.tokenStorageKey);
-    if (stored) {
-      if (this.isTokenExpired(stored)) {
-        localStorage.removeItem(this.tokenStorageKey);
-      } else {
-        this.authState.setAccessToken(stored);
-        this.scheduleAutoLogout(stored);
-      }
-    }
+    this.hydrateStoredToken();
 
     // Token first, then optional OIDC session fallback.
     await this.refreshSession().catch(() => {
@@ -445,14 +449,24 @@ export class AuthService {
       }
       return;
     }
-    this.logoutTimerId = window.setTimeout(() => {
-      this.clearLocalSession();
-      if (this.router.url !== "/signin") {
-        void this.router.navigate(["/signin"], {
-          queryParams:
-            this.router.url && this.router.url !== "/" ? { returnUrl: this.router.url } : undefined,
-        });
-      }
-    }, delayMs);
+    const maxTimeoutMs = 0x7fffffff;
+    this.logoutTimerId = window.setTimeout(
+      () => {
+        if (exp * 1000 > Date.now()) {
+          this.scheduleAutoLogout(token);
+          return;
+        }
+        this.clearLocalSession();
+        if (this.router.url !== "/signin") {
+          void this.router.navigate(["/signin"], {
+            queryParams:
+              this.router.url && this.router.url !== "/"
+                ? { returnUrl: this.router.url }
+                : undefined,
+          });
+        }
+      },
+      Math.min(delayMs, maxTimeoutMs),
+    );
   }
 }

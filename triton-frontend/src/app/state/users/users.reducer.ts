@@ -69,9 +69,21 @@ export const usersReducer = createReducer(
     users: state.users.filter((u) => u.id !== userId),
   })),
 
-  on(updateUserRoleSucceeded, (state, { userId, role }) => ({
+  on(updateUserRoleSucceeded, (state, { userId, role, isActive }) => ({
     ...state,
-    users: state.users.map((u) => (u.id === userId ? { ...u, role, isActive: true } : u)),
+    users: state.users.map((u) =>
+      u.id === userId
+        ? {
+            ...u,
+            role,
+            isActive: isActive ?? u.isActive,
+            accountStatus:
+              (isActive ?? u.isActive) && u.accountStatus === "approval_pending"
+                ? "active"
+                : u.accountStatus,
+          }
+        : u,
+    ),
   })),
 
   on(updateUserRoleFailed, (state, { message }) => ({

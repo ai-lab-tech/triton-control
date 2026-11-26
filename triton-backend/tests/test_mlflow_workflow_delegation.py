@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.core.user_auth import verify_access_token
 from app.db.entities import S3ProfileEntity, UserEntity, WorkflowS3CredentialEntity
 from app.exceptions import BadRequestError, ForbiddenError, NotFoundError
@@ -85,7 +86,7 @@ class WorkflowDelegationTests(unittest.TestCase):
             session.add(UserEntity(id=8, email="other@example.com", name="Other", role="member"))
             session.add(S3ProfileEntity(
                 id=11, owner_user_id=7, name="models", endpoint="https://s3.example.test",
-                bucket="triton-models", access_key="access", secret_key_enc="secret",
+                bucket="triton-models", access_key="access", secret_key_enc=encrypt_secret("secret"),
             ))
             session.add(WorkflowS3CredentialEntity(
                 id=21, created_by_user_id=7, name="models", namespace="triton-control",

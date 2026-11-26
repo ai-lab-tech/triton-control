@@ -68,6 +68,12 @@ database host set to the compose service name:
 postgresql://triton:tritonpw@postgres:5432/triton_backend
 ```
 
+When upgrading from a release that stored S3 credentials in plaintext, back up
+the database and stop all old application replicas before starting the new
+version. On first startup, the backend encrypts existing profile and instance
+secret keys in one transaction. All replicas and restored databases must use
+the same `S3_SECRET_ENCRYPTION_KEY`. Keep a protected backup of that key.
+
 Replace the default `SESSION_SECRET`, `JWT_SECRET`, `S3_SECRET_ENCRYPTION_KEY`,
 `EMAIL_SECRET_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` values before using
 compose outside local development. Store `EMAIL_SMTP_PASSWORD` as a secret when
@@ -95,6 +101,14 @@ rewritten automatically.
 
 ## Minimal Values Override
 
+For a chart-managed Secret, supply stable session and JWT signing secrets.
+On first install Helm generates the S3 encryption key and stores it in the
+application Secret. Connected upgrades reuse it. Back up the Secret with the
+database. To restore encrypted credentials, supply the original key before
+starting the backend. For GitOps or repeated offline renders, use
+`app.existingSecret` containing all three keys or supply a stable
+`app.secretEnv.S3_SECRET_ENCRYPTION_KEY` through your secret manager.
+
 ```yaml
 app:
   image:
@@ -103,7 +117,6 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    S3_SECRET_ENCRYPTION_KEY: "replace-me"
 
 tritonDeployments:
   # Used only by vLLM init/sidecar repository modes. Standard Triton S3

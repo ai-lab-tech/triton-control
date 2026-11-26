@@ -160,6 +160,8 @@ def _parse_positive_int(value: str | None) -> int | None:
     return parsed if parsed > 0 else None
 
 
+if installation_policy.mode() == "production" and not os.getenv("SESSION_SECRET"):
+    raise RuntimeError("Configure SESSION_SECRET in production mode")
 session_secret = os.getenv("SESSION_SECRET") or secrets.token_urlsafe(32)
 session_https_only = _parse_bool(os.getenv("SESSION_HTTPS_ONLY"), default=False)
 server_https_enabled = _parse_bool(os.getenv("SERVER_HTTPS_ENABLED"), default=False)

@@ -57,7 +57,7 @@ export const updateUserRoleRequested = createAction(
 
 export const updateUserRoleSucceeded = createAction(
   "[Users] Update User Role Succeeded",
-  props<{ userId: number; role: string }>(),
+  props<{ userId: number; role: string; isActive?: boolean }>(),
 );
 
 export const updateUserRoleFailed = createAction(

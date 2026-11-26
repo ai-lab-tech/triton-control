@@ -50,12 +50,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/* Installation mode is a literal startup value, never a request/database override. */}}
 {{- define "triton-control.installationMode" -}}
-{{- $mode := "development" -}}
+{{- $configured := .Values.app.installationMode | default "" -}}
+{{- $mode := default "development" $configured -}}
 {{- $seen := false -}}
 {{- range .Values.app.env -}}
 {{- if eq .name "TRITON_CONTROL_MODE" -}}
 {{- if $seen -}}{{ fail "Configure TRITON_CONTROL_MODE only once" }}{{- end -}}
 {{- if .valueFrom -}}{{ fail "TRITON_CONTROL_MODE must be a literal Helm value" }}{{- end -}}
+{{- if and $configured (ne $configured .value) -}}
+{{- fail "TRITON_CONTROL_MODE conflicts with app.installationMode" -}}
+{{- end -}}
 {{- $mode = .value -}}
 {{- $seen = true -}}
 {{- end -}}

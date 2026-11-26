@@ -194,6 +194,8 @@ def prepare_deletion(session: Session, instance_id: int) -> bool:
 
 
 class DeploymentAdapter:
+    cleanup_after_authorized_cancel = True
+
     def normalize(self, session: Session, payload: dict[str, Any]) -> dict[str, Any]:
         raise BadRequestError("Submit deployment creation through /api/deployments")
 
@@ -242,11 +244,12 @@ class DeploymentAdapter:
                     raise NotFoundError("Deployment intent missing")
                 bundle = decode(intent.bundle_enc)
                 actor = users.find_by_id(session, current.actor_id)
-                context.service.authorize(session, actor, current.kind, current.target, "execute", current)
+                if not current.cancel_requested:
+                    context.service.authorize(session, actor, current.kind, current.target, "execute", current)
                 instance = instances.find_by_id(session, intent.instance_id)
                 if instance is None:
                     raise ForbiddenError("Deployment instance was removed")
-                if actor and actor.credential_version != bundle["credential_version"]:
+                if not current.cancel_requested and actor and actor.credential_version != bundle["credential_version"]:
                     raise ForbiddenError("Submitting account credentials changed")
                 if current.cancel_requested != operation.cancel_requested:
                     raise ConflictError("Cancellation requires a new pass")
@@ -256,9 +259,10 @@ class DeploymentAdapter:
                     leased.lease_until = operations.now(session) + timedelta(seconds=30)
                     session.add(leased)
                     session.flush()
-                    context.service.authorize(session, actor, current.kind, current.target, "execute", current)
-                    if actor and actor.credential_version != bundle["credential_version"]:
-                        raise ForbiddenError("Submitting account credentials changed")
+                    if not current.cancel_requested:
+                        context.service.authorize(session, actor, current.kind, current.target, "execute", current)
+                        if actor and actor.credential_version != bundle["credential_version"]:
+                            raise ForbiddenError("Submitting account credentials changed")
 
                 manifests = bundle["manifests"]
                 try:

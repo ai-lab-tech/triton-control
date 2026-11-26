@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.api.development_api import router
 from app.db.database import get_session
 from app.db.entities import CodeServerEntity, MlflowEntity, S3ProfileEntity, UserEntity
@@ -29,7 +30,7 @@ class WorkspaceProfileTests(unittest.TestCase):
                 statefulset_name=f"code-{owner}", service_name=f"code-{owner}-svc",
                 secret_name=f"code-{owner}-secret", image="test"))
             self.session.add(S3ProfileEntity(id=owner, owner_user_id=owner, name=f"profile-{owner}",
-                endpoint="https://s3.example.com", bucket="models", access_key="key", secret_key_enc="secret"))
+                endpoint="https://s3.example.com", bucket="models", access_key="key", secret_key_enc=encrypt_secret("secret")))
         self.session.commit()
         patch("app.services.development.profiles.api_client").start()
         self.core = patch("app.services.development.profiles.client.CoreV1Api").start().return_value

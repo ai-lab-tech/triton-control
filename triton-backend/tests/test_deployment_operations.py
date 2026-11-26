@@ -17,6 +17,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.core.crypto import encrypt_secret
 from app.api.deployment_api import router
 from app.core.operation_secrets import decode
 from app.core.security import get_claims
@@ -99,7 +100,7 @@ class DeploymentOperationTests(unittest.TestCase):
                              UserEntity(id=2, email="ben@test.invalid", name="Ben", role="member")])
             session.commit()
             session.add(S3ProfileEntity(id=1, owner_user_id=1, name="fixture", endpoint="http://s3.invalid",
-                                        bucket="models", access_key="fixture", secret_key_enc="fixture-secret"))
+                                        bucket="models", access_key="fixture", secret_key_enc=encrypt_secret("fixture-secret")))
             session.commit()
         self.enterContext(patch.object(deploy, "collect_deployment_examples", return_value={}))
         self.service = OperationService()
@@ -131,6 +132,27 @@ class DeploymentOperationTests(unittest.TestCase):
             "model_uri": "s3://models/repository/iris", "model_name": "iris", "repository_prefix": "repository",
             "lineage": ControlLineage.model_validate(fixture),
         })
+
+    def test_deployment_resolves_repository_inside_profile_scope(self):
+        with Session(self.engine) as session:
+            profile = session.get(S3ProfileEntity, 1)
+            profile.prefix = "models/team"
+            session.add(profile)
+            session.commit()
+
+            root = deploy.resolve_profile_request(self.request, session, self.claims)
+            nested = deploy.resolve_profile_request(
+                self.request.model_copy(update={"repository_prefix": "models/team/release"}),
+                session, self.claims,
+            )
+            with self.assertRaises(ForbiddenError):
+                deploy.resolve_profile_request(
+                    self.request.model_copy(update={"repository_prefix": "models/other"}),
+                    session, self.claims,
+                )
+
+        self.assertTrue(root.s3_url.endswith("/models/models/team"))
+        self.assertTrue(nested.s3_url.endswith("/models/models/team/release"))
 
     def test_workspace_deployment_retains_task_origin_and_rejects_replay_from_another_task(self):
         # Arrange
@@ -406,3 +428,26 @@ class DeploymentOperationTests(unittest.TestCase):
         with patch.object(repo, "now", side_effect=lambda _: clock[0]), patch.object(self.provider, "call", slow_read):
             self.assertEqual(self.step(result.operation_id).state, "succeeded")
         self.assertEqual(self.provider.writes, writes)
+
+    def test_cancelled_deployment_cleans_up_after_submitter_password_reset_or_demotion(self):
+        result = self.submit()
+        self.step(result.operation_id)
+        with Session(self.engine) as session:
+            submitter = session.get(UserEntity, 1)
+            submitter.credential_version += 1
+            submitter.role = "viewer"
+            submitter.assigned_instances = []
+            session.add(submitter)
+            session.commit()
+            with self.assertRaises(ConflictError):
+                deploy.prepare_deletion(session, result.instance_id)
+        for _ in range(3):
+            with Session(self.engine) as session:
+                row = repo.get(session, result.operation_id)
+                row.available_at = repo.now(session) - timedelta(seconds=1)
+                session.add(row)
+                session.commit()
+            OperationWorker(self.service, lambda: Session(self.engine)).run_once()
+        with Session(self.engine) as session:
+            self.assertEqual(repo.get(session, result.operation_id).state, "cancelled")
+            self.assertTrue(deploy.prepare_deletion(session, result.instance_id))

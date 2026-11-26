@@ -98,6 +98,7 @@ class CutoverTests(unittest.TestCase):
             session.rollback()
             self.assertEqual(session.get(S3ProfileEntity, 1).prefix, "approved")
 
+    @patch.dict(os.environ, {"SESSION_SECRET": "installation-cutover-test-session"})
     def test_production_startup_only_starts_serving_health_worker(self):
         # Arrange
         import asyncio
@@ -172,6 +173,7 @@ class CutoverTests(unittest.TestCase):
                 self.assertEqual("queued development operations" in cutover_blockers(session),
                                  state in {"pending", "running"})
 
+    @patch.dict(os.environ, {"SESSION_SECRET": "installation-cutover-test-session"})
     def test_production_shutdown_finishes_all_cleanup(self):
         import asyncio
         from app import main

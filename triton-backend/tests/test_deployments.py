@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.api.deployment_api import create_deployment as create_deployment_api
 from app.api.deployment_api import delete_deployment as delete_deployment_api
 from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
@@ -48,7 +49,7 @@ class DeploymentServiceTests(unittest.TestCase):
                 endpoint="http://minio:9000",
                 bucket="triton-models",
                 access_key="minioadmin",
-                secret_key_enc="super-secret-value",
+                secret_key_enc=encrypt_secret("super-secret-value"),
             )
         )
         session.commit()

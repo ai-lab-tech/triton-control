@@ -118,6 +118,7 @@ jobs:
           "$RUNNER_TEMP/backend/bin/python" -m pip install -e ./triton-backend
       - name: Test published client against backend deployment routes
         env:
+          S3_SECRET_ENCRYPTION_KEY: disposable-ci-test-key
           PLUGIN_VERSION: ${{ needs.candidate.outputs.version }}
           MLFLOW_VERSION: ${{ needs.candidate.outputs.mlflow }}
           GIT_PYTHON_REFRESH: quiet

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.db.entities import S3ProfileEntity, TritonInstanceEntity, UserEntity
 from app.exceptions import BadRequestError, NotFoundError
 from app.schemas import CreateDeploymentRequest
@@ -21,7 +22,7 @@ class ProfileDeploymentTests(unittest.TestCase):
             session.add(UserEntity(id=8, email="other@example.com", name="Other", role="member"))
             session.add(S3ProfileEntity(
                 id=11, owner_user_id=7, name="models", endpoint="https://s3.example.test",
-                bucket="triton-models", access_key="access", secret_key_enc="secret",
+                bucket="triton-models", access_key="access", secret_key_enc=encrypt_secret("secret"),
             ))
             session.commit()
 

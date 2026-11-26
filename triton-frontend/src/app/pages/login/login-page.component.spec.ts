@@ -26,6 +26,7 @@ describe("LoginPageComponent", () => {
     returnUrl = "/dashboard";
     authServiceMock = jasmine.createSpyObj<AuthService>("AuthService", [
       "getBootstrapStatus",
+      "getAuthOptions",
       "refreshSession",
       "loginWithPassword",
       "registerWithPassword",
@@ -33,6 +34,11 @@ describe("LoginPageComponent", () => {
       "loginWithOidc",
     ]);
     authServiceMock.getBootstrapStatus.and.resolveTo({ oidcEnabled: false, needsSetup: false });
+    authServiceMock.getAuthOptions.and.resolveTo({
+      oidcEnabled: false,
+      kubernetesEnabled: true,
+      forgotPasswordAvailable: false,
+    });
     authServiceMock.refreshSession.and.resolveTo();
     authServiceMock.loginWithPassword.and.resolveTo();
     authServiceMock.registerWithPassword.and.resolveTo();

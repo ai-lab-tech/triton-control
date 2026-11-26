@@ -1,7 +1,7 @@
 """Unit tests for cryptographic primitives and entity-to-DTO mappers.
 
 Covers:
-  Crypto stubs: ``encrypt_secret``, ``decrypt_secret``, ``hash_secret``,
+  Crypto primitives: ``encrypt_secret``, ``decrypt_secret``, ``hash_secret``,
                 ``is_secret_set``.
   Mappers:      ``entity_to_dto`` (TritonInstance), ``user_entity_to_dto``,
                 ``oidc_entity_to_dto``, ``dashboard_alert_entity_to_dto``.
@@ -9,6 +9,7 @@ Covers:
 
 from datetime import datetime, timezone
 import unittest
+from unittest.mock import patch
 
 from app.core.crypto import decrypt_secret, encrypt_secret, hash_secret, is_secret_set
 from app.db.entities import OidcConfigEntity, TritonInstanceEntity, UserEntity
@@ -16,18 +17,14 @@ from app.mappers import entity_to_dto, oidc_entity_to_dto, user_entity_to_dto
 
 
 class CryptoTests(unittest.TestCase):
-    def test_SecretEncryption_FunctionsCalled_ReturnIdentityValues(self):
-        # Arrange
-        secret = "abc"
-        token = "token"
-
-        # Act
-        encrypted = encrypt_secret(secret)
-        decrypted = decrypt_secret(token)
-
-        # Assert
-        self.assertEqual(encrypted, secret)
-        self.assertEqual(decrypted, token)
+    def test_secret_requires_the_original_key(self):
+        with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": "fixture-key"}):
+            encrypted = encrypt_secret("abc")
+            self.assertNotEqual(encrypted, "abc")
+            self.assertEqual(decrypt_secret(encrypted), "abc")
+        with patch.dict("os.environ", {"S3_SECRET_ENCRYPTION_KEY": "other-key"}):
+            with self.assertRaisesRegex(ValueError, "cannot be decrypted"):
+                decrypt_secret(encrypted)
 
     def test_HashSecret_SecretProvided_ProducesPasswordHashFormat(self):
         # Arrange
