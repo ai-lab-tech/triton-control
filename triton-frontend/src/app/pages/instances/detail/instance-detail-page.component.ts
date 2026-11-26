@@ -175,6 +175,11 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
+  readonly hasProfileTarget = computed(() =>
+    this.instance()?.repositoryModels.some((model) =>
+      this.canOpenProfile(model.name, model.state, model.version),
+    ),
+  );
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
   );
