@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import update
+from sqlalchemy import func, text, update
 from sqlmodel import Session, col, select
 
 from app.db.entities import AccountLifecycleTokenEntity, UserEntity
@@ -47,6 +47,22 @@ def list_all(session: Session) -> list[UserEntity]:
 def has_any_admin(session: Session) -> bool:
     rows = session.exec(select(UserEntity.role)).all()
     return any((role or "").strip().lower() == "admin" for role in rows)
+
+
+def is_last_active_admin_for_update(session: Session, user_id: int) -> bool:
+    """Serialize competing removals until the caller commits or rolls back."""
+    if session.get_bind().dialect.name == "postgresql":
+        # Include concurrent promotions and activations in the same write order.
+        session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
+    else:
+        # SQLite serializes writers. Take its write lock before the admin query.
+        session.execute(text("UPDATE users SET id = id WHERE 1 = 0"))
+    active_admin_ids = session.exec(
+        select(UserEntity.id)
+        .where(col(UserEntity.is_active).is_(True), func.lower(func.trim(UserEntity.role)) == "admin")
+        .limit(2)
+    ).all()
+    return active_admin_ids == [user_id]
 
 
 def has_active_local_admin_login(session: Session) -> bool:

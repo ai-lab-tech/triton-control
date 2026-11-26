@@ -84,6 +84,8 @@ spec:
             {{- end }}
           {{- end }}
           env:
+            - name: TRITON_CONTROL_MODE
+              value: {{ include "triton-control.installationMode" . | quote }}
             {{- if $snapshotVolume }}
             - name: TRITON_PREPARATION_SNAPSHOT_DEFAULT_ROOT
               value: /var/lib/triton-control/preparation/snapshots
@@ -169,6 +171,15 @@ spec:
             - name: TRITON_DEPLOY_PROBES_JSON
               value: {{ .Values.tritonDeployments.probes | toJson | quote }}
             {{- if $development }}
+            {{- with .Values.mlflow.backendStoreSecret }}
+            {{- if .name }}
+            - name: MLFLOW_BACKEND_STORE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ required "mlflow.backendStoreSecret.key is required" .key | quote }}
+            {{- end }}
+            {{- end }}
             - name: DEVELOPMENT_PROFILE_API_URL
               value: {{ printf "http://%s.%s.svc.cluster.local:%v" (include "triton-control.fullname" .) .Release.Namespace .Values.service.backendPort | quote }}
             - name: DEVELOPMENT_CODE_SERVER_VERSION
@@ -184,8 +195,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- with .Values.app.env }}
-            {{- toYaml . | nindent 12 }}
+            {{- range .Values.app.env }}
+            {{- if ne .name "TRITON_CONTROL_MODE" }}
+            {{- toYaml (list .) | nindent 12 }}
+            {{- end }}
             {{- end }}
             {{- if .Values.postgresql.enabled }}
             - name: DATABASE_URL

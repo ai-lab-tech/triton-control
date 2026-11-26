@@ -80,7 +80,7 @@ def _require_changes() -> None:
 
 
 def sync_configuration(session: Session) -> None:
-    """Apply one complete startup snapshot or leave the registry intact on failure."""
+    """Reconcile operator-owned startup configuration in either installation mode."""
     provenance, configured = _read_configuration()
     repository.lock_registry(session)
     rows = repository.registrations(session)
@@ -99,8 +99,6 @@ def sync_configuration(session: Session) -> None:
         row for row in rows.values()
         if row.provenance != "database" and not row.retired and row.name not in configured
     ]
-    if updates or removals:
-        _require_changes()
     for name, source in updates.items():
         repository.record(session, rows.get(name), source, provenance)
     for row in removals:

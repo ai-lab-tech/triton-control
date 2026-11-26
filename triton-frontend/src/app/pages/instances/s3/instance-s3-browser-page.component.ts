@@ -1,5 +1,5 @@
 import { InstallationService } from "../../../shared/installation/installation.service";
-import { Component, computed, inject, OnInit } from "@angular/core";
+import { Component, computed, inject, input, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed, toSignal } from "@angular/core/rxjs-interop";
 import { Actions, ofType } from "@ngrx/effects";
 import { Store } from "@ngrx/store";
@@ -16,7 +16,7 @@ import { A11yModule } from "@angular/cdk/a11y";
 import { MonacoEditorModule, NGX_MONACO_EDITOR_CONFIG } from "ngx-monaco-editor-v2";
 import type * as Monaco from "monaco-editor";
 
-import { InstancesService } from "../../../api/generated/index";
+import { BASE_PATH, InstancesService } from "../../../api/generated/index";
 import { type BrowserEntry } from "../../../state/instances-s3/instances-s3.reducer";
 import {
   s3EditorClosed,
@@ -74,8 +74,10 @@ import { mapApiErrorMessage } from "../../../shared/api-error-message";
   templateUrl: "./instance-s3-browser-page.component.html",
 })
 export class InstanceS3BrowserPageComponent implements OnInit {
+  readonly embedded = input(false);
   readonly installation = inject(InstallationService);
   private readonly store = inject(Store);
+  private readonly apiBase = inject(BASE_PATH, { optional: true }) ?? "";
   private readonly instancesApi = inject(InstancesService);
   private readonly route = inject(ActivatedRoute);
   private readonly actions$ = inject(Actions);
@@ -112,9 +114,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
   readonly uploadFileName = toSignal(this.store.select(selectS3UploadFileName), {
     initialValue: "",
   });
-  readonly uploadBusy = computed(
-    () => this.readingUploadFile || this.uploadFolderInProgress || this.uploadLoading(),
-  );
+  readonly uploadBusy = computed(() => !!this.localUploadStatus() || this.uploadLoading());
   readonly canWriteInstances = computed(
     () => this.auth.canWriteInstances() && this.installation.allows("artifact_write"),
   );
@@ -128,12 +128,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     return prefix ? `s3://${bucket}/${prefix}` : `s3://${bucket}`;
   });
   readonly uploadStatusLabel = computed(() => {
-    if (this.readingUploadFile) {
-      return `Reading ${this.readingUploadFileName || "file"}...`;
-    }
-    if (this.uploadFolderInProgress) {
-      return `Uploading ${this.uploadFolderCompleted}/${this.uploadFolderTotal} files...`;
-    }
+    if (this.localUploadStatus()) return this.localUploadStatus();
     if (this.uploadLoading()) {
       return `Uploading ${this.uploadFileName() || "file"}...`;
     }
@@ -142,11 +137,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
 
   // Local UI state
   query = "";
-  readingUploadFile = false;
-  readingUploadFileName = "";
-  uploadFolderInProgress = false;
-  uploadFolderCompleted = 0;
-  uploadFolderTotal = 0;
+  private readonly localUploadStatus = signal("");
   creatingFolder = false;
   newFolderName = "";
   editorContent = "";
@@ -332,8 +323,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     const file = input.files[0];
     const filePath = this.joinPath(this.currentPath(), file.name);
     const currentPath = this.currentPath();
-    this.readingUploadFile = true;
-    this.readingUploadFileName = file.name;
+    this.localUploadStatus.set(`Reading ${file.name}...`);
 
     void file
       .arrayBuffer()
@@ -357,8 +347,7 @@ export class InstanceS3BrowserPageComponent implements OnInit {
         this.store.dispatch(displayFailure({ title: "Upload failed", message }));
       })
       .finally(() => {
-        this.readingUploadFile = false;
-        this.readingUploadFileName = "";
+        this.localUploadStatus.set("");
         input.value = "";
       });
   }
@@ -384,12 +373,10 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     }
 
     const currentPath = this.currentPath();
-    this.uploadFolderInProgress = true;
-    this.uploadFolderCompleted = 0;
-    this.uploadFolderTotal = files.length;
+    this.localUploadStatus.set(`Uploading 0/${files.length} files...`);
 
     const failed: string[] = [];
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const relativePath = this.getUploadRelativePath(file);
       const filePath = this.joinPath(currentPath, relativePath);
       try {
@@ -405,11 +392,11 @@ export class InstanceS3BrowserPageComponent implements OnInit {
       } catch {
         failed.push(relativePath);
       } finally {
-        this.uploadFolderCompleted += 1;
+        this.localUploadStatus.set(`Uploading ${index + 1}/${files.length} files...`);
       }
     }
 
-    this.uploadFolderInProgress = false;
+    this.localUploadStatus.set("");
     if (input) {
       input.value = "";
     }
@@ -621,40 +608,10 @@ export class InstanceS3BrowserPageComponent implements OnInit {
     return null;
   }
 
-  async download(entry: BrowserEntry): Promise<void> {
-    if (entry.type !== "file") {
-      return;
-    }
-    const instanceId = (this.instanceId() ?? "").trim();
-    if (!instanceId) {
-      return;
-    }
-
-    const filePath = this.joinPath(this.currentPath(), entry.name);
-    try {
-      const response = (await firstValueFrom(
-        this.instancesApi.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet(
-          instanceId,
-          filePath,
-          "response",
-        ),
-      )) as { body?: unknown };
-      const body = response?.body;
-      const blob =
-        body instanceof Blob
-          ? body
-          : new Blob([typeof body === "string" ? body : ""], {
-              type: "application/octet-stream",
-            });
-      this.saveBlob(entry.name, blob);
-    } catch (error) {
-      this.store.dispatch(
-        displayFailure({
-          title: "Download failed",
-          message: mapApiErrorMessage(error, `Failed to download ${entry.name}.`),
-        }),
-      );
-    }
+  downloadUrl(entry: BrowserEntry): string {
+    const path = this.joinPath(this.currentPath(), entry.name);
+    const query = new URLSearchParams({ path });
+    return `${this.apiBase.replace(/\/$/, "")}/api/instances/${this.instanceId()}/s3/content/raw?${query}`;
   }
 
   async deleteEntry(entry: BrowserEntry): Promise<void> {
@@ -697,15 +654,6 @@ export class InstanceS3BrowserPageComponent implements OnInit {
         }),
       );
     }
-  }
-
-  private saveBlob(fileName: string, blob: Blob): void {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   private detectLanguage(fileName: string): string {

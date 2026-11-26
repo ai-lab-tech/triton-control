@@ -207,20 +207,30 @@ export class LoginPageComponent {
     } catch {
       // keep original when decoding fails
     }
+    value = value.trim();
+    if (
+      !value ||
+      value.startsWith("//") ||
+      value.includes("\\") ||
+      /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value)
+    ) {
+      return fallback;
+    }
     if (!value.startsWith("/")) {
       value = `/${value}`;
     }
-    return value || fallback;
+    return value.startsWith("//") ? fallback : value || fallback;
   }
 
   private async navigateToTarget(target: string): Promise<void> {
+    const safeTarget = this.normalizeReturnUrl(target);
     try {
-      const ok = await this.router.navigateByUrl(target, { replaceUrl: true });
+      const ok = await this.router.navigateByUrl(safeTarget, { replaceUrl: true });
       if (!ok) {
-        window.location.assign(target);
+        await this.router.navigateByUrl("/dashboard", { replaceUrl: true });
       }
     } catch {
-      window.location.assign(target);
+      await this.router.navigateByUrl("/dashboard", { replaceUrl: true });
     }
   }
 }

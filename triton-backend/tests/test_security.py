@@ -220,21 +220,20 @@ class SecurityClaimsFlowTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             await _extract_claims(self._request(), None)
 
-    async def test_ExtractClaims_BearerInvalidButSessionPresent_ReturnsSessionClaims(self):
+    async def test_ExtractClaims_InvalidBearerWithSession_RaisesUnauthorized(self):
         # Arrange
         request = self._request(session_user={"sub": "session-user"})
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="stale")
 
-        # Act
+        # Act / Assert
         with patch("app.core.token_extractor.verify_access_token", side_effect=ValueError("bad")), patch.object(
             __import__("app.core.token_extractor", fromlist=["auth"]).auth,
             "verify_token",
             AsyncMock(side_effect=ValueError("oidc down")),
-        ):
-            claims = await _extract_claims(request, creds)
+        ), self.assertRaises(HTTPException) as rejected:
+            await _extract_claims(request, creds)
 
-        # Assert
-        self.assertEqual(claims["sub"], "session-user")
+        self.assertEqual(rejected.exception.status_code, 401)
 
     async def test_GetClaimsWithAccessPolicy_UserResolvedWithPendingControl_AllowsOrRejects(self):
         # Arrange

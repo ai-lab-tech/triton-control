@@ -34,9 +34,33 @@ from botocore.httpsession import DEFAULT_CA_BUNDLE
 
 from app.core.crypto import decrypt_secret
 from app.core.tls import create_default_context_with_extra_ca
+from app.exceptions import BadRequestError, ForbiddenError
 
 if TYPE_CHECKING:
     from app.db.entities import TritonInstanceEntity
+
+
+def normalize_s3_path(value: str | None) -> str:
+    path = (value or "").strip().strip("/")
+    if path and (
+        any(part in {"", ".", ".."} for part in path.split("/"))
+        or any(char in "\\?" or ord(char) < 32 or ord(char) == 127 for char in path)
+    ):
+        raise BadRequestError("Invalid S3 path")
+    return path
+
+
+def s3_prefix_contains(root: str, prefix: str) -> bool:
+    return not root or prefix == root or prefix.startswith(root + "/")
+
+
+def resolve_s3_profile_prefix(profile_prefix: str | None, requested_prefix: str | None) -> str:
+    """Resolve a bucket-relative prefix, using the profile root when omitted."""
+    root = normalize_s3_path(profile_prefix)
+    prefix = normalize_s3_path(requested_prefix) or root
+    if not s3_prefix_contains(root, prefix):
+        raise ForbiddenError("S3 prefix is outside the selected profile scope")
+    return prefix
 
 
 class S3Config(TypedDict, total=False):

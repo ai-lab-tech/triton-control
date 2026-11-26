@@ -58,6 +58,16 @@ class JwtTests(unittest.TestCase):
             self.assertEqual(_jwt_secret(), "session")
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(_jwt_secret(), "change-me-in-production")
+        with patch.dict(os.environ, {"TRITON_CONTROL_MODE": "production"}, clear=True):
+            with self.assertRaises(RuntimeError):
+                _jwt_secret()
+        with patch.dict(
+            os.environ,
+            {"TRITON_CONTROL_MODE": "production", "JWT_SECRET": "change-me-in-production"},
+            clear=True,
+        ):
+            with self.assertRaises(RuntimeError):
+                _jwt_secret()
 
     def test_AccessToken_IssuedThenVerified_ReturnsExpectedClaims(self):
         # Arrange

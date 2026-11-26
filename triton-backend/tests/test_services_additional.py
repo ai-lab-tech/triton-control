@@ -20,7 +20,7 @@ class UsersServiceTests(unittest.TestCase):
 
     def test_UpdateUserRole_ValidPayload_PersistsAndReturnsDto(self):
         session = SimpleNamespace()
-        row = SimpleNamespace(id=7, role="viewer", is_active=False)
+        row = SimpleNamespace(id=7, role="viewer", is_active=False, auth_provider="local", password_hash="fixture")
         dto = {"id": 7, "role": "admin"}
         request = UpdateUserRoleRequest(role="admin")
 
@@ -37,6 +37,19 @@ class UsersServiceTests(unittest.TestCase):
         self.assertEqual(row.role, "admin")
         self.assertTrue(row.is_active)
         save_mock.assert_called_once_with(session, row)
+
+    def test_role_changes_leave_passwordless_local_accounts_inactive(self):
+        row = SimpleNamespace(id=7, role="viewer", is_active=False, auth_provider="local", password_hash=None)
+        with (
+            patch.object(users_service.users, "is_last_active_admin_for_update", return_value=False),
+            patch.object(users_service, "get_user_or_404", return_value=row),
+            patch.object(users_service.users, "save"),
+            patch.object(users_service, "user_entity_to_dto"),
+        ):
+            users_service.update_user_role(SimpleNamespace(), {"role": "admin"}, 7, UpdateUserRoleRequest(role="member"))
+
+        self.assertEqual(row.role, "member")
+        self.assertFalse(row.is_active)
 
     def test_UpdateUserInstances_ValidPayload_PersistsAndReturnsDto(self):
         session = SimpleNamespace()

@@ -193,18 +193,34 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
     const accounts: { context: BrowserContext; page: Page; user: User; name: string }[] = [];
     for (const role of ["member", "viewer"]) {
       await test.step(`admin adds a new ${role}; recipient activates and signs in`, async () => {
-        const { user, link } = await provision(admin.page, role, role, seen);
         const recipient = await session();
-        if (!isOidc) {
-          expect(
-            (
-              await recipient.context.request.post("/api/auth/login", {
-                data: { email: user.email, password },
-              })
-            ).status(),
-          ).toBe(403);
+        let user: User;
+        if (mode === "disabled") {
+          const response = await recipient.context.request.post("/api/auth/self-register", {
+            data: { email: `${role}@example.test`, password },
+          });
+          expect(response.ok(), await response.text()).toBeTruthy();
+          user = await response.json();
+          expect(user.is_active).toBe(false);
+          const assigned = await admin.context.request.put(`/api/auth/users/${user.id}/instances`, {
+            data: { assigned_instances: ["Assigned"] },
+          });
+          expect(assigned.ok(), await assigned.text()).toBeTruthy();
+          const approved = await admin.context.request.put(`/api/auth/users/${user.id}/role`, {
+            data: { role },
+          });
+          expect(approved.ok(), await approved.text()).toBeTruthy();
+        } else {
+          const provisioned = await provision(admin.page, role, role, seen);
+          user = provisioned.user;
           if (invitations) {
-            // Invited identities cannot bypass activation through public registration.
+            expect(
+              (
+                await recipient.context.request.post("/api/auth/login", {
+                  data: { email: user.email, password },
+                })
+              ).status(),
+            ).toBe(403);
             expect(
               (
                 await recipient.context.request.post("/api/auth/self-register", {
@@ -212,18 +228,7 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
                 })
               ).status(),
             ).toBe(409);
-            await completeLink(recipient.page, link, "Activate account", password);
-          } else {
-            await recipient.page.goto("/signin");
-            await recipient.page.getByRole("button", { name: "Register with password" }).click();
-            await recipient.page.getByLabel("Email", { exact: true }).fill(user.email);
-            await recipient.page.getByLabel("Password", { exact: true }).fill(password);
-            await recipient.page.getByLabel("Confirm password", { exact: true }).fill(password);
-            const registered = recipient.page.waitForResponse(
-              (r) => r.url().endsWith("/api/auth/self-register") && r.request().method() === "POST",
-            );
-            await recipient.page.getByRole("button", { name: "Create account" }).click();
-            expect((await registered).ok()).toBeTruthy();
+            await completeLink(recipient.page, provisioned.link, "Activate account", password);
           }
         }
         const identity = await login(recipient.page, role);

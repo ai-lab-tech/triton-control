@@ -77,25 +77,6 @@ def apply_installation_resources(
         raise BadGatewayError(f"MLflow installation failed: {exc}") from exc
 
 
-def delete_namespace(namespace: str) -> str:
-    """Request deletion of the namespace that owns the MLflow workload."""
-    from kubernetes import client
-    from kubernetes.client.rest import ApiException
-    from kubernetes.config.config_exception import ConfigException
-
-    try:
-        client.CoreV1Api(_client()).delete_namespace(name=namespace)
-        return f"Namespace '{namespace}' deletion requested."
-    except ConfigException:
-        raise
-    except ApiException as exc:
-        if exc.status == 404:
-            return f"Namespace '{namespace}' was already deleted."
-        raise BadGatewayError(_api_error(exc)) from exc
-    except Exception as exc:
-        raise BadGatewayError(f"Failed to delete MLflow namespace '{namespace}': {exc}") from exc
-
-
 def tracking_upgrade_required(namespace: str, deployment_name: str) -> bool:
     """Detect legacy deployments and interrupted gateway migrations."""
     from kubernetes import client

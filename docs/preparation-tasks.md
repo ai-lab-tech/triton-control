@@ -5,6 +5,8 @@ transitions and retained history. Scientist handoff submission, experiment
 snapshot capture, workspace provisioning and the queue/detail UI are separate
 consumers of this service.
 
+For the steps in the UI, see [Prepare a serving model](production-preparation/prepare-serving-model.md).
+
 ## Persistence and integration
 
 Tasks use UUIDs, an installation engineering team, an optional individual assignee,

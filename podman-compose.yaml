@@ -40,7 +40,7 @@ services:
       SESSION_SECRET: change-me-compose-session
       EMAIL_SECRET_ENCRYPTION_KEY: change-me-compose-email-encryption
       JWT_SECRET: change-me-compose-jwt
-      S3_SECRET_ENCRYPTION_KEY: change-me-compose-s3
+      S3_SECRET_ENCRYPTION_KEY: "${S3_SECRET_ENCRYPTION_KEY:?Set your own S3 encryption key in the .env file}"
     ports:
       - "8080:8080"
       - "8000:8000"

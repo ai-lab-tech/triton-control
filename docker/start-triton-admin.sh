@@ -2,6 +2,12 @@
 set -eu
 
 client_max_body_size="${CLIENT_MAX_BODY_SIZE:-256m}"
+case "$client_max_body_size" in
+  ""|*[!0-9kKmMgG]*)
+    echo "Invalid CLIENT_MAX_BODY_SIZE: $client_max_body_size" >&2
+    exit 1
+    ;;
+esac
 sed "s/__CLIENT_MAX_BODY_SIZE__/${client_max_body_size}/g" /etc/nginx/nginx.conf > /tmp/nginx.conf
 
 python - <<'PY'
@@ -53,7 +59,7 @@ case "${BACKEND_VERBOSE:-}" in
   1|true|TRUE|yes|YES|y|Y|on|ON) access_log_flag="--access-log" ;;
 esac
 
-uvicorn app.main:app --host "${BACKEND_HOST:-0.0.0.0}" --port "${BACKEND_PORT:-8000}" --log-level "$log_level" "$access_log_flag" &
+uvicorn app.main:app --host "${BACKEND_HOST:-0.0.0.0}" --port "${BACKEND_PORT:-8000}" --proxy-headers --forwarded-allow-ips=127.0.0.1 --log-level "$log_level" "$access_log_flag" &
 backend_pid="$!"
 
 nginx -c /tmp/nginx.conf -g "daemon off;" &

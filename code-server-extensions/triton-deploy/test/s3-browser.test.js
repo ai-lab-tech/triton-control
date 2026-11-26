@@ -168,6 +168,29 @@ test("missing workspace integration never falls back to manual credentials", asy
   await assert.rejects(session.connect(), /integration update/);
 });
 
+test("load more appends the next page and refreshes its parent", async (t) => {
+  // Arrange
+  const browser = new S3Browser();
+  browser.session.ready = true;
+  browser.session.profiles = async () => [profile];
+  const tokens = [], refreshed = [];
+  browser.changed.fire = (node) => refreshed.push(node);
+  t.mock.method(s3, "list", async (_, prefix, next) => {
+    tokens.push(next);
+    return { folders: [], files: [{ key: prefix + (next ? "second" : "first"), size: 1 }],
+      next: next ? "" : "next-page-token" };
+  });
+  t.after(() => browser.dispose());
+  const children = await browser.getChildren(target);
+  // Act
+  await browser.loadMore(children.at(-1));
+  const entries = await browser.getChildren(target);
+  // Assert
+  assert.deepEqual(tokens, [undefined, "next-page-token"]);
+  assert.deepEqual(entries.map((entry) => entry.label), ["first", "second"]);
+  assert.deepEqual(refreshed, [target]);
+});
+
 test("tree paginates and refuses profiles no longer owned by the session", async (t) => {
   const browser = new S3Browser();
   browser.session.ready = true;

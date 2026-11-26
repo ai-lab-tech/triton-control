@@ -175,6 +175,11 @@ export class InstanceDetailPageComponent implements OnInit {
   }
 
   readonly instance = toSignal(this.store.select(selectDetailInstance), { initialValue: null });
+  readonly hasProfileTarget = computed(() =>
+    this.instance()?.repositoryModels.some((model) =>
+      this.canOpenProfile(model.name, model.state, model.version),
+    ),
+  );
   readonly currentPodStates = computed(() =>
     this.podStateSummary().filter((state) => !/^(Failed|Succeeded)(?:\s|$)/.test(state.label)),
   );
@@ -213,6 +218,18 @@ export class InstanceDetailPageComponent implements OnInit {
       this.auth.canWriteInstances() &&
       this.installation.allows("direct_deployment") &&
       !this.loadError(),
+  );
+  readonly canRotateInstanceS3 = computed(
+    () =>
+      this.auth.isAdmin() &&
+      this.installation.allows("credential_admin") &&
+      !this.canWriteInstances() &&
+      !this.loadError(),
+  );
+  readonly canEditInstanceS3 = computed(
+    () =>
+      this.canWriteInstances() ||
+      (this.canRotateInstanceS3() && !!this.instance() && this.hasS3Connection(this.instance()!)),
   );
 
   readonly managedModelState = computed(
@@ -409,22 +426,27 @@ export class InstanceDetailPageComponent implements OnInit {
 
   saveS3Config(): void {
     const instance = this.instance();
-    if (!instance || !this.canWriteInstances() || !this.canSaveS3Config()) {
+    if (!instance || !this.canEditInstanceS3() || !this.canSaveS3Config()) {
       return;
     }
 
-    const payload: UpdateInstanceS3Request = {
-      enabled: true,
-      s3_profile_id: Number(this.selectedS3ProfileId),
-      prefix: this.s3Prefix.trim(),
-    };
+    const payload: UpdateInstanceS3Request = this.canWriteInstances()
+      ? {
+          enabled: true,
+          s3_profile_id: Number(this.selectedS3ProfileId),
+          prefix: this.s3Prefix.trim(),
+        }
+      : {
+          enabled: true,
+          s3_profile_id: Number(this.selectedS3ProfileId),
+        };
 
     this.store.dispatch(s3ConfigSaveRequested({ instanceId: instance.id, payload }));
   }
 
   openS3Dialog(): void {
     const instance = this.instance();
-    if (!instance || !this.canWriteInstances()) {
+    if (!instance || !this.canEditInstanceS3()) {
       return;
     }
     this.s3Prefix = instance.s3.prefix;

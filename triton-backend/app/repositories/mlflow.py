@@ -1,6 +1,10 @@
 """Data-access helpers for the singleton ``MlflowEntity`` row."""
 
+import os
+
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 from sqlmodel import Session
 
 from app.db.entities import MlflowEntity
@@ -30,7 +34,17 @@ def delete(session: Session, entity: MlflowEntity) -> None:
 
 
 def prepare_backend_store(session: Session) -> str:
-    """Reuse PostgreSQL in an isolated schema, including a separate Alembic table."""
+    """Use the configured MLflow database or isolate tracking in the control database."""
+    configured = os.environ.get("MLFLOW_BACKEND_STORE_URI")
+    if configured is not None:
+        try:
+            external = make_url(configured)
+        except (ArgumentError, ValueError):
+            raise BadRequestError("Invalid MLflow PostgreSQL connection URL") from None
+        if external.get_backend_name() != "postgresql" or not external.database:
+            raise BadRequestError("MLflow requires a PostgreSQL URL with a database name")
+        return external.set(drivername="postgresql+psycopg2").render_as_string(hide_password=False)
+
     url = session.connection().engine.url
     if url.get_backend_name() != "postgresql":
         raise BadRequestError("Managed MLflow requires a PostgreSQL database")

@@ -127,6 +127,7 @@ def serving_manifests(
         {"name": "model-repository", "emptyDir": {"sizeLimit": repository_storage}},
         {"name": "materialization-plan", "configMap": {"name": config_name}},
         {"name": "runtime-tmp", "emptyDir": {"sizeLimit": "1Gi"}},
+        {"name": "dshm", "emptyDir": {"medium": "Memory", "sizeLimit": "1Gi"}},
     ]
     init_mounts: list[dict[str, Any]] = [
         {"name": "model-repository", "mountPath": "/materialized"},
@@ -214,6 +215,11 @@ def serving_manifests(
                             "failureThreshold": 6,
                         },
                         "args": ["--model-repository=/models", "--model-control-mode=none", "--strict-readiness=true"],
+                        "env": [
+                            {"name": "HOME", "value": "/tmp"},  # nosec B108
+                            {"name": "XDG_CACHE_HOME", "value": "/tmp/.cache"},  # nosec B108
+                            {"name": "TORCHINDUCTOR_CACHE_DIR", "value": "/tmp/torchinductor"},  # nosec B108
+                        ],
                         "securityContext": security,
                         "resources": resources,
                         "volumeMounts": [
@@ -230,6 +236,7 @@ def serving_manifests(
                                 "readOnly": True,
                             },
                             {"name": "runtime-tmp", "mountPath": "/tmp"},  # nosec B108
+                            {"name": "dshm", "mountPath": "/dev/shm"},  # nosec B108
                         ],
                     },
                     {

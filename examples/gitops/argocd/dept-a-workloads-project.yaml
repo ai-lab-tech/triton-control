@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ai-dept-a-workloads
+  namespace: argocd
+spec:
+  sourceRepos:
+    - https://git.example.com/teams/use-case-a.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: ai-dept-a
+  namespaceResourceWhitelist:
+    - group: argoproj.io
+      kind: WorkflowTemplate

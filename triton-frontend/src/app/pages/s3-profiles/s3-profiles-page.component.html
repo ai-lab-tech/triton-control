@@ -119,6 +119,18 @@
               </mat-form-field>
             </div>
             <div class="form-row">
+              <label class="field-label" for="s3-profile-prefix">Repository prefix</label>
+              <mat-form-field appearance="outline">
+                <input
+                  id="s3-profile-prefix"
+                  matInput
+                  [(ngModel)]="draft.prefix"
+                  [disabled]="!installation.allows('trust_admin')"
+                  placeholder="Optional scope root (e.g. models/team-a)"
+                />
+              </mat-form-field>
+            </div>
+            <div class="form-row">
               <label class="field-label" for="s3-profile-access-key">Access key</label>
               <mat-form-field appearance="outline">
                 <input id="s3-profile-access-key" matInput [(ngModel)]="draft.access_key" />

@@ -99,7 +99,9 @@ export class UsersEffects {
       switchMap(({ userId, email }) =>
         from(this.usersApi.deleteUserApiAuthUsersUserIdDelete(userId)).pipe(
           map(() => deleteUserSucceeded({ userId, email })),
-          catchError(() => of(deleteUserFailed({ message: "Failed to delete user." }))),
+          catchError((error) =>
+            of(deleteUserFailed({ message: mapApiErrorMessage(error, "Failed to delete user.") })),
+          ),
         ),
       ),
     ),
@@ -111,13 +113,22 @@ export class UsersEffects {
       switchMap(({ userId, role, prevRole }) => {
         const payload: UpdateUserRoleRequest = { role };
         return from(this.usersApi.updateUserRoleApiAuthUsersUserIdRolePut(payload, userId)).pipe(
-          map(() => updateUserRoleSucceeded({ userId, role })),
-          catchError(() =>
+          map((updated) =>
+            updateUserRoleSucceeded({
+              userId,
+              role,
+              isActive:
+                typeof (updated as { is_active?: unknown })?.is_active === "boolean"
+                  ? Boolean((updated as { is_active?: boolean }).is_active)
+                  : undefined,
+            }),
+          ),
+          catchError((error) =>
             of(
               updateUserRoleFailed({
                 userId,
                 prevRole,
-                message: "Failed to update user role.",
+                message: mapApiErrorMessage(error, "Failed to update user role."),
               }),
             ),
           ),
@@ -165,6 +176,13 @@ export class UsersEffects {
     this.actions$.pipe(
       ofType(createUserFailed),
       map(({ message }) => displayFailure({ title: "Create user failed", message })),
+    ),
+  );
+
+  readonly onRoleUpdateFailed$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(updateUserRoleFailed),
+      map(({ message }) => displayFailure({ title: "Role change failed", message })),
     ),
   );
 

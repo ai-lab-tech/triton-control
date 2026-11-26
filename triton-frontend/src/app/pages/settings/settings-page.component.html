@@ -785,10 +785,15 @@
         </ng-template>
       </mat-tab>
     }
-    <mat-tab label="Model preparation"
-      ><div class="tab-content">
-        <mat-card class="card"><app-preparation-settings /></mat-card></div
-    ></mat-tab>
+    @if (installation.allows("development_jobs")) {
+      <mat-tab label="Model preparation">
+        <ng-template matTabContent>
+          <div class="tab-content">
+            <mat-card class="card"><app-preparation-settings /></mat-card>
+          </div>
+        </ng-template>
+      </mat-tab>
+    }
     @if (installation.allows("trust_admin")) {
       <mat-tab label="Registries">
         <ng-template matTabContent>

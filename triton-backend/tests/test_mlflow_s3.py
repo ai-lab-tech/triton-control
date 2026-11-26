@@ -79,6 +79,22 @@ class MlflowS3Tests(unittest.TestCase):
         self.assertEqual(parsed.query["options"], "-csearch_path=mlflow_tracking")
         self.assertIn("CREATE SCHEMA", str(session.execute.call_args.args[0]))
 
+    def test_external_database_preserves_credentials_and_skips_schema_creation(self):
+        uri = "postgresql://tracking:p%40ss@shared-postgres/mlflow_a?sslmode=require"
+        session = MagicMock()
+        with patch.dict("os.environ", {"MLFLOW_BACKEND_STORE_URI": uri}):
+            actual = make_url(mlflow.prepare_backend_store(session))
+        self.assertEqual(actual, make_url(uri).set(drivername="postgresql+psycopg2"))
+        self.assertFalse(session.mock_calls)
+
+    def test_invalid_external_database_does_not_fall_back(self):
+        for uri in ("", "invalid", "sqlite:///local.db", "postgresql://shared-postgres"):
+            session = MagicMock()
+            with self.subTest(uri=uri), patch.dict("os.environ", {"MLFLOW_BACKEND_STORE_URI": uri}):
+                with self.assertRaises(BadRequestError):
+                    mlflow.prepare_backend_store(session)
+                self.assertFalse(session.mock_calls)
+
     def test_backend_rejects_sqlite_before_creating_schema(self):
         # Arrange
         session = MagicMock()

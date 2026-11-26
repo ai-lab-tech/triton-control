@@ -45,6 +45,11 @@
           </mat-select>
         </mat-form-field>
       </div>
+    } @else if (!oidcEnabled()) {
+      <p class="dialog-hint">
+        Email invitations are disabled. Pre-created local accounts stay inactive until invitations
+        are enabled in Settings; otherwise ask new users to self-register for approval.
+      </p>
     }
     <div class="form-row">
       <label class="field-label" for="dialog-user-instances">Assigned instances</label>

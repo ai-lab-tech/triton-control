@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: triton-control-dev
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - namespace: ai-dept-a
+            host: triton-a.example.com
+          - namespace: ai-dept-b
+            host: triton-b.example.com
+          - namespace: ai-dept-c
+            host: triton-c.example.com
+  template:
+    metadata:
+      name: 'triton-{{ .namespace }}'
+    spec:
+      project: default
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .namespace }}'
+      source:
+        repoURL: https://github.com/ai-lab-tech/triton-control.git
+        targetRevision: 5cafc9bf4abcad95d5efab352054deec6ffb95ed
+        path: charts/triton-control
+        helm:
+          values: |
+            app:
+              image:
+                # Replace with your published build of the pinned revision.
+                repository: registry.example.com/platform/triton-control
+                tag: "5cafc9b"
+              existingSecret: control-app
+            imageBuilds:
+              namespace: '{{ .namespace }}-builds'
+            postgresql:
+              enabled: false
+            development:
+              mlflow:
+                version: "3.14.0"
+            mlflow:
+              version: "3.14.0"
+              backendStoreSecret:
+                name: mlflow-postgres
+                key: database-url
+            argoWorkflows:
+              enabled: true
+              singleNamespace: true
+              crds:
+                install: false
+            ingress:
+              hosts:
+                - host: '{{ .host }}'
+                  paths:
+                    frontend:
+                      - {path: /, pathType: Prefix}
+                    backend:
+                      - {path: /api, pathType: Prefix}
+                      - {path: /auth, pathType: Prefix}
+                      - {path: /login, pathType: Prefix}
+                      - {path: /logout, pathType: Prefix}
+                      - {path: /whoami, pathType: Prefix}
+              tls:
+                - secretName: triton-tls
+                  hosts: ['{{ .host }}']
+      syncPolicy:
+        automated:
+          selfHeal: true
+          prune: true

@@ -298,7 +298,15 @@ class MaterializerPodTests(unittest.TestCase):
         runtime = spec["containers"][0]
         self.assertEqual(runtime["command"], ["tritonserver"])
         self.assertIn("--model-control-mode=none", runtime["args"])
-        self.assertNotIn("env", runtime)
+        self.assertEqual(
+            runtime["env"],
+            [
+                {"name": "HOME", "value": "/tmp"},
+                {"name": "XDG_CACHE_HOME", "value": "/tmp/.cache"},
+                {"name": "TORCHINDUCTOR_CACHE_DIR", "value": "/tmp/torchinductor"},
+            ],
+        )
+        self.assertIn({"name": "dshm", "mountPath": "/dev/shm"}, runtime["volumeMounts"])
         self.assertTrue(runtime["volumeMounts"][0]["readOnly"])
         self.assertFalse(spec["automountServiceAccountToken"])
         self.assertEqual(spec["containers"][1]["image"], IMAGE)

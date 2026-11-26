@@ -42,10 +42,17 @@ from app.schemas import (
     UpdateInstanceS3Request,
 )
 from app.services.access import get_instance_or_404
-from app.services.storage.s3_client import build_s3_client, format_s3_error
+from app.services.storage.s3_client import (
+    build_s3_client,
+    format_s3_error,
+    normalize_s3_path,
+    resolve_s3_profile_prefix,
+    s3_prefix_contains,
+)
 from app.services.triton.config import extract_triton_version, validate_triton_config_pbtxt
 
 DEFAULT_S3_REGION = "us-east-1"
+MAX_INLINE_S3_OBJECT_BYTES = 64 * 1024 * 1024
 
 
 def require_s3_client(entity: Any, *, client_config: Config | None = None) -> Any:
@@ -143,8 +150,9 @@ def update_instance_s3(
         profile = s3_profiles.get(session, request.s3_profile_id)
         if profile is None:
             raise NotFoundError("S3 profile not found")
+        prefix = resolve_s3_profile_prefix(profile.prefix, request.prefix)
         request = request.model_copy(update={
-            "endpoint": profile.endpoint, "bucket": profile.bucket, "region": profile.region,
+            "prefix": prefix, "endpoint": profile.endpoint, "bucket": profile.bucket, "region": profile.region,
             "access_key": profile.access_key, "secret_key": decrypt_secret(profile.secret_key_enc),
             "ca_certificate": profile.ca_certificate, "verify_ssl": True,
             "address_style": "path" if profile.force_path_style else "virtual",
@@ -216,14 +224,14 @@ def _rotate_instance_credentials(
         raise NotFoundError("S3 profile not found")
     session.refresh(profile, with_for_update=True)
     session.refresh(instance, with_for_update=True)
-    prefix = (profile.prefix or "").strip("/")
-    instance_prefix = (instance.s3_prefix or "").strip("/")
+    prefix = normalize_s3_path(profile.prefix)
+    instance_prefix = normalize_s3_path(instance.s3_prefix)
     if (not instance.s3_enabled
             or instance.s3_endpoint != profile.endpoint
             or instance.s3_bucket != profile.bucket
             or (instance.s3_region or "us-east-1") != (profile.region or "us-east-1")
-            or (prefix and instance_prefix != prefix and not instance_prefix.startswith(prefix + "/"))
-            or not instance.s3_verify_ssl
+            or not s3_prefix_contains(prefix, instance_prefix)
+            or (instance.s3_use_https and not instance.s3_verify_ssl)
             or instance.s3_use_https != _is_https_endpoint(profile.endpoint)
             or (instance.s3_ca_certificate or "") != (profile.ca_certificate or "")
             or instance.s3_address_style != ("path" if profile.force_path_style else "virtual")):
@@ -258,7 +266,7 @@ def _clean_s3_key_part(value: str | None) -> str:
 
 
 def _join_s3_key(*parts: str | None) -> str:
-    return "/".join(part for part in (_clean_s3_key_part(value) for value in parts) if part)
+    return "/".join(part for part in (normalize_s3_path(value) for value in parts) if part)
 
 
 def _s3_list_prefix(repository_prefix: str | None, relative_prefix: str | None) -> str:
@@ -282,7 +290,7 @@ def list_instance_s3(
         raise BadRequestError("S3 is not enabled for this instance")
 
     client = require_s3_client(instance)
-    relative_prefix = _clean_s3_key_part(prefix)
+    relative_prefix = normalize_s3_path(prefix)
     effective_prefix = _s3_list_prefix(instance.s3_prefix, relative_prefix)
     display_path = _display_s3_path(relative_prefix)
     try:
@@ -343,12 +351,12 @@ def get_instance_s3_content(
     return S3FileContentResponse(path=f"/{path}", content=content)
 
 
-def get_instance_s3_object_bytes(
+def open_instance_s3_object(
     session: Session,
     claims: dict[str, Any],
     instance_id: int,
     path: str,
-) -> tuple[bytes, str | None]:
+) -> dict[str, Any]:
     instance = get_instance_or_404(session, instance_id, claims)
     if not instance.s3_enabled:
         raise BadRequestError("S3 is not enabled for this instance")
@@ -360,7 +368,7 @@ def get_instance_s3_object_bytes(
     object_key = _join_s3_key(instance.s3_prefix, path)
 
     try:
-        response = client.get_object(Bucket=bucket, Key=object_key)
+        response: dict[str, Any] = client.get_object(Bucket=bucket, Key=object_key)
     except ClientError as exc:
         error_code = (exc.response.get("Error") or {}).get("Code")
         if error_code in {"NoSuchKey", "404"}:
@@ -376,7 +384,33 @@ def get_instance_s3_object_bytes(
     except BotoCoreError as exc:
         raise BadGatewayError(f"Failed to read S3 object ({format_s3_error(exc)})") from exc
 
-    payload = response.get("Body").read() if response.get("Body") else b""
+    return response
+
+
+def get_instance_s3_object_bytes(
+    session: Session,
+    claims: dict[str, Any],
+    instance_id: int,
+    path: str,
+) -> tuple[bytes, str | None]:
+    response = open_instance_s3_object(session, claims, instance_id, path)
+    content_length = response.get("ContentLength")
+    body = response.get("Body")
+    close = getattr(body, "close", None)
+    if isinstance(content_length, int) and content_length > MAX_INLINE_S3_OBJECT_BYTES:
+        if callable(close):
+            close()
+        raise BadRequestError("S3 object exceeds maximum inline read size (64 MiB)")
+    if not body:
+        payload = b""
+    else:
+        try:
+            payload = body.read(MAX_INLINE_S3_OBJECT_BYTES + 1)
+        finally:
+            if callable(close):
+                close()
+        if len(payload) > MAX_INLINE_S3_OBJECT_BYTES:
+            raise BadRequestError("S3 object exceeds maximum inline read size (64 MiB)")
     content_type = response.get("ContentType")
     return payload, content_type
 

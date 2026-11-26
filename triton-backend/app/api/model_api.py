@@ -90,10 +90,12 @@ async def infer_instance_model(
     """Proxy a Triton inference request for a specific model version."""
     payload_bytes = await request.body()
     content_type = request.headers.get("content-type", "application/json")
-    return await model_service.infer_model(
-        session,
-        claims,
-        instance_id,
+    target = model_service.resolve_inference_target(session, claims, instance_id)
+    close = getattr(session, "close", None)
+    if callable(close):
+        close()
+    return await model_service.infer_model_target(
+        target,
         model_name,
         version,
         payload_bytes,

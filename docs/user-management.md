@@ -55,10 +55,9 @@ The available account setup depends on email delivery:
   `manual-link` shows it once for secure out-of-band transfer.
 - With `manual-link` or `smtp`, **Create inactive account** creates an account
   that cannot sign in and cannot be claimed through public self-registration.
-- With delivery `disabled`, the form uses the legacy **Add user** behavior. It
-  creates a passwordless inactive local account. Matching public
-  self-registration sets its initial password, activates it, and preserves the
-  role and instances selected by the administrator.
+- With delivery `disabled`, have new local users self-register, then approve
+  them and assign their role and instance access. For an existing inactive account
+  without a password, enable `manual-link` or `smtp` and issue an invitation.
 
 Administrators never assign or transmit a user's initial password. Passwords
 chosen during registration, invitation activation, or reset must have 12-128
@@ -161,6 +160,10 @@ Assigned users can open that instance and use its available workflows.
 - instance deletion (`admin` only)
 
 ## Delete Users
+
+At least one active administrator must remain. To hand over administration,
+promote a second active account before demoting or deleting the current admin.
+Pending invitations do not count toward this requirement.
 
 Admins can delete users from the Users page. Deleting a user removes that local
 Triton Control account record. For OIDC users, it does not delete the identity

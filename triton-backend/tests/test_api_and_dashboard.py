@@ -6,6 +6,10 @@ requests) are replaced with mocks so the tests run without any live
 infrastructure.
 """
 
+import asyncio
+from io import BytesIO
+import tempfile
+
 import itertools
 import unittest
 from datetime import datetime, timezone
@@ -14,7 +18,9 @@ from unittest.mock import AsyncMock, patch
 
 from botocore.exceptions import ClientError, SSLError
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
+from app.core.crypto import encrypt_secret
 from app.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
 
 from app.api.instance_api import create_instance, delete_instance, update_instance
@@ -76,6 +82,9 @@ class _FakeSession:
     def delete(self, obj):
         self.deleted.append(obj)
 
+    def close(self):
+        pass
+
     def commit(self):
         self.commit_count += 1
 
@@ -83,14 +92,6 @@ class _FakeSession:
         if hasattr(_obj, "id") and getattr(_obj, "id") is None:
             _obj.id = 1
         self.refresh_count += 1
-
-
-class _S3Body:
-    def __init__(self, payload: bytes):
-        self.payload = payload
-
-    def read(self):
-        return self.payload
 
 
 class _S3Client:
@@ -125,7 +126,7 @@ class _S3Client:
         self.get_calls.append(kwargs)
         if kwargs["Key"].endswith("missing.txt"):
             raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
-        return {"Body": _S3Body(b"hello")}
+        return {"Body": BytesIO(b"hello")}
 
     def put_object(self, **kwargs):
         self.put_calls.append(kwargs)
@@ -158,7 +159,7 @@ class _S3ConfigDiscoveryClient(_S3Client):
         self.get_calls.append(kwargs)
         if kwargs["Key"] != self.config_key:
             raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
-        return {"Body": _S3Body(b'name: "opt125m"\nbackend: "vllm"\n')}
+        return {"Body": BytesIO(b'name: "opt125m"\nbackend: "vllm"\n')}
 
 
 class _S3MultiConfigClient(_S3Client):
@@ -181,7 +182,7 @@ class _S3MultiConfigClient(_S3Client):
             "models/preprocess/config.pbtxt": b'name: "preprocess"\nbackend: "python"\n',
             "models/classifier/config.pbtxt": b'name: "classifier"\nplatform: "onnxruntime_onnx"\n',
         }
-        return {"Body": _S3Body(payloads[kwargs["Key"]])}
+        return {"Body": BytesIO(payloads[kwargs["Key"]])}
 
 
 class _BodyRequest:
@@ -438,9 +439,9 @@ class ApiHelperTests(unittest.TestCase):
         session = _FakeSession(get_map={1: instance})
         claims = {"role": "admin"}
         profile = SimpleNamespace(endpoint="https://new-minio", bucket="new-bucket", region="eu",
-                                  access_key="new-ak", secret_key_enc="new-secret", ca_certificate="cert",
-                                  force_path_style=False)
-        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="new/")
+                                  access_key="new-ak", secret_key_enc=encrypt_secret("new-secret"), ca_certificate="cert",
+                                  force_path_style=False, prefix="new")
+        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1)
         # Act
         with patch("app.services.storage.s3.require_user_entity", return_value=SimpleNamespace(id=1)), \
              patch("app.services.storage.s3.s3_profiles.get", return_value=profile):
@@ -450,6 +451,7 @@ class ApiHelperTests(unittest.TestCase):
         self.assertTrue(dto.use_https)
         self.assertEqual(dto.region, "eu")
         self.assertEqual(dto.access_key, "new-ak")
+        self.assertEqual(dto.prefix, "new")
         self.assertTrue(dto.secret_configured)
         self.assertEqual(dto.ca_certificate, "cert")
         # Act
@@ -457,6 +459,20 @@ class ApiHelperTests(unittest.TestCase):
         # Assert
         self.assertFalse(dto.enabled)
         self.assertIsNone(instance.s3_endpoint)
+
+    def test_instance_s3_rejects_prefix_outside_profile(self):
+        instance = self._instance()
+        session = _FakeSession(get_map={1: instance})
+        request = UpdateInstanceS3Request(enabled=True, s3_profile_id=1, prefix="scope-neighbor/model")
+        with (
+            patch("app.services.storage.s3.require_user_entity"),
+            patch("app.services.storage.s3.s3_profiles.get", return_value=SimpleNamespace(prefix="scope")),
+            self.assertRaises(HTTPException) as rejected,
+        ):
+            update_instance_s3(1, request, session=session, claims={"role": "admin"})
+
+        self.assertEqual(rejected.exception.status_code, 403)
+        self.assertEqual(session.commit_count, 0)
 
     def test_UpdateInstanceS3_EnableWithoutRequiredFields_RaisesBadRequest(self):
         # Arrange
@@ -492,12 +508,71 @@ class ApiHelperTests(unittest.TestCase):
         self.assertEqual(listed.entries[0].path, "/")
         self.assertEqual(listed.entries[1].path, "/")
         self.assertEqual(content.content, "hello")
-        self.assertEqual(raw.body, b"hello")
+        self.assertEqual(TestClient(raw).get("/").content, b"hello")
 
         # Act / Assert
         with patch("app.services.storage.s3.require_s3_client", return_value=client):
             with self.assertRaises(HTTPException):
                 get_instance_s3_content(1, path="/missing.txt", session=session, claims={"role": "admin"})
+
+    def test_download_streams_past_the_preview_limit_and_closes_the_body(self):
+        session = _FakeSession(get_map={1: self._instance()})
+        size = 64 * 1024 * 1024 + 1
+        chunks = []
+
+        async def send(message):
+            if message["type"] == "http.response.body":
+                chunks.append(len(message["body"]))
+
+        with tempfile.TemporaryFile() as body, patch("app.services.storage.s3.require_s3_client") as client:
+            body.truncate(size)
+            client.return_value.get_object.return_value = {"Body": body, "ContentLength": size}
+            raw = get_instance_s3_content_raw(1, path="model", session=session, claims={"role": "admin"})
+            asyncio.run(raw({"type": "http", "asgi": {"spec_version": "2.4"}}, AsyncMock(), send))
+            self.assertTrue(body.closed)
+            client.return_value.get_object.return_value = {"Body": BytesIO(), "ContentLength": size}
+            with self.assertRaises(HTTPException) as error:
+                get_instance_s3_content(1, path="model", session=session, claims={"role": "admin"})
+        self.assertEqual(sum(chunks), size)
+        self.assertLessEqual(max(chunks), 1024 * 1024)
+        self.assertEqual(raw.headers["content-length"], str(size))
+        self.assertEqual(error.exception.status_code, 400)
+
+    def test_download_streams_a_20_gib_object_with_bounded_reads(self):
+        size = 20 * 1024**3 + 1
+        block = bytes(1024 * 1024)
+
+        class SyntheticBody:
+            remaining = size
+            closed = False
+
+            def read(self, count):
+                if count != len(block):
+                    raise AssertionError("Expected bounded one-MiB reads")
+                length = min(count, self.remaining)
+                self.remaining -= length
+                return block[:length]
+
+            def close(self):
+                self.closed = True
+
+        body = SyntheticBody()
+        session = _FakeSession(get_map={1: self._instance()})
+        transferred = 0
+
+        async def send(message):
+            nonlocal transferred
+            if message["type"] == "http.response.body":
+                transferred += len(message["body"])
+
+        with patch("app.services.storage.s3.require_s3_client") as client:
+            client.return_value.get_object.return_value = {"Body": body, "ContentLength": size}
+            raw = get_instance_s3_content_raw(1, path="large model.plan", session=session, claims={"role": "admin"})
+            asyncio.run(raw({"type": "http", "asgi": {"spec_version": "2.4"}}, AsyncMock(), send))
+        self.assertEqual(transferred, size)
+        self.assertTrue(body.closed)
+        self.assertEqual(raw.headers["content-length"], str(size))
+        self.assertEqual(raw.headers["content-disposition"], "attachment; filename*=UTF-8''large%20model.plan")
 
     def test_InstanceS3Read_RelativePrefix_ListsRepositoryRootOnlyOnce(self):
         # Arrange
@@ -688,6 +763,30 @@ class ApiAsyncTests(unittest.IsolatedAsyncioTestCase):
         # Act / Assert
         with self.assertRaises(HTTPException):
             await create_instance(request, session=session, claims={"email": "u@example.com", "role": "viewer"})
+
+    async def test_register_existing_url_requires_access_without_mutating(self):
+        instance = TritonInstanceEntity(id=8, name="reserved", url="https://triton:8000")
+        user = UserEntity(id=2, email="reader@example.test", name="Reader", role="member")
+        session = _FakeSession(exec_results=[_ExecResult(first=instance), _ExecResult(), _ExecResult(first=user)])
+        triton = SimpleNamespace(
+            collect_runtime_snapshot=AsyncMock(return_value={"ready": True}),
+            collect_metrics_snapshot=AsyncMock(return_value={}),
+            get_repository_index=AsyncMock(return_value=[]),
+        )
+        with (
+            patch("app.services.triton.instances.TritonService", return_value=triton),
+            patch("app.services.access.require_user_entity", return_value=user),
+        ):
+            with self.assertRaises(HTTPException) as rejected:
+                await create_instance(
+                    CreateTritonInstanceRequest(url=instance.url, name="new-name"),
+                    session=session, claims={"email": user.email, "role": user.role},
+                )
+
+        self.assertEqual(rejected.exception.status_code, 403)
+        self.assertEqual(instance.name, "reserved")
+        self.assertEqual(user.assigned_instances, [])
+        self.assertEqual(session.commit_count, 0)
 
     async def test_CreateInstance_TritonNotReady_IncludesSnapshotErrorDetail(self):
         # Arrange

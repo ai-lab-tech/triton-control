@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.api.build_settings_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
@@ -33,7 +34,7 @@ class BuildSettingsTests(unittest.TestCase):
             session.add(UserEntity(id=2, email="user@test", name="Engineer", role="member"))
             session.commit()
             session.add(S3ProfileEntity(owner_user_id=1, name="staging", endpoint="https://storage.test",
-                                        bucket="contexts", access_key="fixture", secret_key_enc="fixture", prefix=""))
+                                        bucket="contexts", access_key="fixture", secret_key_enc=encrypt_secret("fixture"), prefix=""))
             session.commit()
         self.claims = {"email": "admin@test", "sub": "admin@test"}
 
@@ -212,7 +213,7 @@ class BuildSettingsTests(unittest.TestCase):
             settings = runtime_policy(session)
             session.add(S3ProfileEntity(owner_user_id=1, name="later", endpoint="https://storage.test",
                                         bucket="new-bucket", prefix="team", access_key="fixture",
-                                        secret_key_enc="fixture"))
+                                        secret_key_enc=encrypt_secret("fixture")))
             session.commit()
 
             selected = binding(session, settings, "later")

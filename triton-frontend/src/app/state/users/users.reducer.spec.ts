@@ -75,13 +75,15 @@ describe("usersReducer", () => {
     expect(state.users[0].id).toBe(2);
   });
 
-  it("UpdateUserRoleSucceeded_UserExists_UpdatesRoleAndSetsActive", () => {
-    const state = usersReducer(
-      { ...INITIAL, users: [{ ...MOCK_USER, isActive: false }] },
-      updateUserRoleSucceeded({ userId: 1, role: "admin" }),
-    );
-    expect(state.users[0].role).toBe("admin");
-    expect(state.users[0].isActive).toBeTrue();
+  it("UpdateUserRoleSucceeded_UserExists_UsesServerActivationStatus", () => {
+    for (const isActive of [false, true]) {
+      const state = usersReducer(
+        { ...INITIAL, users: [{ ...MOCK_USER, isActive: false }] },
+        updateUserRoleSucceeded({ userId: 1, role: "admin", isActive }),
+      );
+      expect(state.users[0].role).toBe("admin");
+      expect(state.users[0].isActive).toBe(isActive);
+    }
   });
 
   it("UpdateUserRoleFailed_DefaultState_SetsError", () => {

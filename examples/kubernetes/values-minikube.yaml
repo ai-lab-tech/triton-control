@@ -1,5 +1,6 @@
 # Local development only. Follow docs/local-kubernetes.md.
 app:
+  existingSecret: triton-control-runtime-secrets
   image:
     repository: triton-control
     tag: dev

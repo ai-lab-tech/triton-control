@@ -253,6 +253,8 @@ class ValidationAdapter:
             task = preparation.get(session, task_id)
         except ValueError:
             raise UnprocessableEntityError("Expected a preparation task ID") from None
+        if action in {"submit", "retry", "execute"} and task.state in {"cancelled", "awaiting_information"}:
+            raise ForbiddenError("Preparation task is not ready for validation")
         if actor.role.strip().lower() == "admin":
             return
         if actor.id != task.assignee_user_id or actor.id not in teams.eligible_user_ids(session, task.assigned_team_id):

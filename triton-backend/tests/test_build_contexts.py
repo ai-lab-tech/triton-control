@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.api.build_context_api import router
 from app.core.security import get_claims
 from app.db.database import get_session
@@ -257,7 +258,7 @@ class ContextTests(unittest.TestCase):
             session.commit()
             session.add(S3ProfileEntity(
                 id=1, owner_user_id=3, name="staging", endpoint="http://test", bucket="contexts",
-                access_key="fixture", secret_key_enc="fixture", prefix="",
+                access_key="fixture", secret_key_enc=encrypt_secret("fixture"), prefix="",
             ))
             session.add_all([UserTeamEntity(team_id=teams.INSTALLATION_TEAM_ID, user_id=1),
                              UserTeamEntity(team_id=teams.INSTALLATION_TEAM_ID, user_id=2)])

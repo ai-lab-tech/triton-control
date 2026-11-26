@@ -66,8 +66,18 @@ unset DB_PASSWORD
 
 These names assume release and namespace `triton-control`. For an existing database,
 use its existing credentials; creating a new Secret does not change its password.
-The chart generates application session/encryption secrets on first installation
-and preserves them on upgrade. Back up those Secrets and the database together.
+Create the application Secret once for a new installation and keep it across
+upgrades. The example values reference it with `app.existingSecret`.
+
+```bash
+kubectl -n triton-control create secret generic triton-control-runtime-secrets \
+  --from-literal=SESSION_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=S3_SECRET_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+```
+
+For an upgrade, copy the existing keys to the referenced Secret or supply those
+same values via `app.secretEnv`. Back up the Secrets and the database together.
 For externally managed secrets/database options, see the [chart reference](https://github.com/ai-lab-tech/triton-control/tree/main/charts/triton-control).
 
 ## 3. Install and verify

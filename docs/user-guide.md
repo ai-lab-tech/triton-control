@@ -35,10 +35,9 @@ explicitly inactive account or issue an invitation. An invitation opens
 Expired, revoked, consumed, and invalid links display the same safe message and
 cannot be reused.
 
-When delivery is disabled, an administrator-precreated passwordless local
-account can be claimed through matching public self-registration. Registration
-sets the initial password and preserves the role and instance assignments
-chosen by the administrator.
+When delivery is disabled, new local users self-register and wait for an
+administrator to approve their account and assign access. Pre-created local
+accounts require an invitation to set their initial password.
 
 When SMTP recovery is operational, the login page shows **Forgot password**.
 Submitting the form always displays the same confirmation, whether or not the
@@ -54,12 +53,12 @@ installation capabilities, and Kubernetes availability.
 - **Dashboard** opens the fleet overview.
 - **Serving → Instances** lists Triton endpoints. Select **Connect existing instance** to register a running server, or **Serving → Add deployment** to deploy one.
 - **Development → Engineering queue → Submit model** opens the handoff form. Select **Submit to engineering** to send it.
-- **Prepare for production** on a serving instance opens **Engineering Queue → Submit model** with its S3 repository prefilled. Review the served version and evaluation details, then submit. A task workspace deployment links directly to its engineering task.
+- **Prepare for production** on a serving instance opens **Engineering Queue → Submit model** with its S3 repository prefilled. Review the served version and evaluation details, then submit. A task workspace deployment links directly to its engineering task. See [Prepare a serving model](production-preparation/prepare-serving-model.md) for the walkthrough.
 - Under **Development**, select **Workspaces**, **Argo Workflows**, or **MLflow** for the corresponding development tool.
 - Administrators can open **User Management**, **Settings**, and **Error Logs** from the account menu at the bottom of the sidebar. **S3 Profiles** appears there when credential administration is enabled.
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
-pages for Inference, Profile, and S3 Browser.
+pages for Inference and Perf. The Perf view includes the S3 Browser.
 
 ## Dashboard
 
@@ -176,7 +175,9 @@ prefix. Administrators configure endpoint, bucket, credentials, region, addressi
 mode, and CA certificate in the existing **S3 Profiles** account menu entry.
 Manual connection fields are no longer available in the instance dialog.
 
-When S3 is active, users can open the S3 Browser from the detail page.
+When S3 is active, open **Models → Perf → S3 Browser** to browse the repository.
+If you lack Perf access or the instance has no model version to profile, open
+**S3 Connection → Open S3 Browser** on the instance detail page.
 
 For self-deployed instances created with **Add Deployment**, this tab controls
 Triton Control's S3 browser/editor connection only. It does not update the S3
@@ -245,7 +246,11 @@ Current behavior:
   editable S3 `config.pbtxt` when S3 is configured, otherwise read-only
   **Live API Config**
 
-## S3 Browser Page
+### S3 Browser in the Perf View
+
+Expand **S3 Browser** below the benchmark controls to work with files while keeping
+your benchmark inputs and output on screen. The browser opens at the root of the
+instance’s configured repository prefix, which can contain several models.
 
 When S3 is configured and enabled for an instance, the S3 Browser supports:
 
@@ -293,10 +298,11 @@ with paths allocated per experiment and logged model. Credentials, the endpoint,
 path-style configuration, and an optional CA certificate are stored in a
 server-only Kubernetes Secret. Workflows upload through the tracking proxy.
 
-New installations use the existing PostgreSQL connection in the isolated
+By default, new installations use the existing PostgreSQL connection in the isolated
 `mlflow_tracking` schema for tracking and registry metadata. The database must
 be reachable from the MLflow pod, and its user must be allowed to create that
-schema. No MLflow PersistentVolumeClaim is created. The default MLflow image
+schema. Operators can configure a dedicated PostgreSQL database before installation.
+MLflow runs in the namespace of the Triton Control release. No MLflow PersistentVolumeClaim is created. The default MLflow image
 installs boto3 and psycopg2 into temporary storage if they are missing; use an
 image with these dependencies preinstalled in clusters without package-index access.
 

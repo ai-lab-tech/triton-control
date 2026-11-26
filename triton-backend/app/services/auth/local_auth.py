@@ -5,10 +5,8 @@ Provides use cases for the local (non-OIDC) auth strategy:
                                                     return a signed JWT.
   ``register_user(request, session, claims)``    — admin-only user creation.
   ``self_register(request, session)``            — public self-registration;
-                                                    accounts are auto-approved
-                                                    or placed in a pending
-                                                    state depending on
-                                                    configuration.
+                                                    new accounts start pending
+                                                    administrator approval.
   ``validate_password(password)``                — enforce minimum password
                                                     requirements.
   ``ensure_local_auth_allowed(session)``         — raises ``BadRequestError``
@@ -47,7 +45,6 @@ from app.schemas import (
     UserDTO,
     validate_password_policy,
 )
-from app.services.auth.email_settings import get_runtime_config
 from app.services.oidc.config import get_settings
 
 
@@ -145,16 +142,7 @@ def self_register(request: SelfRegisterRequest, session: Session) -> UserDTO:
     if existing:
         if existing.auth_provider != "local":
             raise ConflictError("User is configured for OIDC login")
-        if existing.password_hash or get_runtime_config(session).delivery_mode != "disabled":
-            raise ConflictError("User is already registered")
-
-        existing.password_hash = hash_password(request.password)
-        requested_name = (request.name or "").strip()
-        if requested_name:
-            existing.name = requested_name
-        existing.is_active = True
-        existing.credential_version += 1
-        return user_entity_to_dto(users.save(session, existing))
+        raise ConflictError("User is already registered")
 
     name = (request.name or "").strip() or (email.split("@", 1)[0] or "User")
     created = users.create(

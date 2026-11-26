@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.core.crypto import encrypt_secret
 from app.api.registry_api import get_registry_settings, put_registry_settings
 from app.db.entities import RegistryConfigEntity, S3ProfileEntity, TritonInstanceEntity, UserEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
@@ -55,7 +56,7 @@ class CentralSettingsTests(unittest.TestCase):
             endpoint="https://s3.example.com",
             bucket="models",
             access_key="access",
-            secret_key_enc="storage-secret",
+            secret_key_enc=encrypt_secret("storage-secret"),
         )
         self.session.add(row)
         self.session.commit()
