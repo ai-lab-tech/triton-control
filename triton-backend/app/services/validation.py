@@ -95,7 +95,17 @@ def check_release_binding(
     """Bridge S08-A artifact/evidence references without a release -> evidence hash cycle."""
     spec = release.spec
     if (
-        spec.image != manifest.image or spec.repository != manifest.repository
+        spec.image != manifest.image
+        # Storage can change during promotion. The signed validation input retains
+        # the original URI, and materialization verifies both inventories.
+        or (
+            spec.repository.uri != manifest.repository.uri
+            and not (
+                spec.repository.uri.startswith("s3://")
+                and spec.repository.uri.endswith("/models/" + spec.repository.inventory_digest[7:] + "/")
+            )
+        )
+        or spec.repository.model_dump(exclude={"uri"}) != manifest.repository.model_dump(exclude={"uri"})
         or spec.models != manifest.startup.models
         or spec.resources_per_replica != manifest.startup.resources_per_replica
         or spec.validation.subjects != artifact_subjects(manifest)

@@ -58,7 +58,7 @@ installation capabilities, and Kubernetes availability.
 - Administrators can open **User Management**, **Settings**, and **Error Logs** from the account menu at the bottom of the sidebar. **S3 Profiles** appears there when credential administration is enabled.
 
 Within an instance, primary workflows are on the detail page tabs plus dedicated
-pages for Inference, Profile, and S3 Browser.
+pages for Inference and Perf. The Perf view includes the S3 Browser.
 
 ## Dashboard
 
@@ -175,7 +175,9 @@ prefix. Administrators configure endpoint, bucket, credentials, region, addressi
 mode, and CA certificate in the existing **S3 Profiles** account menu entry.
 Manual connection fields are no longer available in the instance dialog.
 
-When S3 is active, users can open the S3 Browser from the detail page.
+When S3 is active, open **Models → Perf → S3 Browser** to browse the repository.
+If you lack Perf access or the instance has no model version to profile, open
+**S3 Connection → Open S3 Browser** on the instance detail page.
 
 For self-deployed instances created with **Add Deployment**, this tab controls
 Triton Control's S3 browser/editor connection only. It does not update the S3
@@ -244,7 +246,11 @@ Current behavior:
   editable S3 `config.pbtxt` when S3 is configured, otherwise read-only
   **Live API Config**
 
-## S3 Browser Page
+### S3 Browser in the Perf View
+
+Expand **S3 Browser** below the benchmark controls to work with files while keeping
+your benchmark inputs and output on screen. The browser opens at the root of the
+instance’s configured repository prefix, which can contain several models.
 
 When S3 is configured and enabled for an instance, the S3 Browser supports:
 

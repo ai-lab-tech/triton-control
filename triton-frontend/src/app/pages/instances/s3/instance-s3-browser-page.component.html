@@ -1,17 +1,21 @@
 @if (hasValidId()) {
   <div class="s3-browser">
     <div class="s3-header">
-      <nav class="page-breadcrumbs" aria-label="Breadcrumb">
-        <a routerLink="/instances">Triton Instances</a>
-        <span class="breadcrumb-separator">/</span>
-        <a [routerLink]="['/instances', instanceId()]">{{
-          instanceName() || "Instance #" + instanceId()
-        }}</a>
-        <span class="breadcrumb-separator">/</span>
-        <span aria-current="page">S3 Browser</span>
-      </nav>
+      @if (!embedded()) {
+        <nav class="page-breadcrumbs" aria-label="Breadcrumb">
+          <a routerLink="/instances">Triton Instances</a>
+          <span class="breadcrumb-separator">/</span>
+          <a [routerLink]="['/instances', instanceId()]">{{
+            instanceName() || "Instance #" + instanceId()
+          }}</a>
+          <span class="breadcrumb-separator">/</span>
+          <span aria-current="page">S3 Browser</span>
+        </nav>
+      }
       <div class="s3-title">
-        <h1 class="page-title">Model Repository</h1>
+        @if (!embedded()) {
+          <h1 class="page-title">Model Repository</h1>
+        }
         <p class="page-subtitle">
           {{ instanceName() || "Instance #" + instanceId() }} ·
           {{ repositoryRootPath() }}

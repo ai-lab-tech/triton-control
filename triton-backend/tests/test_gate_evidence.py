@@ -61,6 +61,18 @@ class GateEvidenceTests(unittest.TestCase):
         self.assertRegex(binding, r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(binding, approved)
 
+    def test_relocated_inventory_requires_its_own_approval(self) -> None:
+        raw = self.package(self.signature)
+        original = self.approve(raw)
+        payload = self.release.model_dump(mode="json", by_alias=True)
+        repository = payload["spec"]["repository"]
+        repository["uri"] = "s3://production/promoted/models/" + repository["inventoryDigest"][7:] + "/"
+        promoted = ServingRelease.model_validate(payload)
+        binding = verify_release_evidence(promoted, raw, target=self.target, now=NOW)
+        self.assertNotEqual(original, binding)
+        with self.assertRaisesRegex(MetadataError, "gate-evidence-approval-invalidated"):
+            admit_release(promoted, raw, target=self.target, now=NOW, approved_binding=original)
+
     def test_admission_rejects_expired_evidence(self) -> None:
         # Arrange
         raw = self.package(self.signature)

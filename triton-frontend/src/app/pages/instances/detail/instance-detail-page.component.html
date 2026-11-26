@@ -699,7 +699,7 @@
           </div>
           <div class="panel-card">
             <div class="panel-title">Model data in S3</div>
-            @if (hasS3Connection(instance) && instance.s3.enabled) {
+            @if (hasS3Connection(instance) && instance.s3.enabled && !hasProfileTarget()) {
               <div class="s3-browser-action">
                 <a
                   mat-stroked-button
