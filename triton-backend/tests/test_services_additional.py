@@ -41,6 +41,7 @@ class UsersServiceTests(unittest.TestCase):
     def test_role_changes_leave_passwordless_local_accounts_inactive(self):
         row = SimpleNamespace(id=7, role="viewer", is_active=False, auth_provider="local", password_hash=None)
         with (
+            patch.object(users_service.users, "is_last_active_admin_for_update", return_value=False),
             patch.object(users_service, "get_user_or_404", return_value=row),
             patch.object(users_service.users, "save"),
             patch.object(users_service, "user_entity_to_dto"),
