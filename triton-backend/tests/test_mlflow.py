@@ -85,6 +85,7 @@ class MlflowTests(unittest.TestCase):
         request = self._request()
         session = SimpleNamespace(get=lambda *args: None)
         with (
+            patch.dict("os.environ", {"POD_NAMESPACE": "use-case-a"}),
             patch("app.services.mlflow.installer.mlflow.get", return_value=None),
             patch(
                 "app.services.mlflow.installer.k8s.apply_installation_resources",
@@ -100,11 +101,29 @@ class MlflowTests(unittest.TestCase):
 
         # Assert
         apply_resources.assert_called_once()
-        self.assertEqual(response.namespace, "triton-control")
+        self.assertEqual(response.namespace, "use-case-a")
+        self.assertEqual(apply_resources.call_args.kwargs["namespace"], "use-case-a")
         self.assertEqual(response.deployment_name, "mlflow")
         self.assertEqual(response.service_name, "mlflow-service")
         self.assertEqual(response.image, "ghcr.io/mlflow/mlflow:v3.14.0")
         self.assertIn("Deployment/mlflow", response.applied_resources)
+
+    def test_upgrade_records_the_new_running_image(self) -> None:
+        entity = MlflowEntity(
+            namespace="use-case-a", deployment_name="mlflow", service_name="mlflow-service", image="mlflow:old",
+        )
+        session = MagicMock()
+        with (
+            patch.object(installer.mlflow, "get", return_value=entity),
+            patch.object(installer.mlflow, "save", side_effect=lambda _, row: row) as save,
+            patch.object(installer.k8s, "upgrade_installation_resources", return_value=[]),
+            patch.object(installer.developments, "list_all", return_value=[]),
+            patch.object(installer.config, "server_image", return_value="mlflow:new"),
+        ):
+            result = installer.upgrade_mlflow_tracking(session)
+
+        self.assertEqual(result.image, "mlflow:new")
+        self.assertEqual(save.call_args.args[1].image, "mlflow:new")
 
     def test_Status_NotInstalled_ReturnsDefaultBasePath(self) -> None:
         with patch("app.services.mlflow.installer.mlflow.get", return_value=None):
@@ -222,7 +241,7 @@ class MlflowTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "deleted")
 
-    def test_UninstallMlflow_OtherNamespace_DeletesNamespace(self) -> None:
+    def test_UninstallMlflow_OtherNamespace_DeletesOnlyInstalledResources(self) -> None:
         entity = SimpleNamespace(
             namespace="legacy-mlflow",
             deployment_name="mlflow",
@@ -233,19 +252,16 @@ class MlflowTests(unittest.TestCase):
             patch(
                 "app.services.mlflow.installer.mlflow.save",
             ),
-            patch(
-                "app.services.mlflow.installer.is_running_in_cluster",
-                return_value=False,
-            ),
-            patch(
-                "app.services.mlflow.installer.k8s.delete_namespace",
-                return_value="deleted",
-            ) as delete_namespace,
+            patch.object(
+                installer.k8s, "delete_installation_resources", return_value="Deployment/mlflow",
+            ) as delete_resources,
             patch("app.services.mlflow.installer.mlflow.delete"),
         ):
             installer.uninstall_mlflow(SimpleNamespace(get=lambda *args: None))
 
-        delete_namespace.assert_called_once_with("legacy-mlflow")
+        delete_resources.assert_called_once_with(
+            namespace="legacy-mlflow", deployment_name="mlflow", service_name="mlflow-service",
+        )
 
     def test_Manifests_DockerConfigProvided_AddsImagePullSecret(self) -> None:
         dockerconfigjson = '{"auths":{"registry.example":{"auth":"token"}}}'
@@ -317,7 +333,9 @@ class MlflowTests(unittest.TestCase):
             ),
         )
         with patch("app.api.mlflow_api.installer.get_mlflow_status", return_value=expected):
-            result = mlflow_api.get_mlflow_status(session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
+            result = mlflow_api.get_mlflow_status(
+                session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"},
+            )
         self.assertEqual(result, expected)
 
     def test_ApiInstall_MemberDelegates(self) -> None:
@@ -330,7 +348,9 @@ class MlflowTests(unittest.TestCase):
             applied_resources=["Deployment/mlflow"],
         )
         with patch("app.api.mlflow_api.installer.install_mlflow", return_value=expected) as mocked:
-            result = mlflow_api.install_mlflow(payload, session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
+            result = mlflow_api.install_mlflow(
+                payload, session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"},
+            )
 
         mocked.assert_called_once()
         self.assertEqual(result, expected)
@@ -342,7 +362,9 @@ class MlflowTests(unittest.TestCase):
             namespace="triton-control",
         )
         with patch("app.api.mlflow_api.installer.uninstall_mlflow", return_value=expected) as mocked:
-            result = mlflow_api.uninstall_mlflow(session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"})
+            result = mlflow_api.uninstall_mlflow(
+                session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"},
+            )
 
         mocked.assert_called_once_with(ANY)
         self.assertEqual(result, expected)

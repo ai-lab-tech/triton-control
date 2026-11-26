@@ -298,10 +298,11 @@ with paths allocated per experiment and logged model. Credentials, the endpoint,
 path-style configuration, and an optional CA certificate are stored in a
 server-only Kubernetes Secret. Workflows upload through the tracking proxy.
 
-New installations use the existing PostgreSQL connection in the isolated
+By default, new installations use the existing PostgreSQL connection in the isolated
 `mlflow_tracking` schema for tracking and registry metadata. The database must
 be reachable from the MLflow pod, and its user must be allowed to create that
-schema. No MLflow PersistentVolumeClaim is created. The default MLflow image
+schema. Operators can configure a dedicated PostgreSQL database before installation.
+MLflow runs in the namespace of the Triton Control release. No MLflow PersistentVolumeClaim is created. The default MLflow image
 installs boto3 and psycopg2 into temporary storage if they are missing; use an
 image with these dependencies preinstalled in clusters without package-index access.
 

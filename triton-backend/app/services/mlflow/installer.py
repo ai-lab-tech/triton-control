@@ -20,13 +20,12 @@ from app.schemas import (
     MlflowStatusResponse,
 )
 from app.services.development import kubernetes as workspace_k8s
-from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
+from app.services.kubernetes_client import in_cluster_namespace
 from app.services.mlflow import config
 from app.services.mlflow import kubernetes as k8s
 from app.services.registry_settings import apply_registry_settings
 
 _install_lock = Lock()
-_MLFLOW_NAMESPACE = "triton-control"
 
 
 def get_mlflow_status(session: Session) -> MlflowStatusResponse:
@@ -79,7 +78,7 @@ def install_mlflow(request: InstallMlflowRequest, session: Session, claims: dict
         request = apply_registry_settings(request, session)
         storage = k8s.storage_configuration(profile, mlflow.prepare_backend_store(session))
         name = request.installation_name
-        namespace = _MLFLOW_NAMESPACE
+        namespace = in_cluster_namespace() or "triton-control"
         service_name = f"{name}-service"
         entity = mlflow.save(
             session,
@@ -134,15 +133,11 @@ def uninstall_mlflow(session: Session) -> MlflowDeleteResponse:
     entity.last_transition_at = datetime.utcnow()
     mlflow.save(session, entity)
 
-    control_ns = in_cluster_namespace() if is_running_in_cluster() else ""
-    if namespace == _MLFLOW_NAMESPACE or (control_ns and namespace == control_ns):
-        message = k8s.delete_installation_resources(
-            namespace=namespace,
-            deployment_name=entity.deployment_name,
-            service_name=entity.service_name,
-        )
-    else:
-        message = k8s.delete_namespace(namespace)
+    message = k8s.delete_installation_resources(
+        namespace=namespace,
+        deployment_name=entity.deployment_name,
+        service_name=entity.service_name,
+    )
 
     mlflow.delete(session, entity)
     return MlflowDeleteResponse(status="deleted", message=message, namespace=namespace)
@@ -168,6 +163,7 @@ def upgrade_mlflow_tracking(session: Session) -> MlflowInstallResponse:
                 workspace.namespace, workspace.statefulset_name, workspace.secret_name,
             )
         entity.status = "ready"
+        entity.image = config.server_image()
         entity.status_message = "MLflow tracking gateway is ready."
         entity.last_transition_at = datetime.utcnow()
         entity = mlflow.save(session, entity)

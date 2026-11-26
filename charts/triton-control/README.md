@@ -349,7 +349,11 @@ By default, the chart creates namespace-scoped RBAC (least privilege):
 
 New MLflow installations require an S3 profile selected in the installation UI.
 Artifacts use `s3://<bucket>/<profile-prefix>/mlflow`; tracking and registry data use
-the existing PostgreSQL database in the isolated `mlflow_tracking` schema. The
+by default the existing PostgreSQL database in the isolated `mlflow_tracking` schema.
+To use a dedicated database, set `mlflow.backendStoreSecret.name` and
+`mlflow.backendStoreSecret.key` (default `database-url`) before installing MLflow.
+The Secret and the MLflow workload reside in the release namespace. See the
+[external PostgreSQL example](../../docs/deployment.md). The
 MLflow pod must reach that database. New installations create no MLflow PVC.
 The namespace-scoped Role retains PVC permissions for development workspaces
 and legacy MLflow installations using `mlflow-data`.
