@@ -162,6 +162,10 @@ Assigned users can open that instance and use its available workflows.
 
 ## Delete Users
 
+At least one active administrator must remain. To hand over administration,
+promote a second active account before demoting or deleting the current admin.
+Pending invitations do not count toward this requirement.
+
 Admins can delete users from the Users page. Deleting a user removes that local
 Triton Control account record. For OIDC users, it does not delete the identity
 from the external OIDC provider.

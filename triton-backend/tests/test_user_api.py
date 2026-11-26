@@ -12,10 +12,16 @@ or database is required.
 """
 
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from authlib.integrations.base_client import OAuthError
+from fastapi import HTTPException
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api.auth_api import (
     auth_options,
@@ -640,16 +646,96 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
             get_map={1: admin},
             exec_results=[_ExecResult(), _ExecResult()],
         )
-        deleted = delete_user(1, op_session, admin_claims)
         updated = update_user_instances(
             1, UpdateUserInstancesRequest(assigned_instances=["x"]), op_session, admin_claims
         )
-        role_updated = update_user_role(1, UpdateUserRoleRequest(role="member"), op_session, admin_claims)
+        with patch("app.repositories.users.is_last_active_admin_for_update", return_value=False):
+            role_updated = update_user_role(1, UpdateUserRoleRequest(role="member"), op_session, admin_claims)
+            deleted = delete_user(1, op_session, admin_claims)
 
         # Assert
         self.assertIsNone(deleted)
         self.assertEqual(updated.assigned_instances, ["x"])
         self.assertEqual(role_updated.role, "member")
+
+
+class LastActiveAdminTests(unittest.TestCase):
+    def setUp(self):
+        database = TemporaryDirectory()
+        self.addCleanup(database.cleanup)
+        self.engine = create_engine(f"sqlite:///{Path(database.name) / 'users.db'}")
+        self.addCleanup(self.engine.dispose)
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        self.addCleanup(self.session.close)
+        self.claims = {"role": "admin"}
+
+    def add_admin(self, email, *, active=True, provider="local"):
+        user = UserEntity(email=email, name=email, role="admin", is_active=active, auth_provider=provider)
+        self.session.add(user)
+        self.session.commit()
+        return user.id
+
+    def test_pending_admin_does_not_allow_removing_the_only_active_admin(self):
+        # Arrange
+        target = self.add_admin("owner@example.test")
+        self.add_admin("invited@example.test", active=False)
+
+        for operation in (
+            lambda: delete_user(target, self.session, self.claims),
+            lambda: update_user_role(target, UpdateUserRoleRequest(role="viewer"), self.session, self.claims),
+        ):
+            # Act
+            with self.assertRaises(HTTPException) as raised:
+                operation()
+            self.session.rollback()
+
+            # Assert
+            self.assertEqual(raised.exception.status_code, 409)
+            self.assertEqual(self.session.get(UserEntity, target).role, "admin")
+
+    def test_concurrent_delete_and_demotion_leave_one_admin(self):
+        # Arrange
+        first = self.add_admin("first@example.test")
+        second = self.add_admin("second@example.test")
+        start = Barrier(2)
+
+        def remove_admin(user_id):
+            with Session(self.engine) as session:
+                start.wait(timeout=5)
+                try:
+                    if user_id == first:
+                        delete_user(first, session, self.claims)
+                    else:
+                        update_user_role(second, UpdateUserRoleRequest(role="member"), session, self.claims)
+                except HTTPException as error:
+                    return error.status_code
+                return 200
+
+        # Act
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses = list(pool.map(remove_admin, (first, second)))
+
+        # Assert
+        self.assertCountEqual(statuses, [200, 409])
+        remaining = self.session.exec(select(UserEntity).where(UserEntity.role == "admin")).all()
+        self.assertEqual(len(remaining), 1)
+        self.assertTrue(remaining[0].is_active)
+
+    def test_second_active_oidc_admin_permits_handoff(self):
+        # Arrange
+        first = self.add_admin("first@example.test")
+        second = self.add_admin("second@example.test", provider="oidc")
+
+        # Act
+        update_user_role(first, UpdateUserRoleRequest(role="member"), self.session, self.claims)
+        delete_user(first, self.session, self.claims)
+        unchanged = update_user_role(second, UpdateUserRoleRequest(role="admin"), self.session, self.claims)
+
+        # Assert
+        self.assertIsNone(self.session.get(UserEntity, first))
+        self.assertEqual(unchanged.role, "admin")
+        self.assertTrue(unchanged.is_active)
 
 
 if __name__ == "__main__":

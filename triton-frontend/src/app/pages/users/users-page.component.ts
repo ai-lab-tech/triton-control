@@ -1,4 +1,4 @@
-import { Component, inject, signal, TemplateRef } from "@angular/core";
+import { Component, computed, inject, signal, TemplateRef } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 
 import { MatCheckboxModule } from "@angular/material/checkbox";
@@ -65,6 +65,12 @@ export class UsersPageComponent {
   private readonly usersApi = inject(UsersService);
 
   readonly users = toSignal(this.store.select(selectUsers), { initialValue: [] as UserRow[] });
+  readonly lastActiveAdminId = computed(() => {
+    const admins = this.users().filter(
+      (user) => user.isActive && user.role.trim().toLowerCase() === "admin",
+    );
+    return admins.length === 1 ? admins[0].id : null;
+  });
   readonly instances = toSignal(this.store.select(selectUsersInstances), {
     initialValue: [] as string[],
   });
