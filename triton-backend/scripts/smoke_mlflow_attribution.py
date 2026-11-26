@@ -20,6 +20,7 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.api import mlflow_api
 from app.core.security import get_claims
@@ -83,13 +84,20 @@ def main() -> None:
                 assert client.post(upstream + "/api/2.0/mlflow/runs/create", json={}).status_code == 401
 
             app = FastAPI()
+            app.add_middleware(SessionMiddleware, secret_key=uuid.uuid4().hex)
             app.include_router(mlflow_api.router)
+            browser_ui = "/api/mlflow/proxy/"
+            with TestClient(app) as anonymous:
+                assert anonymous.get(browser_ui).status_code == 401
             app.dependency_overrides[get_claims] = lambda: {"email": "alice@example.com", "role": "member"}
             with patch.object(proxy, "_proxy_server_url", return_value=upstream), patch.object(
                 proxy, "is_running_in_cluster", return_value=True
             ), patch.object(tracking, "gateway_header", return_value=upstream_headers), patch.object(
                 tracking, "authenticate_workload", return_value={"email": "alice@example.com", "role": "member"}
             ), TestClient(app) as client:
+                page = client.get(browser_ui)
+                page.raise_for_status()
+                assert "text/html" in page.headers["content-type"]
                 base = "/api/mlflow/tracking/workflows/test/managed-secret"
                 api = base + "/api/2.0/mlflow"
                 client.headers["Authorization"] = "Bearer fixture-workload-token"

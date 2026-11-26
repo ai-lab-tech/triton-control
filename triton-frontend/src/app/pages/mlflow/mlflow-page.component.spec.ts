@@ -4,6 +4,7 @@ import { HttpClientTestingModule, HttpTestingController } from "@angular/common/
 import { provideRouter } from "@angular/router";
 
 import { BASE_PATH } from "../../api/generated/index";
+import { AuthStore } from "../../shared/auth/auth.store";
 import { AuthService } from "../../shared/auth/auth.service";
 import { ChromeService } from "../../shared/chrome.service";
 import { MlflowPageComponent } from "./mlflow-page.component";
@@ -11,6 +12,7 @@ import { MlflowPageComponent } from "./mlflow-page.component";
 describe("MlflowPageComponent", () => {
   let auth: jasmine.SpyObj<AuthService>;
   let chrome: jasmine.SpyObj<ChromeService>;
+  let isAdmin: jasmine.Spy;
   let http: HttpTestingController;
   const notInstalledStatus = {
     installed: false,
@@ -42,6 +44,7 @@ describe("MlflowPageComponent", () => {
     auth = jasmine.createSpyObj<AuthService>("AuthService", ["refreshSession"]);
     chrome = jasmine.createSpyObj<ChromeService>("ChromeService", ["hideTopbar", "showTopbar"]);
     auth.refreshSession.and.resolveTo();
+    isAdmin = jasmine.createSpy("isAdmin").and.returnValue(false);
 
     await TestBed.configureTestingModule({
       imports: [MlflowPageComponent, HttpClientTestingModule],
@@ -49,6 +52,7 @@ describe("MlflowPageComponent", () => {
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: auth },
+        { provide: AuthStore, useValue: { isAdmin } },
         { provide: ChromeService, useValue: chrome },
         { provide: BASE_PATH, useValue: "" },
       ],
@@ -382,7 +386,21 @@ describe("MlflowPageComponent", () => {
     expect(second).toContain("_tc_reload=");
   });
 
-  it("uninstalls when confirmed", async () => {
+  it("hides uninstall and sends no delete request for members", async () => {
+    const fixture = TestBed.createComponent(MlflowPageComponent);
+    await flushMicrotasks();
+    http.expectOne("/api/mlflow").flush(creatingStatus);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    await fixture.componentInstance.uninstall();
+
+    expect(fixture.nativeElement.querySelector("button.danger")).toBeNull();
+    http.expectNone((req) => req.method === "DELETE");
+  });
+
+  it("uninstalls when confirmed by an admin", async () => {
+    isAdmin.and.returnValue(true);
     const component = TestBed.createComponent(MlflowPageComponent).componentInstance;
     await flushMicrotasks();
     http.expectOne("/api/mlflow").flush({

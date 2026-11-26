@@ -33,7 +33,7 @@ For team A, Argo CD creates two Applications in the same destination namespace:
     | `mlflow-postgres` | `database-url` for `mlflow_a`, using its dedicated login |
     | `triton-tls` | TLS certificate and key for A's ingress hostname |
 
-3. Copy the [platform ApplicationSet](../examples/gitops/argocd/dev-applicationset.yaml)
+3. Copy the [platform ApplicationSet](https://github.com/ai-lab-tech/triton-control/blob/main/examples/gitops/argocd/dev-applicationset.yaml)
    into your platform GitOps repository. Set your ingress hosts and published
    image coordinates. The example uses the Argo CD `default` project for the
    platform. Only platform administrators should be able to change or deploy
@@ -47,18 +47,18 @@ For team A, Argo CD creates two Applications in the same destination namespace:
 
 ## Connect the team repositories
 
-1. Copy the [example workload](../examples/gitops/argocd/use-case-repo/dev/workloads/check-labels.yaml)
+1. Copy the [example workload](https://github.com/ai-lab-tech/triton-control/blob/main/examples/gitops/argocd/use-case-repo/dev/workloads/check-labels.yaml)
    into each team's Git repository at `dev/workloads/check-labels.yaml`. The
    example registers an Argo WorkflowTemplate that validates model labels.
    Syncing it installs the definition. An authorized native Argo submission
    starts a run.
 2. In the **platform** repository, create one AppProject per team using the
-   [team A project](../examples/gitops/argocd/dept-a-workloads-project.yaml)
+   [team A project](https://github.com/ai-lab-tech/triton-control/blob/main/examples/gitops/argocd/dept-a-workloads-project.yaml)
    as a template. For B and C change the project name, repo URL and destination
    namespace. Each project permits only its team's source, namespace and
    `WorkflowTemplate` resources. Review changes to team templates as executable
    code. Native Argo submissions run outside Triton Control's submission checks.
-3. Copy the [workloads ApplicationSet](../examples/gitops/argocd/dev-workloads-applicationset.yaml)
+3. Copy the [workloads ApplicationSet](https://github.com/ai-lab-tech/triton-control/blob/main/examples/gitops/argocd/dev-workloads-applicationset.yaml)
    into the platform repository. Replace its example URLs with the matching
    team repo URLs. Register read credentials in Argo CD for private repositories.
    Sync the projects first, then the workloads ApplicationSet.

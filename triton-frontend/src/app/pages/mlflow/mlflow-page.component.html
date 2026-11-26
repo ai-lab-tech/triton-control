@@ -156,17 +156,19 @@
             <span class="material-icons">refresh</span>
             Refresh
           </button>
-          <button
-            mat-stroked-button
-            type="button"
-            class="danger"
-            (click)="uninstall()"
-            [disabled]="uninstalling()"
-            color="warn"
-          >
-            <span class="material-icons">delete</span>
-            {{ uninstalling() ? "Uninstalling..." : "Uninstall" }}
-          </button>
+          @if (isAdmin()) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="danger"
+              (click)="uninstall()"
+              [disabled]="uninstalling()"
+              color="warn"
+            >
+              <span class="material-icons">delete</span>
+              {{ uninstalling() ? "Uninstalling..." : "Uninstall" }}
+            </button>
+          }
         </div>
       </div>
 

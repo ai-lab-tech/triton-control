@@ -355,7 +355,16 @@ class MlflowTests(unittest.TestCase):
         mocked.assert_called_once()
         self.assertEqual(result, expected)
 
-    def test_ApiDelete_MemberDelegates(self) -> None:
+    def test_ApiDelete_NonAdminIsRejectedBeforeUninstall(self) -> None:
+        for role in ("member", "viewer"):
+            with self.subTest(role=role), patch("app.api.mlflow_api.installer.uninstall_mlflow") as uninstall:
+                with self.assertRaises(HTTPException) as denied:
+                    mlflow_api.uninstall_mlflow(session=SimpleNamespace(), claims={"role": role})
+
+                self.assertEqual(denied.exception.status_code, 403)
+                uninstall.assert_not_called()
+
+    def test_ApiDelete_AdminDelegates(self) -> None:
         expected = mlflow_api.MlflowDeleteResponse(
             status="deleted",
             message="Namespace deletion requested.",
@@ -363,7 +372,7 @@ class MlflowTests(unittest.TestCase):
         )
         with patch("app.api.mlflow_api.installer.uninstall_mlflow", return_value=expected) as mocked:
             result = mlflow_api.uninstall_mlflow(
-                session=SimpleNamespace(get=lambda *args: None), claims={"role": "member"},
+                session=SimpleNamespace(get=lambda *args: None), claims={"role": "admin"},
             )
 
         mocked.assert_called_once_with(ANY)
