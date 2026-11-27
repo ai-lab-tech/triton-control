@@ -21,6 +21,10 @@ export interface AccessGroupsDialogData {
   groupId?: string;
 }
 
+function sameSelection(current: number[], saved: number[]): boolean {
+  return current.length === saved.length && current.every((id) => saved.includes(id));
+}
+
 @Component({
   selector: "app-access-groups-dialog",
   imports: [
@@ -55,6 +59,18 @@ export class AccessGroupsDialogComponent {
     void this.reload();
   }
 
+  get hasEdits(): boolean {
+    return (
+      this.name.trim() !== (this.selected?.name ?? "") ||
+      !sameSelection(this.userIds, this.selected?.user_ids ?? []) ||
+      !sameSelection(this.instanceIds, this.selected?.instance_ids ?? [])
+    );
+  }
+
+  canClose(result: unknown): boolean {
+    return result === true || (!this.busy() && (result === false || !this.hasEdits));
+  }
+
   async reload(): Promise<void> {
     await this.run(async () => {
       this.loaded.set(false);
@@ -87,7 +103,7 @@ export class AccessGroupsDialogComponent {
       user_ids: this.userIds,
       instance_ids: this.instanceIds,
     };
-    if (!assignment.name || this.busy()) return;
+    if (!this.loaded() || !assignment.name || !this.hasEdits || this.busy()) return;
     await this.run(async () => {
       await firstValueFrom(this.api.save(assignment, this.selected));
       this.dialog.close(true);

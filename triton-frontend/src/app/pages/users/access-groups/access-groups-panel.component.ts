@@ -57,6 +57,8 @@ export class AccessGroupsPanelComponent {
           data: { users: this.users(), groupId: group?.id },
           width: "36rem",
           maxWidth: "95vw",
+          closePredicate: (result, _config, component) =>
+            component instanceof AccessGroupsDialogComponent && component.canClose(result),
         },
       )
       .afterClosed()
