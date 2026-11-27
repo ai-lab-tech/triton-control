@@ -70,7 +70,7 @@ def has_active_local_admin_login(session: Session) -> bool:
         func.lower(func.trim(UserEntity.auth_provider)) == "local",
         func.lower(func.trim(UserEntity.role)) == "admin",
         col(UserEntity.is_active).is_(True),
-        UserEntity.password_hash != "",
+        func.length(UserEntity.password_hash) > 0,
     ).limit(1)
     return session.exec(administrator).first() is not None
 
