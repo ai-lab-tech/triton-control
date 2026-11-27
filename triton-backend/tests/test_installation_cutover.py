@@ -29,8 +29,10 @@ class CutoverTests(unittest.TestCase):
         mode.start()
         self.addCleanup(mode.stop)
         with Session(self.engine) as session:
-            session.add(UserEntity(id=1, email="admin@test", name="Admin", role="admin"))
+            admin = UserEntity(email="admin@test", name="Admin", role="admin")
+            session.add(admin)
             session.commit()
+            self.admin_id = admin.id
 
     def test_serving_records_do_not_block_cutover_or_get_deleted(self):
         # Arrange
@@ -46,7 +48,7 @@ class CutoverTests(unittest.TestCase):
     def test_existing_workspace_blocks_activation_without_deleting_it(self):
         # Arrange
         with Session(self.engine) as session:
-            session.add(CodeServerEntity(owner_user_id=1, name="workspace", namespace="dev", statefulset_name="code-1",
+            session.add(CodeServerEntity(owner_user_id=self.admin_id, name="workspace", namespace="dev", statefulset_name="code-1",
                 service_name="code-1", secret_name="code-1", image="fixture"))
             session.commit()
             # Act / Assert
@@ -89,7 +91,7 @@ class CutoverTests(unittest.TestCase):
         from app.db.entities import S3ProfileEntity
         from app.schemas import UpdateS3ProfileRequest
         with Session(self.engine) as session:
-            session.add(S3ProfileEntity(id=1, owner_user_id=1, name="artifacts", endpoint="https://s3.test",
+            session.add(S3ProfileEntity(id=1, owner_user_id=self.admin_id, name="artifacts", endpoint="https://s3.test",
                 bucket="models", region="us-east-1", access_key="read", prefix="approved"))
             session.commit()
             # Act / Assert
@@ -173,7 +175,7 @@ class CutoverTests(unittest.TestCase):
         # Arrange
         request = SelfRegisterRequest(email="viewer@example.test", password="ViewerLocal123!")
         with Session(self.engine) as session, patch.object(local_auth, "oidc_enabled", return_value=False):
-            admin = session.get_one(UserEntity, 1)
+            admin = session.get_one(UserEntity, self.admin_id)
             admin.password_hash = "existing-test-hash"
             session.commit()
 
@@ -188,7 +190,7 @@ class CutoverTests(unittest.TestCase):
         from app.db.entities import OperationEntity
         from app.repositories.deployment_intents import KIND
         with Session(self.engine) as session:
-            operation = OperationEntity(id="deployment", actor_id=1, kind=KIND, target="serving",
+            operation = OperationEntity(id="deployment", actor_id=self.admin_id, kind=KIND, target="serving",
                                         idempotency_key="key", payload_hash="hash", payload={})
             session.add(operation)
             session.commit()
@@ -203,7 +205,7 @@ class CutoverTests(unittest.TestCase):
         from app.repositories.operations import HANDOFF_CAPTURE_KIND
         from app.db.entities import OperationEntity
         with Session(self.engine) as session:
-            operation = OperationEntity(id="capture", actor_id=1, kind=HANDOFF_CAPTURE_KIND,
+            operation = OperationEntity(id="capture", actor_id=self.admin_id, kind=HANDOFF_CAPTURE_KIND,
                                         target="model-preparation", idempotency_key="key",
                                         payload_hash="hash", payload={})
             for state in ("pending", "running", "succeeded", "failed", "cancelled"):
@@ -236,7 +238,7 @@ class CutoverTests(unittest.TestCase):
         from app.services.storage.s3 import update_instance_s3
         claims = {"email": "admin@test", "role": "admin"}
         with Session(self.engine) as session:
-            session.add(S3ProfileEntity(id=1, owner_user_id=1, name="artifacts", endpoint="https://s3.test",
+            session.add(S3ProfileEntity(id=1, owner_user_id=self.admin_id, name="artifacts", endpoint="https://s3.test",
                 bucket="models", region="us-east-1", access_key="old", prefix="approved",
                 force_path_style=True, secret_key_enc=encrypt_secret("old-secret"),
                 secret_key_hash=hash_secret("old-secret")))
