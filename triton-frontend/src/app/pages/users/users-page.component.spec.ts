@@ -2,6 +2,7 @@
 import { HttpClient } from "@angular/common/http";
 import { TestBed } from "@angular/core/testing";
 import { MatDialog } from "@angular/material/dialog";
+import { By } from "@angular/platform-browser";
 import { of, Subject } from "rxjs";
 import { Action } from "@ngrx/store";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
@@ -9,6 +10,10 @@ import { provideMockActions } from "@ngrx/effects/testing";
 import { InstancesService, UsersService } from "../../api/generated/index";
 import { TeamsApiService } from "../teams/teams-api.service";
 import { UsersPageComponent } from "./users-page.component";
+import { AccessGroupsApiService } from "./access-groups/access-groups-api.service";
+import { AccessGroupsDialogComponent } from "./access-groups/access-groups-dialog.component";
+import { AccessGroupsPanelComponent } from "./access-groups/access-groups-panel.component";
+import { InstallationService } from "../../shared/installation/installation.service";
 import { selectUsers, selectUsersInstances } from "../../state/users/users.selectors";
 import {
   addInstanceToUserRequested,
@@ -59,6 +64,13 @@ describe("UsersPageComponent", () => {
       imports: [UsersPageComponent],
       providers: [
         {
+          provide: AccessGroupsApiService,
+          useValue: {
+            list: () =>
+              of([{ id: "vision", name: "Vision", revision: 2, user_ids: [1], instance_ids: [3] }]),
+          },
+        },
+        {
           provide: TeamsApiService,
           useValue: {
             engineeringGroup: () => of({ id: "engineering" }),
@@ -77,6 +89,34 @@ describe("UsersPageComponent", () => {
 
     mockStore = TestBed.inject(MockStore);
     mockStore.overrideSelector(selectUsersInstances, []);
+  });
+
+  it("lists groups in production and opens the selected group for editing", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    const installation = TestBed.inject(InstallationService);
+    const capabilities = { identity_admin: true };
+
+    // Act
+    installation.snapshot.set({ mode: "development", capabilities, explanation: "Development" });
+    fixture.detectChanges();
+    const developmentPanel = fixture.debugElement.query(By.directive(AccessGroupsPanelComponent));
+    installation.snapshot.set({ mode: "production", capabilities, explanation: "Production" });
+    fixture.detectChanges();
+    const panel = fixture.debugElement.query(By.directive(AccessGroupsPanelComponent));
+    const dialog = panel.injector.get(MatDialog);
+    const open = jasmine.isSpy(dialog.open)
+      ? dialog.open
+      : spyOn(dialog, "open").and.returnValue({ afterClosed: () => of(undefined) } as any);
+    panel.query(By.css('[aria-label="Edit Vision"]')).nativeElement.click();
+
+    // Assert
+    expect(developmentPanel).toBeNull();
+    expect(panel.nativeElement.textContent).toContain("Group Management");
+    expect(open).toHaveBeenCalledWith(
+      AccessGroupsDialogComponent,
+      jasmine.objectContaining({ data: jasmine.objectContaining({ groupId: "vision" }) }),
+    );
   });
 
   it("protects the sole active admin until a second admin becomes active", () => {

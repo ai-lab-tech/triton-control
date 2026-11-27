@@ -202,16 +202,22 @@ export class AuthService {
     };
   }
 
-  async getBootstrapStatus(): Promise<{ oidcEnabled: boolean; needsSetup: boolean }> {
+  async getBootstrapStatus(): Promise<{
+    oidcEnabled: boolean;
+    needsSetup: boolean;
+    localAdminSetupRequired: boolean;
+  }> {
     const res = (await firstValueFrom(
       this.usersApi.bootstrapStatusEndpointApiAuthBootstrapStatusGet(),
     )) as {
       oidc_enabled?: boolean;
       needs_setup?: boolean;
+      local_admin_setup_required?: boolean;
     };
     return {
       oidcEnabled: !!res?.oidc_enabled,
       needsSetup: !!res?.needs_setup,
+      localAdminSetupRequired: !!res?.local_admin_setup_required,
     };
   }
 

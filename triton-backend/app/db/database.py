@@ -76,6 +76,9 @@ def session_factory() -> Session:
 def init_db() -> None:
     """Initialize database - create all tables."""
     from app.db.entities import (  # Import models to register them
+        AccessGroupEntity,
+        AccessGroupInstanceEntity,
+        AccessGroupMemberEntity,
         AccountLifecycleTokenEntity,
         BuildContextEntity,
         BuildContextReceiptEntity,

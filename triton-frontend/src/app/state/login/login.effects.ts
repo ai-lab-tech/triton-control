@@ -36,10 +36,11 @@ export class LoginEffects {
       ofType(loginPageOpened),
       switchMap(() =>
         from(Promise.all([this.auth.getBootstrapStatus(), this.auth.getAuthOptions()])).pipe(
-          map(([{ oidcEnabled, needsSetup }, options]) =>
+          map(([{ oidcEnabled, needsSetup, localAdminSetupRequired }, options]) =>
             bootstrapStatusLoaded({
               oidcEnabled,
               needsBootstrap: !oidcEnabled && needsSetup,
+              localAdminSetupRequired,
               forgotPasswordAvailable: options.forgotPasswordAvailable,
             }),
           ),

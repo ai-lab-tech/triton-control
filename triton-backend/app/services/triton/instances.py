@@ -32,7 +32,7 @@ from app.mappers import entity_to_dto
 from app.repositories import dashboard_alerts, instances, users
 from app.repositories import perf_analyzer as perf_analyzer_repo
 from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTritonInstanceRequest
-from app.services.access import ensure_instance_access, get_instance_or_404
+from app.services.access import effective_instance_names, ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
@@ -185,7 +185,7 @@ def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -
     assigned: list[str] | None = None
     if not is_admin(claims):
         user = require_user_entity(session, claims)
-        assigned = [name for name in (user.assigned_instances or []) if name]
+        assigned = effective_instance_names(session, user)
 
     rows = instances.list_visible(session, limit=limit, assigned_names=assigned)
     return [entity_to_dto(row) for row in rows]

@@ -80,6 +80,31 @@ class InstallationHelmTests(unittest.TestCase):
         self.assertNotEqual(missing.returncode, 0)
         self.assertIn("Restore S3_SECRET_ENCRYPTION_KEY", missing.stderr)
 
+    def test_production_can_generate_signing_and_s3_keys_on_first_install(self):
+        # Arrange
+        args = [
+            "-f", str(CHART / "values-production.yaml"), "--show-only", "templates/secret.yaml",
+            "--set", "app.generateSigningSecrets=true",
+        ]
+
+        # Act
+        first = self.render(*args, external_secret=False)
+        second = self.render(*args, external_secret=False)
+        upgrade = self.render(*args, "--is-upgrade", external_secret=False)
+
+        # Assert
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        first_keys = yaml.safe_load(first.stdout)["stringData"]
+        second_keys = yaml.safe_load(second.stdout)["stringData"]
+        self.assertEqual(set(first_keys), {"SESSION_SECRET", "JWT_SECRET", "S3_SECRET_ENCRYPTION_KEY"})
+        self.assertEqual(len(set(first_keys.values())), 3)
+        for key, value in first_keys.items():
+            self.assertRegex(value, r"^[A-Za-z0-9]{64}$")
+            self.assertNotEqual(value, second_keys[key])
+        self.assertNotEqual(upgrade.returncode, 0)
+        self.assertIn("Restore JWT_SECRET", upgrade.stderr)
+
     def test_development_mounts_snapshot_claim_unless_an_external_store_is_configured(self):
         for options, expected in [
             ([], True),

@@ -23,6 +23,7 @@ from app.repositories import instances, operations, s3_profiles, users
 from app.schemas import CreateDeploymentRequest, DeploymentResponse
 from app.schemas.deployment_access import DeploymentAccessRequest
 from app.schemas.operations import OperationResponse, ReconcileResult
+from app.services.access import effective_instance_names
 from app.services.deployment import kubernetes as kube
 from app.services.deployment.access import validate_new_hostname
 from app.services.deployment.access_manifests import validate_policy
@@ -209,7 +210,7 @@ class DeploymentAdapter:
         instance = instances.find_by_name(session, target)
         if instance is None:
             raise ForbiddenError("Deployment instance no longer exists")
-        if actor.role.strip().lower() != "admin" and target not in actor.assigned_instances:
+        if actor.role.strip().lower() != "admin" and target not in effective_instance_names(session, actor):
             raise ForbiddenError("Deployment access revoked")
         if action != "read":
             authorize_actor(actor)

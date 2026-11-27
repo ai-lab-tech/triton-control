@@ -45,11 +45,13 @@
           </div>
         }
       } @else {
-        <div class="status warn">
+        <div class="status warn" [attr.role]="localAdminSetupRequired() ? 'alert' : null">
           <span class="material-icons">lock</span>
           <span>
             @if (needsBootstrap()) {
               No users found. Register the first admin account.
+            } @else if (localAdminSetupRequired()) {
+              A cluster operator must set up the first local admin.
             } @else {
               You are not signed in.
             }
@@ -151,15 +153,17 @@
             Log in with OIDC
           </button>
         } @else if (!needsBootstrap() && !registerMode()) {
-          <button
-            mat-stroked-button
-            class="action-btn action-btn-secondary"
-            (click)="enableRegisterMode()"
-            [disabled]="loading()"
-          >
-            <span class="material-icons">person_add</span>
-            Register with password
-          </button>
+          @if (!localAdminSetupRequired()) {
+            <button
+              mat-stroked-button
+              class="action-btn action-btn-secondary"
+              (click)="enableRegisterMode()"
+              [disabled]="loading()"
+            >
+              <span class="material-icons">person_add</span>
+              Register with password
+            </button>
+          }
           @if (forgotPasswordAvailable()) {
             <a mat-stroked-button class="action-btn action-btn-secondary" href="/forgot-password">
               <span class="material-icons">key</span>

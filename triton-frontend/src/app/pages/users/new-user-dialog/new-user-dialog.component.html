@@ -2,100 +2,109 @@
   <h2 mat-dialog-title class="dialog-title">Add user</h2>
 
   <mat-dialog-content class="dialog-form">
-    <div class="form-row">
-      <label class="field-label" for="dialog-user-name">Full name</label>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <input id="dialog-user-name" matInput [(ngModel)]="newUser.name" placeholder="Full name" />
-      </mat-form-field>
-    </div>
-    <div class="form-row">
-      <label class="field-label" for="dialog-user-email">Email</label>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <input
-          id="dialog-user-email"
-          matInput
-          [(ngModel)]="newUser.email"
-          placeholder="Email"
-          type="email"
-          pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
-        />
-      </mat-form-field>
-    </div>
-    <div class="form-row">
-      <label class="field-label" for="dialog-user-role">Role</label>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-select id="dialog-user-role" [(ngModel)]="newUser.role">
-          <mat-option value="admin">admin</mat-option>
-          <mat-option value="member">member</mat-option>
-          <mat-option value="viewer">viewer</mat-option>
-        </mat-select>
-      </mat-form-field>
-    </div>
-    <div class="form-row">
-      <span class="field-label">Authentication</span>
-      <span>{{ oidcEnabled() ? "OIDC identity" : "Local password" }}</span>
-    </div>
-    @if (!oidcEnabled() && invitationAvailable) {
+    @if (registrationOnly) {
+      <p>Ask the user to choose <strong>Register with password</strong> on the sign-in page.</p>
+      <p>Then verify their identity and select <strong>Approve</strong> in User Management.</p>
+    } @else {
       <div class="form-row">
-        <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
+        <label class="field-label" for="dialog-user-name">Full name</label>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
-          <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
-            <mat-option value="invite">Invite user</mat-option>
-            <mat-option value="inactive">Create inactive account</mat-option>
+          <input
+            id="dialog-user-name"
+            matInput
+            [(ngModel)]="newUser.name"
+            placeholder="Full name"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="dialog-user-email">Email</label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <input
+            id="dialog-user-email"
+            matInput
+            [(ngModel)]="newUser.email"
+            placeholder="Email"
+            type="email"
+            pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
+          />
+        </mat-form-field>
+      </div>
+      <div class="form-row">
+        <label class="field-label" for="dialog-user-role">Role</label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-select id="dialog-user-role" [(ngModel)]="newUser.role">
+            <mat-option value="admin">admin</mat-option>
+            <mat-option value="member">member</mat-option>
+            <mat-option value="viewer">viewer</mat-option>
           </mat-select>
         </mat-form-field>
       </div>
-    } @else if (!oidcEnabled()) {
-      <p class="dialog-hint">
-        Email invitations are disabled. Pre-created local accounts stay inactive until invitations
-        are enabled in Settings; otherwise ask new users to self-register for approval.
-      </p>
+      <div class="form-row">
+        <span class="field-label">Authentication</span>
+        <span>{{ oidcEnabled() ? "OIDC identity" : "Local password" }}</span>
+      </div>
+      @if (!oidcEnabled() && invitationAvailable) {
+        <div class="form-row">
+          <label class="field-label" for="dialog-user-creation-mode">Account setup</label>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-select id="dialog-user-creation-mode" [(ngModel)]="newUser.creationMode">
+              <mat-option value="invite">Invite user</mat-option>
+              <mat-option value="inactive">Create inactive account</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+      }
+      <div class="form-row">
+        <label class="field-label" for="dialog-user-instances">Assigned instances</label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-select id="dialog-user-instances" [(ngModel)]="newUser.instances" multiple>
+            @for (instance of instances(); track instance) {
+              <mat-option [value]="instance">{{ instance }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
     }
-    <div class="form-row">
-      <label class="field-label" for="dialog-user-instances">Assigned instances</label>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-select id="dialog-user-instances" [(ngModel)]="newUser.instances" multiple>
-          @for (instance of instances(); track instance) {
-            <mat-option [value]="instance">{{ instance }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    </div>
   </mat-dialog-content>
 
   <mat-dialog-actions class="dialog-actions" align="end">
-    @if (notice) {
-      <span [attr.role]="saving ? 'status' : null" [attr.aria-live]="saving ? 'polite' : null">
-        {{ notice }}
-      </span>
-    }
-    @if (error) {
-      <span class="dialog-error">{{ error }}</span>
-    }
-    @if (manualLink) {
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <input matInput [value]="manualLink" readonly aria-label="One-time activation link" />
-      </mat-form-field>
-      <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
-    }
-    <button mat-stroked-button type="button" (click)="close()" [disabled]="saving">Cancel</button>
-    <button
-      mat-flat-button
-      class="dialog-submit-button"
-      color="primary"
-      type="button"
-      (click)="save()"
-      [disabled]="!canSave || saving || !!manualLink"
-      [attr.aria-busy]="saving"
-    >
-      @if (saving) {
-        <mat-spinner class="dialog-submit-spinner" diameter="18" aria-hidden="true"></mat-spinner>
-        <span>Sending invitation…</span>
-      } @else {
-        <span>
-          {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
+    @if (registrationOnly) {
+      <button mat-flat-button type="button" (click)="close()">Done</button>
+    } @else {
+      @if (notice) {
+        <span [attr.role]="saving ? 'status' : null" [attr.aria-live]="saving ? 'polite' : null">
+          {{ notice }}
         </span>
       }
-    </button>
+      @if (error) {
+        <span class="dialog-error">{{ error }}</span>
+      }
+      @if (manualLink) {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <input matInput [value]="manualLink" readonly aria-label="One-time activation link" />
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="copyManualLink()">Copy link</button>
+      }
+      <button mat-stroked-button type="button" (click)="close()" [disabled]="saving">Cancel</button>
+      <button
+        mat-flat-button
+        class="dialog-submit-button"
+        color="primary"
+        type="button"
+        (click)="save()"
+        [disabled]="!canSave || saving || !!manualLink"
+        [attr.aria-busy]="saving"
+      >
+        @if (saving) {
+          <mat-spinner class="dialog-submit-spinner" diameter="18" aria-hidden="true"></mat-spinner>
+          <span>Sending invitation…</span>
+        } @else {
+          <span>
+            {{ newUser.creationMode === "invite" && !oidcEnabled() ? "Invite user" : "Add user" }}
+          </span>
+        }
+      </button>
+    }
   </mat-dialog-actions>
 </div>

@@ -33,7 +33,11 @@ describe("LoginPageComponent", () => {
       "registerFirstUser",
       "loginWithOidc",
     ]);
-    authServiceMock.getBootstrapStatus.and.resolveTo({ oidcEnabled: false, needsSetup: false });
+    authServiceMock.getBootstrapStatus.and.resolveTo({
+      oidcEnabled: false,
+      needsSetup: false,
+      localAdminSetupRequired: false,
+    });
     authServiceMock.getAuthOptions.and.resolveTo({
       oidcEnabled: false,
       kubernetesEnabled: true,
@@ -70,6 +74,29 @@ describe("LoginPageComponent", () => {
   it("CreateComponent_TestBedInitialized_CreatesComponentInstance", () => {
     const fixture = TestBed.createComponent(LoginPageComponent);
     expect(fixture.componentInstance).toBeTruthy();
+  });
+
+  it("explains first-admin setup and hides registration while production needs an admin", async () => {
+    // Arrange
+    const fixture = TestBed.createComponent(LoginPageComponent);
+    await fixture.whenStable();
+
+    // Act
+    store.dispatch(
+      bootstrapStatusLoaded({
+        oidcEnabled: false,
+        needsBootstrap: false,
+        localAdminSetupRequired: true,
+      }),
+    );
+    fixture.detectChanges();
+
+    // Assert
+    const page: HTMLElement = fixture.nativeElement;
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain(
+      "A cluster operator must set up the first local admin.",
+    );
+    expect(page.textContent).not.toContain("Register with password");
   });
 
   it("LoginWithPassword_OidcEnabled_ShowsDisabledErrorMessage", async () => {

@@ -233,7 +233,12 @@
                         >ML engineer</mat-checkbox
                       >
                     </div>
-                    <h3>Assigned instances</h3>
+                    <h3>Direct instance assignments</h3>
+                    @if (showAccessGroups() && row.role.trim().toLowerCase() === "viewer") {
+                      <button mat-button type="button" (click)="openAccessSources(row)">
+                        View access sources
+                      </button>
+                    }
                     <div class="instance-chips">
                       @for (instance of row.instances; track instance) {
                         <span class="instance-chip">
@@ -290,4 +295,7 @@
       </tbody>
     </table></mat-card
   >
+  @if (showAccessGroups()) {
+    <app-access-groups-panel [users]="users()" [usersLoading]="loading() || !!error()" />
+  }
 </div>
