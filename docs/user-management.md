@@ -19,19 +19,12 @@ Changing a user's role from the Users page also activates a pending account.
 
 ## First Admin
 
-On a fresh local-auth deployment, the first local admin can be created through
-the initial setup flow. This flow is available only when OIDC is disabled and no
-users exist.
+- **Dev:** With OIDC disabled and an empty user database, create the first
+  local admin in the browser.
+- **Prod:** A cluster operator must provision the first local admin before login.
+  The Helm chart has no local-admin bootstrap setting.
 
-The first admin needs:
-
-- email
-- password with 12-128 characters, at least one uppercase letter, one lowercase
-  letter, one digit, one special character, and no whitespace
-- optional display name
-
-After the first admin exists, additional users are managed from the **User Management**
-page.
+After signing in, manage additional accounts in **User Management**.
 
 ## Add A Local Email/Password User
 
