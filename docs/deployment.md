@@ -358,7 +358,7 @@ Feature-dependent paths:
 | `/v2/models/stats`                             | `GET`                       | Optional                  | Fallback inference timing metrics when Prometheus metrics are unavailable.               | Inference metrics may show no timing source.                         |
 | `/v2/repository/models/<model>/load`           | `POST`                      | Optional write action     | Explicit model load.                                                                     | Load action fails or should be hidden by policy.                     |
 | `/v2/repository/models/<model>/unload`         | `POST`                      | Optional write action     | Explicit model unload.                                                                   | Unload action fails or should be hidden by policy.                   |
-| `/metrics`                                     | `GET`                       | Optional metrics endpoint | CPU, RAM, GPU, and Prometheus inference metrics. This is often on Triton's metrics port. | Metrics show `N/A` or fall back to `/v2/models/stats` when possible. |
+| `/metrics`                                     | `GET`                       | Optional metrics endpoint | GPU utilization, GPU memory, and Prometheus inference metrics. | GPU readings become unavailable. Inference metrics fall back to `/v2/models/stats` when possible. |
 
 For a strict inference-only public Triton ingress, allow only:
 

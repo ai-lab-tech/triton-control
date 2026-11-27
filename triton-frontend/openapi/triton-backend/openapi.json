@@ -12474,6 +12474,111 @@
         ],
         "title": "InstancePods"
       },
+      "InstanceResourceUsage": {
+        "properties": {
+          "cpu_limit_millicores": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit Millicores"
+          },
+          "memory_limit_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit Bytes"
+          },
+          "cpu_millicores": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Millicores"
+          },
+          "memory_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Bytes"
+          },
+          "workload_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workload Error"
+          },
+          "gpu_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Percent"
+          },
+          "gpu_memory_used_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Memory Used Bytes"
+          },
+          "gpu_memory_total_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Memory Total Bytes"
+          },
+          "gpu_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Error"
+          }
+        },
+        "type": "object",
+        "title": "InstanceResourceUsage"
+      },
       "InstanceS3ConfigDTO": {
         "properties": {
           "enabled": {
@@ -16860,6 +16965,16 @@
               }
             ],
             "title": "Metrics Url"
+          },
+          "resource_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstanceResourceUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "metrics_cpu": {
             "type": "number",

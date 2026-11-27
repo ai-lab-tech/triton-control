@@ -101,18 +101,24 @@ The instance list shows each visible Triton instance with:
 - region when configured
 - health status
 - number of models
-- CPU, RAM, and GPU metrics when a metrics endpoint is configured
+- container CPU and RAM for managed deployments, plus GPU utilization and memory from Triton
 
 Use search and status filters to find an instance. Open **Details** to inspect
 runtime status, metadata, models, and S3 configuration.
 
 ### Metrics Behavior
 
-CPU, RAM, and GPU values are shown only when the instance has a metrics endpoint
-configured and Triton exposes usable Prometheus metrics.
+CPU and RAM come from the Kubernetes Resource Metrics API. The backend sums the
+running Triton containers across replicas and excludes sidecars. CPU is shown in
+millicores and memory as working-set bytes converted to MiB or GiB. A limit is
+shown when every included container has that resource limit. If a replica has
+no sample for a resource, its aggregate is unavailable. External instances have
+no Kubernetes container metrics.
 
-- if no metrics endpoint is configured, the UI shows `N/A`
-- if the endpoint is configured but cannot be read, the detail page shows a metrics error
+GPU utilization and GPU memory come from the sampled Triton server's Prometheus
+endpoint. Utilization is the mean across reporting GPUs, and memory is the sum
+of the reported device values. On shared GPUs these are device-wide measurements.
+Missing metrics display as `Unavailable`; a measured zero remains visible.
 
 Example metrics endpoint:
 

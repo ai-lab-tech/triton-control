@@ -35,6 +35,56 @@ export function resolveVersion(dto: { server_metadata?: unknown }): string {
   return typeof version === "string" ? version : "";
 }
 
+function formatResourceMetrics(dto: TritonInstanceDTO) {
+  const usage = dto.resource_usage;
+  const bytes = (value: number) =>
+    value >= 1024 ** 3
+      ? (value / 1024 ** 3).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " GiB"
+      : (value / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " MiB";
+  const cpu = (value: number) => Math.round(value) + " mCPU";
+  const quantity = (
+    used: number | null | undefined,
+    limit: number | null | undefined,
+    format: (value: number) => string,
+  ) => (used == null ? "Unavailable" : format(used) + (limit == null ? "" : " / " + format(limit)));
+  const workload =
+    usage?.workload_error ||
+    (dto.is_self_deployed
+      ? "Running Triton containers across replicas. Usage / limit when configured."
+      : "Container metrics require a managed Kubernetes deployment.");
+  const gpu =
+    usage?.gpu_error ||
+    (dto.metrics_url ? "No sample reported by Triton." : "No Triton metrics endpoint configured.");
+  return [
+    {
+      label: "CPU",
+      value: quantity(usage?.cpu_millicores, usage?.cpu_limit_millicores, cpu),
+      description: workload,
+    },
+    {
+      label: "RAM",
+      value: quantity(usage?.memory_bytes, usage?.memory_limit_bytes, bytes),
+      description: workload,
+    },
+    {
+      label: "GPU",
+      value: usage?.gpu_percent == null ? "Unavailable" : usage.gpu_percent + "%",
+      description:
+        usage?.gpu_percent == null
+          ? gpu
+          : "Mean utilization across devices on the sampled Triton server.",
+    },
+    {
+      label: "GPU memory",
+      value: quantity(usage?.gpu_memory_used_bytes, usage?.gpu_memory_total_bytes, bytes),
+      description:
+        usage?.gpu_memory_used_bytes == null
+          ? gpu
+          : "Used / total memory across devices on the sampled Triton server.",
+    },
+  ];
+}
+
 export function dtoToInstance(dto: TritonInstanceDTO): Instance {
   const metadata = (dto.server_metadata ?? null) as Record<string, unknown> | null;
   const deployment = dto as TritonInstanceDTO & Record<string, unknown>;
@@ -85,6 +135,7 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
       : [],
     serverMetadata: metadata,
     qps: 0,
+    resourceMetrics: formatResourceMetrics(dto),
     cpu: normalizePercent(dto.metrics_cpu),
     ram: normalizePercent(dto.metrics_ram),
     gpu: normalizePercent(dto.metrics_gpu),

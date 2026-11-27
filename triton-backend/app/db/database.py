@@ -283,6 +283,7 @@ def _migrate_triton_instances_table() -> None:
                 """
             )
         )
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS resource_usage JSON"))
         conn.execute(
             text(
                 """

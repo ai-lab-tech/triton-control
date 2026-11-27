@@ -107,6 +107,7 @@ async def create_instance(
         triton_verify_ssl=request.verify_ssl,
         triton_ca_certificate=request.ca_certificate if request.verify_ssl else "",
         metrics_url=request.metrics_url,
+        resource_usage=metrics_snapshot.get("resource_usage"),
         metrics_cpu=metrics_snapshot["cpu"],
         metrics_ram=metrics_snapshot["ram"],
         metrics_gpu=metrics_snapshot["gpu"],
@@ -171,6 +172,10 @@ async def update_instance(
     instance.triton_verify_ssl = request.verify_ssl
     instance.triton_ca_certificate = request.ca_certificate if request.verify_ssl else ""
     instance.metrics_url = request.metrics_url
+    instance.resource_usage = {
+        **{k: v for k, v in (getattr(instance, "resource_usage", None) or {}).items() if not k.startswith("gpu_")},
+        **(metrics_snapshot.get("resource_usage") or {}),
+    }
     instance.metrics_cpu = metrics_snapshot["cpu"]
     instance.metrics_ram = metrics_snapshot["ram"]
     instance.metrics_gpu = metrics_snapshot["gpu"]

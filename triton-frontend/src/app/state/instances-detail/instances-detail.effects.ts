@@ -281,6 +281,7 @@ export class InstancesDetailEffects {
       )
         ? ((dto as TritonInstanceDTO & Record<string, unknown>)["pod_statuses"] as string[])
         : [],
+      resourceMetrics: instance.resourceMetrics,
       cpu: normalizePercent(dto.metrics_cpu),
       ram: normalizePercent(dto.metrics_ram),
       gpu: normalizePercent(dto.metrics_gpu),

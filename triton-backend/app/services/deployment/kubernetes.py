@@ -14,6 +14,7 @@ queries except through deployment record helper functions.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import time
@@ -180,6 +181,53 @@ def is_pod_ready(namespace: str, deployment_name: str) -> bool:
     except Exception:
         return False
     return False
+
+
+def read_workload_usage(namespace: str, deployment_name: str) -> dict[str, Any]:
+    """Sum running Triton containers, excluding sidecars and incomplete replica samples."""
+    from kubernetes import client
+    from kubernetes.utils.quantity import parse_quantity  # type: ignore[import-untyped]
+
+    if not deployment_name:
+        return {"workload_error": "Deployment name unavailable."}
+    selector = f"app=triton,deployment={deployment_name}"
+    try:
+        api = _client()
+        running = client.CoreV1Api(api).list_namespaced_pod(
+            namespace, label_selector=selector, field_selector="status.phase=Running", _request_timeout=5,
+        ).items
+        names = {pod.metadata.name for pod in running}
+        samples = client.CustomObjectsApi(api).list_namespaced_custom_object(
+            "metrics.k8s.io", "v1beta1", namespace, "pods", label_selector=selector, _request_timeout=5,
+        )
+        usage = {
+            pod["metadata"]["name"]: container["usage"]
+            for pod in samples["items"]
+            for container in pod["containers"] if container["name"] == "triton"
+        }
+        limits = {
+            pod.metadata.name: (container.resources.limits or {}) if container.resources else {}
+            for pod in running for container in pod.spec.containers if container.name == "triton"
+        }
+        result: dict[str, Any] = {}
+        for resource, field, multiplier in (("cpu", "cpu_millicores", 1000), ("memory", "memory_bytes", 1)):
+            if names and all(resource in limits.get(name, {}) for name in names):
+                limit_field = "cpu_limit_millicores" if resource == "cpu" else "memory_limit_bytes"
+                result[limit_field] = float(sum(parse_quantity(limits[name][resource]) for name in names) * multiplier)
+            if names and all(resource in usage.get(name, {}) for name in names):
+                result[field] = float(sum(parse_quantity(usage[name][resource]) for name in names) * multiplier)
+            else:
+                result["workload_error"] = "Waiting for resource metrics for all running Triton containers."
+        return result
+    except client.ApiException as exc:
+        if exc.status == 403:
+            return {"workload_error": "Permission denied reading Kubernetes resource metrics."}
+        return {"workload_error": "Kubernetes resource metrics unavailable."}
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Could not read workload metrics for %s/%s", namespace, deployment_name, exc_info=True,
+        )
+        return {"workload_error": "Kubernetes resource metrics unavailable."}
 
 
 def read_pod_statuses(namespace: str, deployment_name: str) -> list[str]:

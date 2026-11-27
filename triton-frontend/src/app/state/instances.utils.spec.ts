@@ -2,6 +2,25 @@ import { TritonInstanceDTO } from "../api/generated/index";
 import { dtoToInstance, isSelfDeployedStarting, resolveStatus } from "./instances.utils";
 
 describe("instances utils", () => {
+  it("keeps measured zero and uses container telemetry independently of the Triton scrape", () => {
+    const dto: TritonInstanceDTO = {
+      id: 42,
+      name: "demo",
+      url: "http://demo",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
+      metrics_cpu: 90,
+      metrics_error: "No host CPU sample",
+      resource_usage: { cpu_millicores: 250, cpu_limit_millicores: 1000, gpu_percent: 0 },
+    };
+    expect(dtoToInstance(dto).resourceMetrics?.map((metric) => metric.value)).toEqual([
+      "250 mCPU / 1000 mCPU",
+      "Unavailable",
+      "0%",
+      "Unavailable",
+    ]);
+  });
+
   it("DtoToInstance_DeploymentLogContainsRuntimeFields_MapsDeploymentMetadata", () => {
     const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 42,

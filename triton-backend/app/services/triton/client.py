@@ -178,6 +178,7 @@ class TritonService:
                 "cpu": 0.0,
                 "ram": 0.0,
                 "gpu": 0.0,
+                "resource_usage": {"gpu_error": "No Triton metrics endpoint configured."},
                 "checked_at": None,
                 "error": None,
             }
@@ -190,9 +191,7 @@ class TritonService:
             text = response.content.decode("utf-8", errors="replace")
             metrics = self._parse_prometheus_metrics(text)
             return {
-                "cpu": metrics["cpu"],
-                "ram": metrics["ram"],
-                "gpu": metrics["gpu"],
+                **metrics,
                 "checked_at": datetime.now(timezone.utc),
                 "error": metrics["error"],
             }
@@ -202,6 +201,7 @@ class TritonService:
                 "ram": 0.0,
                 "gpu": 0.0,
                 "checked_at": datetime.now(timezone.utc),
+                "resource_usage": {"gpu_error": "Triton metrics request failed."},
                 "error": f"metrics request failed: {exc}",
             }
 
@@ -254,7 +254,8 @@ class TritonService:
             except ValueError:
                 continue
 
-            values.setdefault(name, []).append(value)
+            if 0 <= value < float("inf"):
+                values.setdefault(name, []).append(value)
 
         cpu_values = TritonService._metric_values(values, ["nv_cpu_utilization", "cpu_utilization"])
         gpu_values = TritonService._metric_values(values, ["nv_gpu_utilization", "gpu_utilization"])
@@ -282,7 +283,13 @@ class TritonService:
             ram_used = max(0.0, ram_total - ram_free)
 
         cpu = TritonService._average(cpu_values)
+        if "nv_cpu_utilization" in values:
+            cpu = TritonService._average(values["nv_cpu_utilization"]) * 100
         gpu = TritonService._average(gpu_values)
+        if "nv_gpu_utilization" in values:
+            gpu = TritonService._average(values["nv_gpu_utilization"]) * 100
+        used = values.get("nv_gpu_memory_used_bytes", [])
+        total = values.get("nv_gpu_memory_total_bytes", [])
         ram = (ram_used / ram_total * 100) if ram_total > 0 else 0.0
         missing: list[str] = []
         if not cpu_values:
@@ -291,6 +298,11 @@ class TritonService:
             missing.append("nv_cpu_memory_used_bytes/nv_cpu_memory_total_bytes")
 
         return {
+            "resource_usage": {
+                "gpu_percent": TritonService._clamp_percent(gpu) if gpu_values else None,
+                "gpu_memory_used_bytes": sum(used) if used else None,
+                "gpu_memory_total_bytes": sum(total) if total else None,
+            },
             "cpu": TritonService._clamp_percent(cpu),
             "ram": TritonService._clamp_percent(ram),
             "gpu": TritonService._clamp_percent(gpu),

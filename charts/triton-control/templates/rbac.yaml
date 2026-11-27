@@ -12,6 +12,9 @@ metadata:
   labels:
     {{- include "triton-control.labels" . | nindent 4 }}
 rules:
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["list"]
   {{- if eq (include "triton-control.installationMode" .) "production" }}
   - apiGroups: [""]
     resources: ["serviceaccounts", "secrets", "services", "pods", "pods/log", "configmaps", "persistentvolumeclaims"]

@@ -122,24 +122,12 @@
       </div>
     }
     <div class="detail-stats">
-      <div class="stat-block">
-        <span class="label">CPU</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.cpu + "%" : "N/A"
-        }}</span>
-      </div>
-      <div class="stat-block">
-        <span class="label">RAM</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.ram + "%" : "N/A"
-        }}</span>
-      </div>
-      <div class="stat-block">
-        <span class="label">GPU</span>
-        <span class="value">{{
-          instance.metricsUrl && !instance.metricsError ? instance.gpu + "%" : "N/A"
-        }}</span>
-      </div>
+      @for (metric of instance.resourceMetrics; track metric.label) {
+        <div class="stat-block" [title]="metric.description">
+          <span class="label">{{ metric.label }}</span>
+          <span class="value">{{ metric.value }}</span>
+        </div>
+      }
       <div class="stat-block">
         <span class="label">Assigned users</span>
         <span class="value">{{ instance.assignedUsers.length }}</span>
@@ -880,7 +868,7 @@
               />
             </mat-form-field>
             <div class="panel-hint">
-              Optional Prometheus metrics endpoint for CPU, RAM, and GPU usage.
+              Optional Triton metrics endpoint for GPU utilization and GPU memory.
             </div>
           </div>
           <div class="toggle-row compact s3-ssl-row">

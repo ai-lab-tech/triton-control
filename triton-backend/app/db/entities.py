@@ -60,6 +60,7 @@ class TritonInstanceEntity(SQLModel, table=True):
     triton_verify_ssl: bool = Field(default=False)
     triton_ca_certificate: str = Field(default="")
     metrics_url: Optional[str] = None
+    resource_usage: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     metrics_cpu: float = Field(default=0)
     metrics_ram: float = Field(default=0)
     metrics_gpu: float = Field(default=0)

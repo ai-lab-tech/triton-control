@@ -164,6 +164,7 @@ class InstanceHealthRefresher:
             triton_ca_certificate = instance.triton_ca_certificate
 
         resolved_urls: dict[str, str] | None = None
+        workload_usage = {"workload_error": "Container metrics require a managed Kubernetes deployment."}
         pod_statuses = instance.pod_statuses
         if is_self_deployed and deployment_namespace:
             ns = deployment_namespace
@@ -172,12 +173,14 @@ class InstanceHealthRefresher:
                 await asyncio.to_thread(_finish_scale, instance_id)
             except Exception:
                 logger.exception("Could not reconcile pending replica target for instance %s", instance_id)
+            workload_usage = await asyncio.to_thread(deployment_k8s.read_workload_usage, ns, dn)
             pod_statuses = await asyncio.to_thread(deployment_k8s.read_pod_statuses, ns, dn)
             if not await asyncio.to_thread(deployment_k8s.is_pod_ready, ns, dn):
                 with session_factory() as session:
                     current = instances.find_by_id(session, instance_id)
                     if not current:
                         return []
+                    current.resource_usage = {**workload_usage, "gpu_error": "Waiting for Triton readiness."}
                     current.pod_statuses = pod_statuses
                     current.health_live = False
                     current.health_ready = False
@@ -233,6 +236,10 @@ class InstanceHealthRefresher:
             current.health_error = snapshot["error"]
             current.repository_models = repository_models
             current.model_names = repository_model_names(repository_models)
+            current.resource_usage = {
+                **workload_usage,
+                **((metrics_snapshot or {}).get("resource_usage") or {}),
+            }
             if metrics_snapshot is not None:
                 current.metrics_cpu = metrics_snapshot["cpu"]
                 current.metrics_ram = metrics_snapshot["ram"]

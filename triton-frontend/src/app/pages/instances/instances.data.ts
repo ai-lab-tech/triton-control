@@ -41,6 +41,7 @@ export type Instance = {
   podStatuses: string[];
   serverMetadata: Record<string, unknown> | null;
   qps: number;
+  resourceMetrics?: { label: string; value: string; description: string }[];
   cpu: number;
   ram: number;
   gpu: number;
