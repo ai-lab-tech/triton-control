@@ -158,27 +158,7 @@ class UserApiHelperTests(unittest.TestCase):
         require_member_or_admin({"role": "member"})
 
         # Arrange
-        users = [
-            UserEntity(
-                email="a@a.com",
-                name="A",
-                role="admin",
-                auth_provider="local",
-                password_hash="x",
-                assigned_instances=[],
-                is_active=True,
-            ),
-            UserEntity(
-                email="b@b.com",
-                name="B",
-                role="viewer",
-                auth_provider="oidc",
-                password_hash=None,
-                assigned_instances=[],
-                is_active=True,
-            ),
-        ]
-        session = _FakeSession(exec_results=[_ExecResult(all_rows=users)])
+        session = _FakeSession(exec_results=[_ExecResult(first=1)])
 
         # Act
         has_active_local_admin = _has_active_local_admin_login(session)

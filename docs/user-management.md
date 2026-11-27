@@ -22,7 +22,7 @@ Changing a user's role from the Users page also activates a pending account.
 - **Dev:** With OIDC disabled and an empty user database, create the first
   local admin in the browser.
 - **Prod:** A cluster operator must provision the first local admin before login.
-  The Helm chart has no local-admin bootstrap setting.
+  The sign-in page explains this and blocks sign-up until an admin exists.
 
 After signing in, manage additional accounts in **User Management**.
 

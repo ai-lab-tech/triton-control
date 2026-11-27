@@ -32,6 +32,7 @@ import {
   selectLoginError,
   selectLoginForgotPasswordAvailable,
   selectLoginLoading,
+  selectLoginLocalAdminSetupRequired,
   selectLoginNeedsBootstrap,
   selectLoginNotice,
   selectLoginOidcEnabled,
@@ -72,6 +73,12 @@ export class LoginPageComponent {
     initialValue: false,
   });
   readonly loading = toSignal(this.store.select(selectLoginLoading), { initialValue: false });
+  readonly localAdminSetupRequired = toSignal(
+    this.store.select(selectLoginLocalAdminSetupRequired),
+    {
+      initialValue: false,
+    },
+  );
   readonly error = toSignal(this.store.select(selectLoginError), { initialValue: "" });
   readonly notice = toSignal(this.store.select(selectLoginNotice), { initialValue: "" });
   readonly registerMode = toSignal(this.store.select(selectLoginRegisterMode), {
@@ -147,6 +154,7 @@ export class LoginPageComponent {
   }
 
   registerWithPassword(): void {
+    if (this.localAdminSetupRequired()) return;
     if (this.oidcEnabled()) {
       this.store.dispatch(
         registerWithPasswordFailed({ message: "Registration is disabled when OIDC is enabled." }),
@@ -179,6 +187,7 @@ export class LoginPageComponent {
   }
 
   enableRegisterMode(): void {
+    if (this.localAdminSetupRequired()) return;
     this.store.dispatch(registerModeEnabled());
   }
 

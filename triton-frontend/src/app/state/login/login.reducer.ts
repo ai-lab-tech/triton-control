@@ -19,6 +19,7 @@ export const LOGIN_FEATURE_KEY = "login";
 export interface LoginState {
   oidcEnabled: boolean;
   needsBootstrap: boolean;
+  localAdminSetupRequired: boolean;
   loading: boolean;
   error: string;
   notice: string;
@@ -29,6 +30,7 @@ export interface LoginState {
 const initialState: LoginState = {
   oidcEnabled: false,
   needsBootstrap: false,
+  localAdminSetupRequired: false,
   loading: false,
   error: "",
   notice: "",
@@ -41,18 +43,24 @@ export const loginReducer = createReducer(
 
   on(loginPageOpened, (state) => ({ ...state, error: "", notice: "" })),
 
-  on(bootstrapStatusLoaded, (state, { oidcEnabled, needsBootstrap, forgotPasswordAvailable }) => ({
-    ...state,
-    oidcEnabled,
-    needsBootstrap,
-    forgotPasswordAvailable: !!forgotPasswordAvailable,
-  })),
+  on(
+    bootstrapStatusLoaded,
+    (state, { oidcEnabled, needsBootstrap, forgotPasswordAvailable, localAdminSetupRequired }) => ({
+      ...state,
+      oidcEnabled,
+      needsBootstrap,
+      localAdminSetupRequired: !!localAdminSetupRequired,
+      registerMode: !localAdminSetupRequired && state.registerMode,
+      forgotPasswordAvailable: !!forgotPasswordAvailable,
+    }),
+  ),
 
   on(bootstrapStatusFailed, (state) => ({
     ...state,
     // Avoid stale OIDC UI state when bootstrap-status request fails.
     oidcEnabled: false,
     needsBootstrap: false,
+    localAdminSetupRequired: false,
     forgotPasswordAvailable: false,
   })),
 

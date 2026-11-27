@@ -8800,6 +8800,11 @@
           "needs_setup": {
             "type": "boolean",
             "title": "Needs Setup"
+          },
+          "local_admin_setup_required": {
+            "type": "boolean",
+            "title": "Local Admin Setup Required",
+            "default": false
           }
         },
         "type": "object",

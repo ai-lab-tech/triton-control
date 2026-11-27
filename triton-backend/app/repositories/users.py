@@ -66,17 +66,13 @@ def is_last_active_admin_for_update(session: Session, user_id: int) -> bool:
 
 
 def has_active_local_admin_login(session: Session) -> bool:
-    users = session.exec(select(UserEntity)).all()
-    for user in users:
-        role = (user.role or "").strip().lower()
-        if (
-            (user.auth_provider or "").strip().lower() == "local"
-            and bool(user.password_hash)
-            and bool(user.is_active)
-            and role == "admin"
-        ):
-            return True
-    return False
+    administrator = select(UserEntity.id).where(
+        func.lower(func.trim(UserEntity.auth_provider)) == "local",
+        func.lower(func.trim(UserEntity.role)) == "admin",
+        col(UserEntity.is_active).is_(True),
+        UserEntity.password_hash != "",
+    ).limit(1)
+    return session.exec(administrator).first() is not None
 
 
 def save(session: Session, user: UserEntity, *, refresh: bool = True) -> UserEntity:
