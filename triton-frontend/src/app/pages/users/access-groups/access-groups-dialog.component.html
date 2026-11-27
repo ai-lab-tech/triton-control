@@ -1,5 +1,11 @@
 <h2 mat-dialog-title>
-  {{ data.account ? "Instance access for " + data.account.name : "Access groups" }}
+  {{
+    data.account
+      ? "Instance access for " + data.account.name
+      : data.groupId
+        ? "Edit group"
+        : "Add group"
+  }}
 </h2>
 <mat-dialog-content>
   @if (busy()) {
@@ -7,7 +13,7 @@
   }
   @if (error()) {
     <p role="alert">{{ error() }}</p>
-    <button mat-button type="button" (click)="reload()" [disabled]="busy()">Reload groups</button>
+    <button mat-button type="button" (click)="reload()" [disabled]="busy()">Reload</button>
   }
   @if (data.account; as account) {
     <h3>Direct assignments</h3>
@@ -27,26 +33,17 @@
       </ul>
     }
   } @else if (loaded()) {
-    <p>
-      Group assignments give members access to the selected instances. Their roles determine what
-      they can do.
-    </p>
-    <mat-form-field>
-      <mat-label>Group to edit</mat-label>
-      <mat-select [value]="selected" (selectionChange)="choose($event.value)" [disabled]="busy()">
-        <mat-option>Create a group</mat-option>
-        @for (group of groups(); track group.id) {
-          <mat-option [value]="group">{{ group.name }}</mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
     <mat-form-field>
       <mat-label>Group name</mat-label>
       <input matInput [(ngModel)]="name" [disabled]="busy()" maxlength="64" />
     </mat-form-field>
     <mat-form-field>
       <mat-label>Viewers</mat-label>
-      <mat-select multiple [(ngModel)]="userIds" [disabled]="busy()">
+      <mat-select
+        multiple
+        [(ngModel)]="userIds"
+        [disabled]="busy() || (!hasViewers && !userIds.length)"
+      >
         @for (user of data.users; track user.id) {
           @if (user.role.trim().toLowerCase() === "viewer" || userIds.includes(user.id)) {
             <mat-option [value]="user.id"
@@ -55,6 +52,9 @@
           }
         }
       </mat-select>
+      @if (!hasViewers) {
+        <mat-hint>Create a viewer account in User Management first.</mat-hint>
+      }
     </mat-form-field>
     <mat-form-field>
       <mat-label>Instances</mat-label>

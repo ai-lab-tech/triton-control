@@ -28,29 +28,17 @@ After signing in, manage additional accounts in **User Management**.
 
 ## Add A Local Email/Password User
 
-Local users are supported only when OIDC is disabled. When OIDC is enabled,
-local email/password creation is blocked and users must authenticate with OIDC.
+With OIDC disabled, choose the flow for your delivery mode:
 
-To add a local user:
+- **Disabled:** The user selects **Register with password** on the sign-in page.
+  Verify their identity, then select **Approve** in **User Management**.
+- **SMTP:** In **User Management → Add user**, select **Invite user**. The user
+  sets their password through the one-time link sent by email.
+- **Manual link:** Use **Invite user** and share the one-time link directly
+  with the intended user.
 
-1. Sign in as an admin.
-2. Open **User Management**.
-3. Select **Add user**.
-4. Enter full name and email.
-5. Select `admin`, `member`, or `viewer`.
-6. Assign one or more Triton instances for non-admin users.
-7. Select the available account-setup option and submit the form.
-
-The available account setup depends on email delivery:
-
-- With `manual-link` or `smtp`, **Invite user** creates an inactive account and
-  issues a single-use activation link. SMTP sends it automatically;
-  `manual-link` shows it once for secure out-of-band transfer.
-- With `manual-link` or `smtp`, **Create inactive account** creates an account
-  that cannot sign in and cannot be claimed through public self-registration.
-- With delivery `disabled`, have new local users self-register, then approve
-  them and assign their role and instance access. For an existing inactive account
-  without a password, enable `manual-link` or `smtp` and issue an invitation.
+For an existing inactive account without a password, use **Send invitation**
+with SMTP or manual links enabled.
 
 Administrators never assign or transmit a user's initial password. Passwords
 chosen during registration, invitation activation, or reset must have 12-128
@@ -189,7 +177,7 @@ responsibility. Changes are idempotent and retained in the audit history.
 
 ### Local access groups
 
-In the shared Prod Hub, Platform/Ops can use **User Management → Access groups**
+In the shared Prod Hub, Platform/Ops can use **User Management → Group Management**
 to assign viewers and instances to a named group. A viewer's **View access sources** dialog
 shows its direct assignments and the groups that grant it access. Changes to
 group membership or instance assignments apply on subsequent requests. A user

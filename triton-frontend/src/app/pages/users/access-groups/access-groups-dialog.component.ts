@@ -1,7 +1,7 @@
 import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
-import { MAT_DIALOG_DATA, MatDialogModule } from "@angular/material/dialog";
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
@@ -14,6 +14,12 @@ import {
   GroupAssignment,
   InstanceOption,
 } from "./access-groups-api.service";
+
+export interface AccessGroupsDialogData {
+  users: UserRow[];
+  account?: UserRow;
+  groupId?: string;
+}
 
 @Component({
   selector: "app-access-groups-dialog",
@@ -30,7 +36,10 @@ import {
 })
 export class AccessGroupsDialogComponent {
   private readonly api = inject(AccessGroupsApiService);
-  readonly data: { users: UserRow[]; account?: UserRow } = inject(MAT_DIALOG_DATA);
+  private readonly dialog =
+    inject<MatDialogRef<AccessGroupsDialogComponent, boolean>>(MatDialogRef);
+  readonly data: AccessGroupsDialogData = inject(MAT_DIALOG_DATA);
+  readonly hasViewers = this.data.users.some((user) => user.role.trim().toLowerCase() === "viewer");
   readonly groups = signal<AccessGroup[]>([]);
   readonly instances = signal<InstanceOption[]>([]);
   readonly busy = signal(false);
@@ -48,17 +57,23 @@ export class AccessGroupsDialogComponent {
 
   async reload(): Promise<void> {
     await this.run(async () => {
+      this.loaded.set(false);
       const { groups, instances } = await firstValueFrom(
         forkJoin({ groups: this.api.list(), instances: this.api.instances() }),
       );
+      const group = groups.find((group) => group.id === this.data.groupId);
+      if (this.data.groupId && !group) {
+        this.error.set("This group was deleted. Close the dialog to refresh the list.");
+        return;
+      }
       this.groups.set(groups);
       this.instances.set(instances);
-      this.choose(groups.find((group) => group.id === this.selected?.id));
+      this.choose(group);
       this.loaded.set(true);
     });
   }
 
-  choose(group?: AccessGroup): void {
+  private choose(group?: AccessGroup): void {
     this.selected = group;
     this.name = group?.name ?? "";
     this.userIds = [...(group?.user_ids ?? [])];
@@ -74,9 +89,8 @@ export class AccessGroupsDialogComponent {
     };
     if (!assignment.name || this.busy()) return;
     await this.run(async () => {
-      const group = await firstValueFrom(this.api.save(assignment, this.selected));
-      this.groups.update((groups) => [...groups.filter((item) => item.id !== group.id), group]);
-      this.choose(group);
+      await firstValueFrom(this.api.save(assignment, this.selected));
+      this.dialog.close(true);
     });
   }
 
@@ -84,8 +98,7 @@ export class AccessGroupsDialogComponent {
     if (!this.confirmingDelete || this.busy()) return;
     await this.run(async () => {
       await firstValueFrom(this.api.delete(group));
-      this.groups.update((groups) => groups.filter((item) => item.id !== group.id));
-      this.choose();
+      this.dialog.close(true);
     });
   }
 

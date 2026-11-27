@@ -80,6 +80,7 @@ if [[ " $MODES " == *" oidc "* ]]; then
   docker start "$oidc" >/dev/null
   wait_http "$AUTH_SMOKE_OIDC_URL/realms/smoke/.well-known/openid-configuration"
 fi
+result=0
 for mode in $MODES; do
   export AUTH_SMOKE_MODE=$mode
   curl -fsS -X DELETE "$AUTH_SMOKE_MAIL_URL/api/v1/messages" >/dev/null
@@ -99,10 +100,11 @@ for mode in $MODES; do
   docker start "$app" >/dev/null
   wait_http "$AUTH_SMOKE_URL/api/auth/options"
   echo "Testing user authentication and provisioning: $mode"
-  (cd "$REPO_ROOT/triton-frontend" && npm run test:smoke:auth)
+  (cd "$REPO_ROOT/triton-frontend" && npm run test:smoke:auth) || result=1
   docker logs "$app" > "$ARTIFACTS/$app.log" 2>&1
   docker logs "$db" > "$ARTIFACTS/$db.log" 2>&1
   docker rm -fv "$app" "$db" >/dev/null
   # Keep only running dependencies in the exit handler; preserve completed logs.
   CONTAINERS=("${CONTAINERS[@]:0:${#CONTAINERS[@]}-2}")
 done
+exit "$result"

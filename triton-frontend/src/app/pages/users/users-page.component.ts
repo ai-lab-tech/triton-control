@@ -23,6 +23,7 @@ import { firstValueFrom } from "rxjs";
 import { UsersService } from "../../api/generated";
 
 import { AccessGroupsDialogComponent } from "./access-groups/access-groups-dialog.component";
+import { AccessGroupsPanelComponent } from "./access-groups/access-groups-panel.component";
 import { NewUserDialogComponent } from "./new-user-dialog/new-user-dialog.component";
 import { type UserRow } from "../../state/users/users.reducer";
 import {
@@ -47,6 +48,7 @@ import {
   selector: "app-users-page",
   standalone: true,
   imports: [
+    AccessGroupsPanelComponent,
     FormsModule,
     MatCheckboxModule,
     MatCardModule,
@@ -91,10 +93,10 @@ export class UsersPageComponent {
   readonly engineeringBusy = signal(true);
   readonly engineeringError = signal("");
 
-  openAccessGroups(account?: UserRow): void {
+  openAccessSources(account: UserRow): void {
     if (!this.showAccessGroups()) return;
     this.dialog.open(AccessGroupsDialogComponent, {
-      data: { users: this.users(), account },
+      data: { users: [], account },
       width: "36rem",
       maxWidth: "95vw",
     });

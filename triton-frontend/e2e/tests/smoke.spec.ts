@@ -128,7 +128,7 @@ test.describe.serial("smoke", () => {
     await expect(page.getByText("This link is invalid or expired.")).toBeVisible();
   });
 
-  test("user create and delete", async ({ request }) => {
+  test("admin can create and delete an inactive account record", async ({ request }) => {
     await ensureBootstrap(request);
     const login = await loginAdmin(request);
     const authHeaders = { Authorization: `Bearer ${login.access_token}` };
@@ -144,14 +144,14 @@ test.describe.serial("smoke", () => {
         email: userEmail,
         role: "viewer",
         auth_provider: "local",
-        password: "UserPass123!",
         assigned_instances: [],
       },
     });
     expect(createUserResp.ok()).toBeTruthy();
     const createdUser = await createUserResp.json();
-    expect(createdUser.email).toBe(userEmail);
     created.userIds.push(createdUser.id);
+    expect(createdUser.email).toBe(userEmail);
+    expect(createdUser.is_active).toBe(false);
   });
 
   test("instance update and s3 lifecycle", async ({ request }) => {

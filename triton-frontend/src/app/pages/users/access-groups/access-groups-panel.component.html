@@ -1,0 +1,47 @@
+<mat-card class="groups-card">
+  <div class="groups-heading">
+    <h2>Group Management</h2>
+    <button mat-flat-button type="button" (click)="open()" [disabled]="usersLoading()">
+      Add group
+    </button>
+  </div>
+  @if (loading()) {
+    <p role="status">Loading groups…</p>
+  } @else if (error()) {
+    <p role="alert">{{ error() }}</p>
+    <button mat-button type="button" (click)="load()">Retry</button>
+  } @else if (groups().length) {
+    <table aria-label="Access groups">
+      <thead>
+        <tr>
+          <th scope="col">Group</th>
+          <th scope="col">Members</th>
+          <th scope="col">Instances</th>
+          <th scope="col" aria-label="Actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (group of groups(); track group.id) {
+          <tr>
+            <th scope="row">{{ group.name }}</th>
+            <td>{{ group.user_ids.length }}</td>
+            <td>{{ group.instance_ids.length }}</td>
+            <td>
+              <button
+                mat-button
+                type="button"
+                (click)="open(group)"
+                [attr.aria-label]="'Edit ' + group.name"
+                [disabled]="usersLoading()"
+              >
+                Edit
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p>No access groups yet.</p>
+  }
+</mat-card>

@@ -7,16 +7,6 @@
       </p>
     </div>
     <div class="header-actions">
-      @if (showAccessGroups()) {
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="openAccessGroups()"
-          [disabled]="loading()"
-        >
-          Access groups
-        </button>
-      }
       <button mat-flat-button color="primary" (click)="openNewUserDialog()">
         <span class="material-icons" aria-hidden="true">person_add</span>
         Add user
@@ -245,7 +235,7 @@
                     </div>
                     <h3>Direct instance assignments</h3>
                     @if (showAccessGroups() && row.role.trim().toLowerCase() === "viewer") {
-                      <button mat-button type="button" (click)="openAccessGroups(row)">
+                      <button mat-button type="button" (click)="openAccessSources(row)">
                         View access sources
                       </button>
                     }
@@ -305,4 +295,7 @@
       </tbody>
     </table></mat-card
   >
+  @if (showAccessGroups()) {
+    <app-access-groups-panel [users]="users()" [usersLoading]="loading() || !!error()" />
+  }
 </div>

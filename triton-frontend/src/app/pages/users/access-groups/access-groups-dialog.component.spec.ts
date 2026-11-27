@@ -29,14 +29,13 @@ describe("AccessGroupsDialogComponent", () => {
       imports: [AccessGroupsDialogComponent],
       providers: [
         { provide: AccessGroupsApiService, useValue: api },
-        { provide: MAT_DIALOG_DATA, useValue: { users: [] } },
+        { provide: MAT_DIALOG_DATA, useValue: { users: [], groupId: group.id } },
         { provide: MatDialogRef, useValue: {} },
       ],
     });
     const fixture = TestBed.createComponent(AccessGroupsDialogComponent);
     await fixture.whenStable();
     const component = fixture.componentInstance;
-    component.choose(group);
     component.instanceIds = [];
 
     // Act
