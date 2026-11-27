@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: check-labels
+spec:
+  serviceAccountName: argo-service-account
+  entrypoint: check
+  arguments:
+    parameters:
+      - name: labels
+        value: "cat,dog,bird"
+  templates:
+    - name: check
+      container:
+        image: python:3.13-alpine
+        command: [python, -c]
+        args:
+          - |
+            import os
+            labels = [label.strip() for label in os.environ["LABELS"].split(",")]
+            if not all(labels) or len(labels) != len(set(labels)):
+                raise SystemExit("Labels must be nonempty and unique")
+            print(f"Validated {len(labels)} labels")
+        env:
+          - name: LABELS
+            value: "{{workflow.parameters.labels}}"

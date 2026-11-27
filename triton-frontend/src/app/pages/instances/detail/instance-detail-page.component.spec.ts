@@ -15,6 +15,7 @@ import {
   PodsService,
   UsersService,
 } from "../../../api/generated/index";
+import type { Instance } from "../instances.data";
 import { InstanceDetailPageComponent } from "./instance-detail-page.component";
 import {
   selectDetailInstance,
@@ -28,7 +29,7 @@ import {
   s3ConfigDisableRequested,
 } from "../../../state/instances-detail/instances-detail.actions";
 
-const MOCK_INSTANCE = {
+const MOCK_INSTANCE: Instance = {
   id: "7",
   name: "node-7",
   url: "http://localhost:8000",
@@ -40,6 +41,22 @@ const MOCK_INSTANCE = {
   healthReady: true,
   healthLastCheckedAt: "",
   healthError: "",
+  tritonVerifySsl: true,
+  tritonCaCertificate: "",
+  metricsUrl: "",
+  metricsLastCheckedAt: "",
+  metricsError: "",
+  deploymentRuntime: "",
+  deploymentNamespace: "",
+  deploymentName: "",
+  deploymentServiceName: "",
+  deploymentSecretName: "",
+  deploymentImage: "",
+  deploymentRepository: "",
+  deploymentBackend: "",
+  deploymentLog: "",
+  isSelfDeployed: false,
+  podStatuses: [],
   serverMetadata: { version: "1.0.0", platform: "linux" },
   qps: 0,
   cpu: 0,
@@ -54,6 +71,9 @@ const MOCK_INSTANCE = {
     prefix: "p",
     accessKey: "ak",
     secretConfigured: true,
+    useHttps: true,
+    verifySsl: true,
+    caCertificate: "",
   },
   modelFiles: [],
   repositoryModels: [],
@@ -191,6 +211,32 @@ describe("InstanceDetailPageComponent", () => {
     expect(page.querySelector("app-experiment-preparation")).toBeNull();
     expect(page.querySelector('[role="tablist"]')?.textContent).toContain("Overview");
   });
+
+  for (const { version, canProfile, expected } of [
+    { version: "", canProfile: true, expected: false },
+    { version: "1", canProfile: false, expected: false },
+    { version: "1", canProfile: true, expected: true },
+  ]) {
+    it(`determines the S3 entry point for version "${version}" and Perf access ${canProfile}`, () => {
+      // Arrange
+      TestBed.inject(InstallationService).snapshot.set({
+        mode: "development",
+        explanation: "Development",
+        capabilities: { development_jobs: canProfile },
+      });
+      mockStore.overrideSelector(selectDetailInstance, {
+        ...MOCK_INSTANCE,
+        repositoryModels: [{ name: "iris", version, state: "READY", reason: "" }],
+      });
+      const fixture = TestBed.createComponent(InstanceDetailPageComponent);
+
+      // Act
+      const hasTarget = fixture.componentInstance.hasProfileTarget();
+
+      // Assert
+      expect(hasTarget).toBe(expected);
+    });
+  }
 
   it("summarizes repeated pod states without losing readiness information", () => {
     // Arrange

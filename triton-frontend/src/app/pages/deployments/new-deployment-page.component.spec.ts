@@ -379,7 +379,7 @@ describe("NewDeploymentPageComponent", () => {
     );
   });
 
-  it("S3ProfileChanged_ProfileSelected_PopulatesConnectionFieldsOnly", async () => {
+  it("S3ProfileChanged_ProfileSelected_UsesProfilePrefixAsRepositoryRoot", async () => {
     // Arrange
     const fixture = createComponent([
       {
@@ -390,7 +390,7 @@ describe("NewDeploymentPageComponent", () => {
         region: "eu-central-1",
         access_key: "profile-access",
         secret_key: "profile-secret",
-        prefix: "legacy/profile-prefix",
+        prefix: "team/models",
         force_path_style: true,
         ca_certificate: "-----BEGIN CERTIFICATE-----",
       },
@@ -414,12 +414,12 @@ describe("NewDeploymentPageComponent", () => {
 
     // Assert
     expect(component.s3Destination()).toBe(
-      "s3://https://object-store.example.com/triton-models/serving/opt-125m",
+      "s3://https://object-store.example.com/triton-models/team/models",
     );
     expect(deploymentsApi.createDeploymentApiDeploymentsPost).toHaveBeenCalledWith(
       jasmine.objectContaining({
         s3_profile_id: 12,
-        repository_prefix: "serving/opt-125m",
+        repository_prefix: "team/models",
       }),
       jasmine.any(String),
     );

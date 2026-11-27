@@ -667,6 +667,13 @@
                     Delete S3 Connection
                   </button>
                 </div>
+              } @else if (canEditInstanceS3()) {
+                <div class="s3-actions">
+                  <button mat-stroked-button type="button" (click)="openS3Dialog()">
+                    <span class="material-icons">vpn_key</span>
+                    Rotate S3 credentials
+                  </button>
+                </div>
               }
             } @else {
               <div class="s3-empty-state">
@@ -692,7 +699,7 @@
           </div>
           <div class="panel-card">
             <div class="panel-title">Model data in S3</div>
-            @if (hasS3Connection(instance) && instance.s3.enabled) {
+            @if (hasS3Connection(instance) && instance.s3.enabled && !hasProfileTarget()) {
               <div class="s3-browser-action">
                 <a
                   mat-stroked-button
@@ -801,10 +808,12 @@
             </mat-select>
             <mat-hint>Profiles are configured by an administrator under S3 Profiles.</mat-hint>
           </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Repository prefix (optional)</mat-label>
-            <input matInput [(ngModel)]="s3Prefix" />
-          </mat-form-field>
+          @if (canWriteInstances()) {
+            <mat-form-field appearance="outline">
+              <mat-label>Repository prefix (optional)</mat-label>
+              <input matInput [(ngModel)]="s3Prefix" />
+            </mat-form-field>
+          }
           <p role="status">{{ s3ProfilesError() }}</p>
         </div>
         <div class="s3-dialog-actions">

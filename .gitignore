@@ -3,6 +3,7 @@ site/
 .codex/
 openspec/
 /values.yaml
+/.env
 .agents/
 skills-lock.json
 agent/

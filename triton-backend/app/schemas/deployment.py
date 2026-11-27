@@ -63,6 +63,7 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
     lineage: ControlLineage | None = None
     s3_region: str = "us-east-1"
     s3_ca_certificate: Optional[str] = None
+    s3_address_style: Literal["path", "virtual", "auto"] = "path"
     image: str
     dockerconfigjson: Optional[str] = None
     model_control_mode: Literal["explicit", "poll"] = "explicit"

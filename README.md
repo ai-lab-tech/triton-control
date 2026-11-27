@@ -70,6 +70,18 @@ This installs the chart's release image. Building from source: [developer setup]
 
 [Ingress and TLS](docs/ingress-tls.md) · [Helm configuration](charts/triton-control/README.md) · [Minikube](docs/local-kubernetes.md)
 
+## Set up the Compose encryption key
+
+Docker Compose and Podman Compose both read `.env` from the repository root.
+For a new installation, run `openssl rand -hex 32` once and add its output to
+that file as `S3_SECRET_ENCRYPTION_KEY=<generated value>`. Keep the key across
+restarts and upgrades, and back it up so you can restore encrypted S3 credentials.
+
+When upgrading from plaintext storage, set the new key before the first startup
+so the migration can encrypt existing credentials. If your database already
+contains encrypted credentials, set the key to the exact value previously used.
+Changing that value requires re-encrypting the stored credentials.
+
 ## Demo With Docker Compose
 
 With Docker installed, start the published image:
@@ -101,7 +113,7 @@ defined in `compose.yaml`.
 
 ## Demo With Podman Compose
 
-With Podman and `podman-compose` installed, start the published image:
+After [setting up the encryption key](#set-up-the-compose-encryption-key), start the published image with Podman and `podman-compose`:
 
 ```bash
 podman pull docker.io/ailabtechtriton/triton-control:v1.2.3

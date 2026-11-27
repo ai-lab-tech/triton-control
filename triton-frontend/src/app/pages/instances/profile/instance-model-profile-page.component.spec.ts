@@ -16,6 +16,7 @@ import { InstanceModelProfilePageComponent } from "./instance-model-profile-page
 describe("Model Perf jobs", () => {
   let fixture: ComponentFixture<InstanceModelProfilePageComponent>;
   let component: InstanceModelProfilePageComponent;
+  let getInstance: jasmine.Spy;
   let api: {
     getModelPerfStatus: jasmine.Spy;
     startModelPerf: jasmine.Spy;
@@ -45,6 +46,7 @@ describe("Model Perf jobs", () => {
 
   beforeEach(async () => {
     params = new BehaviorSubject(routeParams("model-a"));
+    getInstance = jasmine.createSpy("getInstance").and.returnValue(of({ name: "test" }));
     api = jasmine.createSpyObj("PerfAnalyzersService", [
       "getModelPerfStatus",
       "startModelPerf",
@@ -64,7 +66,7 @@ describe("Model Perf jobs", () => {
         { provide: PerfAnalyzersService, useValue: api },
         {
           provide: InstancesService,
-          useValue: { getInstanceApiInstancesInstanceIdGet: () => of({ name: "test" }) },
+          useValue: { getInstanceApiInstancesInstanceIdGet: getInstance },
         },
       ],
     })
@@ -249,6 +251,23 @@ describe("Model Perf jobs", () => {
     expect(component.modelName()).toBe("model-b");
     expect(component.activeRun()).toBeNull();
     expect(component.canRun()).toBeTrue();
+  }));
+
+  it("clears the previous repository while resolving a different instance", fakeAsync(() => {
+    // Arrange
+    getInstance.and.returnValue(of({ name: "first", s3: { enabled: true } }));
+    mount();
+    flushMicrotasks();
+    expect(component.instanceS3()?.enabled).toBeTrue();
+    getInstance.and.returnValue(throwError(() => new Error("unavailable")));
+
+    // Act
+    params.next(convertToParamMap({ id: "8", modelName: "next", version: "1" }));
+    flushMicrotasks();
+
+    // Assert
+    expect(component.instanceS3()).toBeNull();
+    expect(component.instanceName).toBe("");
   }));
 
   it("shows status uncertainty and retries without enabling Start", fakeAsync(() => {

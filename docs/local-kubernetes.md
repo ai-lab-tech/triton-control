@@ -58,7 +58,7 @@ public root certificate installed in their trust store, never its private key.
 
 ## 3. Build and install Triton Control
 
-Create the namespace/database Secret using step 2 of the
+Create the namespace and both Secrets using step 2 of the
 [installation guide](ingress-tls.md#2-configure-the-release), once only. Then:
 
 ```bash

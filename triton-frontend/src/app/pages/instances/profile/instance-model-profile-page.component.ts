@@ -24,6 +24,7 @@ import {
 import { mapApiErrorMessage } from "../../../shared/api-error-message";
 import { InstanceModelRepositoryConfigComponent } from "../shared/instance-model-repository-config.component";
 import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-monaco-editor.component";
+import { InstanceS3BrowserPageComponent } from "../s3/instance-s3-browser-page.component";
 
 @Component({
   selector: "app-instance-model-profile-page",
@@ -39,6 +40,7 @@ import { InstanceModelMonacoEditorComponent } from "../infer/instance-model-mona
     MatInputModule,
     InstanceModelMonacoEditorComponent,
     InstanceModelRepositoryConfigComponent,
+    InstanceS3BrowserPageComponent,
   ],
   styleUrl: "./instance-model-profile-page.component.scss",
   templateUrl: "./instance-model-profile-page.component.html",
@@ -99,6 +101,9 @@ export class InstanceModelProfilePageComponent implements OnInit, OnDestroy {
   constructor() {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(() => {
       this.generation++;
+      this.instanceS3.set(null);
+      this.instanceName = "";
+      this.instanceUrl = "";
       clearTimeout(this.timer);
       this.activeRun.set(null);
       this.latestRun.set(null);

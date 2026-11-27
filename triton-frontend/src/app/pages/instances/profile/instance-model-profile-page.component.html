@@ -208,6 +208,19 @@
         </div>
       }
     </mat-card>
+
+    @if (instanceS3()?.enabled) {
+      @for (id of [instanceId()]; track id) {
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>S3 Browser</mat-panel-title>
+          </mat-expansion-panel-header>
+          <ng-template matExpansionPanelContent>
+            <app-instance-s3-browser-page [embedded]="true" />
+          </ng-template>
+        </mat-expansion-panel>
+      }
+    }
   </div>
 }
 

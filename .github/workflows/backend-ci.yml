@@ -41,6 +41,9 @@ on:
 permissions:
   contents: read
 
+env:
+  S3_SECRET_ENCRYPTION_KEY: disposable-ci-test-key
+
 jobs:
   security-gate-integration:
     runs-on: ubuntu-latest

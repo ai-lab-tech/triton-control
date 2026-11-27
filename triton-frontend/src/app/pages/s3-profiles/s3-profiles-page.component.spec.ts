@@ -162,7 +162,7 @@ describe("S3ProfilesPageComponent", () => {
     expect(component.usesHttpsS3()).toBeFalse();
   });
 
-  it("SaveProfile_HttpEndpoint_ClearsCertificateAndReloadsProfiles", async () => {
+  it("SaveProfile_HttpEndpoint_PreservesPrefixAndClearsCertificate", async () => {
     const fixture = createComponent();
     await fixture.whenStable();
     const component = fixture.componentInstance;
@@ -174,7 +174,7 @@ describe("S3ProfilesPageComponent", () => {
       region: "",
       access_key: " ak ",
       secret_key: "sk",
-      prefix: "will-not-save",
+      prefix: "team/models",
       force_path_style: true,
       ca_certificate: "stale-cert",
     };
@@ -190,7 +190,7 @@ describe("S3ProfilesPageComponent", () => {
       region: "us-east-1",
       access_key: "ak",
       secret_key: "sk",
-      prefix: "",
+      prefix: "team/models",
       force_path_style: true,
       ca_certificate: "",
     });

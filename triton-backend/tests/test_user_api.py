@@ -12,10 +12,16 @@ or database is required.
 """
 
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from authlib.integrations.base_client import OAuthError
+from fastapi import HTTPException
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api.auth_api import (
     auth_options,
@@ -114,113 +120,26 @@ class _Req:
 
 
 class UserApiHelperTests(unittest.TestCase):
-    def test_SelfRegister_PrecreatedPasswordlessAccount_ClaimsOnlyWhenEmailDeliveryDisabled(self):
-        # Arrange
-        existing = UserEntity(
-            id=7,
-            email="new@example.com",
-            name="Admin supplied name",
-            role="member",
-            auth_provider="local",
-            password_hash=None,
-            assigned_instances=["instance-a"],
-            is_active=False,
-        )
-        session = _FakeSession(exec_results=[_ExecResult(first=existing)])
-
-        # Act
-        with (
-            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
-            patch(
-                "app.services.auth.local_auth.get_runtime_config",
-                return_value=SimpleNamespace(delivery_mode="disabled"),
-            ),
-            patch("app.services.auth.local_auth.hash_password", return_value="hashed"),
-        ):
-            dto = self_register(
-                SelfRegisterRequest(
-                    email="new@example.com",
-                    password="Validpass123!",
-                    name="User supplied name",
-                ),
-                session,
-            )
-
-        # Assert
-        self.assertEqual(dto.email, "new@example.com")
-        self.assertEqual(existing.password_hash, "hashed")
-        self.assertEqual(existing.name, "User supplied name")
-        self.assertTrue(existing.is_active)
-        self.assertEqual(existing.role, "member")
-        self.assertEqual(existing.assigned_instances, ["instance-a"])
-        self.assertEqual(existing.credential_version, 1)
-        self.assertEqual(session.commit_count, 1)
-
-        # Arrange
-        protected = UserEntity(
-            id=8,
-            email="invited@example.com",
-            name="Invited",
-            role="viewer",
-            auth_provider="local",
-            password_hash=None,
-            assigned_instances=[],
-            is_active=False,
-        )
-        protected_session = _FakeSession(exec_results=[_ExecResult(first=protected)])
-
-        # Act / Assert
-        with (
-            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
-            patch(
-                "app.services.auth.local_auth.get_runtime_config",
-                return_value=SimpleNamespace(delivery_mode="manual-link"),
-            ),
-        ):
-            with self.assertRaises(ConflictError):
-                self_register(
-                    SelfRegisterRequest(
-                        email="invited@example.com",
-                        password="Validpass123!",
-                        name="Invited",
-                    ),
-                    protected_session,
+    def test_public_registration_leaves_existing_local_accounts_untouched(self):
+        request = SelfRegisterRequest(email="reserved@example.com", password="Validpass123!", name="New")
+        for role, password in (("admin", None), ("member", None), ("viewer", "existing-hash")):
+            with self.subTest(role=role):
+                user = UserEntity(
+                    id=7, email=request.email, name="Reserved", role=role, auth_provider="local",
+                    password_hash=password, assigned_instances=["instance-a"], is_active=password is not None,
                 )
-        self.assertIsNone(protected.password_hash)
-        self.assertFalse(protected.is_active)
-        self.assertEqual(protected_session.commit_count, 0)
+                session = _FakeSession(exec_results=[_ExecResult(first=user)])
+                original = user.model_dump()
+                with (
+                    patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
+                    patch("app.services.auth.local_auth.hash_password") as hash_password,
+                    self.assertRaises(ConflictError),
+                ):
+                    self_register(request, session)
 
-    def test_SelfRegister_PrecreatedAccountWithPassword_RemainsRegisteredWhenDeliveryDisabled(self):
-        # Arrange
-        existing = UserEntity(
-            id=9,
-            email="registered@example.com",
-            name="Registered",
-            role="viewer",
-            auth_provider="local",
-            password_hash="existing-hash",
-            assigned_instances=[],
-            is_active=True,
-        )
-        session = _FakeSession(exec_results=[_ExecResult(first=existing)])
-
-        # Act / Assert
-        with (
-            patch("app.services.auth.local_auth.ensure_local_auth_allowed"),
-            patch("app.services.auth.local_auth.get_runtime_config") as runtime_config,
-        ):
-            with self.assertRaises(ConflictError):
-                self_register(
-                    SelfRegisterRequest(
-                        email="registered@example.com",
-                        password="Validpass123!",
-                        name="Registered",
-                    ),
-                    session,
-                )
-        runtime_config.assert_not_called()
-        self.assertEqual(existing.password_hash, "existing-hash")
-        self.assertEqual(session.commit_count, 0)
+                hash_password.assert_not_called()
+                self.assertEqual(user.model_dump(), original)
+                self.assertEqual(session.commit_count, 0)
 
     def test_UserApiHelpers_MixedInputs_ProduceExpectedNormalizationAndGuards(self):
         # Arrange / Act
@@ -640,16 +559,96 @@ class UserApiRouteTests(unittest.IsolatedAsyncioTestCase):
             get_map={1: admin},
             exec_results=[_ExecResult(), _ExecResult()],
         )
-        deleted = delete_user(1, op_session, admin_claims)
         updated = update_user_instances(
             1, UpdateUserInstancesRequest(assigned_instances=["x"]), op_session, admin_claims
         )
-        role_updated = update_user_role(1, UpdateUserRoleRequest(role="member"), op_session, admin_claims)
+        with patch("app.repositories.users.is_last_active_admin_for_update", return_value=False):
+            role_updated = update_user_role(1, UpdateUserRoleRequest(role="member"), op_session, admin_claims)
+            deleted = delete_user(1, op_session, admin_claims)
 
         # Assert
         self.assertIsNone(deleted)
         self.assertEqual(updated.assigned_instances, ["x"])
         self.assertEqual(role_updated.role, "member")
+
+
+class LastActiveAdminTests(unittest.TestCase):
+    def setUp(self):
+        database = TemporaryDirectory()
+        self.addCleanup(database.cleanup)
+        self.engine = create_engine(f"sqlite:///{Path(database.name) / 'users.db'}")
+        self.addCleanup(self.engine.dispose)
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        self.addCleanup(self.session.close)
+        self.claims = {"role": "admin"}
+
+    def add_admin(self, email, *, active=True, provider="local"):
+        user = UserEntity(email=email, name=email, role="admin", is_active=active, auth_provider=provider)
+        self.session.add(user)
+        self.session.commit()
+        return user.id
+
+    def test_pending_admin_does_not_allow_removing_the_only_active_admin(self):
+        # Arrange
+        target = self.add_admin("owner@example.test")
+        self.add_admin("invited@example.test", active=False)
+
+        for operation in (
+            lambda: delete_user(target, self.session, self.claims),
+            lambda: update_user_role(target, UpdateUserRoleRequest(role="viewer"), self.session, self.claims),
+        ):
+            # Act
+            with self.assertRaises(HTTPException) as raised:
+                operation()
+            self.session.rollback()
+
+            # Assert
+            self.assertEqual(raised.exception.status_code, 409)
+            self.assertEqual(self.session.get(UserEntity, target).role, "admin")
+
+    def test_concurrent_delete_and_demotion_leave_one_admin(self):
+        # Arrange
+        first = self.add_admin("first@example.test")
+        second = self.add_admin("second@example.test")
+        start = Barrier(2)
+
+        def remove_admin(user_id):
+            with Session(self.engine) as session:
+                start.wait(timeout=5)
+                try:
+                    if user_id == first:
+                        delete_user(first, session, self.claims)
+                    else:
+                        update_user_role(second, UpdateUserRoleRequest(role="member"), session, self.claims)
+                except HTTPException as error:
+                    return error.status_code
+                return 200
+
+        # Act
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses = list(pool.map(remove_admin, (first, second)))
+
+        # Assert
+        self.assertCountEqual(statuses, [200, 409])
+        remaining = self.session.exec(select(UserEntity).where(UserEntity.role == "admin")).all()
+        self.assertEqual(len(remaining), 1)
+        self.assertTrue(remaining[0].is_active)
+
+    def test_second_active_oidc_admin_permits_handoff(self):
+        # Arrange
+        first = self.add_admin("first@example.test")
+        second = self.add_admin("second@example.test", provider="oidc")
+
+        # Act
+        update_user_role(first, UpdateUserRoleRequest(role="member"), self.session, self.claims)
+        delete_user(first, self.session, self.claims)
+        unchanged = update_user_role(second, UpdateUserRoleRequest(role="admin"), self.session, self.claims)
+
+        # Assert
+        self.assertIsNone(self.session.get(UserEntity, first))
+        self.assertEqual(unchanged.role, "admin")
+        self.assertTrue(unchanged.is_active)
 
 
 if __name__ == "__main__":

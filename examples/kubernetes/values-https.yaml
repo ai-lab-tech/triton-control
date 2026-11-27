@@ -1,5 +1,7 @@
 # HTTPS example: replace domains and issuer with your cluster configuration.
-# Create triton-control-db as described in docs/ingress-tls.md first.
+# Create the two Secrets described in docs/ingress-tls.md first.
+app:
+  existingSecret: triton-control-runtime-secrets
 postgresql:
   auth:
     existingSecret: triton-control-db

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from app.core.crypto import encrypt_secret
 from app.api import s3_profile_api
 from app.core import security
 from app.db.database import get_session
@@ -33,7 +34,7 @@ class ProfileResolutionTests(unittest.TestCase):
                         endpoint="https://s3.test",
                         bucket="models",
                         access_key="private-access",
-                        secret_key_enc="private-secret",
+                        secret_key_enc=encrypt_secret("private-secret"),
                     )
                 )
             session.commit()
@@ -77,7 +78,7 @@ class ProfileResolutionTests(unittest.TestCase):
                     endpoint="https://s3.test",
                     bucket="models",
                     access_key="private-access",
-                    secret_key_enc="private-secret",
+                    secret_key_enc=encrypt_secret("private-secret"),
                 )
             )
             session.commit()

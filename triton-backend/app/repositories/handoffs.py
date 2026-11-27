@@ -11,7 +11,7 @@ from app.exceptions import NotFoundError
 
 def find_source(
     session: Session, installation: str, revision: str, endpoint: str, bucket: str, key: str,
-    version: str | None, kind: str = "s3",
+    version: str | None, kind: str = "s3", *, model_name: str | None = None, model_versions: tuple[str, ...] = (),
 ) -> HandoffEntity | None:
     """Match captured source identity, including receipts written before source hashing.
 
@@ -27,7 +27,11 @@ def find_source(
         payload["source"]["key"].as_string() == key,
     )
     if kind == "s3_repository":
-        statement = statement.where(payload["request"]["source"]["kind"].as_string() == kind)
+        source = payload["request"]["source"]
+        statement = statement.where(
+            source["kind"].as_string() == kind,
+            source["model"]["name"].as_string() == model_name,
+        )
     else:
         # Legacy single-object receipts can omit the default kind.
         statement = statement.where(
@@ -38,7 +42,16 @@ def find_source(
         statement = statement.where(payload["request"]["source"]["version_id"].as_string().is_(None))
     else:
         statement = statement.where(payload["source"]["version_id"].as_string() == version)
-    return session.exec(statement.order_by(col(HandoffEntity.created_at), col(HandoffEntity.id))).first()
+    matches = session.exec(statement.order_by(col(HandoffEntity.created_at), col(HandoffEntity.id)))
+    if model_name is None:
+        return matches.first()
+    # JSON array equality differs between PostgreSQL and SQLite. Filter by name
+    # in SQL and compare the exact version set on the matching receipts.
+    return next(
+        (row for row in matches
+         if tuple(sorted(row.payload["request"]["source"]["model"]["versions"])) == model_versions),
+        None,
+    )
 
 
 def find_identity(session: Session, identity: str) -> HandoffEntity | None:

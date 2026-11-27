@@ -155,7 +155,7 @@ export class S3ProfilesPageComponent {
       region: this.draft.region.trim() || "us-east-1",
       access_key: this.draft.access_key.trim(),
       secret_key: this.draft.secret_key,
-      prefix: "",
+      prefix: this.draft.prefix,
       force_path_style: this.draft.force_path_style,
       ca_certificate: this.usesHttpsS3() ? this.draft.ca_certificate.trim() : "",
     };

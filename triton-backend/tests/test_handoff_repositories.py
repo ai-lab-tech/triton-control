@@ -14,10 +14,12 @@ from pydantic import ValidationError
 from sqlmodel import select
 
 from app.api.handoffs_api import router
+from app.core.canonical import digest
 from app.core.security import get_claims
 from app.db.database import get_session
 from app.db.entities import HandoffEntity, PreparationTaskEntity, S3ProfileEntity
 from app.exceptions import BadRequestError, ConflictError, ForbiddenError
+from app.repositories import handoffs as handoff_records
 from app.schemas.handoffs import S3RepositoryInput
 from app.schemas.preparation_settings import PreparationLimits
 from app.services import handoff_repositories as repositories
@@ -88,6 +90,41 @@ class RepositoryTests(HandoffFixture, unittest.TestCase):
             "iris/1/helpers/__init__.py", "iris/1/model.onnx", "iris/config.pbtxt",
         ])
         self.assertEqual(receipt.request.source, source)
+
+    def test_selected_models_and_versions_have_independent_idempotent_receipts(self):
+        self.contents.update({
+            "repo/iris/2/model.onnx": b"version two",
+            "repo/other/config.pbtxt": b'name: "other"',
+            "repo/other/1/model.onnx": b"other model",
+        })
+        whole_repository = self.repository_request()
+        requests = []
+        for model, version in (("iris", "1"), ("iris", "2"), ("other", "1")):
+            source = S3RepositoryInput(kind="s3_repository", profile_id=1, path="repo", model={
+                "name": model, "versions": [version],
+            })
+            requests.append(whole_repository.model_copy(update={"source": source}))
+
+        first_request = requests[0]
+        add = handoff_records.add
+
+        def add_legacy_receipt(session, row, recipients):
+            source = row.payload["source"]
+            row.identity_digest = digest({
+                "installation_id": first_request.origin.installation_id, "revision": first_request.revision,
+                "kind": first_request.source.kind, "endpoint": source["endpoint"],
+                "bucket": source["bucket"], "key": source["key"], "version_id": None,
+            })
+            add(session, row, recipients)
+
+        with patch.object(handoff_records, "add", side_effect=add_legacy_receipt):
+            first = handoffs.submit(self.session, self.submitter, first_request)
+        requests.append(whole_repository)
+        receipts = [first, *(handoffs.submit(self.session, self.submitter, req) for req in requests[1:])]
+        self.assertEqual(len({receipt.task.id for receipt in receipts}), len(requests))
+        with patch.object(repositories, "resolve", side_effect=AssertionError("retry must reuse the receipt")):
+            for req, receipt in zip(requests, receipts, strict=True):
+                self.assertEqual(handoffs.submit(self.session, self.submitter, req).id, receipt.id)
 
     def test_pins_every_file_and_preserves_relative_layout_including_empty_files(self):
         # Arrange

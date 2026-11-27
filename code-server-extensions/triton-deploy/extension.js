@@ -1,11 +1,10 @@
+const crypto = require("node:crypto");
 const fs = require("fs");
-const crypto = require("crypto");
-const http = require("http");
-const https = require("https");
 const path = require("path");
 const vscode = require("vscode");
 const { endpointPayload } = require("./endpoint-config");
 const profileApi = require("./profile-api");
+const s3Client = require("./s3-client");
 const {
   ENSEMBLE_PRESETS,
   TEMPLATES,
@@ -618,27 +617,22 @@ async function promptValue(prompt, value, required, password = false) {
 
 function showSimpleUploadResult(form) {
   const payload = deploymentPayload(form);
-  const displayPayload = {
-    ...payload,
-    s3_secret_key: payload.s3_secret_key ? "<redacted>" : "",
-  };
   outputChannel.clear();
   outputChannel.appendLine("Triton model repository upload complete.");
   outputChannel.appendLine("");
   outputChannel.appendLine("Use Add Deployment in Triton Control with these values:");
   outputChannel.appendLine(`Deployment name: ${form.deploymentName}`);
   outputChannel.appendLine(`Image: ${form.image}`);
-  outputChannel.appendLine(`Model repository: ${payload.s3_url}`);
+  outputChannel.appendLine(`Model repository: ${deploymentS3Url(form)}`);
   outputChannel.appendLine(`S3 endpoint: ${form.endpoint}`);
   outputChannel.appendLine(`S3 bucket: ${form.bucket}`);
-  outputChannel.appendLine(`Repository prefix: ${form.prefix}`);
+  outputChannel.appendLine(`Repository prefix: ${targetPrefix(form)}`);
   outputChannel.appendLine(`Model name: ${form.modelName}`);
   outputChannel.appendLine(`Model control: ${form.modelControlMode}`);
   outputChannel.appendLine(`Repository sync: ${form.repositorySyncMode}`);
-  outputChannel.appendLine("S3 credentials: use the same access key and secret entered in the wizard.");
   outputChannel.appendLine("");
-  outputChannel.appendLine("JSON payload reference with secret redacted:");
-  outputChannel.appendLine(JSON.stringify(displayPayload, null, 2));
+  outputChannel.appendLine("JSON payload reference:");
+  outputChannel.appendLine(JSON.stringify(payload, null, 2));
   outputChannel.show(true);
   vscode.window.showInformationMessage(
     "Repository uploaded. Finish the deployment from Triton Control Add Deployment using the shown S3 target.",
@@ -847,6 +841,7 @@ function normalizeForm(form) {
   return {
     sourceFolder: String(form.sourceFolder || ""),
     profileId: String(form.profileId || "").trim(),
+    profilePrefix: cleanPrefix(String(form.profilePrefix || "")),
     profileName: String(form.profileName || "").trim(),
     deploymentName: String(form.deploymentName || "").trim(),
     image: String(form.image || "").trim(),
@@ -948,7 +943,7 @@ async function uploadRepository(sourceFolder, form, report) {
     inventory.push({ digest: entry.digest, path: displayPath, size: entry.size });
   }
   inventory.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
-  form.candidateInventoryDigest = "sha256:" + sha256Hex(JSON.stringify({ files: inventory, schema_version: 1 }));
+  form.candidateInventoryDigest = "sha256:" + crypto.createHash("sha256").update(JSON.stringify({ files: inventory, schema_version: 1 })).digest("hex");
 }
 
 function repositoryLayout(sourceFolder, modelName) {
@@ -966,147 +961,20 @@ function repositoryLayout(sourceFolder, modelName) {
 }
 
 async function putS3Object(form, key, filePath) {
-  const endpoint = new URL(form.endpoint);
-  const fileSize = fs.statSync(filePath).size;
-  const payloadHash = await sha256FileHex(filePath);
-  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-  const pathName = form.forcePathStyle
-    ? `/${encodeURIComponent(form.bucket)}/${encodedKey}`
-    : `/${encodedKey}`;
-  const host = form.forcePathStyle ? endpoint.host : `${form.bucket}.${endpoint.host}`;
-  const now = new Date();
-  const amzDate = toAmzDate(now);
-  const dateStamp = amzDate.slice(0, 8);
-  const headers = {
-    host,
-    "x-amz-content-sha256": payloadHash,
-    "x-amz-date": amzDate,
-  };
-  const authorization = s3Authorization({
-    accessKeyId: form.accessKeyId,
-    secretAccessKey: form.secretAccessKey,
-    region: form.region,
-    dateStamp,
-    amzDate,
-    method: "PUT",
-    pathName,
-    headers,
-    payloadHash,
-  });
-  await sendHttpRequest(endpoint, {
-    method: "PUT",
-    host,
-    pathName,
-    headers: {
-      ...headers,
-      authorization,
-      "content-length": String(fileSize),
+  return s3Client.upload(
+    {
+      endpoint: form.endpoint,
+      bucket: form.bucket,
+      region: form.region || "us-east-1",
+      access_key: form.accessKeyId,
+      secret_key: form.secretAccessKey,
+      force_path_style: form.forcePathStyle !== false,
+      ca_certificate: form.s3CaCertificate || "",
     },
-    body: fs.createReadStream(filePath),
-    tlsRejectUnauthorized: false,
-  });
-  return { digest: "sha256:" + payloadHash, size: fileSize };
-}
-
-function s3Authorization({
-  accessKeyId,
-  secretAccessKey,
-  region,
-  dateStamp,
-  amzDate,
-  method,
-  pathName,
-  headers,
-  payloadHash,
-}) {
-  const signedHeaders = Object.keys(headers).sort().join(";");
-  const canonicalHeaders = Object.keys(headers)
-    .sort()
-    .map((name) => `${name}:${headers[name]}\n`)
-    .join("");
-  const canonicalRequest = [
-    method,
-    pathName,
-    "",
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
-  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    sha256Hex(canonicalRequest),
-  ].join("\n");
-  const signingKey = hmac(
-    hmac(hmac(hmac(`AWS4${secretAccessKey}`, dateStamp), region), "s3"),
-    "aws4_request",
+    key,
+    filePath,
+    { overwrite: true, inventoryReceipt: true },
   );
-  const signature = hmacHex(signingKey, stringToSign);
-  return `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-}
-
-function sendHttpRequest(endpoint, request) {
-  const client = endpoint.protocol === "https:" ? https : http;
-  return new Promise((resolve, reject) => {
-    const req = client.request(
-      {
-        protocol: endpoint.protocol,
-        hostname: request.host.split(":")[0],
-        port: endpoint.port || (endpoint.protocol === "https:" ? 443 : 80),
-        method: request.method,
-        path: request.pathName,
-        headers: request.headers,
-        rejectUnauthorized: request.tlsRejectUnauthorized,
-      },
-      (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve();
-            return;
-          }
-          reject(new Error(`S3 upload failed with HTTP ${res.statusCode}: ${body}`));
-        });
-      },
-    );
-    req.on("error", reject);
-    if (request.body && typeof request.body.pipe === "function") {
-      request.body.on("error", (error) => req.destroy(error));
-      request.body.pipe(req);
-      return;
-    }
-    req.end(request.body);
-  });
-}
-
-function toAmzDate(date) {
-  return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
-}
-
-function sha256Hex(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function sha256FileHex(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = fs.createReadStream(filePath);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
-}
-
-function hmac(key, value) {
-  return crypto.createHmac("sha256", key).update(value).digest();
-}
-
-function hmacHex(key, value) {
-  return crypto.createHmac("sha256", key).update(value).digest("hex");
 }
 
 function listFiles(root) {
@@ -1142,7 +1010,9 @@ async function resolveDeploymentProfile(form) {
   const profiles = await deploymentProfiles();
   const profile = profiles.find((item) => String(item.id) === String(form.profileId));
   if (!profile) throw new Error("Select an admin-configured S3 profile.");
+  const profilePrefix = cleanPrefix(profile.prefix || "");
   return { ...form, endpoint: profile.endpoint, bucket: profile.bucket, region: profile.region,
+    profilePrefix,
     accessKeyId: profile.access_key, secretAccessKey: profile.secret_key,
     s3CaCertificate: profile.ca_certificate || "", forcePathStyle: profile.force_path_style !== false };
 }
@@ -1186,7 +1056,16 @@ function deploymentS3Url(form) {
 }
 
 function targetPrefix(form) {
-  return cleanPrefix([form.prefix, form.deploymentName].filter(Boolean).join("/"));
+  const scopeRoot = cleanPrefix(form.profilePrefix || "");
+  const requestedBase = cleanPrefix(form.prefix || "") || scopeRoot;
+  if (
+    scopeRoot &&
+    requestedBase !== scopeRoot &&
+    !requestedBase.startsWith(`${scopeRoot}/`)
+  ) {
+    throw new Error("Repository prefix is outside the selected S3 profile scope.");
+  }
+  return cleanPrefix([requestedBase, form.deploymentName].filter(Boolean).join("/"));
 }
 
 function cleanPrefix(value) {

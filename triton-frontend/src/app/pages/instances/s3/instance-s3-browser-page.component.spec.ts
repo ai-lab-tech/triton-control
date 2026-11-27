@@ -3,7 +3,7 @@ import { InstallationService } from "../../../shared/installation/installation.s
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, convertToParamMap } from "@angular/router";
-import { of, Subject, throwError } from "rxjs";
+import { of, Subject } from "rxjs";
 import { Action } from "@ngrx/store";
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
@@ -22,6 +22,7 @@ import {
   s3EditorContentLoaded,
   s3EditorSaveRequested,
 } from "../../../state/instances-s3/instances-s3.actions";
+import { initialInstancesS3State } from "../../../state/instances-s3/instances-s3.reducer";
 import { displayFailure } from "../../../state/shared/shared.actions";
 import { AuthStore } from "../../../shared/auth/auth.store";
 
@@ -33,22 +34,6 @@ describe("InstanceS3BrowserPageComponent", () => {
   let authState: InstanceType<typeof AuthStore>;
   let actionsSubject: Subject<Action>;
 
-  const s3InitialState = {
-    instancesS3: {
-      instanceName: "",
-      bucketName: "",
-      prefix: "",
-      currentPath: "/",
-      entries: [],
-      knownFolderPaths: ["/"],
-      pageLoading: false,
-      editorOpen: false,
-      editorLoading: false,
-      editorFileName: "",
-      editorFilePath: "",
-    },
-  };
-
   beforeEach(async () => {
     routeMock = {
       snapshot: { paramMap: convertToParamMap({ id: "7" }) },
@@ -58,7 +43,6 @@ describe("InstanceS3BrowserPageComponent", () => {
       "getInstanceS3ApiInstancesInstanceIdS3Get",
       "listInstanceS3ApiInstancesInstanceIdS3ListGet",
       "getInstanceS3ContentApiInstancesInstanceIdS3ContentGet",
-      "getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet",
       "putInstanceS3ContentApiInstancesInstanceIdS3ContentPut",
       "deleteInstanceS3ContentApiInstancesInstanceIdS3ContentDelete",
     ]);
@@ -77,9 +61,6 @@ describe("InstanceS3BrowserPageComponent", () => {
     instancesApiMock.getInstanceS3ContentApiInstancesInstanceIdS3ContentGet.and.returnValue(
       of({ content: "x=1" } as any),
     );
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.and.returnValue(
-      of({ body: new Blob(["x=1"], { type: "text/plain" }) } as any),
-    );
     instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.and.returnValue(
       of({} as any),
     );
@@ -91,7 +72,7 @@ describe("InstanceS3BrowserPageComponent", () => {
       imports: [InstanceS3BrowserPageComponent],
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
-        provideMockStore({ initialState: s3InitialState }),
+        provideMockStore({ initialState: { instancesS3: initialInstancesS3State } }),
         provideMockActions(() => actionsSubject),
         { provide: ActivatedRoute, useValue: routeMock },
         { provide: InstancesService, useValue: instancesApiMock },
@@ -156,7 +137,7 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     mockStore.setState({
       instancesS3: {
-        ...s3InitialState.instancesS3,
+        ...initialInstancesS3State,
         bucketName: "triton-test",
         prefix: "cancer",
       },
@@ -376,48 +357,19 @@ describe("InstanceS3BrowserPageComponent", () => {
     expect(editorMock.setValue).toHaveBeenCalledWith("abc");
   });
 
-  it("Download_FileOrFolderEntryProvided_FetchesContentAndClicksOnlyForFiles", async () => {
+  it("links the browser download manager to the authenticated raw endpoint", () => {
     const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
-    const component = fixture.componentInstance;
-    spyOn(URL, "createObjectURL").and.returnValue("blob:demo");
-    spyOn(URL, "revokeObjectURL");
-    const clickSpy = spyOn(HTMLAnchorElement.prototype, "click");
-
-    await component.download({ name: "a.py", path: "/", type: "file", modified: "" });
-
-    expect(
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet,
-    ).toHaveBeenCalled();
-    const rawCallArgs =
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.calls.mostRecent()
-        .args;
-    expect(rawCallArgs[0]).toBe("7");
-    expect(rawCallArgs[1]).toBe("/a.py");
-    expect(String(rawCallArgs[2])).toBe("response");
-    expect(clickSpy).toHaveBeenCalled();
-
-    clickSpy.calls.reset();
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.calls.reset();
-    await component.download({ name: "dir", path: "/", type: "folder", modified: "" });
-    expect(clickSpy).not.toHaveBeenCalled();
-    expect(
-      instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("Download_ContentRequestFails_DispatchesFailureToast", async () => {
-    const fixture = TestBed.createComponent(InstanceS3BrowserPageComponent);
-    const component = fixture.componentInstance;
-    instancesApiMock.getInstanceS3ContentRawApiInstancesInstanceIdS3ContentRawGet.and.returnValue(
-      throwError(() => new Error("down")),
+    const url = new URL(
+      fixture.componentInstance.downloadUrl({
+        name: "large #1&2.plan",
+        path: "/",
+        type: "file",
+        modified: "",
+      }),
+      window.location.origin,
     );
-    const dispatchSpy = spyOn(mockStore, "dispatch");
-
-    await component.download({ name: "a.py", path: "/", type: "file", modified: "" });
-
-    expect(dispatchSpy).toHaveBeenCalledWith(
-      displayFailure({ title: "Download failed", message: "Failed to download a.py." }),
-    );
+    expect(url.pathname).toBe("/api/instances/7/s3/content/raw");
+    expect(url.searchParams.get("path")).toBe("/large #1&2.plan");
   });
 
   it("OnUpload_FileSelected_SetsReadingStateAndDispatchesUploadAfterRead", async () => {
@@ -430,8 +382,8 @@ describe("InstanceS3BrowserPageComponent", () => {
 
     component.onUpload({ target: input } as unknown as Event);
 
-    expect(component.readingUploadFile).toBeTrue();
-    expect(component.readingUploadFileName).toBe("model.py");
+    expect(component.uploadBusy()).toBeTrue();
+    expect(component.uploadStatusLabel()).toBe("Reading model.py...");
 
     await new Promise<void>((resolve) => {
       const check = () => {
@@ -454,8 +406,8 @@ describe("InstanceS3BrowserPageComponent", () => {
       new Uint8Array(uploadAction?.content as ArrayBuffer),
     );
     expect(uploadedText).toBe("x=1");
-    expect(component.readingUploadFile).toBeFalse();
-    expect(component.readingUploadFileName).toBe("");
+    expect(component.uploadBusy()).toBeFalse();
+    expect(component.uploadStatusLabel()).toBe("");
   });
 
   it("OnUploadFolder_FolderSelected_UploadsAllFilesWithRelativePaths", async () => {
@@ -484,8 +436,7 @@ describe("InstanceS3BrowserPageComponent", () => {
       instancesApiMock.putInstanceS3ContentApiInstancesInstanceIdS3ContentPut.calls.allArgs();
     expect(uploadCalls[0][1]).toBe("/models/resnet/config.pbtxt");
     expect(uploadCalls[1][1]).toBe("/models/resnet/1/model.plan");
-    expect(component.uploadFolderInProgress).toBeFalse();
-    expect(component.uploadFolderCompleted).toBe(2);
+    expect(component.uploadBusy()).toBeFalse();
     expect(dispatchSpy).toHaveBeenCalledWith(
       jasmine.objectContaining({ type: "[Instances S3] Navigate To", path: "/models" }),
     );

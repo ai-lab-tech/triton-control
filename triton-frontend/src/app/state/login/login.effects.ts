@@ -191,9 +191,18 @@ export class LoginEffects {
     } catch {
       // keep original when decoding fails
     }
+    value = value.trim();
+    if (
+      !value ||
+      value.startsWith("//") ||
+      value.includes("\\") ||
+      /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value)
+    ) {
+      return fallback;
+    }
     if (!value.startsWith("/")) {
       value = `/${value}`;
     }
-    return value || fallback;
+    return value.startsWith("//") ? fallback : value || fallback;
   }
 }

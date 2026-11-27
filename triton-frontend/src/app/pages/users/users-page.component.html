@@ -68,6 +68,12 @@
                 }
               </div>
               <span class="user-email">{{ row.email }}</span>
+              @if (lastActiveAdminId() === row.id) {
+                <p class="admin-notice">
+                  Last active admin. Promote another user to admin before changing this role or
+                  deleting this account.
+                </p>
+              }
             </td>
             <td class="optional">{{ row.role }}</td>
             <td>
@@ -167,10 +173,15 @@
                   <button
                     class="app-menu-item app-menu-danger"
                     type="button"
+                    [disabled]="lastActiveAdminId() === row.id"
                     (click)="deleteUser(row)"
                   >
                     <span class="material-icons" aria-hidden="true">delete</span>
-                    Delete
+                    {{
+                      lastActiveAdminId() === row.id
+                        ? "Delete unavailable · last active admin"
+                        : "Delete"
+                    }}
                   </button>
                 </div>
               </div>
@@ -191,6 +202,7 @@
                         <mat-form-field appearance="outline" subscriptSizing="dynamic">
                           <mat-select
                             [aria-label]="'Role for ' + row.name"
+                            [disabled]="lastActiveAdminId() === row.id"
                             [(ngModel)]="pendingRoleByUserId[row.id]"
                             (ngModelChange)="updateRole(row, $event)"
                           >
@@ -199,6 +211,12 @@
                             }
                           </mat-select>
                         </mat-form-field>
+                        @if (lastActiveAdminId() === row.id) {
+                          <p class="admin-notice">
+                            This is the last active admin. Promote another user to admin to unlock
+                            this role.
+                          </p>
+                        }
                       </div>
                       <mat-checkbox
                         [checked]="isEngineer(row.id)"

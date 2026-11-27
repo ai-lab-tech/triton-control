@@ -210,7 +210,7 @@ app:
   secretEnv:
     SESSION_SECRET: "replace-me"
     JWT_SECRET: "replace-me"
-    REGISTRY_SECRET_ENCRYPTION_KEY: "replace-me"
+    # Helm generates and reuses the S3 encryption key. Back up the application Secret.
 
 postgresql:
   enabled: true
@@ -481,6 +481,11 @@ model, the operations team reviews the pinned model or image revision in a
 production GitOps pull request. Merging that request deploys the approved
 revision to the production environment.
 
+All development namespaces connect to one shared PostgreSQL instance. Each
+use case has a control database and an MLflow tracking database, each with its
+own credentials. Provision these databases on the shared server and disable
+the PostgreSQL deployment in each Helm release with `postgresql.enabled=false`.
+
 ```mermaid
 flowchart TB
     GitOps[GitOps Repository<br/>Helm/Kustomize/Manifests]
@@ -497,6 +502,7 @@ flowchart TB
 
     subgraph DeptA["Namespace: ai-dept-a"]
         TC_A[Triton Control<br/>own deployment]
+        ML_A[MLflow]
         ING_A[Ingress<br/>triton-a.company.com]
         TR_A1[Triton Server A1]
         TR_A2[Triton Server A2]
@@ -508,6 +514,7 @@ flowchart TB
 
     subgraph DeptB["Namespace: ai-dept-b"]
         TC_B[Triton Control<br/>own deployment]
+        ML_B[MLflow]
         ING_B[Ingress<br/>triton-b.company.com]
         TR_B1[Triton Server B1]
 
@@ -517,6 +524,7 @@ flowchart TB
 
     subgraph DeptC["Namespace: ai-dept-c"]
         TC_C[Triton Control<br/>own deployment]
+        ML_C[MLflow]
         ING_C[Ingress<br/>triton-c.company.com]
         TR_C1[Triton Server C1]
         TR_C2[Triton Server C2]
@@ -525,53 +533,22 @@ flowchart TB
         TC_C --> TR_C1
         TC_C --> TR_C2
     end
+
+    PG[(Shared development PostgreSQL instance)]
+    TC_A -->|control_a| PG
+    ML_A -->|mlflow_a| PG
+    TC_B -->|control_b| PG
+    ML_B -->|mlflow_b| PG
+    TC_C -->|control_c| PG
+    ML_C -->|mlflow_c| PG
 ```
 
-Example layout for the platform repository:
+In production, a central operations team can run one Triton Control installation
+for all use cases with a separate production PostgreSQL instance. This deployment
+omits MLflow and Argo Workflows.
 
-```text
-environments/
-  dept-a/
-    triton-control-values.yaml
-    ingress.yaml
-  dept-b/
-    triton-control-values.yaml
-    ingress.yaml
-  dept-c/
-    triton-control-values.yaml
-    ingress.yaml
-  production/
-    triton-control-values.yaml
-    ingress.yaml
-```
-
-Benefits:
-
-- Clear separation between namespaces
-- Independent lifecycle per team
-- Easier access control
-- Safer configuration changes
-- Reproducible deployments
-- Better auditability through Git history
-- Simple rollback using GitOps tooling
-
-Use this model when:
-
-- Teams require separate Kubernetes namespaces.
-- Access must be isolated between teams.
-- Each team manages its own Triton instances.
-- Configuration should be maintained declaratively.
-
-Ingress recommendation:
-
-- Use a dedicated hostname per namespace or team, for example
-  `triton-a.company.com`, `triton-b.company.com`, and
-  `triton-c.company.com`.
-- Keep Ingress resources in the same namespace as the related Triton Control
-  deployment.
-- Use TLS for every externally reachable Triton Control endpoint.
-- Manage Ingress hosts, TLS secrets, annotations, and controller-specific
-  settings through GitOps.
+For installation steps, repository layout and central version rollouts, see
+[Multi-use-case development with Argo CD](dev-multi-use-case.md).
 
 ## Managed MLflow storage
 
@@ -581,11 +558,34 @@ a server-only Kubernetes Secret. Profile endpoint, region, addressing style and
 custom CA settings are included. Clients use the authenticated MLflow proxy and
 do not receive the S3 credentials.
 
-Tracking and registry metadata use the application's PostgreSQL connection in the
-isolated `mlflow_tracking` schema. PostgreSQL must be reachable from the MLflow
-pod and the database user must be allowed to create this schema. No new MLflow
-PVC is created. The default server image installs the S3/PostgreSQL drivers at
-startup when missing; for restricted networks, preinstall boto3 and psycopg2.
+Managed MLflow is installed in the Triton Control pod's namespace. By default it
+uses the control database and creates the `mlflow_tracking` schema there.
+
+To share a PostgreSQL server across use cases, provision a control database and
+an MLflow database per development release, with a separate login for each.
+In each release namespace, put the control connection URL in the application
+Secret under `DATABASE_URL`. Put the MLflow PostgreSQL URL (including its
+database name and any TLS options) in a separate Secret. Example Helm values:
+
+```yaml
+postgresql:
+  enabled: false
+app:
+  existingSecret: control-app  # includes DATABASE_URL and the usual app secrets
+mlflow:
+  backendStoreSecret:
+    name: mlflow-postgres
+    key: database-url
+```
+
+The MLflow pod must be able to reach PostgreSQL. For clusters without package-index
+access, preinstall boto3 and psycopg2 in the MLflow image.
+The MLflow database login needs permission to create and update tables in the
+target schema. The installer copies the URL
+into MLflow's managed storage Secret at installation. Existing installations
+keep their stored URL during upgrades. To move an existing installation, stop
+writes and migrate its tracking metadata before switching the connection.
+Changing Helm values alone does not migrate data or rotate the stored credentials.
 
 The tracking upgrade endpoint requires and preserves existing S3 storage
 configuration. SQLite/PVC installations must be migrated before upgrading; old

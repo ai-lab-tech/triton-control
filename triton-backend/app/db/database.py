@@ -111,6 +111,7 @@ def init_db() -> None:
         UserTeamEntity,
         WorkflowS3CredentialEntity,
     )
+    from app.db.s3_credentials import migrate_legacy_credentials
     from app.db.schema import create_tables
 
     create_tables(engine)
@@ -124,6 +125,7 @@ def init_db() -> None:
     _migrate_perf_analyzer_table()
     _migrate_s3_profiles_table()
     _migrate_s3_profile_name_uniqueness()
+    migrate_legacy_credentials(engine)
     _migrate_mlflow_table()
     _migrate_workflow_s3_profile_links()
     _migrate_deployment_policy_table()

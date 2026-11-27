@@ -349,9 +349,16 @@ class TritonModelEdgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("model broken", str(unload_error.exception))
 
     async def test_InferModel_EmptyPayload_RaisesBadRequest(self):
-        # Act / Assert
-        with self.assertRaises(BadRequestError):
-            await triton_models.infer_model(SimpleNamespace(), {}, 1, "m", "1", b"", "application/json")
+        instance = TritonInstanceEntity(name="triton", url="http://triton")
+        with (
+            patch.object(triton_models, "get_instance_or_404", return_value=instance) as resolve,
+            patch.object(triton_models, "TritonService") as service,
+            self.assertRaisesRegex(BadRequestError, "Request body is required"),
+        ):
+            await triton_models.infer_model(SimpleNamespace(), {"role": "admin"}, 1, "m", "1", b"", "application/json")
+
+        resolve.assert_called_once()
+        service.assert_not_called()
 
     def test_TritonInferenceTimeoutSeconds_DefaultAndEnvOverride(self):
         # Act / Assert

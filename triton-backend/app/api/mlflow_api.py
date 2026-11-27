@@ -62,7 +62,7 @@ def uninstall_mlflow(
     claims: dict[str, Any] = Depends(get_claims),
 ) -> MlflowDeleteResponse:
     """Uninstall singleton MLflow from Kubernetes."""
-    require_member_or_admin(claims)
+    require_admin(claims)
     return installer.uninstall_mlflow(session)
 
 

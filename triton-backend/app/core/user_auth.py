@@ -46,7 +46,14 @@ def verify_password(password: str, encoded_hash: str) -> bool:
 
 
 def _jwt_secret() -> str:
-    return os.getenv("JWT_SECRET") or os.getenv("SESSION_SECRET") or "change-me-in-production"
+    configured = os.getenv("JWT_SECRET") or os.getenv("SESSION_SECRET")
+    if configured:
+        if os.getenv("TRITON_CONTROL_MODE") == "production" and configured == "change-me-in-production":
+            raise RuntimeError("Configure a non-default JWT_SECRET or SESSION_SECRET in production mode")
+        return configured
+    if os.getenv("TRITON_CONTROL_MODE") == "production":
+        raise RuntimeError("Configure JWT_SECRET or SESSION_SECRET in production mode")
+    return "change-me-in-production"
 
 
 def issue_access_token(

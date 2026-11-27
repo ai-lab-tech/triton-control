@@ -217,7 +217,7 @@ test.describe.serial("smoke", () => {
     const s3ConfigEdited = await editS3Resp.json();
     expect(s3ConfigEdited.bucket).toBe("smoke-bucket-updated");
     expect(s3ConfigEdited.access_key).toBe("smoke-access-updated");
-    expect(s3ConfigEdited.prefix).toBe("models-updated/");
+    expect(s3ConfigEdited.prefix).toBe("models-updated");
     expect(s3ConfigEdited.secret_configured).toBeTruthy();
 
     // Act: manual connection overrides are rejected even when a profile is selected.

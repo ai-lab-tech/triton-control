@@ -5,21 +5,23 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
-function load(profiles = [], env = {}, requestJson = async () => profiles) {
+function load(profiles = [], env = {}, requestJson = async () => profiles, upload) {
   const filename = path.join(__dirname, "../extension.js");
   const localRequire = createRequire(filename);
   const sandbox = {
+    Buffer,
     module: { exports: {} },
     process: { env: { TRITON_CONTROL_PROFILE_URL: "https://control/profiles", TRITON_CONTROL_PROFILE_TOKEN: "token", ...env } },
     require(name) {
       if (name === "vscode") return { TreeItem: class {}, workspace: { isTrusted: true } };
+      if (name === "./s3-client" && upload) return { upload };
       if (name === "./profile-api") return { requestJson };
       if (name === "./hf-builder") return {};
       return localRequire(name);
     },
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") +
-    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile, submitWorkspaceDeployment };", sandbox);
+    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile, submitWorkspaceDeployment, normalizeForm, uploadRepository };", sandbox);
   return sandbox.module.exports;
 }
 
@@ -79,4 +81,22 @@ test("managed deployment uses the workspace credential and exposes only the resu
   assert.equal(options.body, payload);
   assert.equal(options.token, env.TRITON_CONTROL_TOKEN);
   assert.deepEqual({ ...result }, { type: "deploymentResult", instanceId: 17 });
+});
+
+test("simple upload keeps a scoped profile root in object keys and deployment payload", async (t) => {
+  // Arrange
+  const keys = [];
+  const api = load([{ id: 5, prefix: "team/models", endpoint: "https://s3", bucket: "models" }],
+    {}, undefined, async (_, key) => { keys.push(key); return { digest: "sha256:" + "a".repeat(64), size: 12 }; });
+  const source = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "scoped-upload-"));
+  t.after(() => fs.rmSync(source, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(source, "config.pbtxt"), 'name: "iris"');
+  const profile = await api.resolveDeploymentProfile({ profileId: 5, deploymentName: "serving", modelName: "iris" });
+  // Act
+  const form = api.normalizeForm(profile);
+  await api.uploadRepository(source, form, () => {});
+  const payload = api.deploymentPayload(form);
+  // Assert
+  assert.deepEqual(keys, ["team/models/serving/iris/config.pbtxt"]);
+  assert.equal(payload.repository_prefix, "team/models/serving");
 });

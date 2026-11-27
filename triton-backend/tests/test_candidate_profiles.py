@@ -3,6 +3,7 @@
 import unittest
 from unittest.mock import patch
 
+from app.core.crypto import encrypt_secret
 from app.db.entities import S3ProfileEntity, UserEntity
 from app.exceptions import BadRequestError, ForbiddenError
 from app.services.candidates.profiles import source_from_profile, store_from_profile
@@ -22,7 +23,7 @@ class CandidateProfileTests(fixtures.CandidateFixture, unittest.TestCase):
                 bucket="models",
                 prefix="team-root",
                 access_key="fixture-access",
-                secret_key_enc="opaque-fixture",
+                secret_key_enc=encrypt_secret("opaque-fixture"),
                 ca_certificate="",
             )
         )

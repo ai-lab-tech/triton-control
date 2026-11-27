@@ -16,6 +16,7 @@ import { MatInputModule } from "@angular/material/input";
 
 import { BASE_PATH } from "../../api/generated/index";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+import { AuthStore } from "../../shared/auth/auth.store";
 import { AuthService } from "../../shared/auth/auth.service";
 import { ChromeService } from "../../shared/chrome.service";
 
@@ -66,6 +67,7 @@ type InstallMlflowRequest = {
 export class MlflowPageComponent implements OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
+  readonly isAdmin = inject(AuthStore).isAdmin;
   private readonly auth = inject(AuthService);
   private readonly chrome = inject(ChromeService);
   private readonly destroyRef = inject(DestroyRef);
@@ -212,7 +214,7 @@ export class MlflowPageComponent implements OnDestroy {
 
   async uninstall(): Promise<void> {
     const current = this.status();
-    if (!current?.installed || this.uninstalling()) {
+    if (!this.isAdmin() || !current?.installed || this.uninstalling()) {
       return;
     }
     const namespace = current.installation?.namespace || "mlflow";

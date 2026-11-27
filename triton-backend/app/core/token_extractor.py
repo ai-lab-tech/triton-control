@@ -55,9 +55,6 @@ async def extract_claims(
                 claims["auth_provider"] = "oidc"
                 return claims
             except ValueError as oidc_exc:
-                user = request.session.get("user")
-                if user:
-                    return cast(Dict[str, Any], user)
                 detail = str(oidc_exc) or str(local_exc) or "Invalid bearer token"
                 raise HTTPException(status_code=401, detail=detail) from oidc_exc
 
