@@ -3,8 +3,8 @@
 Provides two helpers that combine repository lookups with access-policy
 enforcement so individual service modules do not duplicate the same checks:
   ``ensure_instance_access(session, claims, instance_name)`` — raises
-    ``ForbiddenError`` when a non-admin caller has neither a direct nor a
-    group assignment for ``instance_name``. Admins always pass through.
+    ``ForbiddenError`` when a non-admin caller's ``assigned_instances`` list
+    does not include ``instance_name``; admins always pass through.
   ``get_instance_or_404(session, instance_id, claims)``      — fetches a
     ``TritonInstanceEntity`` by primary key, raises ``NotFoundError`` if
     absent, and optionally calls ``ensure_instance_access`` when ``claims``
@@ -17,20 +17,11 @@ from typing import Any
 
 from sqlmodel import Session
 
-from app.core import installation_policy
 from app.core.access_control import is_admin
 from app.core.identity import require_user_entity
-from app.db.entities import TritonInstanceEntity, UserEntity
+from app.db.entities import TritonInstanceEntity
 from app.exceptions import ForbiddenError, NotFoundError
-from app.repositories import access_groups, instances
-
-
-def effective_instance_names(session: Session, user: UserEntity) -> list[str]:
-    direct = [name for name in (user.assigned_instances or []) if name]
-    if installation_policy.mode() != "production" or user.role.strip().lower() != "viewer" or user.id is None:
-        return direct
-    inherited = access_groups.granted_instance_names(session, user.id)
-    return list(dict.fromkeys([*direct, *inherited]))
+from app.repositories import instances
 
 
 def ensure_instance_access(session: Session, claims: dict[str, Any], instance_name: str) -> None:
@@ -38,7 +29,7 @@ def ensure_instance_access(session: Session, claims: dict[str, Any], instance_na
     if is_admin(claims):
         return
     user = require_user_entity(session, claims)
-    if instance_name not in effective_instance_names(session, user):
+    if instance_name not in (user.assigned_instances or []):
         raise ForbiddenError("Instance access denied")
 
 

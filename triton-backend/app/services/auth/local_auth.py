@@ -85,18 +85,10 @@ def has_active_local_admin_login(session: Session) -> bool:
     return users.has_active_local_admin_login(session)
 
 
-LOCAL_ADMIN_SETUP_REQUIRED = "A cluster operator must set up the first local admin."
-
-
-def production_requires_local_admin(session: Session) -> bool:
-    return installation_policy.mode() == "production" and not has_active_local_admin_login(session)
-
-
 def login(request: LoginRequest, session: Session) -> LoginResponse:
     ensure_local_auth_allowed(session)
     if not oidc_enabled(session) and user_count(session) == 0:
-        if installation_policy.mode() == "production":
-            raise ForbiddenError(LOCAL_ADMIN_SETUP_REQUIRED)
+        installation_policy.require("trust_admin")
         email = request.email
         validate_password(request.password)
 
@@ -144,8 +136,6 @@ def login(request: LoginRequest, session: Session) -> LoginResponse:
 
 def self_register(request: SelfRegisterRequest, session: Session) -> UserDTO:
     ensure_local_auth_allowed(session)
-    if production_requires_local_admin(session):
-        raise ForbiddenError(LOCAL_ADMIN_SETUP_REQUIRED)
     email = request.email
 
     existing = users.find_by_email(session, email)

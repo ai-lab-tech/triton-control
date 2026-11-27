@@ -109,14 +109,6 @@ starting the backend. For GitOps or repeated offline renders, use
 `app.existingSecret` containing all three keys or supply a stable
 `app.secretEnv.S3_SECRET_ENCRYPTION_KEY` through your secret manager.
 
-For a fresh Prod Hub installed directly with Helm, set
-`app.generateSigningSecrets: true` and leave `app.existingSecret` empty to
-generate the session and JWT signing keys alongside the S3 key. Helm reads
-the application Secret during connected upgrades and reuses each key. If a
-key is missing, restore it before upgrading or supply its original value in
-`app.secretEnv`. Use an existing Secret for GitOps because an offline render
-cannot read the deployed keys and renders fresh values for a new install.
-
 ```yaml
 app:
   image:

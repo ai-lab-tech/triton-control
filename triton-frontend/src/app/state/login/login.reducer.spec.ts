@@ -104,7 +104,6 @@ describe("loginSelectors", () => {
     const featureState: LoginState = {
       oidcEnabled: true,
       needsBootstrap: true,
-      localAdminSetupRequired: false,
       loading: true,
       error: "oops",
       notice: "hello",

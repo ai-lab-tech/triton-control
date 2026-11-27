@@ -207,7 +207,7 @@ describe("AuthService", () => {
     const result = await service.getBootstrapStatus();
 
     // Assert
-    expect(result).toEqual({ oidcEnabled: true, needsSetup: true, localAdminSetupRequired: false });
+    expect(result).toEqual({ oidcEnabled: true, needsSetup: true });
   });
 
   it("RegisterFirstUser_ValidPayload_CallsBootstrapRegisterApi", async () => {

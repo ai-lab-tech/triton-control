@@ -151,35 +151,6 @@ async function completeLink(
   await expect(page.getByText("This link is invalid or expired.", { exact: true })).toBeVisible();
 }
 
-async function registerWithPassword(page: Page, email: string) {
-  await page.goto("/signin");
-  await page.getByRole("button", { name: "Register with password" }).click();
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByLabel("Confirm password", { exact: true }).fill(password);
-  const signup = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/auth/self-register") && response.request().method() === "POST",
-  );
-  await page.getByRole("button", { name: "Create account" }).click();
-  return signup;
-}
-
-async function approveViewer(admin: Page, user: User) {
-  await admin.goto("/users");
-  const row = admin.getByRole("row").filter({ hasText: user.email });
-  await expect(row.getByText("approval pending", { exact: true })).toBeVisible();
-  const approval = admin.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/auth/users/${user.id}/role`) &&
-      response.request().method() === "PUT",
-  );
-  await row.getByRole("button", { name: "Approve", exact: true }).click();
-  const response = await approval;
-  expect(response.ok(), await response.text()).toBeTruthy();
-  await expect(row.getByText("active", { exact: true })).toBeVisible();
-}
-
 test(`${mode}: provision additional users, enforce roles, and complete account lifecycle`, async ({
   browser,
   baseURL,
@@ -221,19 +192,16 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
     });
     const accounts: { context: BrowserContext; page: Page; user: User; name: string }[] = [];
     for (const role of ["member", "viewer"]) {
-      const flow = mode === "disabled" ? "self-registers and is approved" : "is added by the admin";
-      await test.step(`${role} ${flow} and signs in`, async () => {
+      await test.step(`admin adds a new ${role}; recipient activates and signs in`, async () => {
         const recipient = await session();
         let user: User;
         if (mode === "disabled") {
-          const response = await registerWithPassword(recipient.page, `${role}@example.test`);
+          const response = await recipient.context.request.post("/api/auth/self-register", {
+            data: { email: `${role}@example.test`, password },
+          });
           expect(response.ok(), await response.text()).toBeTruthy();
           user = await response.json();
           expect(user.is_active).toBe(false);
-          const beforeApproval = await recipient.context.request.post("/api/auth/login", {
-            data: { email: user.email, password },
-          });
-          expect(beforeApproval.status()).toBe(403);
           const assigned = await admin.context.request.put(`/api/auth/users/${user.id}/instances`, {
             data: { assigned_instances: ["Assigned"] },
           });
@@ -412,18 +380,7 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
         expect((await login(reset.page, "member", changedPassword)).access_allowed).toBe(true);
       });
     } else if (mode === "disabled") {
-      await test.step("without email, Add user guides the admin through self-registration and approval", async () => {
-        const settings = admin.page.waitForResponse((response) =>
-          response.url().endsWith("/api/auth/email-settings"),
-        );
-        await admin.page.goto("/users");
-        await settings;
-        await admin.page.getByRole("button", { name: "Add user" }).click();
-        const dialog = admin.page.getByRole("dialog");
-        await expect(dialog.getByText("Register with password", { exact: true })).toBeVisible();
-        await expect(dialog.getByText("Approve", { exact: true })).toBeVisible();
-        await expect(dialog.getByLabel("Email", { exact: true })).toHaveCount(0);
-        await dialog.getByRole("button", { name: "Done", exact: true }).click();
+      await test.step("no-delivery mode disables invitations and resets; unknown registrations need approval", async () => {
         expect(
           (
             await admin.context.request.post("/api/auth/invitations", {
@@ -439,7 +396,9 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
           ).status(),
         ).toBe(400);
         const pending = await session();
-        const response = await registerWithPassword(pending.page, "pending@example.test");
+        const response = await pending.context.request.post("/api/auth/self-register", {
+          data: { email: "pending@example.test", password },
+        });
         expect(response.ok()).toBeTruthy();
         const user: User = await response.json();
         expect(user.is_active).toBe(false);
@@ -450,7 +409,13 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
             })
           ).status(),
         ).toBe(403);
-        await approveViewer(admin.page, user);
+        expect(
+          (
+            await admin.context.request.put(`/api/auth/users/${user.id}/role`, {
+              data: { role: "viewer" },
+            })
+          ).ok(),
+        ).toBeTruthy();
         expect((await login(pending.page, "pending")).access_allowed).toBe(true);
       });
     } else {
@@ -505,7 +470,7 @@ test(`${mode}: provision additional users, enforce roles, and complete account l
     });
     testInfo.annotations.push({
       type: "authentication",
-      description: `${mode}: additional member and viewer completed account setup and signed in`,
+      description: `${mode}: additional member and viewer provisioned through the Users UI`,
     });
   } finally {
     await Promise.all(contexts.map((context) => context.close()));

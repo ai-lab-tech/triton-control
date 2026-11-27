@@ -37,7 +37,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.access_groups_api import router as access_groups_router
 from app.api.auth_api import protected_router as protected_auth_router
 from app.api.auth_api import public_router as public_auth_router
 from app.api.build_api import router as build_router
@@ -276,7 +275,6 @@ app.include_router(user_router, dependencies=[Depends(get_claims)])
 app.include_router(operation_router, dependencies=[Depends(get_claims)])
 app.include_router(build_context_router, dependencies=[Depends(get_claims)])
 app.include_router(build_router, dependencies=[Depends(get_claims)])
-app.include_router(access_groups_router)
 app.include_router(team_router, dependencies=[Depends(get_claims)])
 app.include_router(task_workspaces_router)
 app.include_router(preparation_router, dependencies=[Depends(get_claims)])

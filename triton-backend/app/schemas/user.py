@@ -157,7 +157,6 @@ class LoginResponse(SQLModel):
 class BootstrapStatusResponse(SQLModel):
     oidc_enabled: bool
     needs_setup: bool
-    local_admin_setup_required: bool = False
 
 
 class BootstrapRegisterRequest(SQLModel):

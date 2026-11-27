@@ -19,26 +19,45 @@ Changing a user's role from the Users page also activates a pending account.
 
 ## First Admin
 
-- **Dev:** With OIDC disabled and an empty user database, create the first
-  local admin in the browser.
-- **Prod:** A cluster operator must provision the first local admin before login.
-  The sign-in page explains this and blocks sign-up until an admin exists.
+On a fresh local-auth deployment, the first local admin can be created through
+the initial setup flow. This flow is available only when OIDC is disabled and no
+users exist.
 
-After signing in, manage additional accounts in **User Management**.
+The first admin needs:
+
+- email
+- password with 12-128 characters, at least one uppercase letter, one lowercase
+  letter, one digit, one special character, and no whitespace
+- optional display name
+
+After the first admin exists, additional users are managed from the **User Management**
+page.
 
 ## Add A Local Email/Password User
 
-With OIDC disabled, choose the flow for your delivery mode:
+Local users are supported only when OIDC is disabled. When OIDC is enabled,
+local email/password creation is blocked and users must authenticate with OIDC.
 
-- **Disabled:** The user selects **Register with password** on the sign-in page.
-  Verify their identity, then select **Approve** in **User Management**.
-- **SMTP:** In **User Management → Add user**, select **Invite user**. The user
-  sets their password through the one-time link sent by email.
-- **Manual link:** Use **Invite user** and share the one-time link directly
-  with the intended user.
+To add a local user:
 
-For an existing inactive account without a password, use **Send invitation**
-with SMTP or manual links enabled.
+1. Sign in as an admin.
+2. Open **User Management**.
+3. Select **Add user**.
+4. Enter full name and email.
+5. Select `admin`, `member`, or `viewer`.
+6. Assign one or more Triton instances for non-admin users.
+7. Select the available account-setup option and submit the form.
+
+The available account setup depends on email delivery:
+
+- With `manual-link` or `smtp`, **Invite user** creates an inactive account and
+  issues a single-use activation link. SMTP sends it automatically;
+  `manual-link` shows it once for secure out-of-band transfer.
+- With `manual-link` or `smtp`, **Create inactive account** creates an account
+  that cannot sign in and cannot be claimed through public self-registration.
+- With delivery `disabled`, have new local users self-register, then approve
+  them and assign their role and instance access. For an existing inactive account
+  without a password, enable `manual-link` or `smtp` and issue an invitation.
 
 Administrators never assign or transmit a user's initial password. Passwords
 chosen during registration, invitation activation, or reset must have 12-128
@@ -174,18 +193,6 @@ and membership changes retain audit events; roles and resource assignments are u
 
 Inactive users cannot be newly assigned. An admin can still revoke their existing
 responsibility. Changes are idempotent and retained in the audit history.
-
-### Local access groups
-
-In the shared Prod Hub, Platform/Ops can use **User Management → Group Management**
-to assign viewers and instances to a named group. A viewer's **View access sources** dialog
-shows its direct assignments and the groups that grant it access. Changes to
-group membership or instance assignments apply on subsequent requests. A user
-keeps access while any group or direct assignment still grants it.
-
-Group grants apply only to viewers in production mode. Dev spokes continue to
-use direct instance assignments. Both local and OIDC viewers can join a group.
-Engineering responsibility remains independently managed.
 
 ### Team API
 

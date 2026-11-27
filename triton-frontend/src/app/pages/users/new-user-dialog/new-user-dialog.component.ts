@@ -76,12 +76,7 @@ export class NewUserDialogComponent {
     this.newUser.creationMode = this.invitationAvailable ? "invite" : "inactive";
   }
 
-  get registrationOnly(): boolean {
-    return !this.oidcEnabled() && !this.invitationAvailable;
-  }
-
   get canSave(): boolean {
-    if (this.registrationOnly) return false;
     if (this.newUser.name.trim().length === 0 || this.newUser.email.trim().length === 0) {
       return false;
     }
@@ -99,7 +94,7 @@ export class NewUserDialogComponent {
   }
 
   save(): void {
-    if (this.saving || this.registrationOnly) {
+    if (this.saving) {
       return;
     }
     this.error = "";
@@ -116,8 +111,11 @@ export class NewUserDialogComponent {
     }
     const oidc = this.oidcEnabled();
     if (!oidc && this.newUser.creationMode === "invite") {
-      void this.invite();
-      return;
+      if (this.invitationAvailable) {
+        void this.invite();
+        return;
+      }
+      this.newUser.creationMode = "inactive";
     }
     this.store.dispatch(
       createUserRequested({

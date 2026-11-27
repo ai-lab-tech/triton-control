@@ -21,12 +21,11 @@ from sqlmodel import Session
 
 from app.core import installation_policy
 from app.core.user_auth import hash_password
-from app.exceptions import BadRequestError, ForbiddenError
+from app.exceptions import BadRequestError
 from app.mappers import user_entity_to_dto
 from app.repositories import users
 from app.schemas import BootstrapRegisterRequest, BootstrapStatusResponse, UserDTO
 from app.services.auth.email_settings import get_runtime_config
-from app.services.auth.local_auth import LOCAL_ADMIN_SETUP_REQUIRED, production_requires_local_admin
 from app.services.oidc.config import get_settings
 
 
@@ -43,16 +42,11 @@ def auth_options(session: Session) -> dict[str, object]:
 def bootstrap_status(session: Session) -> BootstrapStatusResponse:
     is_oidc = get_settings(session).oidc_enabled
     needs_setup = installation_policy.mode() == "development" and (not is_oidc) and (users.count(session) == 0)
-    return BootstrapStatusResponse(
-        oidc_enabled=is_oidc,
-        needs_setup=needs_setup,
-        local_admin_setup_required=not is_oidc and production_requires_local_admin(session),
-    )
+    return BootstrapStatusResponse(oidc_enabled=is_oidc, needs_setup=needs_setup)
 
 
 def bootstrap_register(request: BootstrapRegisterRequest, session: Session) -> UserDTO:
-    if installation_policy.mode() == "production":
-        raise ForbiddenError(LOCAL_ADMIN_SETUP_REQUIRED)
+    installation_policy.require("trust_admin")
     if get_settings(session).oidc_enabled:
         raise BadRequestError("OIDC is enabled")
     if users.count(session) > 0:

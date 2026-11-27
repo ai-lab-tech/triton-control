@@ -29,7 +29,6 @@ _REVIEWED = {
         "update_email_settings_endpoint test_email_endpoint"
     ),
     "user_api": "list_users delete_user update_user_instances update_user_role",
-    "access_groups_api": "list_groups list_instance_options create_group update_group delete_group",
     "team_api": "list_teams create_team initialize_engineering_group update_team list_members add_member "
                 "remove_member list_history",
     "instance_api": "list_instances get_instance get_instance_by_name",

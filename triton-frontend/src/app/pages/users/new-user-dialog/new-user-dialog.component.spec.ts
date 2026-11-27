@@ -157,7 +157,7 @@ describe("NewUserDialogComponent", () => {
     expect(native.querySelector("#dialog-user-oidc")).toBeNull();
   });
 
-  it("shows self-registration and approval instructions when delivery is disabled", async () => {
+  it("Template_EmailLifecycleDisabled_UsesLegacyAddUserFlow", async () => {
     // Arrange
     dialogData.emailLifecycleAvailable = false;
     mockStore.overrideSelector(selectUsersOidcEnabled, false);
@@ -171,13 +171,16 @@ describe("NewUserDialogComponent", () => {
     const native = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(native.textContent).toContain("Register with password");
-    expect(native.textContent).toContain("Approve");
-    expect(native.querySelector("#dialog-user-email")).toBeNull();
-    expect(native.querySelector(".dialog-submit-button")).toBeNull();
+    expect(fixture.componentInstance.newUser.creationMode).toBe("inactive");
+    expect(native.textContent).not.toContain("Invite user");
+    expect(native.textContent).not.toContain("Email lifecycle");
+    expect(native.textContent).not.toContain("Account setup");
+    expect(native.textContent).not.toContain("Create inactive account");
+    expect(native.querySelector("#dialog-user-creation-mode")).toBeNull();
+    expect(native.textContent).toContain("Add user");
   });
 
-  it("does not create a local account when delivery is disabled", () => {
+  it("Save_EmailLifecycleDisabled_CreatesLocalUserWithoutInvitation", () => {
     // Arrange
     dialogData.emailLifecycleAvailable = false;
     const fixture = TestBed.createComponent(NewUserDialogComponent);
@@ -192,8 +195,15 @@ describe("NewUserDialogComponent", () => {
 
     // Assert
     expect(usersApiMock.inviteUserEndpointApiAuthInvitationsPost).not.toHaveBeenCalled();
-    expect(mockStore.dispatch).not.toHaveBeenCalled();
-    expect(dialogRefMock.close).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        name: "Alice",
+        email: "alice@example.com",
+        auth: "local",
+        creationMode: "inactive",
+      }),
+    );
+    expect(dialogRefMock.close).toHaveBeenCalled();
   });
 
   it("Save_InvalidInput_DoesNotDispatch", () => {

@@ -2,7 +2,6 @@
 
 import os
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy.pool import StaticPool
@@ -141,48 +140,9 @@ class CutoverTests(unittest.TestCase):
              patch.object(local_auth, "user_count", return_value=0), \
              patch.object(local_auth.users, "create") as create:
             # Act / Assert
-            with Session(self.engine) as session, self.assertRaisesRegex(ForbiddenError, "first local admin"):
+            with Session(self.engine) as session, self.assertRaises(ForbiddenError):
                 local_auth.login(LoginRequest(email="attacker@test.test", password="irrelevant"), session)
             create.assert_not_called()
-
-    def test_production_sign_up_waits_for_a_local_admin(self):
-        from app.schemas import SelfRegisterRequest
-        from app.services.auth import bootstrap, local_auth
-
-        # Arrange
-        request = SelfRegisterRequest(email="viewer@example.test", password="ViewerLocal123!")
-        with (
-            Session(self.engine) as session,
-            patch.object(local_auth, "oidc_enabled", return_value=False),
-            patch.object(bootstrap, "get_settings", return_value=SimpleNamespace(oidc_enabled=False)),
-        ):
-            # Act
-            status = bootstrap.bootstrap_status(session)
-            with self.assertRaisesRegex(ForbiddenError, "first local admin"):
-                local_auth.self_register(request, session)
-
-            # Assert
-            self.assertTrue(status.local_admin_setup_required)
-            self.assertFalse(status.needs_setup)
-            self.assertEqual(local_auth.user_count(session), 1)
-
-    def test_production_accepts_pending_signup_after_local_admin_setup(self):
-        from app.schemas import SelfRegisterRequest
-        from app.services.auth import local_auth
-
-        # Arrange
-        request = SelfRegisterRequest(email="viewer@example.test", password="ViewerLocal123!")
-        with Session(self.engine) as session, patch.object(local_auth, "oidc_enabled", return_value=False):
-            admin = session.get_one(UserEntity, 1)
-            admin.password_hash = "existing-test-hash"
-            session.commit()
-
-            # Act
-            user = local_auth.self_register(request, session)
-
-            # Assert
-            self.assertEqual(user.role, "viewer")
-            self.assertFalse(user.is_active)
 
     def test_pending_deployment_blocks_cutover_but_terminal_history_does_not(self):
         from app.db.entities import OperationEntity

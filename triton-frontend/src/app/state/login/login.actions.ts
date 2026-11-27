@@ -4,12 +4,7 @@ export const loginPageOpened = createAction("[Login] Page Opened");
 
 export const bootstrapStatusLoaded = createAction(
   "[Login] Bootstrap Status Loaded",
-  props<{
-    oidcEnabled: boolean;
-    needsBootstrap: boolean;
-    forgotPasswordAvailable?: boolean;
-    localAdminSetupRequired?: boolean;
-  }>(),
+  props<{ oidcEnabled: boolean; needsBootstrap: boolean; forgotPasswordAvailable?: boolean }>(),
 );
 
 export const bootstrapStatusFailed = createAction("[Login] Bootstrap Status Failed");

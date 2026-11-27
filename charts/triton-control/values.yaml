@@ -95,8 +95,6 @@ app:
       value: ""
   envFrom: []
   existingSecret: ""
-  # Opt in for direct Helm installs. Upgrades require the deployed keys or their original values.
-  generateSigningSecrets: false
   secretEnv:
     # Set real values in your environment-specific values file.
     SESSION_SECRET: ""
