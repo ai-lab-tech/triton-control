@@ -1,0 +1,89 @@
+<h2 mat-dialog-title>
+  {{ data.account ? "Instance access for " + data.account.name : "Access groups" }}
+</h2>
+<mat-dialog-content>
+  @if (busy()) {
+    <p role="status">Working…</p>
+  }
+  @if (error()) {
+    <p role="alert">{{ error() }}</p>
+    <button mat-button type="button" (click)="reload()" [disabled]="busy()">Reload groups</button>
+  }
+  @if (data.account; as account) {
+    <h3>Direct assignments</h3>
+    <p>{{ account.instances.join(", ") || "None" }}</p>
+    @if (loaded()) {
+      <h3>Group assignments</h3>
+      <ul>
+        @for (group of groups(); track group.id) {
+          @if (group.user_ids.includes(account.id)) {
+            @for (instance of instances(); track instance.id) {
+              @if (group.instance_ids.includes(instance.id)) {
+                <li>{{ instance.name }} via {{ group.name }}</li>
+              }
+            }
+          }
+        }
+      </ul>
+    }
+  } @else if (loaded()) {
+    <p>
+      Group assignments give members access to the selected instances. Their roles determine what
+      they can do.
+    </p>
+    <mat-form-field>
+      <mat-label>Group to edit</mat-label>
+      <mat-select [value]="selected" (selectionChange)="choose($event.value)" [disabled]="busy()">
+        <mat-option>Create a group</mat-option>
+        @for (group of groups(); track group.id) {
+          <mat-option [value]="group">{{ group.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Group name</mat-label>
+      <input matInput [(ngModel)]="name" [disabled]="busy()" maxlength="64" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Viewers</mat-label>
+      <mat-select multiple [(ngModel)]="userIds" [disabled]="busy()">
+        @for (user of data.users; track user.id) {
+          @if (user.role.trim().toLowerCase() === "viewer" || userIds.includes(user.id)) {
+            <mat-option [value]="user.id"
+              >{{ user.name }} ({{ user.email }} · {{ user.role }})</mat-option
+            >
+          }
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Instances</mat-label>
+      <mat-select multiple [(ngModel)]="instanceIds" [disabled]="busy()">
+        @for (instance of instances(); track instance.id) {
+          <mat-option [value]="instance.id">{{ instance.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-flat-button type="button" (click)="save()" [disabled]="busy() || !name.trim()">
+      {{ selected ? "Save group" : "Create group" }}
+    </button>
+    @if (selected; as group) {
+      @if (confirmingDelete) {
+        <p>Delete {{ group.name }} and remove access granted by this group?</p>
+        <button mat-button type="button" (click)="remove(group)" [disabled]="busy()">
+          Confirm delete
+        </button>
+        <button mat-button type="button" (click)="confirmingDelete = false" [disabled]="busy()">
+          Cancel
+        </button>
+      } @else {
+        <button mat-button type="button" (click)="confirmingDelete = true" [disabled]="busy()">
+          Delete group
+        </button>
+      }
+    }
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="busy()">Done</button>
+</mat-dialog-actions>

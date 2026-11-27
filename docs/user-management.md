@@ -194,6 +194,18 @@ and membership changes retain audit events; roles and resource assignments are u
 Inactive users cannot be newly assigned. An admin can still revoke their existing
 responsibility. Changes are idempotent and retained in the audit history.
 
+### Local access groups
+
+In the shared Prod Hub, Platform/Ops can use **User Management → Access groups**
+to assign viewers and instances to a named group. A viewer's **View access sources** dialog
+shows its direct assignments and the groups that grant it access. Changes to
+group membership or instance assignments apply on subsequent requests. A user
+keeps access while any group or direct assignment still grants it.
+
+Group grants apply only to viewers in production mode. Dev spokes continue to
+use direct instance assignments. Both local and OIDC viewers can join a group.
+Engineering responsibility remains independently managed.
+
 ### Team API
 
 All endpoints require a currently active administrator, including reads.

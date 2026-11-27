@@ -122,6 +122,28 @@ class UserEntity(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class AccessGroupEntity(SQLModel, table=True):
+    __tablename__ = "access_groups"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(sa_column=Column(String(64), nullable=False, unique=True))
+    revision: int = 1
+
+
+class AccessGroupMemberEntity(SQLModel, table=True):
+    __tablename__ = "access_group_members"
+
+    group_id: UUID = Field(foreign_key="access_groups.id", ondelete="CASCADE", primary_key=True)
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", primary_key=True, index=True)
+
+
+class AccessGroupInstanceEntity(SQLModel, table=True):
+    __tablename__ = "access_group_instances"
+
+    group_id: UUID = Field(foreign_key="access_groups.id", ondelete="CASCADE", primary_key=True)
+    instance_id: int = Field(foreign_key="triton_instances.id", ondelete="CASCADE", primary_key=True, index=True)
+
+
 class TeamEntity(SQLModel, table=True):
     """Engineering responsibility, independent of application authorization."""
 

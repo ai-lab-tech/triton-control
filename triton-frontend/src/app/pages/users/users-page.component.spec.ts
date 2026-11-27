@@ -9,6 +9,7 @@ import { provideMockActions } from "@ngrx/effects/testing";
 import { InstancesService, UsersService } from "../../api/generated/index";
 import { TeamsApiService } from "../teams/teams-api.service";
 import { UsersPageComponent } from "./users-page.component";
+import { InstallationService } from "../../shared/installation/installation.service";
 import { selectUsers, selectUsersInstances } from "../../state/users/users.selectors";
 import {
   addInstanceToUserRequested,
@@ -77,6 +78,27 @@ describe("UsersPageComponent", () => {
 
     mockStore = TestBed.inject(MockStore);
     mockStore.overrideSelector(selectUsersInstances, []);
+  });
+
+  it("opens access groups only for production identity admins", () => {
+    // Arrange
+    const fixture = TestBed.createComponent(UsersPageComponent);
+    const page = fixture.componentInstance;
+    const installation = TestBed.inject(InstallationService);
+    const open = spyOn(fixture.debugElement.injector.get(MatDialog), "open");
+    const capabilities = { identity_admin: true };
+
+    // Act
+    installation.snapshot.set({ mode: "development", capabilities, explanation: "Development" });
+    page.openAccessGroups();
+    const developmentVisible = page.showAccessGroups();
+    installation.snapshot.set({ mode: "production", capabilities, explanation: "Production" });
+    page.openAccessGroups();
+
+    // Assert
+    expect(developmentVisible).toBeFalse();
+    expect(page.showAccessGroups()).toBeTrue();
+    expect(open).toHaveBeenCalledTimes(1);
   });
 
   it("protects the sole active admin until a second admin becomes active", () => {

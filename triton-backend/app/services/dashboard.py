@@ -3,8 +3,8 @@
 Provides:
   ``list_dashboard_alerts(session, claims)`` — returns the list of persisted
     ``DashboardAlertDTO`` objects visible to the caller.  Admins receive all
-    alerts; non-admin users receive only alerts belonging to instances in
-    their ``assigned_instances`` list.  Delegates to the
+    alerts. Non-admin users receive only alerts belonging to instances
+    assigned directly or through an access group. Delegates to the
     ``repositories/dashboard_alerts`` module for the actual DB query.
 """
 
@@ -19,13 +19,14 @@ from app.core.identity import require_user_entity
 from app.mappers import dashboard_alert_entity_to_dto
 from app.repositories import dashboard_alerts
 from app.schemas import DashboardAlertDTO
+from app.services.access import effective_instance_names
 
 
 def list_dashboard_alerts(session: Session, claims: dict[str, Any]) -> list[DashboardAlertDTO]:
     assigned: list[str] | None = None
     if not is_admin(claims):
         user = require_user_entity(session, claims)
-        assigned = [name for name in (user.assigned_instances or []) if name]
+        assigned = effective_instance_names(session, user)
 
     rows = dashboard_alerts.list_visible(session, assigned)
     return [dashboard_alert_entity_to_dto(row) for row in rows]

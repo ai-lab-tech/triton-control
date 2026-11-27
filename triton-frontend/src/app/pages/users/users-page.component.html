@@ -7,6 +7,16 @@
       </p>
     </div>
     <div class="header-actions">
+      @if (showAccessGroups()) {
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="openAccessGroups()"
+          [disabled]="loading()"
+        >
+          Access groups
+        </button>
+      }
       <button mat-flat-button color="primary" (click)="openNewUserDialog()">
         <span class="material-icons" aria-hidden="true">person_add</span>
         Add user
@@ -233,7 +243,12 @@
                         >ML engineer</mat-checkbox
                       >
                     </div>
-                    <h3>Assigned instances</h3>
+                    <h3>Direct instance assignments</h3>
+                    @if (showAccessGroups() && row.role.trim().toLowerCase() === "viewer") {
+                      <button mat-button type="button" (click)="openAccessGroups(row)">
+                        View access sources
+                      </button>
+                    }
                     <div class="instance-chips">
                       @for (instance of row.instances; track instance) {
                         <span class="instance-chip">

@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { MatCheckboxModule } from "@angular/material/checkbox";
 import { TeamsApiService, TeamMember } from "../teams/teams-api.service";
 import { mapApiErrorMessage } from "../../shared/api-error-message";
+import { InstallationService } from "../../shared/installation/installation.service";
 
 import { FormsModule } from "@angular/forms";
 import { MatCardModule } from "@angular/material/card";
@@ -21,6 +22,7 @@ import { toSignal } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
 import { UsersService } from "../../api/generated";
 
+import { AccessGroupsDialogComponent } from "./access-groups/access-groups-dialog.component";
 import { NewUserDialogComponent } from "./new-user-dialog/new-user-dialog.component";
 import { type UserRow } from "../../state/users/users.reducer";
 import {
@@ -63,6 +65,12 @@ export class UsersPageComponent {
   private readonly store = inject(Store);
   private readonly dialog = inject(MatDialog);
   private readonly usersApi = inject(UsersService);
+  private readonly installation = inject(InstallationService);
+  readonly showAccessGroups = computed(
+    () =>
+      this.installation.snapshot()?.mode === "production" &&
+      this.installation.allows("identity_admin"),
+  );
 
   readonly users = toSignal(this.store.select(selectUsers), { initialValue: [] as UserRow[] });
   readonly lastActiveAdminId = computed(() => {
@@ -82,6 +90,15 @@ export class UsersPageComponent {
   readonly engineeringMembers = signal<TeamMember[]>([]);
   readonly engineeringBusy = signal(true);
   readonly engineeringError = signal("");
+
+  openAccessGroups(account?: UserRow): void {
+    if (!this.showAccessGroups()) return;
+    this.dialog.open(AccessGroupsDialogComponent, {
+      data: { users: this.users(), account },
+      width: "36rem",
+      maxWidth: "95vw",
+    });
+  }
 
   openDetails(template: TemplateRef<unknown>, user: UserRow): void {
     this.dialog.open(template, {
