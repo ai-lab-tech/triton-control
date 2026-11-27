@@ -429,14 +429,12 @@ test.describe.serial("code-server plugin workflows", () => {
     await form!.locator('[name="prefix"]').fill(prefix);
     // Small image: this smoke test verifies upload and deployment creation, not GPU inference.
     await form!.locator('[name="image"]').fill(workspaceImage);
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().endsWith("/api/deployments") && r.request().method() === "POST",
-    );
     await form!.locator("#submit").click();
-    const response = await responsePromise;
-    expect(response.ok(), await response.text()).toBeTruthy();
-    const deployment = await response.json();
+    // Both the managed extension host and the browser flow open the created instance.
+    await expect(page).toHaveURL(/\/instances\/\d+$/, { timeout: 120_000 });
+    const instanceId = new URL(page.url()).pathname.split("/").pop()!;
     try {
+      await expect(page.getByRole("heading", { name: deploymentName, exact: true })).toBeVisible();
       await expect
         .poll(() => probe(() => s3("get", `${prefix}/${deploymentName}/${model}/config.pbtxt`)))
         .toBe(readFile(`/workspace/${repository}/${model}/config.pbtxt`));
@@ -455,7 +453,7 @@ test.describe.serial("code-server plugin workflows", () => {
       // Only the documented cleanup conflict is retryable; other errors fail immediately.
       const deadline = Date.now() + 60_000;
       while (true) {
-        const deletion = await context.request.delete(`/api/deployments/${deployment.instance_id}`);
+        const deletion = await context.request.delete(`/api/deployments/${instanceId}`);
         if (deletion.status() === 200) break;
         expect(deletion.status(), await deletion.text()).toBe(409);
         expect((await deletion.json()).detail).toContain("cleanup requested");
@@ -465,9 +463,7 @@ test.describe.serial("code-server plugin workflows", () => {
       expect(
         kubectl("get", "deployment", deploymentName, "--ignore-not-found", "-o", "name").trim(),
       ).toBe("");
-      expect((await context.request.get(`/api/instances/${deployment.instance_id}`)).status()).toBe(
-        404,
-      );
+      expect((await context.request.get(`/api/instances/${instanceId}`)).status()).toBe(404);
     }
   });
 

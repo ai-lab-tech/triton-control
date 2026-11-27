@@ -465,17 +465,21 @@ S3 deployment profiles:
 
 ## Recommended Kubernetes Deployment Model
 
-In development, deploy one Triton Control instance per use case in its own
-Kubernetes namespace. A team is
-the organizational owner of that namespace, not a Kubernetes resource type.
+Triton Control uses the **Multi-Dev-Spoke → Central-Prod-Hub** deployment model.
+Each use case has a development namespace with its own Triton Control release,
+ingress and Triton servers. Teams use MLflow and Argo Workflows in their
+development spokes to track experiments and validate workloads. In production,
+the operations team runs a single Triton Control installation for all use cases
+in production mode, without MLflow or Argo Workflows.
 
-Each namespace gets its own:
-
-- Kubernetes namespace
-- Triton Control deployment
-- Ingress endpoint
-- Configuration
-- Self-deployed Triton instances
+**We recommend GitOps with Argo CD.** The platform team owns the chart and image
+versions for Triton Control, MLflow and Argo Workflows. It can roll out a fix to
+all development spokes from one platform repository. Each use-case team owns
+its workflow manifests and parameters in a separate repository. Argo CD syncs
+those changes to that team's development namespace. To promote a validated
+model, the operations team reviews the pinned model or image revision in a
+production GitOps pull request. Merging that request deploys the approved
+revision to the production environment.
 
 All development namespaces connect to one shared PostgreSQL instance. Each
 use case has a control database and an MLflow tracking database, each with its
@@ -489,6 +493,12 @@ flowchart TB
     GitOps --> DeptA
     GitOps --> DeptB
     GitOps --> DeptC
+    GitOps -->|Approved production revision| Prod
+    subgraph Prod["Production hub"]
+        TC_P[Central Triton Control]
+        TR_P[Production Triton servers]
+        TC_P --> TR_P
+    end
 
     subgraph DeptA["Namespace: ai-dept-a"]
         TC_A[Triton Control<br/>own deployment]

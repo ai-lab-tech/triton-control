@@ -201,6 +201,7 @@ def _migrate_triton_instances_table() -> None:
         conn.execute(text(
             "ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS preparation_task_id VARCHAR"
         ))
+        conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS perf_candidate JSON"))
         conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_uri VARCHAR"))
         conn.execute(text("ALTER TABLE IF EXISTS triton_instances ADD COLUMN IF NOT EXISTS mlflow_model_name VARCHAR"))
         conn.execute(
@@ -392,6 +393,11 @@ def _migrate_triton_instances_table() -> None:
 def _migrate_perf_analyzer_table() -> None:
     """Apply lightweight schema migration for perf_analyzer."""
     with engine.begin() as conn:
+        conn.execute(text("""ALTER TABLE IF EXISTS model_perf_jobs
+            ADD COLUMN IF NOT EXISTS mlflow_snapshot JSON,
+            ADD COLUMN IF NOT EXISTS mlflow_state VARCHAR,
+            ADD COLUMN IF NOT EXISTS mlflow_run_id VARCHAR,
+            ADD COLUMN IF NOT EXISTS mlflow_retry_at TIMESTAMP"""))
         conn.execute(
             text(
                 """

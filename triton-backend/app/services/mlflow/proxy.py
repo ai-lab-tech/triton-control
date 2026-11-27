@@ -100,11 +100,12 @@ def _proxy_http_sync(
     headers: dict[str, str],
     query_params: list[tuple[str, str]],
     body: bytes,
+    timeout: int = 120,
 ) -> Response:
     headers = {**headers, **tracking.gateway_header(server_url)}
     if is_running_in_cluster():
-        return _direct_proxy_http_sync(server_url, path, method, headers, query_params, body)
-    return _kubernetes_proxy_http_sync(server_url, path, method, headers, query_params, body)
+        return _direct_proxy_http_sync(server_url, path, method, headers, query_params, body, timeout)
+    return _kubernetes_proxy_http_sync(server_url, path, method, headers, query_params, body, timeout)
 
 
 def _direct_proxy_http_sync(
@@ -114,10 +115,11 @@ def _direct_proxy_http_sync(
     headers: dict[str, str],
     query_params: list[tuple[str, str]],
     body: bytes,
+    timeout: int = 120,
 ) -> Response:
     target = _http_url(server_url, path, query_params)
     try:
-        with httpx.Client(follow_redirects=False, timeout=120, trust_env=False) as client:
+        with httpx.Client(follow_redirects=False, timeout=timeout, trust_env=False) as client:
             upstream = client.request(
                 method,
                 target,
@@ -143,6 +145,7 @@ def _kubernetes_proxy_http_sync(
     headers: dict[str, str],
     query_params: list[tuple[str, str]],
     body: bytes,
+    timeout: int = 120,
 ) -> Response:
     from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
@@ -179,7 +182,7 @@ def _kubernetes_proxy_http_sync(
             auth_settings=["BearerToken"],
             _return_http_data_only=False,
             _preload_content=False,
-            _request_timeout=120,
+            _request_timeout=timeout,
         )
         content = upstream.data
         upstream.release_conn()

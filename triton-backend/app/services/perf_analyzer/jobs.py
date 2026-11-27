@@ -13,14 +13,14 @@ from sqlmodel import Session
 
 from app.core import installation_policy
 from app.db.database import session_factory
-from app.db.entities import ModelPerfJobEntity, PerfAnalyzerRunEntity
-from app.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.db.entities import ModelPerfJobEntity, PerfAnalyzerRunEntity, TritonInstanceEntity
+from app.exceptions import AppError, BadRequestError, ConflictError, NotFoundError
 from app.repositories import perf_analyzer as results
 from app.repositories import perf_jobs as repo
 from app.schemas.perf_analyzer import RunPerfAnalyzerRequest
 from app.schemas.perf_jobs import ModelPerfRunResponse, ModelPerfStatusResponse, StartModelPerfRequest
 from app.services.access import get_instance_or_404
-from app.services.perf_analyzer import commands, installer
+from app.services.perf_analyzer import benchmark_tracking, commands, installer, provenance
 from app.services.perf_analyzer.jobs_kubernetes import Jobs, deadline_seconds, default_image, pod_message
 from app.services.registry_settings import apply_registry_settings
 
@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 def dto(run: ModelPerfJobEntity) -> ModelPerfRunResponse:
-    return ModelPerfRunResponse.model_validate(run, from_attributes=True)
+    response = ModelPerfRunResponse.model_validate(run, from_attributes=True)
+    if run.mlflow_run_id and run.mlflow_snapshot:
+        response.mlflow_run_url = benchmark_tracking.ui(run.mlflow_snapshot["experiment"], "runs", run.mlflow_run_id)
+    return response
 
 
 def start(
@@ -42,9 +45,17 @@ def start(
     existing = repo.active(session, instance_id, model_name)
     if existing:
         raise ConflictError(f"A performance run is already active for this model: {existing.id}")
+    snapshot = None
+    if request.log_to_mlflow:
+        try:
+            snapshot = provenance.resolve(session, claims, instance, model_name, request.model_version, submit=True)
+        except AppError:
+            raise
+        except Exception:
+            raise ConflictError("Could not verify the served candidate. Retry or run without MLflow.") from None
     target = RunPerfAnalyzerRequest(
         instance_id=instance_id, model_name=model_name,
-        **request.model_dump(exclude={"image", "dockerconfigjson"}),
+        **request.model_dump(exclude={"image", "dockerconfigjson", "log_to_mlflow"}),
     )
     config = commands.fetch_triton_model_config(instance, model_name=model_name, model_version=target.model_version)
     if config is None:
@@ -58,6 +69,7 @@ def start(
     namespace = commands.perf_analyzer_namespace()
     run = ModelPerfJobEntity(
         id=run_id, instance_id=instance_id, model_name=target.model_name, model_version=target.model_version,
+        mlflow_snapshot=snapshot, mlflow_state="selected" if snapshot else None,
         image=request.image or default_image(), namespace=namespace, job_name=f"model-perf-{run_id}",
         pull_secret=bool(request.dockerconfigjson), input_data=prepared_input,
         batch_size=commands.effective_perf_analyzer_batch_size(target, decoupled=decoupled),
@@ -65,6 +77,11 @@ def start(
         command=commands.run_command(target, instance, perf_analyzer_namespace=namespace,
                                       input_data_arg=input_arg, decoupled=decoupled),
     )
+    if snapshot:
+        port = 18001 if run.command[run.command.index("-i") + 1].lower() == "grpc" else 18000
+        run.command[run.command.index("-u") + 1] = (
+            f"{instance.deployment_service_name}.{instance.deployment_namespace}.svc.cluster.local:{port}"
+        )
     repo.reserve(session, run)
     locked = repo.lock_run(session, run_id)
     if locked is None:
@@ -106,7 +123,7 @@ def status(
     session: Session, claims: dict[str, Any], instance_id: int, model_name: str, version: str,
 ) -> ModelPerfStatusResponse:
     installation_policy.require("development_jobs")
-    get_instance_or_404(session, instance_id, claims)
+    instance = get_instance_or_404(session, instance_id, claims)
     current = repo.active(session, instance_id, model_name)
     if current:
         reconcile(session, current.id)
@@ -117,6 +134,7 @@ def status(
     )
     return ModelPerfStatusResponse(
         active_run=dto(current) if current else None, latest_run=dto(latest) if latest else None,
+        mlflow=provenance.option(session, claims, instance, model_name, version),
         latest_result=previous, default_image=default_image(),
     )
 
@@ -142,6 +160,18 @@ def stop(
 
 def finish(session: Session, run: ModelPerfJobEntity, state: str, message: str) -> None:
     run.state, run.message, run.finished_at = state, message, datetime.utcnow()
+    if run.mlflow_snapshot:
+        run.mlflow_state = "skipped"
+        if state == "succeeded":
+            try:
+                instance = session.get(TritonInstanceEntity, run.instance_id)
+                actual = provenance.verify_workload(session, instance, run.mlflow_snapshot) if instance else None
+                if actual != run.mlflow_snapshot["runtime"]:
+                    raise ConflictError("Workload changed")
+                benchmark_tracking.measurements(run.output)
+                run.mlflow_state = "pending"
+            except Exception:
+                run.mlflow_state = "unverified"
     previous = results.get_latest_run(session, instance_id=run.instance_id, model_name=run.model_name,
                                       model_version=run.model_version)
     if previous is None:
@@ -303,6 +333,7 @@ class PerfJobReconciler:
     def __init__(self) -> None:
         self.event = Event()
         self.thread: Thread | None = None
+        self.sync_thread: Thread | None = None
 
     def start(self) -> None:
         installation_policy.require("development_jobs")
@@ -311,11 +342,15 @@ class PerfJobReconciler:
         self.event.clear()
         self.thread = Thread(target=self.loop, daemon=True, name="model-perf-reconciler")
         self.thread.start()
+        self.sync_thread = Thread(target=self.sync_loop, daemon=True, name="benchmark-mlflow-sync")
+        self.sync_thread.start()
 
     def stop(self) -> None:
         self.event.set()
         if self.thread:
             self.thread.join(timeout=20)
+        if self.sync_thread:
+            self.sync_thread.join(timeout=20)
 
     def loop(self) -> None:
         while not self.event.is_set():
@@ -330,6 +365,20 @@ class PerfJobReconciler:
                         reconcile(session, run_id)
             except Exception:
                 logger.warning("Performance reconciliation interrupted; retrying.")
+            self.event.wait(3)
+
+    def sync_loop(self) -> None:
+        while not self.event.is_set():
+            try:
+                with session_factory() as session:
+                    exports = benchmark_tracking.pending(session)
+                for job_id in exports:
+                    if self.event.is_set():
+                        break
+                    with session_factory() as session:
+                        benchmark_tracking.sync(session, job_id)
+            except Exception:
+                logger.warning("Benchmark metadata sync interrupted; retrying.")
             self.event.wait(3)
 
 

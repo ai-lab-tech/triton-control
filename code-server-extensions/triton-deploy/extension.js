@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 const vscode = require("vscode");
@@ -441,6 +442,16 @@ async function resolveSourceFolder(resource) {
   return selection?.[0]?.fsPath || "";
 }
 
+async function submitWorkspaceDeployment(payload) {
+  const token = process.env.TRITON_CONTROL_TOKEN;
+  if (!token) return { type: "createDeployment", payload };
+  // Only the extension host has access to the managed workspace credential.
+  const result = await profileApi.requestJson(process.env.TRITON_CONTROL_URL, "/api/deployments", {
+    token, body: payload, timeoutMs: 120000, failureHint: "Could not create the workspace deployment.",
+  });
+  return { type: "deploymentResult", instanceId: result.instance_id };
+}
+
 function openDeployPanel(context, initial) {
   const panel = vscode.window.createWebviewPanel(
     "tritonControlDeploy",
@@ -473,10 +484,7 @@ function openDeployPanel(context, initial) {
             });
           },
         );
-        panel.webview.postMessage({
-          type: "createDeployment",
-          payload: deploymentPayload(form),
-        });
+        panel.webview.postMessage(await submitWorkspaceDeployment(deploymentPayload(form)));
       } catch (error) {
         const messageText = error instanceof Error ? error.message : String(error);
         panel.webview.postMessage({ type: "error", text: messageText });
@@ -924,14 +932,18 @@ async function uploadRepository(sourceFolder, form, report) {
   }
   const basePrefix = targetPrefix(form);
   const layout = repositoryLayout(sourceFolder, form.modelName);
+  const inventory = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     const relative = toS3Path(path.relative(layout.relativeRoot, file));
     const key = [basePrefix, layout.modelFolderName, relative].filter(Boolean).join("/");
     const displayPath = [layout.modelFolderName, relative].filter(Boolean).join("/");
     report(`${index + 1}/${files.length} ${displayPath}`, 100 / files.length);
-    await putS3Object(form, key, file);
+    const entry = await putS3Object(form, key, file);
+    inventory.push({ digest: entry.digest, path: displayPath, size: entry.size });
   }
+  inventory.sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
+  form.candidateInventoryDigest = "sha256:" + crypto.createHash("sha256").update(JSON.stringify({ files: inventory, schema_version: 1 })).digest("hex");
 }
 
 function repositoryLayout(sourceFolder, modelName) {
@@ -949,7 +961,7 @@ function repositoryLayout(sourceFolder, modelName) {
 }
 
 async function putS3Object(form, key, filePath) {
-  await s3Client.upload(
+  return s3Client.upload(
     {
       endpoint: form.endpoint,
       bucket: form.bucket,
@@ -961,7 +973,7 @@ async function putS3Object(form, key, filePath) {
     },
     key,
     filePath,
-    { overwrite: true },
+    { overwrite: true, inventoryReceipt: true },
   );
 }
 
@@ -1011,6 +1023,7 @@ function deploymentPayload(form) {
     image: form.image,
     s3_profile_id: Number(form.profileId),
     repository_prefix: targetPrefix(form),
+    ...(form.candidateInventoryDigest ? { candidate_inventory_digest: form.candidateInventoryDigest } : {}),
     model_control_mode: form.modelControlMode,
     repository_sync_mode: form.repositorySyncMode,
     repository_poll_secs: form.repositoryPollSecs > 0 ? form.repositoryPollSecs : 15,
@@ -1288,30 +1301,34 @@ function renderHtml(webview, nonce, initial) {
         statusEl.textContent = message.text;
         return;
       }
-      if (message.type === 'createDeployment') {
+      if (message.type === 'createDeployment' || message.type === 'deploymentResult') {
         statusEl.textContent = 'Creating Triton Control deployment...';
         try {
-          const response = await fetch('/api/deployments', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(message.payload),
-          });
-          const body = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            const detail = Array.isArray(body.detail)
-              ? body.detail.map(item => item.msg || 'Invalid request').join('; ')
-              : body.detail;
-            throw new Error(detail || 'Failed to create deployment.');
+          let instanceId = message.instanceId;
+          if (message.type === 'createDeployment') {
+            const response = await fetch('/api/deployments', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(message.payload),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              const detail = Array.isArray(body.detail)
+                ? body.detail.map(item => item.msg || 'Invalid request').join('; ')
+                : body.detail;
+              throw new Error(detail || 'Failed to create deployment.');
+            }
+            instanceId = body.instance_id;
           }
           statusEl.className = 'status success';
           form.elements.basicAuthPassword.value = '';
-          statusEl.textContent = 'Deployment created. Instance id: ' + body.instance_id;
-          await notifyDeploymentNavigation(body.instance_id);
+          statusEl.textContent = 'Deployment created. Instance id: ' + instanceId;
+          await notifyDeploymentNavigation(instanceId);
           const navigationMessage = {
             source: 'triton-control-deploy',
             type: 'deploymentCreated',
-            instanceId: body.instance_id,
+            instanceId: instanceId,
           };
           postToHostFrames(navigationMessage);
         } catch (error) {

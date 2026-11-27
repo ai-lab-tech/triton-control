@@ -10,6 +10,16 @@ Form settings are restored only from a run for the selected version, falling bac
 
 Every Job runs as UID/GID 10001 with `runAsNonRoot`, filesystem group 10001, no privilege escalation, all capabilities dropped, a read-only root filesystem, RuntimeDefault seccomp, and no mounted service-account token. `/tmp` and `/dev/shm` remain writable. Custom images must support this environment; there is no root fallback. Registry credentials and JSON inputs use separate run-owned Secrets. Pod logs are captured up to 2 MB per pod.
 
+## Record a task benchmark in Dev MLflow
+
+On a serving launched from an engineering task workspace, the assigned engineer can select **Record benchmark in Dev MLflow** for one run. The Perf view shows the converted model ID and a link to the scientist’s source. The option starts unchecked each time. Ordinary profiling remains available when the option is disabled.
+
+Logging requires a handoff with an immutable MLflow source, a ready converted Triton logged model, and a versioned Dev S3 candidate repository. The deployment profile needs permission to list object versions and read the candidate files. At submission the backend verifies the selected version and hashes the served inventory. It checks the deployment, service, pods and repository revision again at completion.
+
+Each successful, verified benchmark with logging enabled creates a separate Dev MLflow run for the exact converted model. Benchmarking the same version three times produces three runs, each with its own settings and measurements. Metric steps represent measured concurrency, throughput uses inferences per second, and latency uses microseconds. The run contains structured settings and source references. The Perf view shows sync status and the link to the benchmark.
+
+After a Dev MLflow outage, the worker retries only the metadata sync for the original benchmark. The analyzer runs once and each measurement appears once. If MLflow accepted a write but the response was lost, the worker recovers the run by its benchmark job ID and replays metrics with their original timestamps. If a create request has an unknown outcome and MLflow never returns a matching record, the status stays pending confirmation to prevent duplicates.
+
 ## Configuration
 
 Helm values under `perfAnalyzer` supply the default image, deadline, and resource limits. Corresponding environment variables are:
@@ -57,6 +67,8 @@ A duplicate start returns 409 with the active run ID in the error detail. The fo
 ## Verification
 
 Run backend unit tests and coverage, mypy, Ruff, import-linter, and Bandit using the CI Python version. Run frontend tests/build/lint, regenerate OpenAPI/client artifacts, and lint/render Helm.
+
+Set `PERF_MLFLOW_TEST_URL` to a disposable MLflow 3.14 tracking server to include model association, metric readback and lost-response tests in `test_benchmark_tracking.py`. The test creates experiments in that server.
 
 For database concurrency, create an isolated PostgreSQL test database and set `PERF_TEST_DATABASE_URL`, then run `python -m unittest tests.test_model_perf_jobs.PostgresPerfConcurrencyTests` from `triton-backend`. This test creates an isolated instance and exercises simultaneous reservations in separate transactions.
 

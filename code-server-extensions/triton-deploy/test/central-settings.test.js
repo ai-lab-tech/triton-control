@@ -5,22 +5,23 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
-function load(profiles = [], upload) {
+function load(profiles = [], env = {}, requestJson = async () => profiles, upload) {
   const filename = path.join(__dirname, "../extension.js");
   const localRequire = createRequire(filename);
   const sandbox = {
+    Buffer,
     module: { exports: {} },
-    process: { env: { TRITON_CONTROL_PROFILE_URL: "https://control/profiles", TRITON_CONTROL_PROFILE_TOKEN: "token" } },
+    process: { env: { TRITON_CONTROL_PROFILE_URL: "https://control/profiles", TRITON_CONTROL_PROFILE_TOKEN: "token", ...env } },
     require(name) {
       if (name === "vscode") return { TreeItem: class {}, workspace: { isTrusted: true } };
       if (name === "./s3-client" && upload) return { upload };
-      if (name === "./profile-api") return { requestJson: async () => profiles };
+      if (name === "./profile-api") return { requestJson };
       if (name === "./hf-builder") return {};
       return localRequire(name);
     },
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") +
-    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile, normalizeForm, uploadRepository };", sandbox);
+    "\nmodule.exports = { deploymentPayload, resolveDeploymentProfile, submitWorkspaceDeployment, normalizeForm, uploadRepository };", sandbox);
   return sandbox.module.exports;
 }
 
@@ -59,11 +60,34 @@ test("an unavailable profile cannot fall back to manual credentials", async () =
   await assert.rejects(result, /Select an admin-configured S3 profile/);
 });
 
+test("managed deployment uses the workspace credential and exposes only the result to the webview", async () => {
+  // Arrange
+  const calls = [];
+  const env = { TRITON_CONTROL_URL: "https://control", TRITON_CONTROL_TOKEN: "workspace-test" };
+  const { submitWorkspaceDeployment } = load([], env, async (...args) => {
+    calls.push(args);
+    return { instance_id: 17 };
+  });
+  const payload = { deployment_name: "converted", candidate_inventory_digest: "sha256:" + "a".repeat(64) };
+
+  // Act
+  const result = await submitWorkspaceDeployment(payload);
+
+  // Assert
+  assert.equal(calls.length, 1);
+  const [endpoint, route, options] = calls[0];
+  assert.equal(endpoint, env.TRITON_CONTROL_URL);
+  assert.equal(route, "/api/deployments");
+  assert.equal(options.body, payload);
+  assert.equal(options.token, env.TRITON_CONTROL_TOKEN);
+  assert.deepEqual({ ...result }, { type: "deploymentResult", instanceId: 17 });
+});
+
 test("simple upload keeps a scoped profile root in object keys and deployment payload", async (t) => {
   // Arrange
   const keys = [];
   const api = load([{ id: 5, prefix: "team/models", endpoint: "https://s3", bucket: "models" }],
-    async (_, key) => keys.push(key));
+    {}, undefined, async (_, key) => { keys.push(key); return { digest: "sha256:" + "a".repeat(64), size: 12 }; });
   const source = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "scoped-upload-"));
   t.after(() => fs.rmSync(source, { recursive: true, force: true }));
   fs.writeFileSync(path.join(source, "config.pbtxt"), 'name: "iris"');

@@ -13,6 +13,7 @@ from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
 from app.db.entities import ModelPerfJobEntity
 from app.services.kubernetes_client import api_client
+from app.services.perf_analyzer.benchmark_tracking import CSV_MARKER
 
 TIMEOUT = (5, 15)
 RUN_LABEL = "triton-control/run-id"
@@ -45,6 +46,11 @@ def manifest(run: ModelPerfJobEntity) -> dict[str, Any]:
     pod = spec["template"]["spec"]
     container = pod["containers"][0]
     container.update(image=run.image, command=list(run.command))
+    if run.mlflow_snapshot:
+        container.update(command=["/bin/sh", "-ec"], args=[
+            f'''"$@" -f /tmp/benchmark.csv && echo && echo {CSV_MARKER} && cat /tmp/benchmark.csv''',
+            "perf-analyzer", *run.command,
+        ])
     for resource_type, suffix in (("requests", "REQUEST"), ("limits", "LIMIT")):
         for resource in ("cpu", "memory"):
             values = container["resources"][resource_type]

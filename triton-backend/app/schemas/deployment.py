@@ -23,6 +23,7 @@ from sqlmodel import Field, SQLModel
 
 from app.schemas.control_lineage import ControlLineage
 from app.schemas.deployment_access import DeploymentAccessRequest
+from app.schemas.lineage import Digest
 
 MAX_EXAMPLE_BYTES = 256 * 1024
 MAX_EXAMPLE_DEPTH = 64
@@ -58,6 +59,7 @@ class CreateDeploymentRequest(DeploymentAccessRequest):
     s3_profile_id: Optional[int] = Field(default=None, gt=0)
     repository_prefix: Optional[str] = None
     model_uri: Optional[str] = None
+    candidate_inventory_digest: Digest | None = None
     lineage: ControlLineage | None = None
     s3_region: str = "us-east-1"
     s3_ca_certificate: Optional[str] = None

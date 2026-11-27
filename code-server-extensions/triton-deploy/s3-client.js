@@ -256,7 +256,7 @@ async function download(profile, key, filename, { signal, etag, onBytes, version
     }
   }
 }
-async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}, versionReceipt = false, overwrite = false } = {}) {
+async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}, versionReceipt = false, inventoryReceipt = false, overwrite = false } = {}) {
   signal?.throwIfAborted();
   const stat = await fs.promises.stat(file);
   if (stat.size > 5 * 1024 ** 3)
@@ -287,6 +287,7 @@ async function upload(profile, key, file, { signal, onBytes, etag, metadata = {}
     if (!version || version === "null") throw new Error("Select an S3 bucket with versioning enabled.");
     return { key, version_id: version, size: stat.size, sha256 };
   }
+  if (inventoryReceipt) return { digest: "sha256:" + sha256, size: stat.size };
   return response.headers.etag;
 }
 async function remove(profile, key, signal, etag) {
