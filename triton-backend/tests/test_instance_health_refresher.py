@@ -230,11 +230,8 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
             "app.services.triton.health.TritonService", return_value=service
         ) as triton_service, patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=["gpu-a: Running (Ready)"],
-        ), patch(
-            "app.services.deployment.kubernetes.is_pod_ready",
-            return_value=True,
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=(["gpu-a: Running (Ready)"], True, {}),
         ), patch(
             "app.services.deployment.kubernetes.resolve_deployment_service_urls",
             return_value=service_urls,
@@ -271,11 +268,8 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
             "app.services.triton.health.TritonService"
         ) as triton_service, patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=["gpu-a: Pending"],
-        ), patch(
-            "app.services.deployment.kubernetes.is_pod_ready",
-            return_value=False,
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=(["gpu-a: Pending"], False, {}),
         ), patch(
             "app.services.triton.health.instances.save"
         ) as save:
@@ -307,9 +301,9 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
 
         # Act
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=[],
-        ), patch("app.services.deployment.kubernetes.is_pod_ready", return_value=False), patch(
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=([], False, {}),
+        ), patch(
             "app.services.triton.health.instances.save",
             side_effect=StaleDataError("deleted"),
         ):
@@ -349,11 +343,8 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
             "app.services.triton.health.TritonService", return_value=service
         ), patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=["gpu-a: Running (Ready)"],
-        ), patch(
-            "app.services.deployment.kubernetes.is_pod_ready",
-            return_value=True,
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=(["gpu-a: Running (Ready)"], True, {}),
         ), patch("app.services.deployment.kubernetes.resolve_deployment_service_urls") as resolve_urls:
             alerts = await refresher._refresh_instance(1)
 
@@ -397,11 +388,8 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
             "app.services.triton.health.TritonService", return_value=service
         ), patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=latest_pod_statuses,
-        ), patch(
-            "app.services.deployment.kubernetes.is_pod_ready",
-            return_value=True,
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=(latest_pod_statuses, True, {}),
         ):
             alerts = await refresher._refresh_instance(1)
 
@@ -453,11 +441,8 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.triton.health.session_factory", return_value=session), patch(
             "app.services.triton.health.TritonService", return_value=service
         ) as triton_service, patch(
-            "app.services.deployment.kubernetes.read_pod_statuses",
-            return_value=["gpu-a: Running (Ready)"],
-        ), patch(
-            "app.services.deployment.kubernetes.is_pod_ready",
-            return_value=True,
+            "app.services.deployment.kubernetes.read_workload_health",
+            return_value=(["gpu-a: Running (Ready)"], True, {}),
         ), patch(
             "app.services.deployment.kubernetes.resolve_deployment_service_urls",
             return_value=service_urls,

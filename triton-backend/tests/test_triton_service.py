@@ -279,7 +279,7 @@ nv_gpu_utilization{gpu_uuid="GPU-2"} 0.6
         self.assertIsNone(missing["gpu_percent"])
         self.assertIsNone(missing["gpu_memory_used_bytes"])
 
-    async def test_CollectMetricsSnapshot_NoCpuRamFamilies_ReturnsDiagnosticError(self):
+    async def test_CollectMetricsSnapshot_GpuOnly_ReturnsSuccessfulSample(self):
         # Arrange
         service = TritonService("http://triton")
         metrics = b"""
@@ -296,7 +296,7 @@ nv_gpu_utilization{gpu_uuid="GPU-1"} 0.4
         self.assertEqual(result["cpu"], 0)
         self.assertEqual(result["ram"], 0)
         self.assertEqual(result["gpu"], 40)
-        self.assertIn("does not expose Triton CPU/RAM metrics", result["error"])
+        self.assertIsNone(result["error"])
 
     async def test_InferenceMetricsDelta_EnsembleAndStepCounters_ReturnsLatencyRows(self):
         # Arrange

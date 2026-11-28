@@ -53,6 +53,10 @@ def _normalize_metrics_url(v: str | None) -> str | None:
 
 
 class InstanceResourceUsage(SQLModel):
+    desired_replicas: int | None = None
+    running_triton_containers: int | None = None
+    cpu_samples: int | None = None
+    memory_samples: int | None = None
     cpu_limit_millicores: float | None = None
     memory_limit_bytes: float | None = None
     cpu_millicores: float | None = None

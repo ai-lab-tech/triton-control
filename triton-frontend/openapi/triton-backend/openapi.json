@@ -9540,6 +9540,13 @@
               }
             ],
             "title": "Image Id"
+          },
+          "limits": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Limits"
           }
         },
         "type": "object",
@@ -12476,6 +12483,50 @@
       },
       "InstanceResourceUsage": {
         "properties": {
+          "desired_replicas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Replicas"
+          },
+          "running_triton_containers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Triton Containers"
+          },
+          "cpu_samples": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Samples"
+          },
+          "memory_samples": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Samples"
+          },
           "cpu_limit_millicores": {
             "anyOf": [
               {

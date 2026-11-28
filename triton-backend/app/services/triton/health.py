@@ -173,9 +173,10 @@ class InstanceHealthRefresher:
                 await asyncio.to_thread(_finish_scale, instance_id)
             except Exception:
                 logger.exception("Could not reconcile pending replica target for instance %s", instance_id)
-            workload_usage = await asyncio.to_thread(deployment_k8s.read_workload_usage, ns, dn)
-            pod_statuses = await asyncio.to_thread(deployment_k8s.read_pod_statuses, ns, dn)
-            if not await asyncio.to_thread(deployment_k8s.is_pod_ready, ns, dn):
+            pod_statuses, pod_ready, workload_usage = await asyncio.to_thread(
+                deployment_k8s.read_workload_health, ns, dn
+            )
+            if not pod_ready:
                 with session_factory() as session:
                     current = instances.find_by_id(session, instance_id)
                     if not current:

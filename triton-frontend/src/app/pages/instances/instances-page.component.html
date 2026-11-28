@@ -93,6 +93,9 @@
           @for (metric of instance.resourceMetrics; track metric.label) {
             <div [title]="metric.description">
               <div class="metric-value">{{ metric.value }}</div>
+              @if (metric.coverage) {
+                <small>{{ metric.coverage }}</small>
+              }
               <div class="metric-label">{{ metric.label }}</div>
             </div>
           }

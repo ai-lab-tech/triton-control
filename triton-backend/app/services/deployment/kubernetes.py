@@ -158,64 +158,60 @@ def apply_deployment_resources(
         )
 
 
-def is_pod_ready(namespace: str, deployment_name: str) -> bool:
-    """Return True when at least one pod for the deployment has Ready=True condition."""
-    from kubernetes import client
-    from kubernetes.config.config_exception import ConfigException
+def read_workload_health(namespace: str, deployment_name: str) -> tuple[list[str], bool, dict[str, Any]]:
+    from app.services.deployment.pod_provider import PodProvider
 
+    if not deployment_name:
+        return [], False, {"workload_error": "Deployment name unavailable."}
     try:
         api = _client()
-        selector = f"app=triton,deployment={deployment_name}" if deployment_name else "app=triton"
-        pods = client.CoreV1Api(api).list_namespaced_pod(
-            namespace=namespace,
-            label_selector=selector,
-        ).items
-        for pod in pods:
-            conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
-            for condition in conditions:
-                if (getattr(condition, "type", "") == "Ready"
-                        and getattr(condition, "status", "") == "True"):
-                    return True
-    except ConfigException:
-        return False
+        deployment, pods = PodProvider(api).snapshot(namespace, deployment_name)
     except Exception:
-        return False
-    return False
+        logging.getLogger(__name__).debug("Could not read deployment pod state", exc_info=True)
+        return [], False, {"workload_error": "Kubernetes pod state unavailable."}
+
+    statuses = [f"{pod.name}: {pod.phase} ({'Ready' if pod.ready else 'Not Ready'})" for pod in pods]
+    limits = {
+        pod.name: container.limits
+        for pod in pods
+        for container in pod.containers
+        if container.name == "triton" and container.kind == "regular" and container.state == "running"
+    }
+    usage = read_workload_usage(api, namespace, deployment_name, limits)
+    usage.update(desired_replicas=deployment.desired, running_triton_containers=len(limits))
+    return statuses, any(pod.ready for pod in pods), usage
 
 
-def read_workload_usage(namespace: str, deployment_name: str) -> dict[str, Any]:
-    """Sum running Triton containers, excluding sidecars and incomplete replica samples."""
+def read_workload_usage(
+    api: Any, namespace: str, deployment_name: str, limits: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """Aggregate each resource only when every running Triton container has a sample."""
     from kubernetes import client
     from kubernetes.utils.quantity import parse_quantity  # type: ignore[import-untyped]
 
-    if not deployment_name:
-        return {"workload_error": "Deployment name unavailable."}
-    selector = f"app=triton,deployment={deployment_name}"
+    if not limits:
+        return {"cpu_samples": 0, "memory_samples": 0, "workload_error": "No running Triton containers."}
     try:
-        api = _client()
-        running = client.CoreV1Api(api).list_namespaced_pod(
-            namespace, label_selector=selector, field_selector="status.phase=Running", _request_timeout=5,
-        ).items
-        names = {pod.metadata.name for pod in running}
         samples = client.CustomObjectsApi(api).list_namespaced_custom_object(
-            "metrics.k8s.io", "v1beta1", namespace, "pods", label_selector=selector, _request_timeout=5,
+            "metrics.k8s.io", "v1beta1", namespace, "pods",
+            label_selector=f"app=triton,deployment={deployment_name}", _request_timeout=5,
         )
         usage = {
             pod["metadata"]["name"]: container["usage"]
             for pod in samples["items"]
             for container in pod["containers"] if container["name"] == "triton"
         }
-        limits = {
-            pod.metadata.name: (container.resources.limits or {}) if container.resources else {}
-            for pod in running for container in pod.spec.containers if container.name == "triton"
-        }
         result: dict[str, Any] = {}
-        for resource, field, multiplier in (("cpu", "cpu_millicores", 1000), ("memory", "memory_bytes", 1)):
-            if names and all(resource in limits.get(name, {}) for name in names):
-                limit_field = "cpu_limit_millicores" if resource == "cpu" else "memory_limit_bytes"
-                result[limit_field] = float(sum(parse_quantity(limits[name][resource]) for name in names) * multiplier)
-            if names and all(resource in usage.get(name, {}) for name in names):
-                result[field] = float(sum(parse_quantity(usage[name][resource]) for name in names) * multiplier)
+        for resource, field, limit_field, multiplier in (
+            ("cpu", "cpu_millicores", "cpu_limit_millicores", 1000),
+            ("memory", "memory_bytes", "memory_limit_bytes", 1),
+        ):
+            if all(resource in quantities for quantities in limits.values()):
+                result[limit_field] = float(sum(parse_quantity(q[resource]) for q in limits.values()) * multiplier)
+            values = [usage[name][resource] for name in limits if resource in usage.get(name, {})]
+            result[f"{resource}_samples"] = len(values)
+            if len(values) == len(limits):
+                result[field] = float(sum(parse_quantity(value) for value in values) * multiplier)
             else:
                 result["workload_error"] = "Waiting for resource metrics for all running Triton containers."
         return result
@@ -228,35 +224,6 @@ def read_workload_usage(namespace: str, deployment_name: str) -> dict[str, Any]:
             "Could not read workload metrics for %s/%s", namespace, deployment_name, exc_info=True,
         )
         return {"workload_error": "Kubernetes resource metrics unavailable."}
-
-
-def read_pod_statuses(namespace: str, deployment_name: str) -> list[str]:
-    """Return a human-readable status string for each pod in the namespace."""
-    from kubernetes import client
-    from kubernetes.config.config_exception import ConfigException
-
-    try:
-        api = _client()
-        selector = f"app=triton,deployment={deployment_name}" if deployment_name else "app=triton"
-        pods = client.CoreV1Api(api).list_namespaced_pod(
-            namespace=namespace,
-            label_selector=selector,
-        ).items
-        result: list[str] = []
-        for pod in pods:
-            pod_name = getattr(getattr(pod, "metadata", None), "name", None) or "unknown"
-            phase = getattr(getattr(pod, "status", None), "phase", None) or "Unknown"
-            conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
-            ready = any(
-                getattr(c, "type", "") == "Ready" and getattr(c, "status", "") == "True"
-                for c in conditions
-            )
-            result.append(f"{pod_name}: {phase} ({'Ready' if ready else 'Not Ready'})")
-        return result
-    except ConfigException:
-        return []
-    except Exception:
-        return []
 
 
 def delete_namespace(namespace: str) -> str:

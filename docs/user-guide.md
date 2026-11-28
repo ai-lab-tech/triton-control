@@ -112,7 +112,9 @@ CPU and RAM come from the Kubernetes Resource Metrics API. The backend sums the
 running Triton containers across replicas and excludes sidecars. CPU is shown in
 millicores and memory as working-set bytes converted to MiB or GiB. A limit is
 shown when every included container has that resource limit. If a replica has
-no sample for a resource, its aggregate is unavailable. External instances have
+a running Triton container without a sample for a resource, its aggregate is unavailable.
+The coverage counts show sampled containers for each resource, running Triton
+containers, and desired replicas. A restarting Triton container contributes no usage. External instances have
 no Kubernetes container metrics.
 
 GPU utilization and GPU memory come from the sampled Triton server's Prometheus

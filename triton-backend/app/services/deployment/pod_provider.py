@@ -60,6 +60,7 @@ def container_states(pod: dict[str, Any]) -> list[ContainerState]:
                     message=detail.get("message"),
                     exit_code=detail.get("exitCode"),
                     last_termination_reason=((status.get("lastState") or {}).get("terminated") or {}).get("reason"),
+                    limits=(spec.get("resources") or {}).get("limits") or {},
                     image=spec.get("image"),
                     image_id=status.get("imageID"),
                 )

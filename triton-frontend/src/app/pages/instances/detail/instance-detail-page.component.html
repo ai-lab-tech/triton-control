@@ -126,6 +126,9 @@
         <div class="stat-block" [title]="metric.description">
           <span class="label">{{ metric.label }}</span>
           <span class="value">{{ metric.value }}</span>
+          @if (metric.coverage) {
+            <small>{{ metric.coverage }}</small>
+          }
         </div>
       }
       <div class="stat-block">

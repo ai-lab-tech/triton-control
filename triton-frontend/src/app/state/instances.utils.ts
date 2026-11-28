@@ -47,6 +47,10 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     limit: number | null | undefined,
     format: (value: number) => string,
   ) => (used == null ? "Unavailable" : format(used) + (limit == null ? "" : " / " + format(limit)));
+  const coverage = (samples: number | null | undefined) =>
+    samples == null || usage?.desired_replicas == null || usage.running_triton_containers == null
+      ? undefined
+      : `${samples} sampled · ${usage.running_triton_containers} running · ${usage.desired_replicas} desired`;
   const workload =
     usage?.workload_error ||
     (dto.is_self_deployed
@@ -59,12 +63,16 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     {
       label: "CPU",
       value: quantity(usage?.cpu_millicores, usage?.cpu_limit_millicores, cpu),
-      description: workload,
+      coverage: coverage(usage?.cpu_samples),
+      description:
+        usage?.cpu_millicores == null ? workload : "CPU usage across running Triton containers.",
     },
     {
       label: "RAM",
       value: quantity(usage?.memory_bytes, usage?.memory_limit_bytes, bytes),
-      description: workload,
+      coverage: coverage(usage?.memory_samples),
+      description:
+        usage?.memory_bytes == null ? workload : "Memory usage across running Triton containers.",
     },
     {
       label: "GPU",

@@ -291,12 +291,6 @@ class TritonService:
         used = values.get("nv_gpu_memory_used_bytes", [])
         total = values.get("nv_gpu_memory_total_bytes", [])
         ram = (ram_used / ram_total * 100) if ram_total > 0 else 0.0
-        missing: list[str] = []
-        if not cpu_values:
-            missing.append("nv_cpu_utilization")
-        if ram_total <= 0 or ram_used <= 0:
-            missing.append("nv_cpu_memory_used_bytes/nv_cpu_memory_total_bytes")
-
         return {
             "resource_usage": {
                 "gpu_percent": TritonService._clamp_percent(gpu) if gpu_values else None,
@@ -306,13 +300,7 @@ class TritonService:
             "cpu": TritonService._clamp_percent(cpu),
             "ram": TritonService._clamp_percent(ram),
             "gpu": TritonService._clamp_percent(gpu),
-            "error": (
-                "Metrics endpoint does not expose Triton CPU/RAM metrics: "
-                + ", ".join(missing)
-                + ". Enable Triton CPU metrics or configure the correct metrics endpoint."
-                if missing
-                else None
-            ),
+            "error": None,
         }
 
     @staticmethod

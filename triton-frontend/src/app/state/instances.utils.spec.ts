@@ -11,9 +11,20 @@ describe("instances utils", () => {
       created_at: "2026-06-24T00:00:00Z",
       metrics_cpu: 90,
       metrics_error: "No host CPU sample",
-      resource_usage: { cpu_millicores: 250, cpu_limit_millicores: 1000, gpu_percent: 0 },
+      resource_usage: {
+        cpu_millicores: 250,
+        cpu_limit_millicores: 1000,
+        gpu_percent: 0,
+        desired_replicas: 2,
+        running_triton_containers: 1,
+        cpu_samples: 1,
+        memory_samples: 0,
+      },
     };
-    expect(dtoToInstance(dto).resourceMetrics?.map((metric) => metric.value)).toEqual([
+    const metrics = dtoToInstance(dto).resourceMetrics;
+    expect(metrics?.[0].coverage).toBe("1 sampled · 1 running · 2 desired");
+    expect(metrics?.[1].coverage).toBe("0 sampled · 1 running · 2 desired");
+    expect(metrics?.map((metric) => metric.value)).toEqual([
       "250 mCPU / 1000 mCPU",
       "Unavailable",
       "0%",
