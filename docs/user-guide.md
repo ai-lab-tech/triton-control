@@ -121,7 +121,12 @@ instances have no Kubernetes container metrics.
 GPU utilization and GPU memory come from the sampled Triton server's Prometheus
 endpoint. Utilization is the mean across reporting GPUs, and memory is the sum
 of the reported device values. Memory capacity is shown alongside usage when
-both samples cover the same devices. On shared GPUs these are device-wide measurements.
+both samples cover the same devices. Both GPU tiles include activity from all
+processes on those devices. A managed instance shows **No GPU allocated** when
+its running Triton containers have no NVIDIA GPU allocation. The **Shared device**
+label appears when Kubernetes reports a shared GPU resource or when multiple
+registered instances report the same GPU UUID in their latest samples. An absent
+sharing label does not establish exclusive access.
 Missing metrics display as `Unavailable`; a measured zero remains visible.
 
 Example metrics endpoint:

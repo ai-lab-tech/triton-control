@@ -28,11 +28,18 @@ def s3_entity_to_dto(entity: TritonInstanceEntity) -> InstanceS3ConfigDTO:
     )
 
 
-def entity_to_dto(entity: TritonInstanceEntity) -> TritonInstanceDTO:
+def entity_to_dto(entity: TritonInstanceEntity, shared_devices: set[str] | None = None) -> TritonInstanceDTO:
     """Convert a Triton instance entity to an outgoing DTO."""
     dto = TritonInstanceDTO.model_validate(entity, from_attributes=True)
     # Translate legacy storage at the API boundary; new deployments store only the map.
     if dto.example_model_name and dto.example_request is not None:
         dto.inference_examples = {dto.example_model_name: dto.example_request, **dto.inference_examples}
+    usage = dto.resource_usage
+    devices = (entity.resource_usage or {}).get("gpu_device_ids", [])
+    if usage and dto.is_self_deployed and usage.gpu_allocated is False:
+        usage.gpu_percent = usage.gpu_memory_used_bytes = usage.gpu_memory_total_bytes = None
+        dto.metrics_gpu = 0
+    elif usage and shared_devices and shared_devices.intersection(devices):
+        usage.gpu_shared = True
     dto.s3 = s3_entity_to_dto(entity)
     return dto

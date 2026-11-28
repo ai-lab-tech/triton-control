@@ -12476,6 +12476,28 @@
       },
       "InstanceResourceUsage": {
         "properties": {
+          "gpu_allocated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Allocated"
+          },
+          "gpu_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Shared"
+          },
           "desired_replicas": {
             "anyOf": [
               {

@@ -87,7 +87,7 @@ async def create_instance(
         ensure_instance_access(session, claims, existing_by_url.name)
         if request.name and instance_name != existing_by_url.name:
             raise ConflictError("An existing instance cannot be renamed through registration")
-        return entity_to_dto(existing_by_url)
+        return _instance_dto(session, existing_by_url)
 
     if existing_by_name:
         raise ConflictError(
@@ -122,7 +122,7 @@ async def create_instance(
         user.assigned_instances = [*user.assigned_instances, instance_name]
         users.save(session, user)
 
-    return entity_to_dto(entity)
+    return _instance_dto(session, entity)
 
 
 async def update_instance(
@@ -180,7 +180,7 @@ async def update_instance(
     apply_triton_sample(instance, metrics_snapshot)
 
     instances.save(session, instance)
-    return entity_to_dto(instance)
+    return _instance_dto(session, instance)
 
 
 def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -> list[TritonInstanceDTO]:
@@ -190,12 +190,13 @@ def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -
         assigned = [name for name in (user.assigned_instances or []) if name]
 
     rows = instances.list_visible(session, limit=limit, assigned_names=assigned)
-    return [entity_to_dto(row) for row in rows]
+    shared = instances.shared_gpu_ids(session) if any(_has_device_ids(row) for row in rows) else set()
+    return [entity_to_dto(row, shared) for row in rows]
 
 
 def get_instance(session: Session, claims: dict[str, Any], instance_id: int) -> TritonInstanceDTO:
     instance = get_instance_or_404(session, instance_id, claims)
-    return _entity_to_dto_with_repository_backends(instance)
+    return _entity_to_dto_with_repository_backends(session, instance)
 
 
 def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) -> None:
@@ -251,11 +252,21 @@ def get_instance_by_name(session: Session, claims: dict[str, Any], name: str) ->
     if not instance:
         raise NotFoundError("Instance not found")
     ensure_instance_access(session, claims, instance.name)
-    return _entity_to_dto_with_repository_backends(instance)
+    return _entity_to_dto_with_repository_backends(session, instance)
 
 
-def _entity_to_dto_with_repository_backends(instance: Any) -> TritonInstanceDTO:
-    dto = entity_to_dto(instance)
+def _has_device_ids(instance: Any) -> bool:
+    return bool((getattr(instance, "resource_usage", None) or {}).get("gpu_device_ids"))
+
+
+def _instance_dto(session: Session, instance: Any) -> TritonInstanceDTO:
+    if _has_device_ids(instance):
+        return entity_to_dto(instance, instances.shared_gpu_ids(session))
+    return entity_to_dto(instance)
+
+
+def _entity_to_dto_with_repository_backends(session: Session, instance: Any) -> TritonInstanceDTO:
+    dto = _instance_dto(session, instance)
     dto.deployment_backend = discover_instance_repository_backends(instance)
     return dto
 

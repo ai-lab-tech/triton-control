@@ -56,4 +56,22 @@ class WorkloadUsageTests(TestCase):
         read.assert_called_once_with(api.return_value.__enter__.return_value, "team", "test", {"healthy": {}})
         self.assertTrue(ready)
         self.assertEqual(statuses, ["healthy: Running (Ready)", "restarting: Running (Not Ready)"])
-        self.assertEqual(usage, {"desired_replicas": 2, "running_triton_containers": 1, "cpu_samples": 1})
+        self.assertEqual(usage, {
+            "desired_replicas": 2, "running_triton_containers": 1, "cpu_samples": 1, "gpu_allocated": False,
+        })
+
+    def test_gpu_allocation_is_independent_of_metrics_server(self):
+        for limits, allocated, shared in (
+            ({"pod": {"nvidia.com/gpu": "1"}}, True, None),
+            ({"pod": {"nvidia.com/gpu.shared": "1"}}, True, True),
+            ({"pod": {"nvidia.com/mig-1g.5gb": "1"}}, True, None),
+            ({"pod": {"nvidia.com/gpu": "0"}}, False, None),
+            ({}, None, None),
+        ):
+            with (self.subTest(limits=limits), patch.object(kubernetes, "_client"),
+                  patch("app.services.deployment.pod_provider.PodProvider") as provider,
+                  patch.object(kubernetes, "read_workload_usage", return_value={"workload_error": "unavailable"})):
+                provider.return_value.workload_snapshot.return_value = SimpleNamespace(desired=1), [], limits
+                _, _, usage = kubernetes.read_workload_health("team", "test")
+                self.assertIs(usage.get("gpu_allocated"), allocated)
+                self.assertIs(usage.get("gpu_shared"), shared)

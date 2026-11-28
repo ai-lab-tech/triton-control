@@ -32,6 +32,36 @@ describe("instances utils", () => {
     ]);
   });
 
+  it("hides host GPU readings for a managed CPU-only instance and identifies shared device readings", () => {
+    const dto: TritonInstanceDTO = {
+      id: 1,
+      name: "iris",
+      url: "http://iris",
+      model_names: [],
+      created_at: "",
+      is_self_deployed: true,
+      resource_usage: { gpu_allocated: false, gpu_percent: 53, gpu_memory_used_bytes: 200 },
+    };
+    const gpu = () => dtoToInstance(dto).resourceMetrics!.slice(2);
+    expect(gpu().map((m) => m.label)).toEqual(["Device GPU utilization", "Device GPU memory"]);
+    expect(gpu().map((m) => m.value)).toEqual(["No GPU allocated", "No GPU allocated"]);
+    expect(gpu()[0].coverage).toBeUndefined();
+    dto.resource_usage = {
+      gpu_allocated: true,
+      gpu_shared: true,
+      gpu_percent: 0,
+      gpu_memory_used_bytes: 0,
+    };
+    expect(gpu()[0].value).toBe("0%");
+    expect(gpu().map((m) => m.coverage)).toEqual([
+      "Shared device · 1 server sampled",
+      "Shared device · 1 server sampled",
+    ]);
+    dto.is_self_deployed = false;
+    dto.resource_usage = { gpu_percent: 80 };
+    expect(gpu()[0].value).toBe("80%");
+  });
+
   it("shows known replica counts after a failed metrics read and rounds units consistently", () => {
     const metrics = dtoToInstance({
       id: 7,

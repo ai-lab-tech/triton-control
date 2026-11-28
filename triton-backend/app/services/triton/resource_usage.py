@@ -4,7 +4,9 @@ from typing import Any
 
 from app.db.entities import TritonInstanceEntity
 
-GPU_FIELDS = frozenset({"gpu_percent", "gpu_memory_used_bytes", "gpu_memory_total_bytes", "gpu_error"})
+GPU_FIELDS = frozenset({
+    "gpu_device_ids", "gpu_percent", "gpu_memory_used_bytes", "gpu_memory_total_bytes", "gpu_error",
+})
 
 
 def apply_triton_sample(instance: TritonInstanceEntity, sample: dict[str, Any]) -> None:

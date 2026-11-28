@@ -56,9 +56,14 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     (dto.is_self_deployed
       ? "Running Triton containers across replicas. Usage / limit when configured."
       : "Container metrics require a managed Kubernetes deployment.");
-  const gpu =
-    usage?.gpu_error ||
-    (dto.metrics_url ? "No sample reported by Triton." : "No Triton metrics endpoint configured.");
+  const noGpu = dto.is_self_deployed === true && usage?.gpu_allocated === false;
+  const gpuCoverage = usage?.gpu_shared ? "Shared device · 1 server sampled" : "1 server sampled";
+  const gpu = noGpu
+    ? "Kubernetes assigned no GPU to the running Triton containers."
+    : usage?.gpu_error ||
+      (dto.metrics_url
+        ? "No sample reported by Triton."
+        : "No Triton metrics endpoint configured.");
   return [
     {
       label: "CPU",
@@ -75,22 +80,28 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
         usage?.memory_bytes == null ? workload : "Memory usage across running Triton containers.",
     },
     {
-      label: "GPU",
-      coverage: usage?.gpu_percent == null ? undefined : "1 server sampled",
-      value: usage?.gpu_percent == null ? "Unavailable" : usage.gpu_percent + "%",
+      label: "Device GPU utilization",
+      coverage: noGpu || usage?.gpu_percent == null ? undefined : gpuCoverage,
+      value: noGpu
+        ? "No GPU allocated"
+        : usage?.gpu_percent == null
+          ? "Unavailable"
+          : usage.gpu_percent + "%",
       description:
-        usage?.gpu_percent == null
+        noGpu || usage?.gpu_percent == null
           ? gpu
-          : "Mean utilization across devices on the sampled Triton server.",
+          : "Device-wide utilization across all processes on the GPUs visible to the sampled server.",
     },
     {
-      label: "GPU memory",
-      coverage: usage?.gpu_memory_used_bytes == null ? undefined : "1 server sampled",
-      value: quantity(usage?.gpu_memory_used_bytes, usage?.gpu_memory_total_bytes, bytes),
+      label: "Device GPU memory",
+      coverage: noGpu || usage?.gpu_memory_used_bytes == null ? undefined : gpuCoverage,
+      value: noGpu
+        ? "No GPU allocated"
+        : quantity(usage?.gpu_memory_used_bytes, usage?.gpu_memory_total_bytes, bytes),
       description:
-        usage?.gpu_memory_used_bytes == null
+        noGpu || usage?.gpu_memory_used_bytes == null
           ? gpu
-          : "Used / total memory across devices on the sampled Triton server.",
+          : "Device-wide memory across all processes on the GPUs visible to the sampled server.",
     },
   ];
 }

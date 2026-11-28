@@ -24,6 +24,7 @@ from typing import Any, cast
 from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
+from kubernetes.utils.quantity import parse_quantity  # type: ignore[import-untyped]
 
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
@@ -172,6 +173,16 @@ def read_workload_health(namespace: str, deployment_name: str) -> tuple[list[str
         return [], False, {"workload_error": "Kubernetes pod state unavailable."}
 
     statuses = [f"{pod.name}: {pod.phase} ({'Ready' if pod.ready else 'Not Ready'})" for pod in pods]
+    # These are the live limits of the owned, running Triton containers only.
+    if limits:
+        gpu_resources = {
+            resource for resources in limits.values() for resource, quantity in resources.items()
+            if (resource in {"nvidia.com/gpu", "nvidia.com/gpu.shared"} or resource.startswith("nvidia.com/mig-"))
+            and parse_quantity(quantity) > 0
+        }
+        usage["gpu_allocated"] = bool(gpu_resources)
+        if any(resource.endswith(".shared") for resource in gpu_resources):
+            usage["gpu_shared"] = True
     usage.update(desired_replicas=deployment.desired, running_triton_containers=len(limits))
     return statuses, any(pod.ready for pod in pods), usage
 
@@ -181,7 +192,6 @@ def read_workload_usage(
 ) -> dict[str, Any]:
     """Aggregate each resource only when every running Triton container has a sample."""
     from kubernetes import client
-    from kubernetes.utils.quantity import parse_quantity  # type: ignore[import-untyped]
 
     if not limits:
         return {"cpu_samples": 0, "memory_samples": 0, "workload_error": "No running Triton containers."}

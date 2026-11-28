@@ -246,8 +246,14 @@ class TritonService:
     def _parse_prometheus_metrics(text: str) -> Dict[str, Any]:
         values: dict[str, list[float]] = {}
         memory_devices: dict[str, list[str]] = {}
+        devices: set[str] = set()
         for name, labels, value in samples(text):
             values.setdefault(name, []).append(value)
+            if name in {
+                "nv_gpu_utilization", "gpu_utilization", "nv_gpu_memory_used_bytes", "nv_gpu_memory_total_bytes",
+            }:
+                if device := labels.get("gpu_uuid"):
+                    devices.add(device)
             if name in {"nv_gpu_memory_used_bytes", "nv_gpu_memory_total_bytes"}:
                 memory_devices.setdefault(name, []).append(labels.get("gpu_uuid", ""))
 
@@ -293,6 +299,7 @@ class TritonService:
         ram = (ram_used / ram_total * 100) if ram_total > 0 else 0.0
         return {
             "resource_usage": {
+                **({"gpu_device_ids": sorted(devices)} if devices else {}),
                 "gpu_percent": TritonService._clamp_percent(gpu) if gpu_values else None,
                 "gpu_memory_used_bytes": sum(used) if used else None,
                 "gpu_memory_total_bytes": sum(total) if total and paired else None,
