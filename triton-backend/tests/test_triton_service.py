@@ -249,11 +249,11 @@ class TritonServiceTests(unittest.IsolatedAsyncioTestCase):
         service = TritonService("http://triton")
         metrics = b"""
 # HELP nv_cpu_utilization CPU utilization
-nv_cpu_utilization 25
+nv_cpu_utilization 0.25
 nv_cpu_memory_used_bytes 512
 nv_cpu_memory_total_bytes 1024
-nv_gpu_utilization{gpu_uuid="GPU-1"} 40
-nv_gpu_utilization{gpu_uuid="GPU-2"} 60
+nv_gpu_utilization{gpu_uuid="GPU-1"} 0.4
+nv_gpu_utilization{gpu_uuid="GPU-2"} 0.6
 """
         client = FakeClient(get_responses=[FakeResponse(status_code=200, content=metrics)])
         service._get_client = lambda: client
@@ -267,12 +267,35 @@ nv_gpu_utilization{gpu_uuid="GPU-2"} 60
         self.assertEqual(result["gpu"], 50)
         self.assertIsNone(result["error"])
 
-    async def test_CollectMetricsSnapshot_NoCpuRamFamilies_ReturnsDiagnosticError(self):
+    def test_device_metrics_distinguish_absent_and_idle_devices(self):
+        for fraction in (0, 0.25, 0.5, 1):
+            result = TritonService._parse_prometheus_metrics(
+                f"nv_gpu_utilization {fraction}\nnv_gpu_memory_used_bytes 0\nnv_gpu_memory_total_bytes 1024"
+            )["resource_usage"]
+            self.assertEqual(result["gpu_percent"], fraction * 100)
+            self.assertEqual(result["gpu_memory_used_bytes"], 0)
+            self.assertEqual(result["gpu_memory_total_bytes"], 1024)
+        missing = TritonService._parse_prometheus_metrics("")["resource_usage"]
+        self.assertIsNone(missing["gpu_percent"])
+        self.assertIsNone(missing["gpu_memory_used_bytes"])
+
+    def test_rejects_non_metrics_body_and_pairs_gpu_capacity_by_device(self):
+        for body in ("<html>ok</html>", '{"version": "2.70"}', "unknown_metric 4"):
+            self.assertTrue(TritonService._parse_prometheus_metrics(body)["error"])
+        body = ('nv_gpu_memory_used_bytes{gpu_uuid="card A"} 512 1234\n'
+                'nv_gpu_memory_total_bytes{gpu_uuid="card B"} 1024')
+        usage = TritonService._parse_prometheus_metrics(body)["resource_usage"]
+        self.assertEqual(usage["gpu_memory_used_bytes"], 512)
+        self.assertIsNone(usage["gpu_memory_total_bytes"])
+        matched = TritonService._parse_prometheus_metrics(body.replace("card B", "card A"))
+        self.assertEqual(matched["resource_usage"]["gpu_memory_total_bytes"], 1024)
+
+    async def test_CollectMetricsSnapshot_GpuOnly_ReturnsSuccessfulSample(self):
         # Arrange
         service = TritonService("http://triton")
         metrics = b"""
 nv_inference_request_success 3
-nv_gpu_utilization{gpu_uuid="GPU-1"} 40
+nv_gpu_utilization{gpu_uuid="GPU-1"} 0.4
 """
         client = FakeClient(get_responses=[FakeResponse(status_code=200, content=metrics)])
         service._get_client = lambda: client
@@ -284,7 +307,7 @@ nv_gpu_utilization{gpu_uuid="GPU-1"} 40
         self.assertEqual(result["cpu"], 0)
         self.assertEqual(result["ram"], 0)
         self.assertEqual(result["gpu"], 40)
-        self.assertIn("does not expose Triton CPU/RAM metrics", result["error"])
+        self.assertIsNone(result["error"])
 
     async def test_InferenceMetricsDelta_EnsembleAndStepCounters_ReturnsLatencyRows(self):
         # Arrange

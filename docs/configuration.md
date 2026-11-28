@@ -221,3 +221,13 @@ error listing the conflicting names. No profiles are automatically renamed or
 deleted. Assign distinct names to those rows in `s3_profiles`, then restart the
 backend. Update any workflow annotations that select a renamed profile by name;
 references using profile IDs remain valid.
+
+### Triton metrics URLs
+
+For a managed Kubernetes instance, the backend authorizes the internal metrics URL
+after verifying the live Service, Deployment, Triton container port and selected
+pods. For operation-managed deployments it also checks the recorded resource UIDs
+and operation labels. Set `TRITON_METRICS_ALLOWED_URLS` on the backend to a
+comma-separated list of exact URLs for external instances or custom endpoints.
+Clearing an instance's metrics URL disables Triton Prometheus scraping. Kubernetes
+CPU and RAM collection continues independently.

@@ -126,6 +126,12 @@ class PodProvider:
                 return result
 
     def snapshot(self, namespace: str, name: str) -> tuple[DeploymentState, list[PodState]]:
+        deployment, pods, _ = self.workload_snapshot(namespace, name)
+        return deployment, pods
+
+    def workload_snapshot(
+        self, namespace: str, name: str,
+    ) -> tuple[DeploymentState, list[PodState], dict[str, dict[str, str]]]:
         deployment = self.deployment(namespace, name)
         meta, status = deployment["metadata"], deployment.get("status", {})
         sets = {
@@ -135,10 +141,17 @@ class PodProvider:
         }
         revision = (meta.get("annotations") or {}).get(REVISION_KEY)
         pods = []
+        running_limits = {}
         for pod in self.items(self.core.list_namespaced_pod, namespace):
             owner = next((r for uid, r in sets.items() if controlled_by(pod, "ReplicaSet", uid)), None)
             if owner is not None:
-                pods.append(pod_state(pod, owner, revision))
+                observed_pod = pod_state(pod, owner, revision)
+                pods.append(observed_pod)
+                if not observed_pod.terminating and any(
+                    c.name == "triton" and c.kind == "regular" and c.state == "running" for c in observed_pod.containers
+                ):
+                    container = next(c for c in pod["spec"]["containers"] if c["name"] == "triton")
+                    running_limits[observed_pod.name] = (container.get("resources") or {}).get("limits") or {}
         # Reads span several resources. Do not report a mixed generation as a completed rollout.
         after = self.deployment(namespace, name)
         if after["metadata"]["uid"] != meta["uid"]:
@@ -159,7 +172,7 @@ class PodProvider:
             revision=revision,
             conditions=conditions(status),
         )
-        return state, sorted(pods, key=lambda p: (p.name, p.uid))
+        return state, sorted(pods, key=lambda p: (p.name, p.uid)), running_limits
 
     def verify(
         self, namespace: str, name: str, deployment_uid: str, pod: PodState, *, generation: int | None = None,

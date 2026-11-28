@@ -50,7 +50,7 @@ const server = http.createServer((req, res) => {
       [
         "# HELP nv_cpu_utilization CPU utilization percentage",
         "# TYPE nv_cpu_utilization gauge",
-        "nv_cpu_utilization 35",
+        "nv_cpu_utilization 0.35",
         "# HELP nv_cpu_memory_used_bytes Used host RAM bytes",
         "# TYPE nv_cpu_memory_used_bytes gauge",
         "nv_cpu_memory_used_bytes 2147483648",
@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
         "nv_cpu_memory_total_bytes 4294967296",
         "# HELP nv_gpu_utilization GPU utilization percentage",
         "# TYPE nv_gpu_utilization gauge",
-        "nv_gpu_utilization 12",
+        "nv_gpu_utilization 0.12",
         "# TYPE nv_inference_request_success counter",
         'nv_inference_request_success{model="resnet50",version="1"} 100',
         "# TYPE nv_inference_request_duration_us counter",

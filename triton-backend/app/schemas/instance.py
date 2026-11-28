@@ -52,6 +52,24 @@ def _normalize_metrics_url(v: str | None) -> str | None:
     return urlunparse(parsed)
 
 
+class InstanceResourceUsage(SQLModel):
+    gpu_allocated: bool | None = None
+    gpu_shared: bool | None = None
+    desired_replicas: int | None = None
+    running_triton_containers: int | None = None
+    cpu_samples: int | None = None
+    memory_samples: int | None = None
+    cpu_limit_millicores: float | None = None
+    memory_limit_bytes: float | None = None
+    cpu_millicores: float | None = None
+    memory_bytes: float | None = None
+    workload_error: str | None = None
+    gpu_percent: float | None = None
+    gpu_memory_used_bytes: float | None = None
+    gpu_memory_total_bytes: float | None = None
+    gpu_error: str | None = None
+
+
 class InstanceS3ConfigDTO(SQLModel):
     enabled: bool = False
     endpoint: Optional[str] = None
@@ -104,6 +122,7 @@ class TritonInstanceDTO(SQLModel):
     triton_verify_ssl: bool = False
     triton_ca_certificate: str = ""
     metrics_url: Optional[str] = None
+    resource_usage: InstanceResourceUsage | None = None
     metrics_cpu: float = 0
     metrics_ram: float = 0
     metrics_gpu: float = 0

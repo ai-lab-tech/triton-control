@@ -281,9 +281,7 @@ export class InstancesDetailEffects {
       )
         ? ((dto as TritonInstanceDTO & Record<string, unknown>)["pod_statuses"] as string[])
         : [],
-      cpu: normalizePercent(dto.metrics_cpu),
-      ram: normalizePercent(dto.metrics_ram),
-      gpu: normalizePercent(dto.metrics_gpu),
+      resourceMetrics: instance.resourceMetrics,
       serverMetadata: (dto.server_metadata ?? null) as Record<string, unknown> | null,
       repositoryModels: instance.repositoryModels,
     };
@@ -300,14 +298,6 @@ function normalizeRoleLabel(role: unknown): string {
   if (value === "member") return "Member";
   if (value === "viewer") return "View only";
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "View only";
-}
-
-function normalizePercent(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(100, Math.round(parsed * 10) / 10));
 }
 
 function stringDtoField(dto: TritonInstanceDTO, key: string): string {

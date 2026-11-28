@@ -30,6 +30,7 @@ from app.repositories import instances
 from app.schemas import ModelRepositoryActionResponse, TritonRepositoryModelDTO
 from app.services.access import get_instance_or_404
 from app.services.deployment import model_state
+from app.services.deployment.managed_metrics import ManagedMetricsService, trusted_metrics_url
 from app.services.triton.client import TritonService
 from app.services.triton.config import extract_triton_error_detail
 
@@ -153,10 +154,14 @@ async def _send_model_command(
 class InferenceTarget:
     """Detached connection snapshot so long inference calls do not hold a DB session."""
 
-    def __init__(self, url: str, verify_ssl: bool, ca_certificate: str, metrics_url: str | None) -> None:
+    def __init__(
+        self, url: str, verify_ssl: bool, ca_certificate: str, metrics_url: str | None,
+        managed_metrics: ManagedMetricsService | None = None,
+    ) -> None:
         self.url = url
         self.verify_ssl = verify_ssl
         self.ca_certificate = ca_certificate
+        self.managed_metrics = managed_metrics
         self.metrics_url = metrics_url
 
 
@@ -168,6 +173,7 @@ def resolve_inference_target(session: Session, claims: dict[str, Any], instance_
         verify_ssl=bool(instance.triton_verify_ssl),
         ca_certificate=instance.triton_ca_certificate or "",
         metrics_url=instance.metrics_url,
+        managed_metrics=ManagedMetricsService.from_instance(session, instance, instance.metrics_url),
     )
 
 
@@ -201,9 +207,11 @@ async def infer_model_target(
         instance.ca_certificate,
         timeout=triton_inference_timeout_seconds(),
     )
+    trusted = await trusted_metrics_url(instance.managed_metrics, instance.metrics_url)
     use_metrics = bool(instance.metrics_url)
     metrics_before = (
-        await triton_service.collect_inference_metrics_snapshot(instance.metrics_url) if use_metrics else None
+        await triton_service.collect_inference_metrics_snapshot(instance.metrics_url, trusted_url=trusted)
+        if use_metrics else None
     )
     use_stats = not _is_metrics_snapshot_available(metrics_before)
     fallback_stats_before = None if use_stats else await triton_service.collect_inference_stats_snapshot()
@@ -228,7 +236,9 @@ async def infer_model_target(
             stats_after = await triton_service.collect_inference_stats_snapshot()
             inference_metrics = triton_service.inference_metrics_delta(stats_before or {}, stats_after)
         else:
-            metrics_after = await triton_service.collect_inference_metrics_snapshot(instance.metrics_url)
+            metrics_after = await triton_service.collect_inference_metrics_snapshot(
+                instance.metrics_url, trusted_url=trusted,
+            )
             inference_metrics = triton_service.inference_metrics_delta(metrics_before or {}, metrics_after)
         for delay_seconds in (0.1, 0.3, 0.75, 1.5):
             if inference_metrics.get("available"):
@@ -238,7 +248,9 @@ async def infer_model_target(
                 stats_after = await triton_service.collect_inference_stats_snapshot()
                 inference_metrics = triton_service.inference_metrics_delta(stats_before or {}, stats_after)
             else:
-                metrics_after = await triton_service.collect_inference_metrics_snapshot(instance.metrics_url)
+                metrics_after = await triton_service.collect_inference_metrics_snapshot(
+                    instance.metrics_url, trusted_url=trusted,
+                )
                 inference_metrics = triton_service.inference_metrics_delta(metrics_before or {}, metrics_after)
         inference_metrics = _with_metric_context(
             inference_metrics,

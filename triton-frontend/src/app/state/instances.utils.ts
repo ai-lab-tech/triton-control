@@ -35,6 +35,77 @@ export function resolveVersion(dto: { server_metadata?: unknown }): string {
   return typeof version === "string" ? version : "";
 }
 
+function formatResourceMetrics(dto: TritonInstanceDTO) {
+  const usage = dto.resource_usage;
+  const bytes = (value: number) =>
+    Math.round((value / 1024 ** 2) * 10) / 10 >= 1024
+      ? (value / 1024 ** 3).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " GiB"
+      : (value / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " MiB";
+  const cpu = (value: number) => Math.round(value) + " mCPU";
+  const quantity = (
+    used: number | null | undefined,
+    limit: number | null | undefined,
+    format: (value: number) => string,
+  ) => (used == null ? "Unavailable" : format(used) + (limit == null ? "" : " / " + format(limit)));
+  const coverage = (samples: number | null | undefined) =>
+    usage?.desired_replicas == null || usage.running_triton_containers == null
+      ? undefined
+      : `${samples == null ? "" : samples + " sampled · "}${usage.running_triton_containers} running · ${usage.desired_replicas} desired`;
+  const workload =
+    usage?.workload_error ||
+    (dto.is_self_deployed
+      ? "Running Triton containers across replicas. Usage / limit when configured."
+      : "Container metrics require a managed Kubernetes deployment.");
+  const noGpu = dto.is_self_deployed === true && usage?.gpu_allocated === false;
+  const gpuCoverage = usage?.gpu_shared ? "Shared device · 1 server sampled" : "1 server sampled";
+  const gpu = noGpu
+    ? "Kubernetes assigned no GPU to the running Triton containers."
+    : usage?.gpu_error ||
+      (dto.metrics_url
+        ? "No sample reported by Triton."
+        : "No Triton metrics endpoint configured.");
+  return [
+    {
+      label: "CPU",
+      value: quantity(usage?.cpu_millicores, usage?.cpu_limit_millicores, cpu),
+      coverage: coverage(usage?.cpu_samples),
+      description:
+        usage?.cpu_millicores == null ? workload : "CPU usage across running Triton containers.",
+    },
+    {
+      label: "RAM",
+      value: quantity(usage?.memory_bytes, usage?.memory_limit_bytes, bytes),
+      coverage: coverage(usage?.memory_samples),
+      description:
+        usage?.memory_bytes == null ? workload : "Memory usage across running Triton containers.",
+    },
+    {
+      label: "Device GPU utilization",
+      coverage: noGpu || usage?.gpu_percent == null ? undefined : gpuCoverage,
+      value: noGpu
+        ? "No GPU allocated"
+        : usage?.gpu_percent == null
+          ? "Unavailable"
+          : usage.gpu_percent + "%",
+      description:
+        noGpu || usage?.gpu_percent == null
+          ? gpu
+          : "Device-wide utilization across all processes on the GPUs visible to the sampled server.",
+    },
+    {
+      label: "Device GPU memory",
+      coverage: noGpu || usage?.gpu_memory_used_bytes == null ? undefined : gpuCoverage,
+      value: noGpu
+        ? "No GPU allocated"
+        : quantity(usage?.gpu_memory_used_bytes, usage?.gpu_memory_total_bytes, bytes),
+      description:
+        noGpu || usage?.gpu_memory_used_bytes == null
+          ? gpu
+          : "Device-wide memory across all processes on the GPUs visible to the sampled server.",
+    },
+  ];
+}
+
 export function dtoToInstance(dto: TritonInstanceDTO): Instance {
   const metadata = (dto.server_metadata ?? null) as Record<string, unknown> | null;
   const deployment = dto as TritonInstanceDTO & Record<string, unknown>;
@@ -85,9 +156,7 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
       : [],
     serverMetadata: metadata,
     qps: 0,
-    cpu: normalizePercent(dto.metrics_cpu),
-    ram: normalizePercent(dto.metrics_ram),
-    gpu: normalizePercent(dto.metrics_gpu),
+    resourceMetrics: formatResourceMetrics(dto),
     assignedUsers: [],
     s3: {
       enabled: !!dto.s3?.enabled,
@@ -155,12 +224,4 @@ function formatBackendList(value: string): string {
     .filter(Boolean)
     .map((part) => (part.toLowerCase() === "vllm" ? "vLLM" : part))
     .join(", ");
-}
-
-function normalizePercent(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(100, Math.round(parsed * 10) / 10));
 }

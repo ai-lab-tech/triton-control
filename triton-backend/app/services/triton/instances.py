@@ -34,11 +34,13 @@ from app.repositories import perf_analyzer as perf_analyzer_repo
 from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTritonInstanceRequest
 from app.services.access import ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
+from app.services.deployment.managed_metrics import ManagedMetricsService, trusted_metrics_url
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.storage.s3 import discover_instance_repository_backends
 from app.services.triton.client import TritonService
 from app.services.triton.repository_snapshot import normalize_repository_models, repository_model_names
+from app.services.triton.resource_usage import apply_triton_sample
 
 logger = logging.getLogger(__name__)
 _DEFAULT_TRITON_CONNECTION_VALIDATION_TIMEOUT_SECONDS = 5.0
@@ -85,7 +87,7 @@ async def create_instance(
         ensure_instance_access(session, claims, existing_by_url.name)
         if request.name and instance_name != existing_by_url.name:
             raise ConflictError("An existing instance cannot be renamed through registration")
-        return entity_to_dto(existing_by_url)
+        return _instance_dto(session, existing_by_url)
 
     if existing_by_name:
         raise ConflictError(
@@ -107,6 +109,7 @@ async def create_instance(
         triton_verify_ssl=request.verify_ssl,
         triton_ca_certificate=request.ca_certificate if request.verify_ssl else "",
         metrics_url=request.metrics_url,
+        resource_usage=metrics_snapshot.get("resource_usage"),
         metrics_cpu=metrics_snapshot["cpu"],
         metrics_ram=metrics_snapshot["ram"],
         metrics_gpu=metrics_snapshot["gpu"],
@@ -119,7 +122,7 @@ async def create_instance(
         user.assigned_instances = [*user.assigned_instances, instance_name]
         users.save(session, user)
 
-    return entity_to_dto(entity)
+    return _instance_dto(session, entity)
 
 
 async def update_instance(
@@ -157,9 +160,12 @@ async def update_instance(
             _format_triton_unavailable_detail(request.url, runtime_snapshot["error"]),
         )
 
-    metrics_snapshot = await triton_service.collect_metrics_snapshot(request.metrics_url)
+    identity = ManagedMetricsService.from_instance(session, instance, request.metrics_url)
+    trusted = await trusted_metrics_url(identity, request.metrics_url)
+    metrics_snapshot = await triton_service.collect_metrics_snapshot(request.metrics_url, trusted_url=trusted)
     repository_models = normalize_repository_models(await triton_service.get_repository_index())
 
+    session.refresh(instance, with_for_update=True)
     instance.url = request.url
     instance.model_names = repository_model_names(repository_models)
     instance.repository_models = repository_models
@@ -171,14 +177,10 @@ async def update_instance(
     instance.triton_verify_ssl = request.verify_ssl
     instance.triton_ca_certificate = request.ca_certificate if request.verify_ssl else ""
     instance.metrics_url = request.metrics_url
-    instance.metrics_cpu = metrics_snapshot["cpu"]
-    instance.metrics_ram = metrics_snapshot["ram"]
-    instance.metrics_gpu = metrics_snapshot["gpu"]
-    instance.metrics_last_checked_at = metrics_snapshot["checked_at"]
-    instance.metrics_error = metrics_snapshot["error"]
+    apply_triton_sample(instance, metrics_snapshot)
 
     instances.save(session, instance)
-    return entity_to_dto(instance)
+    return _instance_dto(session, instance)
 
 
 def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -> list[TritonInstanceDTO]:
@@ -188,12 +190,13 @@ def list_instances(session: Session, claims: dict[str, Any], limit: int = 100) -
         assigned = [name for name in (user.assigned_instances or []) if name]
 
     rows = instances.list_visible(session, limit=limit, assigned_names=assigned)
-    return [entity_to_dto(row) for row in rows]
+    shared = instances.shared_gpu_ids(session) if any(_has_device_ids(row) for row in rows) else set()
+    return [entity_to_dto(row, shared) for row in rows]
 
 
 def get_instance(session: Session, claims: dict[str, Any], instance_id: int) -> TritonInstanceDTO:
     instance = get_instance_or_404(session, instance_id, claims)
-    return _entity_to_dto_with_repository_backends(instance)
+    return _entity_to_dto_with_repository_backends(session, instance)
 
 
 def delete_instance(session: Session, claims: dict[str, Any], instance_id: int) -> None:
@@ -249,11 +252,21 @@ def get_instance_by_name(session: Session, claims: dict[str, Any], name: str) ->
     if not instance:
         raise NotFoundError("Instance not found")
     ensure_instance_access(session, claims, instance.name)
-    return _entity_to_dto_with_repository_backends(instance)
+    return _entity_to_dto_with_repository_backends(session, instance)
 
 
-def _entity_to_dto_with_repository_backends(instance: Any) -> TritonInstanceDTO:
-    dto = entity_to_dto(instance)
+def _has_device_ids(instance: Any) -> bool:
+    return bool((getattr(instance, "resource_usage", None) or {}).get("gpu_device_ids"))
+
+
+def _instance_dto(session: Session, instance: Any) -> TritonInstanceDTO:
+    if _has_device_ids(instance):
+        return entity_to_dto(instance, instances.shared_gpu_ids(session))
+    return entity_to_dto(instance)
+
+
+def _entity_to_dto_with_repository_backends(session: Session, instance: Any) -> TritonInstanceDTO:
+    dto = _instance_dto(session, instance)
     dto.deployment_backend = discover_instance_repository_backends(instance)
     return dto
 

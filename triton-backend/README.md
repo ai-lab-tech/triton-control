@@ -188,16 +188,18 @@ credentials required for S3 uploads through their dedicated profile endpoint.
 Set `TRITON_METRICS_ALLOWED_URLS` in the backend environment to a comma-separated
 list of exact trusted metrics URLs, for example
 `http://triton-service.namespace.svc.cluster.local:18002/metrics,https://metrics.example.com/triton`.
-Both utilization and inference metrics requests select their destination from
-this server-side list. URL ports, paths and query strings must match exactly;
-redirects are never followed. Only list endpoints under your control, including
-DNS names whose resolution you trust.
+The backend checks exact URLs for both utilization and inference metrics and
+disables redirects. External instances and custom endpoints require an entry,
+including the port, path and query string.
 
-**Upgrade requirement:** populate this list with the metrics URLs of existing
-instances and newly deployed instances before restarting the backend. An unset
-or empty list blocks all metrics fetches and reports a metrics error. Triton
-health checks and inference requests are unaffected. Private Kubernetes service
-addresses are supported when explicitly listed; there is no wildcard bypass.
+For a managed instance, the backend can also derive the internal metrics URL
+from its Kubernetes ClusterIP Service. It checks the Service selector and
+metrics port and verifies that the selected pods belong to the instance's
+Deployment through their ReplicaSets. This works with older deployments that
+have no Service owner reference. For intent-backed deployments it also checks
+the recorded resource UIDs and operation labels. Clearing the metrics URL disables
+Triton scraping while Kubernetes CPU and RAM sampling continues. This lookup uses the existing read permissions
+for Services, Deployments, ReplicaSets and pods.
 
 Metrics label tokens are parsed sequentially and limited to 64 KiB of UTF-8.
 Malformed, duplicate or oversized label sets yield no labels; valid quoted values

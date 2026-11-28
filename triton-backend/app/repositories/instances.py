@@ -12,6 +12,7 @@ Provides thin query functions that abstract SQLModel selects from service code:
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from sqlalchemy import text
@@ -48,6 +49,19 @@ def find_by_url(session: Session, url: str) -> TritonInstanceEntity | None:
 
 def find_by_name(session: Session, name: str) -> TritonInstanceEntity | None:
     return session.exec(select(TritonInstanceEntity).where(TritonInstanceEntity.name == name)).first()
+
+
+def shared_gpu_ids(session: Session) -> set[str]:
+    """Devices visible in the latest available scrape of more than one instance."""
+    observations = session.exec(select(TritonInstanceEntity.resource_usage).where(
+        col(TritonInstanceEntity.metrics_url).is_not(None),
+        col(TritonInstanceEntity.metrics_last_checked_at).is_not(None),
+    ))
+    counts: Counter[str] = Counter()
+    for usage in observations:
+        if usage:
+            counts.update(set(usage.get("gpu_device_ids", [])))
+    return {device for device, count in counts.items() if count > 1}
 
 
 def list_ids(session: Session) -> list[int | None]:

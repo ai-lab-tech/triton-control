@@ -1,6 +1,8 @@
 """Bounded, sequential parsing of Prometheus text-format label sets."""
 
 import re
+from collections.abc import Iterator
+from math import isfinite
 
 MAX_LABEL_TOKEN_BYTES = 64 * 1024
 _LABEL_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
@@ -58,3 +60,36 @@ def parse_labels(token: str) -> dict[str, str]:
                 return {}
             position += 1
     return labels
+
+_METRIC_NAME = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*")
+
+
+def samples(text: str) -> Iterator[tuple[str, dict[str, str], float]]:
+    """Read a metric token, numeric value and optional integer timestamp."""
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        end = line.rfind("}")
+        if end >= 0:
+            if not line[end + 1:end + 2].isspace():
+                continue
+            token = line[:end + 1]
+            name = token.partition("{")[0]
+            labels = parse_labels(token)
+            if not labels and token != name + "{}":
+                continue
+            fields = line[end + 1:].split()
+        else:
+            name, *fields = line.split()
+            labels = {}
+        if not _METRIC_NAME.fullmatch(name) or len(fields) not in (1, 2):
+            continue
+        try:
+            value = float(fields[0])
+            if len(fields) == 2:
+                int(fields[1])
+        except ValueError:
+            continue
+        if isfinite(value) and value >= 0:
+            yield name, labels, value

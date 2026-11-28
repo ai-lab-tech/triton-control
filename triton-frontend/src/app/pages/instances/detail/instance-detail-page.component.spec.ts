@@ -59,9 +59,6 @@ const MOCK_INSTANCE: Instance = {
   podStatuses: [],
   serverMetadata: { version: "1.0.0", platform: "linux" },
   qps: 0,
-  cpu: 0,
-  ram: 0,
-  gpu: 0,
   assignedUsers: [],
   s3: {
     enabled: true,

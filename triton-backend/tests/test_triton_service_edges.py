@@ -6,7 +6,7 @@ import json
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from google.protobuf import text_format
 
@@ -170,6 +170,7 @@ class TritonInstanceEdgeTests(unittest.IsolatedAsyncioTestCase):
             triton_verify_ssl=False,
             triton_ca_certificate="",
             metrics_url=None,
+            resource_usage=None,
             metrics_cpu=0.0,
             metrics_ram=0.0,
             metrics_gpu=0.0,
@@ -217,7 +218,7 @@ class TritonInstanceEdgeTests(unittest.IsolatedAsyncioTestCase):
             "app.services.triton.instances.entity_to_dto",
             return_value=instance,
         ):
-            result = await triton_instances.update_instance(request, SimpleNamespace(), {"role": "admin"}, 1)
+            result = await triton_instances.update_instance(request, Mock(), {"role": "admin"}, 1)
 
         # Assert
         self.assertIs(result, instance)

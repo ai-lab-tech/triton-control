@@ -90,24 +90,15 @@
             <div class="metric-value">{{ instance.models }}</div>
             <div class="metric-label">Models</div>
           </div>
-          <div>
-            <div class="metric-value">
-              {{ instance.metricsUrl && !instance.metricsError ? instance.cpu + "%" : "N/A" }}
+          @for (metric of instance.resourceMetrics; track metric.label) {
+            <div [title]="metric.description">
+              <div class="metric-value">{{ metric.value }}</div>
+              <div class="metric-label">{{ metric.label }}</div>
+              @if (metric.coverage) {
+                <small class="metric-coverage">{{ metric.coverage }}</small>
+              }
             </div>
-            <div class="metric-label">CPU</div>
-          </div>
-          <div>
-            <div class="metric-value">
-              {{ instance.metricsUrl && !instance.metricsError ? instance.ram + "%" : "N/A" }}
-            </div>
-            <div class="metric-label">RAM</div>
-          </div>
-          <div>
-            <div class="metric-value">
-              {{ instance.metricsUrl && !instance.metricsError ? instance.gpu + "%" : "N/A" }}
-            </div>
-            <div class="metric-label">GPU</div>
-          </div>
+          }
         </div>
         <div class="card-actions">
           <a class="details-link" [routerLink]="['/instances', instance.id]">

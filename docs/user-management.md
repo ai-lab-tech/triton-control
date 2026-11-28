@@ -146,7 +146,7 @@ Assigned users can open that instance and use its available workflows.
 `member` and `admin` can perform write actions; `viewer` is read-only.
 
 - dashboard and health visibility
-- CPU, RAM, and GPU metrics when a metrics endpoint is configured
+- container CPU and RAM for managed deployments, plus GPU utilization and memory from Triton
 - model repository view
 - model config view
 - inference

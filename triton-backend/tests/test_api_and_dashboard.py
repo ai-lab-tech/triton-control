@@ -68,7 +68,7 @@ class _FakeSession:
         self.commit_count = 0
         self.refresh_count = 0
 
-    def get(self, _model, key):
+    def get(self, _model, key, **kwargs):
         return self.get_map.get(key)
 
     def exec(self, _query):
@@ -88,7 +88,7 @@ class _FakeSession:
     def commit(self):
         self.commit_count += 1
 
-    def refresh(self, _obj):
+    def refresh(self, _obj, **kwargs):
         if hasattr(_obj, "id") and getattr(_obj, "id") is None:
             _obj.id = 1
         self.refresh_count += 1

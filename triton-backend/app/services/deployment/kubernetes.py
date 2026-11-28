@@ -14,6 +14,7 @@ queries except through deployment record helper functions.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import time
@@ -23,6 +24,7 @@ from typing import Any, cast
 from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
+from kubernetes.utils.quantity import parse_quantity  # type: ignore[import-untyped]
 
 from app.db.database import session_factory
 from app.exceptions import BadGatewayError, BadRequestError, ConflictError
@@ -157,58 +159,75 @@ def apply_deployment_resources(
         )
 
 
-def is_pod_ready(namespace: str, deployment_name: str) -> bool:
-    """Return True when at least one pod for the deployment has Ready=True condition."""
-    from kubernetes import client
-    from kubernetes.config.config_exception import ConfigException
+def read_workload_health(namespace: str, deployment_name: str) -> tuple[list[str], bool, dict[str, Any]]:
+    from app.services.deployment.pod_provider import PodProvider
 
+    if not deployment_name:
+        return [], False, {"workload_error": "Deployment name unavailable."}
     try:
-        api = _client()
-        selector = f"app=triton,deployment={deployment_name}" if deployment_name else "app=triton"
-        pods = client.CoreV1Api(api).list_namespaced_pod(
-            namespace=namespace,
-            label_selector=selector,
-        ).items
-        for pod in pods:
-            conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
-            for condition in conditions:
-                if (getattr(condition, "type", "") == "Ready"
-                        and getattr(condition, "status", "") == "True"):
-                    return True
-    except ConfigException:
-        return False
+        with _client() as api:
+            deployment, pods, limits = PodProvider(api).workload_snapshot(namespace, deployment_name)
+            usage = read_workload_usage(api, namespace, deployment_name, limits)
     except Exception:
-        return False
-    return False
+        logging.getLogger(__name__).debug("Could not read deployment pod state", exc_info=True)
+        return [], False, {"workload_error": "Kubernetes pod state unavailable."}
+
+    statuses = [f"{pod.name}: {pod.phase} ({'Ready' if pod.ready else 'Not Ready'})" for pod in pods]
+    # These are the live limits of the owned, running Triton containers only.
+    if limits:
+        gpu_resources = {
+            resource for resources in limits.values() for resource, quantity in resources.items()
+            if (resource in {"nvidia.com/gpu", "nvidia.com/gpu.shared"} or resource.startswith("nvidia.com/mig-"))
+            and parse_quantity(quantity) > 0
+        }
+        usage["gpu_allocated"] = bool(gpu_resources)
+        if any(resource.endswith(".shared") for resource in gpu_resources):
+            usage["gpu_shared"] = True
+    usage.update(desired_replicas=deployment.desired, running_triton_containers=len(limits))
+    return statuses, any(pod.ready for pod in pods), usage
 
 
-def read_pod_statuses(namespace: str, deployment_name: str) -> list[str]:
-    """Return a human-readable status string for each pod in the namespace."""
+def read_workload_usage(
+    api: Any, namespace: str, deployment_name: str, limits: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """Aggregate each resource only when every running Triton container has a sample."""
     from kubernetes import client
-    from kubernetes.config.config_exception import ConfigException
 
+    if not limits:
+        return {"cpu_samples": 0, "memory_samples": 0, "workload_error": "No running Triton containers."}
     try:
-        api = _client()
-        selector = f"app=triton,deployment={deployment_name}" if deployment_name else "app=triton"
-        pods = client.CoreV1Api(api).list_namespaced_pod(
-            namespace=namespace,
-            label_selector=selector,
-        ).items
-        result: list[str] = []
-        for pod in pods:
-            pod_name = getattr(getattr(pod, "metadata", None), "name", None) or "unknown"
-            phase = getattr(getattr(pod, "status", None), "phase", None) or "Unknown"
-            conditions = getattr(getattr(pod, "status", None), "conditions", None) or []
-            ready = any(
-                getattr(c, "type", "") == "Ready" and getattr(c, "status", "") == "True"
-                for c in conditions
-            )
-            result.append(f"{pod_name}: {phase} ({'Ready' if ready else 'Not Ready'})")
+        samples = client.CustomObjectsApi(api).list_namespaced_custom_object(
+            "metrics.k8s.io", "v1beta1", namespace, "pods",
+            label_selector=f"app=triton,deployment={deployment_name}", _request_timeout=5,
+        )
+        usage = {
+            pod["metadata"]["name"]: container["usage"]
+            for pod in samples["items"]
+            for container in pod["containers"] if container["name"] == "triton"
+        }
+        result: dict[str, Any] = {}
+        for resource, field, limit_field, multiplier in (
+            ("cpu", "cpu_millicores", "cpu_limit_millicores", 1000),
+            ("memory", "memory_bytes", "memory_limit_bytes", 1),
+        ):
+            if all(resource in quantities for quantities in limits.values()):
+                result[limit_field] = float(sum(parse_quantity(q[resource]) for q in limits.values()) * multiplier)
+            values = [usage[name][resource] for name in limits if resource in usage.get(name, {})]
+            result[f"{resource}_samples"] = len(values)
+            if len(values) == len(limits):
+                result[field] = float(sum(parse_quantity(value) for value in values) * multiplier)
+            else:
+                result["workload_error"] = "Waiting for resource metrics for all running Triton containers."
         return result
-    except ConfigException:
-        return []
+    except client.ApiException as exc:
+        if exc.status == 403:
+            return {"workload_error": "Permission denied reading Kubernetes resource metrics."}
+        return {"workload_error": "Kubernetes resource metrics unavailable."}
     except Exception:
-        return []
+        logging.getLogger(__name__).debug(
+            "Could not read workload metrics for %s/%s", namespace, deployment_name, exc_info=True,
+        )
+        return {"workload_error": "Kubernetes resource metrics unavailable."}
 
 
 def delete_namespace(namespace: str) -> str:

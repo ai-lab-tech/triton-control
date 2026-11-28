@@ -2,6 +2,87 @@ import { TritonInstanceDTO } from "../api/generated/index";
 import { dtoToInstance, isSelfDeployedStarting, resolveStatus } from "./instances.utils";
 
 describe("instances utils", () => {
+  it("keeps measured zero and uses container telemetry independently of the Triton scrape", () => {
+    const dto: TritonInstanceDTO = {
+      id: 42,
+      name: "demo",
+      url: "http://demo",
+      model_names: [],
+      created_at: "2026-06-24T00:00:00Z",
+      metrics_cpu: 90,
+      metrics_error: "No host CPU sample",
+      resource_usage: {
+        cpu_millicores: 250,
+        cpu_limit_millicores: 1000,
+        gpu_percent: 0,
+        desired_replicas: 2,
+        running_triton_containers: 1,
+        cpu_samples: 1,
+        memory_samples: 0,
+      },
+    };
+    const metrics = dtoToInstance(dto).resourceMetrics;
+    expect(metrics?.[0].coverage).toBe("1 sampled · 1 running · 2 desired");
+    expect(metrics?.[1].coverage).toBe("0 sampled · 1 running · 2 desired");
+    expect(metrics?.map((metric) => metric.value)).toEqual([
+      "250 mCPU / 1000 mCPU",
+      "Unavailable",
+      "0%",
+      "Unavailable",
+    ]);
+  });
+
+  it("hides host GPU readings for a managed CPU-only instance and identifies shared device readings", () => {
+    const dto: TritonInstanceDTO = {
+      id: 1,
+      name: "iris",
+      url: "http://iris",
+      model_names: [],
+      created_at: "",
+      is_self_deployed: true,
+      resource_usage: { gpu_allocated: false, gpu_percent: 53, gpu_memory_used_bytes: 200 },
+    };
+    const gpu = () => dtoToInstance(dto).resourceMetrics!.slice(2);
+    expect(gpu().map((m) => m.label)).toEqual(["Device GPU utilization", "Device GPU memory"]);
+    expect(gpu().map((m) => m.value)).toEqual(["No GPU allocated", "No GPU allocated"]);
+    expect(gpu()[0].coverage).toBeUndefined();
+    dto.resource_usage = {
+      gpu_allocated: true,
+      gpu_shared: true,
+      gpu_percent: 0,
+      gpu_memory_used_bytes: 0,
+    };
+    expect(gpu()[0].value).toBe("0%");
+    expect(gpu().map((m) => m.coverage)).toEqual([
+      "Shared device · 1 server sampled",
+      "Shared device · 1 server sampled",
+    ]);
+    dto.is_self_deployed = false;
+    dto.resource_usage = { gpu_percent: 80 };
+    expect(gpu()[0].value).toBe("80%");
+  });
+
+  it("shows known replica counts after a failed metrics read and rounds units consistently", () => {
+    const metrics = dtoToInstance({
+      id: 7,
+      name: "iris",
+      url: "http://iris",
+      model_names: [],
+      created_at: "",
+      resource_usage: {
+        desired_replicas: 2,
+        running_triton_containers: 1,
+        workload_error: "Permission denied",
+        gpu_memory_used_bytes: 1073700000,
+      },
+    }).resourceMetrics!;
+    expect(metrics[0].coverage).toBe("1 running · 2 desired");
+    expect(metrics[0].description).toBe("Permission denied");
+    expect(metrics[2].coverage).toBeUndefined();
+    expect(metrics[3].coverage).toBe("1 server sampled");
+    expect(metrics[3].value).toBe("1 GiB");
+  });
+
   it("DtoToInstance_DeploymentLogContainsRuntimeFields_MapsDeploymentMetadata", () => {
     const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 42,

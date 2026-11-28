@@ -41,9 +41,7 @@ export type Instance = {
   podStatuses: string[];
   serverMetadata: Record<string, unknown> | null;
   qps: number;
-  cpu: number;
-  ram: number;
-  gpu: number;
+  resourceMetrics?: { label: string; value: string; description: string; coverage?: string }[];
   assignedUsers: InstanceAssignedUser[];
   s3: {
     enabled: boolean;
