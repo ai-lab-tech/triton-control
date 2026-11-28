@@ -27,14 +27,16 @@ from app.db.database import session_factory
 from app.db.entities import DashboardAlertEntity, TritonInstanceEntity
 from app.repositories import dashboard_alerts, instances
 from app.services.deployment import kubernetes as deployment_k8s
+from app.services.deployment.managed_metrics import ManagedMetricsService, trusted_metrics_url
 from app.services.deployment.model_state import reconcile_scale
 from app.services.storage.s3_client import build_s3_client, format_s3_error, is_s3_configured
-from app.services.triton.client import TritonService
+from app.services.triton.client import TritonService, empty_metrics_snapshot
 from app.services.triton.repository_snapshot import (
     normalize_repository_models,
     repository_model_names,
     unavailable_repository_model_count,
 )
+from app.services.triton.resource_usage import apply_triton_sample, apply_workload_sample
 
 logger = get_logger(__name__)
 DEFAULT_HEALTH_REFRESH_INTERVAL_SECONDS = 10
@@ -155,6 +157,7 @@ class InstanceHealthRefresher:
 
             include_metadata = _should_refresh_server_metadata(instance.server_metadata)
             target_url = instance.url
+            managed_metrics = ManagedMetricsService.from_instance(session, instance, instance.metrics_url)
             target_metrics_url = instance.metrics_url
             is_self_deployed = instance.is_self_deployed
             deployment_namespace = instance.deployment_namespace
@@ -178,10 +181,14 @@ class InstanceHealthRefresher:
             )
             if not pod_ready:
                 with session_factory() as session:
-                    current = instances.find_by_id(session, instance_id)
+                    current = session.get(TritonInstanceEntity, instance_id, with_for_update=True)
                     if not current:
                         return []
-                    current.resource_usage = {**workload_usage, "gpu_error": "Waiting for Triton readiness."}
+                    apply_workload_sample(current, workload_usage)
+                    if current.metrics_url == target_metrics_url:
+                        reason = ("Waiting for Triton readiness." if current.metrics_url
+                                  else "No Triton metrics endpoint configured.")
+                        apply_triton_sample(current, empty_metrics_snapshot(reason))
                     current.pod_statuses = pod_statuses
                     current.health_live = False
                     current.health_ready = False
@@ -200,8 +207,6 @@ class InstanceHealthRefresher:
                     deployment_service_name,
                 )
                 target_url = resolved_urls["http"]
-                if not (target_metrics_url or "").strip():
-                    target_metrics_url = resolved_urls["metrics"]
 
         triton_service = TritonService(
             target_url,
@@ -210,9 +215,10 @@ class InstanceHealthRefresher:
             timeout=health_request_timeout_seconds(),
         )
         snapshot = await triton_service.collect_runtime_snapshot(include_metadata=include_metadata)
-        metrics_snapshot = None
+        metrics_snapshot = empty_metrics_snapshot("No Triton metrics endpoint configured.")
         if target_metrics_url:
-            metrics_snapshot = await triton_service.collect_metrics_snapshot(target_metrics_url)
+            trusted = await trusted_metrics_url(managed_metrics, target_metrics_url)
+            metrics_snapshot = await triton_service.collect_metrics_snapshot(target_metrics_url, trusted_url=trusted)
         repository_models = []
         if snapshot["live"] and snapshot["ready"]:
             try:
@@ -221,13 +227,11 @@ class InstanceHealthRefresher:
                 logger.exception("Failed to refresh repository index for instance %s", instance.name)
 
         with session_factory() as session:
-            current = instances.find_by_id(session, instance_id)
+            current = session.get(TritonInstanceEntity, instance_id, with_for_update=True)
             if not current:
                 return []
             if resolved_urls and not (current.url or "").strip():
                 current.url = resolved_urls["http"]
-                if not (current.metrics_url or "").strip():
-                    current.metrics_url = resolved_urls["metrics"]
             if include_metadata:
                 current.server_metadata = snapshot["metadata"]
             current.pod_statuses = pod_statuses
@@ -237,16 +241,11 @@ class InstanceHealthRefresher:
             current.health_error = snapshot["error"]
             current.repository_models = repository_models
             current.model_names = repository_model_names(repository_models)
-            current.resource_usage = {
-                **workload_usage,
-                **((metrics_snapshot or {}).get("resource_usage") or {}),
-            }
-            if metrics_snapshot is not None:
-                current.metrics_cpu = metrics_snapshot["cpu"]
-                current.metrics_ram = metrics_snapshot["ram"]
-                current.metrics_gpu = metrics_snapshot["gpu"]
-                current.metrics_last_checked_at = metrics_snapshot["checked_at"]
-                current.metrics_error = metrics_snapshot["error"]
+            apply_workload_sample(current, workload_usage)
+            if (current.metrics_url, current.triton_verify_ssl, current.triton_ca_certificate) == (
+                target_metrics_url, triton_verify_ssl, triton_ca_certificate,
+            ):
+                apply_triton_sample(current, metrics_snapshot)
             try:
                 instances.save(session, current)
             except StaleDataError:

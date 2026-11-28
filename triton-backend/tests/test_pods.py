@@ -94,6 +94,19 @@ class PodTests(unittest.TestCase):
         self.assertEqual(items[0].release, "r2")
         self.assertTrue(items[0].current_revision)
 
+    def test_draining_and_restarting_pods_remain_visible_outside_metrics_aggregate(self):
+        healthy = copy.deepcopy(self.pod)
+        healthy["status"]["containerStatuses"][0]["state"] = {"running": {}}
+        healthy["metadata"].update(name="healthy", uid="healthy")
+        healthy["spec"]["containers"][0]["resources"] = {"limits": {"cpu": "1"}}
+        draining = copy.deepcopy(healthy)
+        draining["metadata"].update(name="draining", uid="draining", deletionTimestamp="2026-01-01T01:00:00Z")
+        self.core.list_namespaced_pod.return_value = {"items": [healthy, draining, self.pod]}
+        _, pods, limits = self.reader.workload_snapshot("ns", "serving")
+        self.assertEqual(len(pods), 3)
+        self.assertEqual(limits, {"healthy": {"cpu": "1"}})
+        self.assertNotIn("limits", pods[0].containers[-1].model_dump())
+
     def test_rejects_unrelated_pod_uids_despite_identical_labels(self):
         # Arrange
         stranger = copy.deepcopy(self.pod)

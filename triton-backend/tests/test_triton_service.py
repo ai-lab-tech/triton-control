@@ -279,6 +279,17 @@ nv_gpu_utilization{gpu_uuid="GPU-2"} 0.6
         self.assertIsNone(missing["gpu_percent"])
         self.assertIsNone(missing["gpu_memory_used_bytes"])
 
+    def test_rejects_non_metrics_body_and_pairs_gpu_capacity_by_device(self):
+        for body in ("<html>ok</html>", '{"version": "2.70"}', "unknown_metric 4"):
+            self.assertTrue(TritonService._parse_prometheus_metrics(body)["error"])
+        body = ('nv_gpu_memory_used_bytes{gpu_uuid="card A"} 512 1234\n'
+                'nv_gpu_memory_total_bytes{gpu_uuid="card B"} 1024')
+        usage = TritonService._parse_prometheus_metrics(body)["resource_usage"]
+        self.assertEqual(usage["gpu_memory_used_bytes"], 512)
+        self.assertIsNone(usage["gpu_memory_total_bytes"])
+        matched = TritonService._parse_prometheus_metrics(body.replace("card B", "card A"))
+        self.assertEqual(matched["resource_usage"]["gpu_memory_total_bytes"], 1024)
+
     async def test_CollectMetricsSnapshot_GpuOnly_ReturnsSuccessfulSample(self):
         # Arrange
         service = TritonService("http://triton")

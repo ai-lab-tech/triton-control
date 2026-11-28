@@ -164,20 +164,14 @@ def read_workload_health(namespace: str, deployment_name: str) -> tuple[list[str
     if not deployment_name:
         return [], False, {"workload_error": "Deployment name unavailable."}
     try:
-        api = _client()
-        deployment, pods = PodProvider(api).snapshot(namespace, deployment_name)
+        with _client() as api:
+            deployment, pods, limits = PodProvider(api).workload_snapshot(namespace, deployment_name)
+            usage = read_workload_usage(api, namespace, deployment_name, limits)
     except Exception:
         logging.getLogger(__name__).debug("Could not read deployment pod state", exc_info=True)
         return [], False, {"workload_error": "Kubernetes pod state unavailable."}
 
     statuses = [f"{pod.name}: {pod.phase} ({'Ready' if pod.ready else 'Not Ready'})" for pod in pods]
-    limits = {
-        pod.name: container.limits
-        for pod in pods
-        for container in pod.containers
-        if container.name == "triton" and container.kind == "regular" and container.state == "running"
-    }
-    usage = read_workload_usage(api, namespace, deployment_name, limits)
     usage.update(desired_replicas=deployment.desired, running_triton_containers=len(limits))
     return statuses, any(pod.ready for pod in pods), usage
 

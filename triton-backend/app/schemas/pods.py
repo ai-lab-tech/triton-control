@@ -25,7 +25,6 @@ class ContainerState(BaseModel):
     last_termination_reason: str | None = None
     image: str | None = None
     image_id: str | None = None
-    limits: dict[str, str] = Field(default_factory=dict)
 
 
 class PodState(BaseModel):

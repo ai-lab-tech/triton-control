@@ -27,9 +27,6 @@ const MOCK_INSTANCE: any = {
   healthError: "",
   serverMetadata: null,
   qps: 0,
-  cpu: 0,
-  ram: 0,
-  gpu: 0,
   assignedUsers: [],
   s3: {
     enabled: false,

@@ -42,9 +42,6 @@ export type Instance = {
   serverMetadata: Record<string, unknown> | null;
   qps: number;
   resourceMetrics?: { label: string; value: string; description: string; coverage?: string }[];
-  cpu: number;
-  ram: number;
-  gpu: number;
   assignedUsers: InstanceAssignedUser[];
   s3: {
     enabled: boolean;

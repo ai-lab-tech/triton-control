@@ -34,11 +34,13 @@ from app.repositories import perf_analyzer as perf_analyzer_repo
 from app.schemas import CreateTritonInstanceRequest, TritonInstanceDTO, UpdateTritonInstanceRequest
 from app.services.access import ensure_instance_access, get_instance_or_404
 from app.services.deployment import kubernetes as deployment_k8s
+from app.services.deployment.managed_metrics import ManagedMetricsService, trusted_metrics_url
 from app.services.kubernetes_client import in_cluster_namespace, is_running_in_cluster
 from app.services.perf_analyzer.jobs import prepare_instance_deletion
 from app.services.storage.s3 import discover_instance_repository_backends
 from app.services.triton.client import TritonService
 from app.services.triton.repository_snapshot import normalize_repository_models, repository_model_names
+from app.services.triton.resource_usage import apply_triton_sample
 
 logger = logging.getLogger(__name__)
 _DEFAULT_TRITON_CONNECTION_VALIDATION_TIMEOUT_SECONDS = 5.0
@@ -158,9 +160,12 @@ async def update_instance(
             _format_triton_unavailable_detail(request.url, runtime_snapshot["error"]),
         )
 
-    metrics_snapshot = await triton_service.collect_metrics_snapshot(request.metrics_url)
+    identity = ManagedMetricsService.from_instance(session, instance, request.metrics_url)
+    trusted = await trusted_metrics_url(identity, request.metrics_url)
+    metrics_snapshot = await triton_service.collect_metrics_snapshot(request.metrics_url, trusted_url=trusted)
     repository_models = normalize_repository_models(await triton_service.get_repository_index())
 
+    session.refresh(instance, with_for_update=True)
     instance.url = request.url
     instance.model_names = repository_model_names(repository_models)
     instance.repository_models = repository_models
@@ -172,15 +177,7 @@ async def update_instance(
     instance.triton_verify_ssl = request.verify_ssl
     instance.triton_ca_certificate = request.ca_certificate if request.verify_ssl else ""
     instance.metrics_url = request.metrics_url
-    instance.resource_usage = {
-        **{k: v for k, v in (getattr(instance, "resource_usage", None) or {}).items() if not k.startswith("gpu_")},
-        **(metrics_snapshot.get("resource_usage") or {}),
-    }
-    instance.metrics_cpu = metrics_snapshot["cpu"]
-    instance.metrics_ram = metrics_snapshot["ram"]
-    instance.metrics_gpu = metrics_snapshot["gpu"]
-    instance.metrics_last_checked_at = metrics_snapshot["checked_at"]
-    instance.metrics_error = metrics_snapshot["error"]
+    apply_triton_sample(instance, metrics_snapshot)
 
     instances.save(session, instance)
     return entity_to_dto(instance)

@@ -38,7 +38,7 @@ export function resolveVersion(dto: { server_metadata?: unknown }): string {
 function formatResourceMetrics(dto: TritonInstanceDTO) {
   const usage = dto.resource_usage;
   const bytes = (value: number) =>
-    value >= 1024 ** 3
+    Math.round((value / 1024 ** 2) * 10) / 10 >= 1024
       ? (value / 1024 ** 3).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " GiB"
       : (value / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " MiB";
   const cpu = (value: number) => Math.round(value) + " mCPU";
@@ -48,9 +48,9 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     format: (value: number) => string,
   ) => (used == null ? "Unavailable" : format(used) + (limit == null ? "" : " / " + format(limit)));
   const coverage = (samples: number | null | undefined) =>
-    samples == null || usage?.desired_replicas == null || usage.running_triton_containers == null
+    usage?.desired_replicas == null || usage.running_triton_containers == null
       ? undefined
-      : `${samples} sampled · ${usage.running_triton_containers} running · ${usage.desired_replicas} desired`;
+      : `${samples == null ? "" : samples + " sampled · "}${usage.running_triton_containers} running · ${usage.desired_replicas} desired`;
   const workload =
     usage?.workload_error ||
     (dto.is_self_deployed
@@ -76,6 +76,7 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     },
     {
       label: "GPU",
+      coverage: usage?.gpu_percent == null ? undefined : "1 server sampled",
       value: usage?.gpu_percent == null ? "Unavailable" : usage.gpu_percent + "%",
       description:
         usage?.gpu_percent == null
@@ -84,6 +85,7 @@ function formatResourceMetrics(dto: TritonInstanceDTO) {
     },
     {
       label: "GPU memory",
+      coverage: usage?.gpu_memory_used_bytes == null ? undefined : "1 server sampled",
       value: quantity(usage?.gpu_memory_used_bytes, usage?.gpu_memory_total_bytes, bytes),
       description:
         usage?.gpu_memory_used_bytes == null
@@ -144,9 +146,6 @@ export function dtoToInstance(dto: TritonInstanceDTO): Instance {
     serverMetadata: metadata,
     qps: 0,
     resourceMetrics: formatResourceMetrics(dto),
-    cpu: normalizePercent(dto.metrics_cpu),
-    ram: normalizePercent(dto.metrics_ram),
-    gpu: normalizePercent(dto.metrics_gpu),
     assignedUsers: [],
     s3: {
       enabled: !!dto.s3?.enabled,
@@ -214,12 +213,4 @@ function formatBackendList(value: string): string {
     .filter(Boolean)
     .map((part) => (part.toLowerCase() === "vllm" ? "vLLM" : part))
     .join(", ");
-}
-
-function normalizePercent(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(100, Math.round(parsed * 10) / 10));
 }

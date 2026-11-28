@@ -32,6 +32,27 @@ describe("instances utils", () => {
     ]);
   });
 
+  it("shows known replica counts after a failed metrics read and rounds units consistently", () => {
+    const metrics = dtoToInstance({
+      id: 7,
+      name: "iris",
+      url: "http://iris",
+      model_names: [],
+      created_at: "",
+      resource_usage: {
+        desired_replicas: 2,
+        running_triton_containers: 1,
+        workload_error: "Permission denied",
+        gpu_memory_used_bytes: 1073700000,
+      },
+    }).resourceMetrics!;
+    expect(metrics[0].coverage).toBe("1 running · 2 desired");
+    expect(metrics[0].description).toBe("Permission denied");
+    expect(metrics[2].coverage).toBeUndefined();
+    expect(metrics[3].coverage).toBe("1 server sampled");
+    expect(metrics[3].value).toBe("1 GiB");
+  });
+
   it("DtoToInstance_DeploymentLogContainsRuntimeFields_MapsDeploymentMetadata", () => {
     const dto: TritonInstanceDTO & Record<string, unknown> = {
       id: 42,

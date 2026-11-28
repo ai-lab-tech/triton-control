@@ -59,7 +59,7 @@ class _FakeSession:
     def exec(self, _query):
         return _ExecResult(self.exec_rows.pop(0) if self.exec_rows else [])
 
-    def get(self, _model, key):
+    def get(self, _model, key, **kwargs):
         return self.get_map.get(key)
 
     def add(self, obj):
@@ -68,7 +68,7 @@ class _FakeSession:
     def commit(self):
         self.commit_count += 1
 
-    def refresh(self, _obj):
+    def refresh(self, _obj, **kwargs):
         return None
 
 
@@ -248,6 +248,56 @@ class InstanceHealthRefresherTests(unittest.IsolatedAsyncioTestCase):
             "",
             timeout=DEFAULT_HEALTH_REQUEST_TIMEOUT_SECONDS,
         )
+
+    async def test_refresh_discards_gpu_sample_when_connection_changes_during_scrape(self):
+        instance = TritonInstanceEntity(id=1, name="iris", url="http://iris", metrics_url="http://old/metrics",
+                                       is_self_deployed=True, deployment_namespace="team")
+        session = _FakeSession(get_map={1: instance})
+
+        async def edit_during_scrape(*args, **kwargs):
+            instance.metrics_url = "http://new/metrics"
+            instance.resource_usage = {"gpu_percent": 7}
+            instance.metrics_gpu = 7
+            return {"cpu": 0, "ram": 0, "gpu": 99, "resource_usage": {"gpu_percent": 99},
+                    "checked_at": None, "error": None}
+
+        service = SimpleNamespace(collect_runtime_snapshot=AsyncMock(return_value={
+            "metadata": {}, "live": True, "ready": True, "checked_at": None, "error": None,
+        }), get_repository_index=AsyncMock(return_value=[]), collect_metrics_snapshot=edit_during_scrape)
+        with (
+            patch("app.services.triton.health.session_factory", return_value=session),
+            patch("app.services.triton.health.TritonService", return_value=service),
+            patch("app.services.deployment.kubernetes.read_workload_health",
+                  return_value=([], True, {"cpu_millicores": 4})),
+        ):
+            await InstanceHealthRefresher()._refresh_instance(1)
+        self.assertEqual(instance.resource_usage, {"cpu_millicores": 4, "gpu_percent": 7})
+        self.assertEqual(instance.metrics_gpu, 7)
+
+    async def test_resolving_http_url_preserves_disabled_metrics(self):
+        instance = TritonInstanceEntity(id=1, name="iris", url="", is_self_deployed=True,
+                                       deployment_namespace="team", deployment_name="iris")
+        session = _FakeSession(get_map={1: instance})
+        service = SimpleNamespace(
+            collect_runtime_snapshot=AsyncMock(return_value={
+                "metadata": {}, "live": True, "ready": True, "checked_at": None, "error": None,
+            }),
+            get_repository_index=AsyncMock(return_value=[]),
+            collect_metrics_snapshot=AsyncMock(),
+        )
+        with (
+            patch("app.services.triton.health.session_factory", return_value=session),
+            patch("app.services.triton.health.TritonService", return_value=service),
+            patch("app.services.deployment.kubernetes.read_workload_health",
+                  return_value=([], True, {"cpu_millicores": 4})),
+            patch("app.services.deployment.kubernetes.resolve_deployment_service_urls",
+                  return_value={"http": "http://iris", "metrics": "http://iris/metrics"}),
+        ):
+            await InstanceHealthRefresher()._refresh_instance(1)
+        self.assertEqual(instance.url, "http://iris")
+        self.assertIsNone(instance.metrics_url)
+        self.assertEqual(instance.resource_usage["cpu_millicores"], 4)
+        service.collect_metrics_snapshot.assert_not_awaited()
 
     async def test_RefreshInstance_SelfDeployedPodNotReady_StoresWaitingState(self):
         # Arrange

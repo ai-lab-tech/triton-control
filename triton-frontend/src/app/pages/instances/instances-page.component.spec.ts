@@ -2,7 +2,7 @@ import { InstallationService } from "../../shared/installation/installation.serv
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { MatDialog } from "@angular/material/dialog";
 import { TestBed } from "@angular/core/testing";
-import { NavigationEnd, Router } from "@angular/router";
+import { ActivatedRoute, NavigationEnd, Router } from "@angular/router";
 import { of, Subject } from "rxjs";
 import { MockStore, provideMockStore } from "@ngrx/store/testing";
 import { InstancesPageComponent } from "./instances-page.component";
@@ -20,6 +20,8 @@ describe("InstancesPageComponent", () => {
   const routerMock = {
     url: "/instances",
     events: events$.asObservable(),
+    createUrlTree: () => null,
+    serializeUrl: () => "/instances",
   };
   const instancesApiMock = jasmine.createSpyObj<InstancesService>("InstancesService", [
     "listInstancesApiInstancesGet",
@@ -37,6 +39,7 @@ describe("InstancesPageComponent", () => {
         provideMockStore(),
         { provide: InstancesService, useValue: instancesApiMock },
         { provide: Router, useValue: routerMock },
+        { provide: ActivatedRoute, useValue: {} },
       ],
     }).compileComponents();
     TestBed.inject(InstallationService).snapshot.set({
@@ -92,6 +95,35 @@ describe("InstancesPageComponent", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it("keeps metric labels aligned and coverage inside a narrow card", () => {
+    const row = dtoToInstance({
+      id: 1,
+      name: "iris",
+      url: "http://iris",
+      model_names: [],
+      created_at: "",
+      resource_usage: {
+        cpu_millicores: 25,
+        desired_replicas: 2,
+        running_triton_containers: 1,
+        cpu_samples: 1,
+      },
+    });
+    mockStore.overrideSelector(selectInstances, [row]);
+    const fixture = TestBed.createComponent(InstancesPageComponent);
+    fixture.detectChanges();
+    const grid: HTMLElement = fixture.nativeElement.querySelector(".instance-metrics");
+    grid.style.width = "310px";
+    const labels = grid.querySelectorAll(".metric-label");
+    expect(labels[1].getBoundingClientRect().top).toBe(labels[0].getBoundingClientRect().top);
+    const coverage = grid.querySelector(".metric-coverage")!;
+    expect(coverage.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      labels[1].getBoundingClientRect().bottom,
+    );
+    expect(grid.scrollWidth).toBeLessThanOrEqual(grid.clientWidth);
+    fixture.destroy();
+  });
+
   it("FilteredInstances_QueryAndStatusSet_ReturnsMatchingRows", () => {
     // Arrange
     const fixture = TestBed.createComponent(InstancesPageComponent);
@@ -112,9 +144,6 @@ describe("InstancesPageComponent", () => {
         healthError: "",
         serverMetadata: null,
         qps: 0,
-        cpu: 0,
-        ram: 0,
-        gpu: 0,
         assignedUsers: [],
         s3: {
           enabled: false,
@@ -142,9 +171,6 @@ describe("InstancesPageComponent", () => {
         healthError: "",
         serverMetadata: null,
         qps: 0,
-        cpu: 0,
-        ram: 0,
-        gpu: 0,
         assignedUsers: [],
         s3: {
           enabled: false,

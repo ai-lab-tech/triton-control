@@ -109,17 +109,19 @@ runtime status, metadata, models, and S3 configuration.
 ### Metrics Behavior
 
 CPU and RAM come from the Kubernetes Resource Metrics API. The backend sums the
-running Triton containers across replicas and excludes sidecars. CPU is shown in
+running Triton containers across non-terminating replicas and excludes sidecars. CPU is shown in
 millicores and memory as working-set bytes converted to MiB or GiB. A limit is
 shown when every included container has that resource limit. If a replica has
 a running Triton container without a sample for a resource, its aggregate is unavailable.
 The coverage counts show sampled containers for each resource, running Triton
-containers, and desired replicas. A restarting Triton container contributes no usage. External instances have
-no Kubernetes container metrics.
+containers, and desired replicas. If the metrics API fails, only running and desired
+counts are shown. A restarting Triton container contributes no usage. External
+instances have no Kubernetes container metrics.
 
 GPU utilization and GPU memory come from the sampled Triton server's Prometheus
 endpoint. Utilization is the mean across reporting GPUs, and memory is the sum
-of the reported device values. On shared GPUs these are device-wide measurements.
+of the reported device values. Memory capacity is shown alongside usage when
+both samples cover the same devices. On shared GPUs these are device-wide measurements.
 Missing metrics display as `Unavailable`; a measured zero remains visible.
 
 Example metrics endpoint:

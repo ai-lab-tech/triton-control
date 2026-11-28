@@ -49,11 +49,11 @@ class WorkloadUsageTests(TestCase):
             patch("app.services.deployment.pod_provider.PodProvider") as provider,
             patch.object(kubernetes, "read_workload_usage", return_value={"cpu_samples": 1}) as read,
         ):
-            provider.return_value.snapshot.return_value = SimpleNamespace(desired=2), pods
+            provider.return_value.workload_snapshot.return_value = SimpleNamespace(desired=2), pods, {"healthy": {}}
             statuses, ready, usage = kubernetes.read_workload_health("team", "test")
 
-        provider.return_value.snapshot.assert_called_once_with("team", "test")
-        read.assert_called_once_with(api.return_value, "team", "test", {"healthy": {}})
+        provider.return_value.workload_snapshot.assert_called_once_with("team", "test")
+        read.assert_called_once_with(api.return_value.__enter__.return_value, "team", "test", {"healthy": {}})
         self.assertTrue(ready)
         self.assertEqual(statuses, ["healthy: Running (Ready)", "restarting: Running (Not Ready)"])
         self.assertEqual(usage, {"desired_replicas": 2, "running_triton_containers": 1, "cpu_samples": 1})

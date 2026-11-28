@@ -28,7 +28,14 @@ import httpx
 
 from app.core import installation_policy
 from app.core.tls import create_default_context_with_extra_ca
-from app.services.triton.prometheus_labels import parse_labels
+from app.services.triton.prometheus_labels import parse_labels, samples
+
+
+def empty_metrics_snapshot(reason: str) -> dict[str, Any]:
+    return {
+        "cpu": 0.0, "ram": 0.0, "gpu": 0.0, "resource_usage": {"gpu_error": reason},
+        "checked_at": None, "error": None,
+    }
 
 
 class TritonService:
@@ -159,33 +166,30 @@ class TritonService:
         }
 
     @staticmethod
-    def _allowed_metrics_url(requested_url: str) -> str:
+    def _allowed_metrics_url(requested_url: str, trusted_url: str | None) -> str:
         """Select an exact URL from trusted deployment configuration.
 
         This constrains ports, paths and queries while allowing explicitly
         configured private Kubernetes endpoints. Redirects must stay disabled.
         """
+        if trusted_url and requested_url == trusted_url:
+            return trusted_url
         for configured_url in os.getenv("TRITON_METRICS_ALLOWED_URLS", "").split(","):
             allowed_url = configured_url.strip()
             if allowed_url and requested_url == allowed_url:
                 return allowed_url
         raise ValueError("Metrics endpoint is not in TRITON_METRICS_ALLOWED_URLS")
 
-    async def collect_metrics_snapshot(self, metrics_url: str | None) -> Dict[str, Any]:
+    async def collect_metrics_snapshot(
+        self, metrics_url: str | None, *, trusted_url: str | None = None,
+    ) -> Dict[str, Any]:
         """Fetch and parse Triton Prometheus metrics for host utilization."""
         if not metrics_url:
-            return {
-                "cpu": 0.0,
-                "ram": 0.0,
-                "gpu": 0.0,
-                "resource_usage": {"gpu_error": "No Triton metrics endpoint configured."},
-                "checked_at": None,
-                "error": None,
-            }
+            return empty_metrics_snapshot("No Triton metrics endpoint configured.")
 
         try:
             response = await self._get_client().get(
-                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+                self._allowed_metrics_url(metrics_url, trusted_url), follow_redirects=False,
             )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
@@ -205,14 +209,16 @@ class TritonService:
                 "error": f"metrics request failed: {exc}",
             }
 
-    async def collect_inference_metrics_snapshot(self, metrics_url: str | None) -> Dict[str, Any]:
+    async def collect_inference_metrics_snapshot(
+        self, metrics_url: str | None, *, trusted_url: str | None = None,
+    ) -> Dict[str, Any]:
         """Fetch cumulative Triton inference latency counters."""
         if not metrics_url:
             return {"series": {}, "error": "Metrics endpoint is not configured."}
 
         try:
             response = await self._get_client().get(
-                self._allowed_metrics_url(metrics_url), follow_redirects=False,
+                self._allowed_metrics_url(metrics_url, trusted_url), follow_redirects=False,
             )
             response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
@@ -239,23 +245,11 @@ class TritonService:
     @staticmethod
     def _parse_prometheus_metrics(text: str) -> Dict[str, Any]:
         values: dict[str, list[float]] = {}
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-
-            name = parts[0].split("{", 1)[0]
-            try:
-                value = float(parts[1])
-            except ValueError:
-                continue
-
-            if 0 <= value < float("inf"):
-                values.setdefault(name, []).append(value)
+        memory_devices: dict[str, list[str]] = {}
+        for name, labels, value in samples(text):
+            values.setdefault(name, []).append(value)
+            if name in {"nv_gpu_memory_used_bytes", "nv_gpu_memory_total_bytes"}:
+                memory_devices.setdefault(name, []).append(labels.get("gpu_uuid", ""))
 
         cpu_values = TritonService._metric_values(values, ["nv_cpu_utilization", "cpu_utilization"])
         gpu_values = TritonService._metric_values(values, ["nv_gpu_utilization", "gpu_utilization"])
@@ -290,17 +284,24 @@ class TritonService:
             gpu = TritonService._average(values["nv_gpu_utilization"]) * 100
         used = values.get("nv_gpu_memory_used_bytes", [])
         total = values.get("nv_gpu_memory_total_bytes", [])
+        used_ids = memory_devices.get("nv_gpu_memory_used_bytes", [])
+        total_ids = memory_devices.get("nv_gpu_memory_total_bytes", [])
+        paired = (set(used_ids) == set(total_ids) and len(set(used_ids)) == len(used_ids) == len(total_ids)
+                  and (len(used_ids) == 1 or "" not in used_ids))
+        recognized = any(name.startswith("nv_") or name in {"cpu_utilization", "gpu_utilization"} for name in values)
+        error = None if recognized else "Metrics endpoint returned no recognized Triton samples."
         ram = (ram_used / ram_total * 100) if ram_total > 0 else 0.0
         return {
             "resource_usage": {
                 "gpu_percent": TritonService._clamp_percent(gpu) if gpu_values else None,
                 "gpu_memory_used_bytes": sum(used) if used else None,
-                "gpu_memory_total_bytes": sum(total) if total else None,
+                "gpu_memory_total_bytes": sum(total) if total and paired else None,
+                **({"gpu_error": error} if error else {}),
             },
             "cpu": TritonService._clamp_percent(cpu),
             "ram": TritonService._clamp_percent(ram),
             "gpu": TritonService._clamp_percent(gpu),
-            "error": None,
+            "error": error,
         }
 
     @staticmethod
@@ -317,25 +318,9 @@ class TritonService:
         }
         series: dict[str, dict[str, Any]] = {}
 
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-
-            metric_name = parts[0].split("{", 1)[0]
+        for metric_name, labels, value in samples(text):
             if metric_name not in metric_names:
                 continue
-
-            try:
-                value = float(parts[1])
-            except ValueError:
-                continue
-
-            labels = TritonService._parse_prometheus_labels(parts[0])
             model = labels.get("model") or labels.get("model_name") or ""
             version = labels.get("version") or labels.get("model_version") or ""
             key = f"{model}|{version}"

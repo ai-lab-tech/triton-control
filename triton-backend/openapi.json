@@ -9540,13 +9540,6 @@
               }
             ],
             "title": "Image Id"
-          },
-          "limits": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Limits"
           }
         },
         "type": "object",
